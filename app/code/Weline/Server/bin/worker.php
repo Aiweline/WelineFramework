@@ -788,6 +788,16 @@ try {
     );
     WlsLogger::info_("框架运行时初始化成功");
 
+    // 启动期预热主库连接：把首请求冷建连成本前移，连接建立后立刻归还空闲队列。
+    if (\class_exists(\Weline\Framework\Database\Connection\Pool\ConnectionPool::class)) {
+        try {
+            $prewarmed = \Weline\Framework\Database\Connection\Pool\ConnectionPool::prewarmDefaultPool();
+            WlsLogger::info_('[ConnectionPool] startup prewarm ' . ($prewarmed ? 'ready' : 'skipped') . ' worker=' . $workerId);
+        } catch (\Throwable $e) {
+            WlsLogger::error_('[ConnectionPool] startup prewarm failed: ' . $e->getMessage());
+        }
+    }
+
     // 共享服务检查延迟到后台进行，不阻塞 IPC 连接
     // IPC 连接应该尽快建立，让 Master 能立即感知到 Worker
     // SharedState 的 session/memory 信息在首次请求时通过 ConnectionPool 自动获取
@@ -2392,9 +2402,51 @@ $homepageKeepWarmFiber = null;
 $processL1HydrateFiber = null;
 $attackLogNextFlushCheckAt = 0.0;
 
+/**
+ * 后台预热 Fiber 收尾：归还「本 Fiber owner」的空闲数据库连接。
+ *
+ * WLS 的后台 Fiber（shared-state 预热 / deferred warmup / keep-warm / L1 hydrate）
+ * 会把连接带到下一次调度；不逐轮归还会让它以 fiber owner 形式长期占住池位
+ * （实测单 worker held>429s、leases 不变）。该 API 只结算当前 owner，并跳过活跃事务。
+ */
+function wlsReleaseFiberDbOwner(string $tag): void
+{
+    if (!\class_exists(\Weline\Framework\Database\Connection\Pool\ConnectionPool::class)) {
+        return;
+    }
+    try {
+        $released = \Weline\Framework\Database\Connection\Pool\ConnectionPool::releaseCurrentOwnerIdleConnections();
+        if ($released > 0) {
+            WlsLogger::info_('[ConnectionPool] fiber owner released connections=' . $released . ' tag=' . $tag);
+        }
+    } catch (\Throwable $e) {
+        WlsLogger::error_('[ConnectionPool] fiber owner release failed tag=' . $tag . ': ' . $e->getMessage());
+    }
+}
+
+// 主上下文（process owner）在 bootstrap / 延迟预热 / 周期性后台任务里取到的连接，
+// 请求阶段（Fiber owner）复用不到，会变成每 worker 每池一条常驻空转连接。
+// 事件循环里首轮立即结算，之后每 30 秒再结算一次（延迟任务可能重新取连接）。
+$dbPoolProcessSettleNextAt = 0.0;
+
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
     try {
+    if (\class_exists(\Weline\Framework\Database\Connection\Pool\ConnectionPool::class)) {
+        $loopNowMonotonic = wlsWorkerMonotonicNow();
+        if ($loopNowMonotonic >= $dbPoolProcessSettleNextAt) {
+            $dbPoolProcessSettleNextAt = $loopNowMonotonic + 30.0;
+            try {
+                $settled = \Weline\Framework\Database\Connection\Pool\ConnectionPool::releaseProcessOwnerConnections();
+                if ($settled > 0) {
+                    WlsLogger::info_('[ConnectionPool] settled process-owner connections=' . $settled
+                        . ' worker=' . $workerId);
+                }
+            } catch (\Throwable $e) {
+                WlsLogger::error_('[ConnectionPool] process-owner settle failed: ' . $e->getMessage());
+            }
+        }
+    }
     wlsResetLongRunningExecutionLimit();
     wlsPruneHttpContinueState($http1ContinueSent, $connections);
     if (\function_exists('pcntl_signal_dispatch')) {
@@ -2607,6 +2659,7 @@ while (true) {
             } catch (\Throwable $e) {
                 WlsLogger::warning_("[ConnectionPoolWarmup] async shared-state prewarm failed worker={$workerId}: " . $e->getMessage());
             } finally {
+                wlsReleaseFiberDbOwner('shared-runtime-prewarm');
                 if ($self instanceof \Fiber) {
                     \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($self);
                 }
@@ -2669,6 +2722,7 @@ while (true) {
                 WlsLogger::warning_("[WorkerWarmup] deferred bootstrap warmup failed worker={$workerId}: " . $e->getMessage());
                 $warmupLog('warmup_failed', 'WARNING');
             } finally {
+                wlsReleaseFiberDbOwner('deferred-bootstrap-warmup');
                 if ($self instanceof \Fiber) {
                     \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($self);
                 }
@@ -2716,6 +2770,7 @@ while (true) {
             try {
                 $runtime->runHomepageKeepWarmCycle();
             } finally {
+                wlsReleaseFiberDbOwner('homepage-keep-warm');
                 if ($self instanceof \Fiber) {
                     \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($self);
                 }
@@ -2764,6 +2819,7 @@ while (true) {
                     }
                 }
             } finally {
+                wlsReleaseFiberDbOwner('process-l1-hydrate');
                 if ($self instanceof \Fiber) {
                     \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($self);
                 }
@@ -2911,6 +2967,19 @@ while (true) {
                     $ipcClient->flushPendingWrites(0.2);
                 }
                 WlsLogger::info_("排水完成（{$drainElapsed}秒），Worker 退出");
+                // 排水完成后主动关池：让 PG backend 随 reload 及时释放，而不是等进程退出，
+                // 避免热重载窗口内新旧 Worker 连接数叠加。
+                if (\class_exists(\Weline\Framework\Database\Connection\Pool\ConnectionPool::class)) {
+                    try {
+                        // ERROR 级：实例 INFO 文件日志可能关闭（fileEnabled=false 时只有 >=ERROR 落盘），
+                        // 这行是「drain 真的关池」唯一可被外部取证的生命周期证据。
+                        WlsLogger::error_('[ConnectionPool] drain metrics worker=' . $workerId . ' '
+                            . \json_encode(\Weline\Framework\Database\Connection\Pool\ConnectionPool::getMetrics(), JSON_UNESCAPED_SLASHES));
+                        \Weline\Framework\Database\Connection\Pool\ConnectionPool::closePool();
+                    } catch (\Throwable $e) {
+                        WlsLogger::warning_('[ConnectionPool] drain closePool failed: ' . $e->getMessage());
+                    }
+                }
                 $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载');
             }
 
@@ -6572,6 +6641,14 @@ function handleRequest(
                 'php_version' => PHP_VERSION,
                 'timestamp' => \time(),
                 'fiber_count' => \count($fiberSnapshot),
+                // 连接池观测面（仅 detail=1）：created_total 在 total_requests=0 时已 ≥1
+                // 即证明启动期建连；acquire_total-created_total 即复用次数。
+                'db_pool' => \class_exists(\Weline\Framework\Database\Connection\Pool\ConnectionPool::class)
+                    ? [
+                        'metrics' => \Weline\Framework\Database\Connection\Pool\ConnectionPool::getMetrics(),
+                        'pools' => \Weline\Framework\Database\Connection\Pool\ConnectionPool::getPoolStats(null, true),
+                    ]
+                    : null,
             ];
             if ($wantsGatewayAttestation) {
                 // A challenge carries no secret. The Worker proves possession

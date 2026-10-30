@@ -204,7 +204,7 @@
     min-width: 0;
     padding: 0;
     border: unset;
-    box-shadow: var(--weline-shadow-lg);
+    box-shadow: var(--weline-theme-shadow-lg);
     overflow: hidden;
     visibility: visible;
     pointer-events: auto;

@@ -2244,6 +2244,16 @@ try {
     $wlsStartupTrace('runtime_bootstrap_done');
     WlsLogger::info_("框架运行时初始化成功");
 
+    // 启动期预热主库连接：把首请求冷建连成本前移，连接建立后立刻归还空闲队列。
+    if (\class_exists(\Weline\Framework\Database\Connection\Pool\ConnectionPool::class)) {
+        try {
+            $prewarmed = \Weline\Framework\Database\Connection\Pool\ConnectionPool::prewarmDefaultPool();
+            WlsLogger::info_('[ConnectionPool] startup prewarm ' . ($prewarmed ? 'ready' : 'skipped') . ' worker=' . $workerId);
+        } catch (\Throwable $e) {
+            WlsLogger::error_('[ConnectionPool] startup prewarm failed: ' . $e->getMessage());
+        }
+    }
+
     // 共享服务检查延迟到后台进行，不阻塞 IPC 连接
     // IPC 连接应该尽快建立，让 Master 能立即感知到 Worker
     // SharedState 的 session/memory 信息在首次请求时通过 ConnectionPool 自动获取
@@ -5994,6 +6004,17 @@ while (true) {
                     $ipcClient->flushPendingWrites(0.2);
                 }
                 WlsLogger::info_("排水完成（{$drainElapsed}秒），Worker 退出");
+                // 排水完成后主动关池：让 PG backend 随 reload 及时释放，避免热重载窗口连接数叠加。
+                if (\class_exists(\Weline\Framework\Database\Connection\Pool\ConnectionPool::class)) {
+                    try {
+                        // ERROR 级：INFO 文件日志可能关闭，这行是 drain 关池的唯一外部取证点。
+                        WlsLogger::error_('[ConnectionPool] drain metrics worker=' . $workerId . ' '
+                            . \json_encode(\Weline\Framework\Database\Connection\Pool\ConnectionPool::getMetrics(), JSON_UNESCAPED_SLASHES));
+                        \Weline\Framework\Database\Connection\Pool\ConnectionPool::closePool();
+                    } catch (\Throwable $e) {
+                        WlsLogger::warning_('[ConnectionPool] drain closePool failed: ' . $e->getMessage());
+                    }
+                }
                 $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载');
             }
 

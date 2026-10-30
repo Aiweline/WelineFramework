@@ -494,8 +494,10 @@ final class ManagedNginxService
                 );
             if ($drainSoftFailed) {
                 // B2: one structured line per tolerated drain-soft publication so
-                // the next occurrence is attributable without guesswork.
-                \w_log_error(
+                // the next occurrence is attributable without guesswork. Warning,
+                // not error: the publication is being tolerated, so error level
+                // would add alert noise for a decision that is working as designed.
+                \w_log_warning(
                     '[WLS Managed Nginx] drain-soft publication decision',
                     [
                         'lifecycle_message' => (string)($lifecycle['message'] ?? ''),

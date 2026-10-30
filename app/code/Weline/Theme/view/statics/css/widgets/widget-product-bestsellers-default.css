@@ -1,6 +1,6 @@
 .wc-theme_widget_bestsellers {
     --bs-card-bg: var(--weline-chrome-bg-primary);
-    --bs-card-border: var(--weline-theme-border-subtle);
+    --bs-card-border: var(--weline-theme-border-color-subtle);
     --bs-card-text: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary)));
     --bs-card-text-muted: var(--weline-theme-body-text-muted);
     --bs-card-price: var(--color-primary);

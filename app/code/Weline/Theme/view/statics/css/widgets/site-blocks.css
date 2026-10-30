@@ -41,7 +41,7 @@
 .weline-site-block .sb-media.w-frame { aspect-ratio: var(--weline-frame-ratio, var(--sb-ratio, 4 / 3)); }
 .weline-site-block.is-looks .sb-media { --sb-ratio: 3 / 4; }
 .weline-site-block.is-looks .sb-looks-media-link { color: inherit; text-decoration: none; }
-.weline-site-block.is-looks .sb-looks-media-link:focus-visible { outline: var(--border-width-medium) solid var(--weline-theme-focus); outline-offset: var(--border-width-medium); }
+.weline-site-block.is-looks .sb-looks-media-link:focus-visible { outline: var(--border-width-medium) solid var(--weline-theme-focus-ring-color); outline-offset: var(--border-width-medium); }
 /* 买家秀：同排齐高，文案夹两行，「查看商品」钉在卡底，避免高低锯齿 */
 .weline-site-block.is-looks .sb-looks-wall { align-items: stretch; }
 .weline-site-block.is-looks .sb-looks-tile {

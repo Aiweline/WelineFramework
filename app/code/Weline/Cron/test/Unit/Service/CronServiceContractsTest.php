@@ -50,6 +50,14 @@ final class CronServiceContractsTest extends TestCase
             $this->setUpBeforeClass_ManagedChildAdmission();
             $this->assert_CronCpuGovernor_testDegradesWithoutStealingHostAlarm();
         },
+            'CronHostLoadGate::testBlocksOnlyAboveThreshold' => function () {
+            $this->setUpBeforeClass_ManagedChildAdmission();
+            $this->assert_CronHostLoadGate_testBlocksOnlyAboveThreshold();
+        },
+            'CronHostLoadGate::testWiredIntoAutomaticDispatchOnly' => function () {
+            $this->setUpBeforeClass_ManagedChildAdmission();
+            $this->assert_CronHostLoadGate_testWiredIntoAutomaticDispatchOnly();
+        },
         ];
     }
 
@@ -216,6 +224,65 @@ private function assert_CronCpuGovernor_testDegradesWithoutStealingHostAlarm(): 
         },
     ));
     self::assertIsString($degraded3);
+}
+
+private function assert_CronHostLoadGate_testBlocksOnlyAboveThreshold(): void
+{
+    // 10 核 load1=7.5 → 75%，超过默认 70% 必须拦自动调度。
+    $gate = new \Weline\Cron\Service\CronHostLoadGate(null, $this->loadSample(10, 7.5), 70);
+    self::assertSame(70, $gate->maxPercent());
+    self::assertEqualsWithDelta(75.0, $gate->measure()['percent'], 1e-9);
+    $block = $gate->blocksAutomation();
+    self::assertIsArray($block);
+    self::assertEqualsWithDelta(75.0, $block['percent'], 1e-9);
+    self::assertSame(70, $block['threshold']);
+    self::assertSame(10, $block['cores']);
+    self::assertEqualsWithDelta(7.5, $block['load1'], 1e-9);
+
+    // 恰好等于阈值不拦（边界：70% 允许跑）。
+    $atLimit = new \Weline\Cron\Service\CronHostLoadGate(null, $this->loadSample(10, 7.0), 70);
+    self::assertEqualsWithDelta(70.0, $atLimit->measure()['percent'], 1e-9);
+    self::assertNull($atLimit->blocksAutomation());
+
+    // 取不到负载样本（Windows 无 sys_getloadavg 等）必须放行，不能把调度停死。
+    $unknown = new \Weline\Cron\Service\CronHostLoadGate(null, static fn (): ?array => null, 70);
+    self::assertFalse($unknown->measure()['available']);
+    self::assertNull($unknown->blocksAutomation());
+
+    // 阈值 1-100 夹紧；超载报数不夹到 100（如实反映「超了多少」）。
+    self::assertSame(1, (new \Weline\Cron\Service\CronHostLoadGate(null, null, 0))->maxPercent());
+    self::assertSame(100, (new \Weline\Cron\Service\CronHostLoadGate(null, null, 999))->maxPercent());
+    $heavy = new \Weline\Cron\Service\CronHostLoadGate(null, $this->loadSample(4, 20.0), 70);
+    self::assertEqualsWithDelta(500.0, $heavy->measure()['percent'], 1e-9);
+}
+
+private function assert_CronHostLoadGate_testWiredIntoAutomaticDispatchOnly(): void
+{
+    // 后台阈值键名必须与策略常量逐字一致（配置页 embed 用同一字面）。
+    self::assertSame('cron/load/max_percent', \Weline\Cron\Service\CronHostLoadGate::KEY_MAX_PERCENT);
+    self::assertSame(70, \Weline\Cron\Service\CronHostLoadGate::DEFAULT_MAX_PERCENT);
+    $page = (string) \file_get_contents(
+        \BP . 'app/code/Weline/Cron/extends/module/Weline_SystemConfig/Config/backend/cron.phtml',
+    );
+    self::assertStringContainsString('key="cron/load/max_percent"', $page);
+    self::assertStringContainsString('default="70"', $page);
+
+    // 闸门只挂在「自动调度整轮」：必须同时排除 -p 子进程、-f、指定任务名、后台手动 SSE。
+    $src = (string) \file_get_contents(\BP . 'app/code/Weline/Cron/Console/Cron/Task/Run.php');
+    self::assertStringContainsString('CronHostLoadGate', $src);
+    self::assertStringContainsString('blocksAutomation()', $src);
+    self::assertMatchesRegularExpression(
+        '/if \(!\$process && !\$force && \$task_names === \[\] && !\$manualSse\)/',
+        $src,
+    );
+}
+
+/**
+ * @return \Closure(): array{cores:int,load1:float}
+ */
+private function loadSample(int $cores, float $load1): \Closure
+{
+    return static fn (): array => ['cores' => $cores, 'load1' => $load1];
 }
 
 private function setUpBeforeClass_ManagedChildAdmission(): void

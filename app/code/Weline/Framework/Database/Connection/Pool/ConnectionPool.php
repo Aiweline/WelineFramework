@@ -57,6 +57,13 @@ class ConnectionPool
     private static array $unhealthyConnections = [];
 
     /**
+     * MySQL 驱动是否支持 `RESET CONNECTION`（MySQL 8.0.3+ 支持，MariaDB 不支持）。
+     * null = 尚未探测；false = 已确认不支持，归还时直接走 SET SESSION 回退，
+     * 避免每次归还都付一次失败往返与 1064 Warning。
+     */
+    private static ?bool $supportsResetConnection = null;
+
+    /**
      * 断链纪元：每次标记连接不健康（断链/重置失败）就自增。
      * 空闲连接在归还时记录当时的纪元，取用时若纪元已变化则强制验活。
      */
@@ -69,6 +76,11 @@ class ConnectionPool
     private static int $acquireSequence = 0;
 
     private const IDLE_SWEEP_EVERY_N_ACQUIRES = 128;
+
+    /** 上一次周期性回收（滞留 owner + 过期空闲连接）的时间，保证低频流量进程也能回收。 */
+    private static float $lastMaintenanceAt = 0.0;
+
+    private const MAINTENANCE_INTERVAL_SECONDS = 60.0;
 
     /** 进程级累计计数（只读出口 getMetrics）。 */
     private static int $counterAcquireTotal = 0;
@@ -190,6 +202,24 @@ class ConnectionPool
             || \str_contains($message, 'connection reset by peer');
     }
 
+    /**
+     * 物理连接的 PG application_name（`weline:w<workerId|m<pid>>:<poolShort>`）。
+     * 写进 DSN（Pgsql Connector 拼装处），属于连接启动包参数，
+     * 归还时的 DISCARD ALL 不会重置它，因此无需在归还路径重复 SET。
+     */
+    public static function applicationNameFor(ConfigProviderInterface $configProvider): string
+    {
+        $workerId = (string) (\getenv('WLS_WORKER_ID') ?: '');
+        $workerId = \preg_replace('/[^A-Za-z0-9_]/', '', $workerId);
+        if ($workerId === '') {
+            // master / cron / CLI 没有 WLS_WORKER_ID：用 pid 兜底，避免所有进程都叫 weline:w0。
+            $workerId = 'm' . (\getmypid() ?: 0);
+        }
+        $poolShort = \substr(\md5((string) $configProvider->getDatabase()), 0, 6);
+
+        return 'weline:w' . $workerId . ':' . $poolShort;
+    }
+
     public static function markConnectionUnhealthy(PDO $connection): void
     {
         self::$unhealthyConnections[\spl_object_id($connection)] = true;
@@ -241,14 +271,85 @@ class ConnectionPool
     {
         try {
             $connector = \Weline\Framework\Database\ConnectionFactory::getInstance()->getConnector();
+            $configProvider = $connector->getConfigProvider();
             $connector->close();
             // bootstrap 阶段的连接由 process owner 持有；不结算就会一直被钉在 in_use，
             // 请求 Fiber 无法复用（每个 Worker 每个池白占一条 PG backend）。
-            self::requestEndCleanup();
+            // 只结算本次预热对应的池键：多库场景下不得误结算其它库的 owner 连接。
+            self::releaseOwnerConnectionsForPool($configProvider);
             return true;
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * 对所有池回收「Fiber 已结束但 owner 条目仍在」的滞留连接。
+     * 供长驻进程（Worker 事件循环 / Master 主循环）周期性调用。
+     *
+     * @return int 回收的 owner 数
+     */
+    public static function reapAbandonedOwnersForAllPools(): int
+    {
+        $reaped = 0;
+        foreach (\array_keys(self::$pools) as $poolKey) {
+            $reaped += self::reapAbandonedOwners($poolKey);
+        }
+
+        return $reaped;
+    }
+
+    /**
+     * 结算所有「process owner」持有的连接（WLS 启动收尾专用）。
+     *
+     * Worker 的 bootstrap / 延迟预热在主上下文里取连接时，owner 是 `process:<pid>`；
+     * 这些连接在以 Fiber 为 owner 的请求阶段无法复用，会变成每 worker 每池一条的常驻空转连接。
+     * 在主事件循环开始、且没有请求在飞时调用，把它们归还到空闲队列。
+     *
+     * 注意：只处理 owner_type=process，不触碰正在执行的请求 Fiber。
+     *
+     * @return int 结算的连接数
+     */
+    public static function releaseProcessOwnerConnections(): int
+    {
+        $released = 0;
+        // 护栏：有活跃事务时不得结算，否则会把正在写入的事务回滚掉。
+        if (TransactionContext::activeTransactionConnectionCount() > 0) {
+            return 0;
+        }
+        foreach (\array_keys(self::$pools) as $poolKey) {
+            foreach (\array_keys(self::$ownerConnections[$poolKey] ?? []) as $ownerKey) {
+                if (self::ownerType((string) $ownerKey) !== 'process') {
+                    continue;
+                }
+                $owner = self::$ownerConnections[$poolKey][$ownerKey] ?? null;
+                if (!\is_array($owner) || !(($owner['connection'] ?? null) instanceof PDO)) {
+                    continue;
+                }
+                $reusable = self::prepareConnectionForReturn($owner['connection']);
+                self::settleOwnerConnection($poolKey, (string) $ownerKey, !$reusable);
+                $released++;
+            }
+        }
+
+        return $released;
+    }
+
+    /**
+     * 只结算指定库配置在当前 owner 下的连接（prewarm 收尾专用）。
+     * 与 requestEndCleanup() 的区别：不会遍历其它池键，避免误结算分库连接。
+     */
+    public static function releaseOwnerConnectionsForPool(ConfigProviderInterface $configProvider): void
+    {
+        $poolKey = self::getPoolKey($configProvider);
+        $ownerKey = self::resolveCurrentOwnerKey();
+        $owner = self::$ownerConnections[$poolKey][$ownerKey] ?? null;
+        if (!\is_array($owner) || !(($owner['connection'] ?? null) instanceof PDO)) {
+            return;
+        }
+
+        $reusable = self::prepareConnectionForReturn($owner['connection']);
+        self::settleOwnerConnection($poolKey, $ownerKey, !$reusable);
     }
 
     /**
@@ -570,7 +671,14 @@ class ConnectionPool
         $now = \microtime(true);
 
         self::$acquireSequence++;
-        if (self::$acquireSequence % self::IDLE_SWEEP_EVERY_N_ACQUIRES === 0) {
+        if (self::$acquireSequence % self::IDLE_SWEEP_EVERY_N_ACQUIRES === 0
+            || ($now - self::$lastMaintenanceAt) >= self::MAINTENANCE_INTERVAL_SECONDS) {
+            self::$lastMaintenanceAt = $now;
+            // 先回收「Fiber 已结束但 owner 条目还在」的滞留连接：长驻进程（worker / master 主循环）
+            // 里这类滞留会让 in_use 永久顶住池位，且只有池满那次取连接才会被清理。
+            foreach (\array_keys(self::$pools) as $maintenancePoolKey) {
+                self::reapAbandonedOwners($maintenancePoolKey);
+            }
             self::sweepExpiredIdleConnections($idleTtlSeconds, $maxLifetimeSeconds, $now);
         }
 
@@ -1415,9 +1523,33 @@ class ConnectionPool
                 // MySQL 8.0.3+ 才有 RESET CONNECTION；MariaDB 同样报 driver=mysql 但不支持该语句
                 // （现场：SQLSTATE[42000] ... near 'CONNECTION'）。不支持时退回最小可移植复位，
                 // 否则每次归还都判 unhealthy、丢连接，连接池被反复打穿。
-                try {
-                    $connection->exec('RESET CONNECTION');
-                } catch (\Throwable) {
+                //
+                // 2026-10-30 修正（marker: reset-connection-capability-memo-v2）：原实现对每次归还都
+                // 先 exec('RESET CONNECTION')，在 MariaDB 上必然失败 —— 每请求多一次失败往返 + 一条
+                // PHP Warning（实测 php_error.log 被 1064 刷屏，每次归还都付这个成本）。
+                //
+                // v1 用 try/catch 记忆能力，实测**无效**：本项目 PDO 处于 WARNING 模式（不抛异常），
+                // exec() 只返回 false + 发 Warning，catch 永不触发 → 标志一直 null，每回合照旧失败。
+                // v2 改为两条硬判据：
+                //   ① 先看 ATTR_SERVER_VERSION，含 "mariadb" 直接判定不支持（不发那条注定失败的 SQL）；
+                //   ② 其余情况用 @ 抑制 warning + 检查 exec() 返回值，false 即记忆为不支持。
+                if (self::$supportsResetConnection === null) {
+                    $version = '';
+                    try {
+                        $version = (string) $connection->getAttribute(PDO::ATTR_SERVER_VERSION);
+                    } catch (\Throwable) {
+                        $version = '';
+                    }
+                    if ($version !== '' && \stripos($version, 'mariadb') !== false) {
+                        self::$supportsResetConnection = false;
+                    } else {
+                        $probe = @$connection->exec('RESET CONNECTION');
+                        self::$supportsResetConnection = ($probe !== false);
+                    }
+                } elseif (self::$supportsResetConnection === true) {
+                    @$connection->exec('RESET CONNECTION');
+                }
+                if (self::$supportsResetConnection !== true) {
                     $connection->exec('SET SESSION sql_mode = DEFAULT');
                     $connection->exec('SET SESSION time_zone = DEFAULT');
                     $connection->exec('SET SESSION wait_timeout = DEFAULT');

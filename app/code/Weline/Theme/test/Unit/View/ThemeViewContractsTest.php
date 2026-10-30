@@ -1889,10 +1889,16 @@ private function assert_StorefrontFloatLayer_testFooterPartialEmitsEditableFloat
     self::assertStringContainsString('data-testid="storefront-tail-chrome"', $footer);
     self::assertStringContainsString('compare-shopper-chrome', $footer);
     self::assertStringContainsString('emitPartialsFooterShellLayoutCssHtml', $footer);
-    self::assertStringContainsString('--weline-product-sticky-purchase-clearance', $footer);
-    self::assertStringContainsString('#w-storefront-float-layer{', $footer);
-    self::assertStringContainsString('bottom:var(--weline-product-sticky-purchase-clearance,0px)', $footer);
-    self::assertStringContainsString('padding-bottom:0', $footer);
+    // 2026-10-30 单一出处重构：critical CSS 正文已移入 SharedChromeService::emitFloatLayerCriticalCss()，
+    // 页脚只允许保留调用点（Marker: storefront-float-critical-single-source-v1）。
+    self::assertStringContainsString('emitFloatLayerCriticalCss', $footer);
+    self::assertStringNotContainsString('<style data-storefront-float-layer-critical', $footer);
+    $critical = \Weline\Theme\Service\SharedChromeService::emitFloatLayerCriticalCss();
+    self::assertStringContainsString('<style data-storefront-float-layer-critical', $critical);
+    self::assertStringContainsString('--weline-product-sticky-purchase-clearance', $critical);
+    self::assertStringContainsString('#w-storefront-float-layer{', $critical);
+    self::assertStringContainsString('bottom:var(--weline-product-sticky-purchase-clearance,0px)', $critical);
+    self::assertStringContainsString('padding-bottom:0', $critical);
     self::assertStringNotContainsString('getHook(', $footer);
     self::assertStringNotContainsString('float-slot-start', $footer);
     self::assertStringNotContainsString('float-slot-end', $footer);
@@ -1953,7 +1959,7 @@ private function assert_StorefrontFloatLayer_testFloatLayerCssOwnsStickyClearanc
     self::assertStringContainsString('position: relative', $css);
     self::assertStringNotContainsString('position: relative !important', $css);
     self::assertStringContainsString('storefront-float-edge-dock-v1', $css);
-    self::assertStringContainsString('storefront-float-edge-flush-v2', $css);
+    self::assertStringContainsString('storefront-float-edge-flush-v3', $css);
     self::assertStringContainsString('storefront-float-edge-transform-clear-v1', $css);
     self::assertStringContainsString('storefront-float-consent-clearance-v1', $css);
     self::assertStringContainsString('#weline-consent-banner:not([hidden])', $css);
@@ -1976,9 +1982,11 @@ private function assert_StorefrontFloatLayer_testFloatLayerJsOwnsEdgeDockLocalSt
     $js = (string) file_get_contents($this->themeRoot_StorefrontFloatLayer() . '/view/statics/js/storefront-float-layer.js');
     self::assertStringContainsString('storefront-float-edge-dock-v1', $js);
     self::assertStringContainsString('storefront-float-edge-transform-clear-v1', $js);
-    self::assertStringContainsString('storefront-float-dock-real-content-v1', $js);
-    self::assertStringContainsString(':not([data-store-music-skipped])', $js);
-    self::assertStringNotContainsString('[data-widget-code]:not([data-store-music-skipped])', $js);
+    self::assertStringContainsString('storefront-float-dock-real-content-v2', $js);
+    // 2026-10-30 对齐现状（历史 stale 断言）：v2 用 mount-state + 零尺寸判定真实内容，
+    // 不再使用 `data-store-music-skipped` 这类选择器黑名单。
+    self::assertStringContainsString('data-weline-mount-state', $js);
+    self::assertStringNotContainsString('data-store-music-skipped', $js);
     self::assertStringContainsString('weline.storefrontFloat.edgeCollapsed.', $js);
     self::assertStringContainsString('localStorage', $js);
     self::assertStringContainsString('data-float-edge-dismiss', $js);
@@ -1989,8 +1997,11 @@ private function assert_StorefrontFloatLayer_testFloatLayerJsOwnsEdgeDockLocalSt
     self::assertStringNotContainsString("|| '展开悬浮'", $js);
     self::assertStringNotContainsString("|| '收起悬浮'", $js);
     self::assertStringContainsString('is-edge-collapsed', $js);
-    self::assertStringContainsString('translateX(-100%)', $js);
-    self::assertStringContainsString('translateX(100%)', $js);
+    // 2026-10-30 对齐现状：折叠位移由 emitter critical CSS 承担（未分层），JS 只切 is-edge-collapsed 类。
+    $criticalCss = \Weline\Theme\Service\SharedChromeService::emitFloatLayerCriticalCss();
+    self::assertStringContainsString('translateX(-100%)', $criticalCss);
+    self::assertStringContainsString('translateX(100%)', $criticalCss);
+    self::assertStringContainsString("classList.toggle('is-edge-collapsed'", $js);
     self::assertStringContainsString('removeProperty(\'transform\')', $js);
     self::assertStringContainsString('bindCsOpenClearsEndTransform', $js);
     self::assertStringContainsString('endHasOpenCustomerService', $js);
@@ -2003,14 +2014,18 @@ private function assert_StorefrontFloatLayer_testFooterPartialWiresEdgeDockLabel
     $footer = (string) file_get_contents($this->themeRoot_StorefrontFloatLayer() . '/view/theme/frontend/partials/footer/default.phtml');
     self::assertStringContainsString('data-edge-dismiss-label', $footer);
     self::assertStringContainsString('data-edge-recall-label', $footer);
-    self::assertStringContainsString("__('收起悬浮')", $footer);
-    self::assertStringContainsString("__('展开悬浮')", $footer);
-    self::assertStringContainsString('Parser::prefetchWords', $footer);
-    self::assertStringContainsString('Expand float', $footer);
-    self::assertStringContainsString('Collapse float', $footer);
-    self::assertStringContainsString('is-edge-collapsed', $footer);
-    self::assertStringContainsString('storefront-float-edge-transform-clear-v1', $footer);
-    self::assertStringContainsString('will-change:auto', $footer);
+    // 2026-10-30 对齐现状（历史 stale 断言）：a11y 标签走 WidgetI18n，英文兜底与折叠态正文在 emitter/JS，
+    // 页脚不再内联 `__()` / Parser::prefetchWords / Expand float / is-edge-collapsed。
+    self::assertStringContainsString("WidgetI18n::prefetchLabels(['收起悬浮', '展开悬浮'])", $footer);
+    self::assertStringContainsString("WidgetI18n::label('收起悬浮')", $footer);
+    self::assertStringContainsString("WidgetI18n::label('展开悬浮')", $footer);
+    // 单一出处重构后：critical 正文断言转移到 emitter 返回值（Marker: storefront-float-critical-single-source-v1）
+    self::assertStringContainsString('emitFloatLayerCriticalCss', $footer);
+    $critical = \Weline\Theme\Service\SharedChromeService::emitFloatLayerCriticalCss();
+    self::assertStringContainsString('is-edge-collapsed', $critical);
+    self::assertStringContainsString('storefront-float-edge-transform-clear-v1', $critical);
+    self::assertStringContainsString('storefront-float-edge-dock-directions-v2', $critical);
+    self::assertStringContainsString('will-change:auto', $critical);
 }
 
 private function assert_StorefrontFloatLayer_testHookRegistryDropsFloatPseudoSlots(): void

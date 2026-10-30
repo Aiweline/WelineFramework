@@ -10,7 +10,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
 
 /**
- * 计划任务 CPU 预算配置：内嵌 Weline_Cron 已声明的 SystemConfig（cron/cpu/*）。
+ * 计划任务调度配置：内嵌 Weline_Cron 已声明的 SystemConfig（cron/cpu/*、cron/load/*）。
  *
  * 类级 ACL 依附菜单 Weline_Cron::cron_system_config（子菜单），parent_source 指向父菜单
  * Weline_Cron::system_cron，两者都在 Cron/etc/backend/menu.xml 里，避免 ACL 树断链。
@@ -48,7 +48,7 @@ class Config extends BackendController
             ));
         }
 
-        $this->assign('page_title', __('计划任务CPU预算'));
+        $this->assign('page_title', __('计划任务调度配置'));
         $this->assign('selected_scope', $storageScope);
         $this->assign('target_scope', $storageScope);
         $this->assign('scope_website_code', (string)($resolved['website_code'] ?? ''));

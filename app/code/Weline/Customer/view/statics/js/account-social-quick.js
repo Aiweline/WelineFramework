@@ -498,8 +498,11 @@
           '.weline-social-quick-bar__btn--google{background:var(--color-bg-primary,#fffefa);color:var(--color-text,#1c1c1c);',
           'border:1px solid var(--color-border-default,#d4cfc5)}',
           '.weline-social-quick-bar__btn--google:hover{background:var(--color-surface-hover,#f0ebe3)}',
-          '.weline-social-quick-bar__btn--facebook{background:#1877f2;color:#fff;border:1px solid #1877f2}',
-          '.weline-social-quick-bar__btn--facebook:hover{filter:brightness(1.06)}',
+          /* 2026-10-30 无障碍：官方 Facebook 蓝 #1877f2 压白字实测仅 4.23:1，低于正文 4.5:1 门槛。
+             保留「品牌蓝」识别感，但把底色压深到 #12529e（7.70:1）；hover 用 #1565d8（5.41:1），
+             两者都在门槛之上，不再用 filter:brightness() 以免悬停时跌破阈值。 */
+          '.weline-social-quick-bar__btn--facebook{background:#12529e;color:#fff;border:1px solid #12529e}',
+          '.weline-social-quick-bar__btn--facebook:hover{background:#1565d8;border-color:#1565d8}',
           '.weline-social-quick-bar__close{position:absolute;top:8px;right:8px;width:28px;height:28px;border:0;',
           'border-radius:var(--weline-radius-sm,6px);background:transparent;',
           'color:var(--color-text-on-dark-muted,#d4cfc5);cursor:pointer;font-size:18px;line-height:1}',
@@ -803,8 +806,10 @@
         '.weline-social-quick-bar__btn--google{background:var(--color-bg-primary,#fffefa);color:var(--color-text,#1c1c1c);',
         'border:1px solid var(--color-border-default,#d4cfc5)}',
         '.weline-social-quick-bar__btn--google:hover{background:var(--color-surface-hover,#f0ebe3)}',
-        '.weline-social-quick-bar__btn--facebook{background:#1877f2;color:#fff;border:1px solid #1877f2}',
-        '.weline-social-quick-bar__btn--facebook:hover{filter:brightness(1.06)}',
+        /* 2026-10-30 无障碍：同 :504 的判定——官方 Facebook 蓝 #1877f2 压白字 4.23:1 不达标。
+           底色压深到 #12529e（7.70:1），hover #1565d8（5.41:1）。 */
+        '.weline-social-quick-bar__btn--facebook{background:#12529e;color:#fff;border:1px solid #12529e}',
+        '.weline-social-quick-bar__btn--facebook:hover{background:#1565d8;border-color:#1565d8}',
         '.weline-social-quick-inline{box-sizing:border-box;width:100%;',
         'background:var(--color-bg-secondary,var(--weline-theme-surface-subtle,#ede9e1));',
         'color:var(--color-text-primary,var(--weline-theme-text,#1c1c1c));',

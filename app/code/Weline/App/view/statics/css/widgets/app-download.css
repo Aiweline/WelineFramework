@@ -21,12 +21,36 @@
   gap: var(--weline-space-2);
   padding-block: var(--weline-space-2);
   padding-inline: var(--weline-space-4);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
+  border-radius: var(--weline-radius-md);
+  border: var(--weline-theme-border-width) solid var(--weline-theme-border);
+  background: var(--weline-theme-surface);
+  color: var(--weline-theme-text);
   text-decoration: none;
   transition: filter 0.15s ease;
+}
+
+/*
+ * 2026-10-30 无障碍（WO-UI-CONTRAST-PAIRING）
+ * 本部件会被注入到反色面（footer / 浮层）内部，宿主面规则
+ * `.weline-footer a { color: var(--weline-chrome-text-light-secondary) }`
+ * 特异性 (0,1,1) 高于 `.app-download__btn` (0,1,0)，
+ * 会把按钮文字染成反色面的第二层浅墨；而本部件自身底色是亮面
+ * `--weline-theme-surface`，于是亮底压反色浅墨实测 1.48:1。
+ *
+ * 按钮属于「自带背景的控件」，必须成对绑定前景与背景，不得继承
+ * 宿主面的链接墨色。这里用 (0,2,0) 的 `.weline-app-download .app-download__btn`
+ * 压过宿主面链接规则（根容器即模板里的 `.weline-app-download`，见
+ * templates/frontend/widgets/app-download/default.phtml:62），
+ * 并在悬停态同样重绑前景，避免 hover 掉门槛。
+ */
+.weline-app-download .app-download__btn,
+.weline-app-download .app-download__btn:hover,
+.weline-app-download .app-download__btn:focus-visible {
+  color: var(--weline-theme-text);
+}
+
+.weline-app-download .app-download__btn {
+  background: var(--weline-theme-surface);
 }
 
 .app-download__btn:hover,
@@ -36,7 +60,7 @@
 }
 
 .app-download__btn:focus-visible {
-  outline: 2px solid var(--color-primary, currentColor);
+  outline: var(--weline-theme-border-width) solid var(--weline-theme-primary);
   outline-offset: 2px;
 }
 
@@ -71,7 +95,7 @@
 [data-slot-id="storefront-float-start"] .app-download__btn {
   width: 100%;
   justify-content: center;
-  font-size: var(--weline-font-size-xs, 12px);
+  font-size: var(--weline-font-size-xs);
 }
 
 [data-slot-id="storefront-float-start"] .weline-app-download[data-app-download-loaded]::after {
@@ -100,7 +124,7 @@
 .app-download__scrim {
   position: absolute;
   inset: 0;
-  background: color-mix(in srgb, var(--weline-theme-text, #2e2a25) 42%, transparent);
+  background: color-mix(in srgb, var(--weline-theme-text) 42%, transparent);
 }
 
 .app-download__dialog {
@@ -109,10 +133,10 @@
   max-height: calc(100vh - 2 * var(--weline-space-5));
   overflow: auto;
   padding: var(--weline-space-6);
-  border: 1px solid var(--weline-theme-border, #e4dbcd);
-  border-radius: var(--weline-radius-lg, 16px);
-  background: var(--weline-theme-surface-raised, #fffdf8);
-  box-shadow: var(--weline-theme-shadow-lg, 0 18px 48px rgba(46, 42, 37, .18));
+  border: var(--weline-theme-border-width) solid var(--weline-theme-border);
+  border-radius: var(--weline-radius-lg);
+  background: var(--weline-theme-surface-raised);
+  box-shadow: var(--weline-theme-shadow-lg);
 }
 
 .app-download__dialog-head {
@@ -124,30 +148,33 @@
 
 .app-download__dialog-title {
   margin: 0;
-  font: 600 var(--weline-font-size-lg, 18px)/1.3 var(--weline-font-serif, Georgia, serif);
+  font-family: var(--weline-font-serif);
+  font-size: var(--weline-font-size-lg);
+  font-weight: var(--weline-layout-font-weight-bold);
+  line-height: 1.3;
 }
 
 .app-download__dialog-sub {
   margin: var(--weline-space-1) 0 0;
-  color: var(--weline-theme-text-muted, #7b7268);
-  font-size: var(--weline-font-size-sm, 13px);
+  color: var(--weline-theme-text-muted);
+  font-size: var(--weline-font-size-sm);
 }
 
 .app-download__close {
   flex: 0 0 auto;
   width: 2rem;
   height: 2rem;
-  border: 1px solid var(--weline-theme-border, #e4dbcd);
-  border-radius: 999px;
-  background: var(--weline-theme-surface-raised, #fff);
-  color: var(--weline-theme-text-muted, #7b7268);
-  font-size: 1rem;
+  border: var(--weline-theme-border-width) solid var(--weline-theme-border);
+  border-radius: var(--weline-radius-round);
+  background: var(--weline-theme-surface-raised);
+  color: var(--weline-theme-text-muted);
+  font-size: var(--weline-font-size-base);
   line-height: 1;
   cursor: pointer;
 }
 
 .app-download__close:focus-visible {
-  outline: 2px solid var(--weline-theme-primary, #a83a32);
+  outline: var(--weline-theme-border-width) solid var(--weline-theme-primary);
   outline-offset: 2px;
 }
 
@@ -161,9 +188,9 @@
 
 .app-download__qr {
   padding: var(--weline-space-3);
-  border: 1px solid var(--weline-theme-border, #e4dbcd);
-  border-radius: var(--radius-md, 10px);
-  background: #fff;
+  border: var(--weline-theme-border-width) solid var(--weline-theme-border);
+  border-radius: var(--weline-radius-md);
+  background: var(--weline-theme-surface-raised);
   line-height: 0;
 }
 
@@ -184,45 +211,45 @@
   align-items: center;
   gap: var(--weline-space-2);
   padding: var(--weline-space-2) var(--weline-space-3);
-  border: 1px solid var(--weline-theme-border, #e4dbcd);
-  border-radius: var(--radius-md, 10px);
-  background: var(--weline-theme-surface, #fffdf8);
-  font-size: var(--weline-font-size-sm, 13px);
+  border: var(--weline-theme-border-width) solid var(--weline-theme-border);
+  border-radius: var(--weline-radius-md);
+  background: var(--weline-theme-surface);
+  font-size: var(--weline-font-size-sm);
 }
 
 .app-download__plat-name {
-  font-weight: 600;
+  font-weight: var(--weline-layout-font-weight-bold);
 }
 
 .app-download__plat-meta {
-  color: var(--weline-theme-text-muted, #7b7268);
+  color: var(--weline-theme-text-muted);
 }
 
 .app-download__tag {
   margin-left: auto;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--weline-theme-border, #e4dbcd) 55%, transparent);
-  color: var(--weline-theme-text-muted, #7b7268);
-  font-size: var(--weline-font-size-xs, 12px);
+  padding: var(--weline-space-1) var(--weline-space-3);
+  border-radius: var(--weline-radius-round);
+  background: color-mix(in srgb, var(--weline-theme-border) 55%, transparent);
+  color: var(--weline-theme-text-muted);
+  font-size: var(--weline-font-size-xs);
 }
 
 .app-download__tag--on {
-  background: color-mix(in srgb, var(--weline-theme-primary, #a83a32) 12%, transparent);
-  color: var(--weline-theme-primary, #a83a32);
+  background: color-mix(in srgb, var(--weline-theme-primary) 12%, transparent);
+  color: var(--weline-theme-primary);
 }
 
 .app-download__center.app-download__btn {
   justify-content: center;
   margin-top: var(--weline-space-1);
   border-color: transparent;
-  background: var(--weline-theme-primary, #a83a32);
-  color: var(--weline-theme-on-primary, #fff);
+  background: var(--weline-theme-primary);
+  color: var(--weline-theme-on-primary);
 }
 
 .app-download__hint {
-  color: var(--weline-theme-text-muted, #7b7268);
-  font-size: var(--weline-font-size-xs, 12px);
+  color: var(--weline-theme-text-muted);
+  font-size: var(--weline-font-size-xs);
 }
 
 @media (max-width: 640px) {
@@ -235,7 +262,7 @@
     width: 100%;
     max-height: 92vh;
     padding: var(--weline-space-5) var(--weline-space-5) var(--weline-space-6);
-    border-radius: var(--weline-radius-xl, 20px) var(--weline-radius-xl, 20px) 0 0;
+    border-radius: var(--weline-radius-xl) var(--weline-radius-xl) 0 0;
   }
 
   .app-download__dialog-body {

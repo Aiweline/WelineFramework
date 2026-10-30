@@ -10,7 +10,7 @@ use Weline\Server\Console\Server\Doctor;
  */
 final class CapacityBudgetGate
 {
-    public const DEFAULT_FIBER_MAX_ACTIVE = 12;
+    public const DEFAULT_FIBER_MAX_ACTIVE = 6;
     public const DEFAULT_RESERVED_CONNECTIONS = 8;
 
     /**
@@ -35,6 +35,7 @@ final class CapacityBudgetGate
         $targetWorkers = \max(1, $targetWorkers);
         $fiberPool = Doctor::resolveFiberVsPoolFromConfig($instanceName, $env);
         $poolSize = (int)$fiberPool['pool_size'];
+        $poolCount = \max(1, (int)($fiberPool['pool_count'] ?? 1));
         $fiberMaxActive = (int)$fiberPool['fiber_max_active'];
 
         // Gate DB-A: per-process pool must cover fiber max_active; explicit 0 = reject scale.
@@ -84,7 +85,9 @@ final class CapacityBudgetGate
             ];
         }
         $reserved = \max(0, $reservedConnections);
-        $needed = $targetWorkers * $poolSize;
+        // 真实峰值连接需求：每 Worker 每个库最多 max_active 条（主库 + 各模块库）。
+        // 旧口径 workers × pool_size 只算主库且把 pool_size 当并发，会高估数倍并漏掉分库。
+        $needed = $targetWorkers * $fiberMaxActive * $poolCount;
         if (($pgMax - $reserved) < $needed) {
             return [
                 'ok' => false,
@@ -95,6 +98,8 @@ final class CapacityBudgetGate
                     'reserved' => $reserved,
                     'needed' => $needed,
                     'target_workers' => $targetWorkers,
+                    'fiber_max_active' => $fiberMaxActive,
+                    'pool_count' => $poolCount,
                     'pool_size' => $poolSize,
                 ],
             ];
@@ -131,6 +136,7 @@ final class CapacityBudgetGate
             'details' => [
                 'fiber_max_active' => $fiberMaxActive,
                 'pool_size' => $poolSize,
+                'pool_count' => $poolCount,
                 'pg_max_connections' => $pgMax,
                 'reserved' => $reserved,
                 'needed' => $needed,

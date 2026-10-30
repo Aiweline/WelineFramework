@@ -255,10 +255,10 @@ composer,composer
 站点联系（人收）,站点联系（人收）
 "SMTP 提交/代理","SMTP 提交/代理"
 系统固定账号,系统固定账号
-企业邮箱,"Business email"
-尚未开通企业邮箱，可在下方申请本站邮箱。,"No business email yet; apply for site email below."
 我的邮箱,"My Mail"
 查看企业邮箱收件箱,"View enterprise mailbox"
+企业邮箱,"Business email"
+尚未开通企业邮箱，可在下方申请本站邮箱。,"No business email yet; apply for site email below."
 我的企业邮箱,"My enterprise mailbox"
 这里只显示与你当前账号绑定且已启用的邮箱。,"Only active mailboxes explicitly linked to your current account are shown."
 当前邮箱,"Current mailbox"

@@ -106,6 +106,91 @@ final class SharedChromeService
     ];
 
     /**
+     * 悬浮层边缘 chrome 的首帧 critical CSS 正文（**单一出处**，未分层）。
+     *
+     * 为什么是「未分层」：权威 sheet 被资产发布器包进 `@layer components`
+     * （WidgetAssetArtifactPublisher::layerWidgetSourceCss），而页面里未分层的基础规则
+     * （如主题 `button{min-block-size:2.5rem}`）会反过来压过分层 sheet —— 实测把本块包进
+     * `@layer components` 后 chip 由 24×24 变 24×40，尺寸钉不住。故尺寸钉住与交互态都留在
+     * 本块，并与 sheet 同值镜像（漂移由 FloatChromeCriticalParityTest 锁住）。
+     *
+     * 唯一允许的手写源 = 本常量：默认主题页脚 / design 主题页脚 / StorefrontFloatLayerHost
+     * 的 heal 注入都必须调用 {@see self::emitFloatLayerCriticalCss()}，禁止再复制 CSS 正文。
+     *
+     * Marker: storefront-float-critical-single-source-v1
+     */
+    private const FLOAT_LAYER_CRITICAL_CSS = <<<'CSS'
+    /* 内联 critical 保持「未分层」：权威 sheet 被发布器包进 `@layer components`，而页面里未分层的基础规则
+     * （如主题 button{min-block-size:2.5rem}）会反过来压过分层 sheet —— 实测分层后 chip 从 24×24 变 24×40。
+     * 因此 chip 的尺寸钉住与交互态都放在本块（未分层），并与 sheet 同值镜像。
+     * Marker: storefront-float-critical-unlayered-v1 */
+    /* Marker: storefront-float-edge-transform-clear-v1 */
+    #w-storefront-float-layer{position:fixed;top:0;left:0;right:0;bottom:var(--weline-product-sticky-purchase-clearance,0px);z-index:2147482900;box-sizing:border-box;pointer-events:none;padding-bottom:0}
+    #w-storefront-float-layer .w-storefront-float-layer__slot{position:absolute;pointer-events:auto;max-width:min(100vw,28rem);--w-float-dock-base:translate3d(0,0,0);transition:transform var(--weline-theme-duration-normal,.28s) var(--weline-theme-easing-standard,cubic-bezier(.22,1,.36,1));will-change:auto}
+    #w-storefront-float-layer .w-storefront-float-layer__slot--start{left:max(.85rem,env(safe-area-inset-left,0px));bottom:max(.95rem,env(safe-area-inset-bottom,0px))}
+    #w-storefront-float-layer .w-storefront-float-layer__slot--end{right:max(var(--weline-space-5,1.25rem),env(safe-area-inset-right,0px));bottom:max(var(--weline-space-5,1.25rem),env(safe-area-inset-bottom,0px))}
+    #w-storefront-float-layer .w-storefront-float-layer__slot--side{right:max(var(--weline-space-5,1.25rem),env(safe-area-inset-right,0px));top:50%;transform:translateY(-50%);--w-float-dock-base:translateY(-50%);overflow:visible}
+    /* Eight-direction containers (empty shells; only content-bearing ones occupy space). */
+    #w-storefront-float-layer .w-storefront-float-layer__slot--top-start{left:max(.85rem,env(safe-area-inset-left,0px));top:calc(var(--weline-header-height,4.5rem) + .75rem)}
+    #w-storefront-float-layer .w-storefront-float-layer__slot--top-center{left:50%;transform:translateX(-50%);--w-float-dock-base:translateX(-50%);top:calc(var(--weline-header-height,4.5rem) + .75rem)}
+    #w-storefront-float-layer .w-storefront-float-layer__slot--top-end{right:max(var(--weline-space-5,1.25rem),env(safe-area-inset-right,0px));top:calc(var(--weline-header-height,4.5rem) + .75rem)}
+    #w-storefront-float-layer .w-storefront-float-layer__slot--middle-start{left:max(.85rem,env(safe-area-inset-left,0px));top:50%;transform:translateY(-50%);--w-float-dock-base:translateY(-50%)}
+    #w-storefront-float-layer .w-storefront-float-layer__slot--bottom-center{left:50%;transform:translateX(-50%);--w-float-dock-base:translateX(-50%);bottom:max(.95rem,env(safe-area-inset-bottom,0px))}
+    /* 同意条 / 社交条让位镜像（未分层）：sheet 里这些规则在 @layer components 内，压不过本块未分层基础态
+     * （实测 PIC 390px 同意条 167px 时 slot--end 仍 bottom:20px → 遮挡 41%）。必须在此同值镜像；
+     * sheet 保留同值作为非 critical 场景回退。Marker: storefront-float-critical-consent-clearance-v1 */
+    body:has(#weline-consent-banner:not([hidden])) #w-storefront-float-layer .w-storefront-float-layer__slot--start{bottom:calc(max(.95rem,env(safe-area-inset-bottom,0px)) + var(--weline-consent-banner-clearance,4.75rem))}
+    body:has(#weline-consent-banner:not([hidden])) #w-storefront-float-layer .w-storefront-float-layer__slot--end:not(:has(.customer-service-widget.is-open)){bottom:calc(max(var(--weline-space-5,1.25rem),env(safe-area-inset-bottom,0px)) + var(--weline-consent-banner-clearance,4.75rem))}
+    body:has(.weline-social-quick-bar:not([hidden])) #w-storefront-float-layer .w-storefront-float-layer__slot--end:not(:has(.customer-service-widget.is-open)){bottom:calc(max(var(--weline-space-5,1.25rem),env(safe-area-inset-bottom,0px)) + 10.5rem)}
+    body:has(#weline-consent-banner:not([hidden])):has(.weline-social-quick-bar:not([hidden])) #w-storefront-float-layer .w-storefront-float-layer__slot--end:not(:has(.customer-service-widget.is-open)){bottom:calc(max(var(--weline-space-5,1.25rem),env(safe-area-inset-bottom,0px)) + 10.5rem + var(--weline-consent-banner-clearance,4.75rem))}
+    /* 空壳边缘容器上收（原写在 PIC 首页布局里的 !important 主题补丁）：body 无元素子节点、只剩「×」的槽
+     * 与相邻槽目标重叠，Lighthouse 判「触摸目标的尺寸或间距不足」。空壳无可展示内容，直接隐藏；
+     * 有内容后 :has() 会自动恢复显示。这是框架 chrome 语义，design 主题禁止再自行 !important 强藏。
+     * Marker: storefront-float-edge-empty-shell-hide-v1 */
+    #w-storefront-float-layer .w-storefront-float-layer__slot:has(> .w-storefront-float-edge__chrome > .w-storefront-float-edge__body:empty){display:none}
+    #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed{will-change:transform;overflow:visible;max-height:none}
+    /* One dock rule per direction — every slot carrying data-float-dock collapses the same way. Marker: storefront-float-edge-dock-directions-v2 */
+    #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed[data-float-dock=left]{left:max(0px,env(safe-area-inset-left,0px))!important;right:auto;transform:var(--w-float-dock-base,) translateX(-100%)}
+    #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed[data-float-dock=right]{right:max(0px,env(safe-area-inset-right,0px))!important;left:auto;transform:var(--w-float-dock-base,) translateX(100%)}
+    #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed[data-float-dock=up]{transform:var(--w-float-dock-base,) translateY(-100%)}
+    #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed[data-float-dock=down]{transform:var(--w-float-dock-base,) translateY(100%)}
+    #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed .w-storefront-float-edge__body,#w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed .w-storefront-float-edge__body *{visibility:hidden!important;opacity:0!important;pointer-events:none!important}
+    /* Marker: storefront-float-edge-chrome-critical-v1 — edge chrome must paint without the external sheet.
+     * 本块必须与 sheet `Theme/view/statics/css/storefront-float-layer.css` 的 .w-storefront-float-edge__dismiss 同值，
+     * 否则 ID 选择器会反压 sheet（曾把 sheet 的 1.5rem 压回 1.25rem）。Marker: storefront-float-critical-parity-v1 */
+    #w-storefront-float-layer .w-storefront-float-edge__chrome{position:absolute;inset:0;pointer-events:none;z-index:3}
+    #w-storefront-float-layer .w-storefront-float-edge__body{position:relative;z-index:1}
+    #w-storefront-float-layer .w-storefront-float-edge__dismiss{pointer-events:auto;position:absolute;top:-.35rem;z-index:4;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;box-sizing:border-box;width:1.5rem;height:1.5rem;min-inline-size:1.5rem;min-block-size:1.5rem;max-inline-size:1.5rem;max-block-size:1.5rem;margin:0;padding:0;border:1px solid color-mix(in srgb,var(--weline-theme-text,#111) 60%,transparent);border-radius:999px;background:var(--weline-theme-surface-raised,#fff);color:var(--weline-theme-text,#111);font-size:1rem;line-height:1;cursor:pointer;appearance:none}
+    /* 交互态镜像（未分层）：sheet 的 hover 在 components 层内，赢不过本块未分层基础态 → 必须在此同步声明。 */
+    #w-storefront-float-layer .w-storefront-float-edge__dismiss:is(:hover,:focus-visible){opacity:1;color:var(--weline-theme-text,#111);background:var(--weline-theme-surface-raised,#fff);border-color:color-mix(in srgb,var(--weline-theme-text,#111) 78%,transparent);outline:none}
+    #w-storefront-float-layer .w-storefront-float-edge__dismiss:focus-visible{box-shadow:0 0 0 var(--weline-theme-focus-ring-width,2px) color-mix(in srgb,var(--weline-theme-primary,#0f766e) 45%,transparent)}
+    #w-storefront-float-layer .w-storefront-float-layer__slot[data-float-dock=left] .w-storefront-float-edge__dismiss{right:-.15rem}
+    #w-storefront-float-layer .w-storefront-float-layer__slot[data-float-dock=right] .w-storefront-float-edge__dismiss{left:-.15rem}
+    #w-storefront-float-layer .w-storefront-float-layer__slot[data-float-dock=up] .w-storefront-float-edge__dismiss{top:auto;bottom:-.35rem;left:50%;transform:translateX(-50%)}
+    #w-storefront-float-layer .w-storefront-float-layer__slot[data-float-dock=down] .w-storefront-float-edge__dismiss{left:50%;transform:translateX(-50%)}
+    #w-storefront-float-layer .w-storefront-float-edge__recall{pointer-events:auto;position:absolute;top:50%;z-index:5;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;box-sizing:border-box;width:var(--weline-space-5,1.25rem);height:calc(var(--weline-space-8,2rem) + .25rem);min-inline-size:0;min-block-size:0;margin:0;padding:0;transform:translateY(-50%);color:var(--weline-theme-primary,#0f766e);background:var(--weline-theme-surface-raised,#fff);border:1px solid var(--weline-theme-border,#e2e8f0);box-shadow:var(--weline-theme-shadow-xs,0 1px 2px rgba(0,0,0,.08));cursor:pointer;appearance:none}
+    #w-storefront-float-layer .w-storefront-float-layer__slot[data-float-dock=left] .w-storefront-float-edge__recall{left:100%;border-radius:0 var(--weline-radius-md,8px) var(--weline-radius-md,8px) 0;border-left:none}
+    #w-storefront-float-layer .w-storefront-float-layer__slot[data-float-dock=right] .w-storefront-float-edge__recall{right:100%;border-radius:var(--weline-radius-md,8px) 0 0 var(--weline-radius-md,8px);border-right:none}
+    #w-storefront-float-layer .w-storefront-float-layer__slot[data-float-dock=up] .w-storefront-float-edge__recall{top:100%;left:50%;transform:translateX(-50%);border-radius:0 0 var(--weline-radius-md,8px) var(--weline-radius-md,8px);border-top:none}
+    #w-storefront-float-layer .w-storefront-float-layer__slot[data-float-dock=down] .w-storefront-float-edge__recall{top:auto;bottom:100%;left:50%;transform:translateX(-50%);border-radius:var(--weline-radius-md,8px) var(--weline-radius-md,8px) 0 0;border-bottom:none}
+    #w-storefront-float-layer .w-storefront-float-edge__recall:is(:hover,:focus-visible){color:var(--weline-theme-on-primary,#fff);background:var(--weline-theme-primary,#0f766e);outline:none}
+    #w-storefront-float-layer .w-store-music[data-store-music],#w-storefront-float-layer .customer-service-widget{position:relative;left:auto;right:auto;bottom:auto;top:auto}
+    #w-storefront-float-layer .w-store-music-host[data-store-music-host]{width:auto;height:auto;overflow:visible}
+    @media (max-width:720px){
+        /* 移动端档位镜像（sheet:448-516 区）：否则未分层 critical 会压掉分层 sheet 的移动端基线/让位。 */
+        #w-storefront-float-layer .w-storefront-float-layer__slot--start{left:max(.55rem,env(safe-area-inset-left,0px));bottom:max(.7rem,env(safe-area-inset-bottom,0px))}
+        #w-storefront-float-layer .w-storefront-float-layer__slot--end{right:max(var(--weline-space-3,.75rem),env(safe-area-inset-right,0px));bottom:max(var(--weline-space-3,.75rem),env(safe-area-inset-bottom,0px))}
+        #w-storefront-float-layer .w-storefront-float-layer__slot--side{right:max(var(--weline-space-3,.75rem),env(safe-area-inset-right,0px))}
+        body:has(.weline-social-quick-bar:not([hidden])) #w-storefront-float-layer .w-storefront-float-layer__slot--end:not(:has(.customer-service-widget.is-open)){bottom:calc(max(var(--weline-space-3,.75rem),env(safe-area-inset-bottom,0px)) + 10.5rem)}
+        body:has(#weline-consent-banner:not([hidden])) #w-storefront-float-layer .w-storefront-float-layer__slot--start{bottom:calc(max(.7rem,env(safe-area-inset-bottom,0px)) + var(--weline-consent-banner-clearance,5.25rem))}
+        body:has(#weline-consent-banner:not([hidden])) #w-storefront-float-layer .w-storefront-float-layer__slot--end:not(:has(.customer-service-widget.is-open)){bottom:calc(max(var(--weline-space-3,.75rem),env(safe-area-inset-bottom,0px)) + var(--weline-consent-banner-clearance,5.25rem))}
+        body:has(#weline-consent-banner:not([hidden])):has(.weline-social-quick-bar:not([hidden])) #w-storefront-float-layer .w-storefront-float-layer__slot--end:not(:has(.customer-service-widget.is-open)){bottom:calc(max(var(--weline-space-3,.75rem),env(safe-area-inset-bottom,0px)) + 10.5rem + var(--weline-consent-banner-clearance,5.25rem))}
+        #w-storefront-float-layer .w-store-music__avatar{width:2.5rem;height:2.5rem}
+        #w-storefront-float-layer .cs-chat-button{width:2.5rem;height:2.5rem}
+    }
+    CSS;
+
+    /**
      * Nested chrome extensions inside header mini-cart (not float-layer hosts).
      * Primary path: Partials storefront_chrome MISS builder fills these into the
      * shared bag (schema v24+). Outbound fillEmptyNestedChromeSlots remains a
@@ -228,6 +313,27 @@ final class SharedChromeService
         }
 
         return $chunks === [] ? '' : \implode("\n", $chunks) . "\n";
+    }
+
+    /**
+     * 悬浮层边缘 chrome 首帧 critical CSS（**单一出处**，未分层）。
+     *
+     * 默认主题页脚 / design 主题页脚 / StorefrontFloatLayerHost 的 heal 注入都必须调用本方法，
+     * 禁止再各自内联手写 CSS 正文（历史上最多 8 个手写作者，导致 1.25rem 与 1.5rem 漂移）。
+     * Marker: storefront-float-critical-single-source-v1
+     *
+     * @param string $styleAttrs 附加到 `<style>` 上的字面属性；仅供框架内部调用方传常量
+     *                           （如 `data-required-injection-host="float-layer"`）。
+     *                           调用方不得传入来自请求/模板变量的内容。
+     */
+    public static function emitFloatLayerCriticalCss(string $styleAttrs = ''): string
+    {
+        $attrs = \trim($styleAttrs);
+        $attrs = $attrs === '' ? '' : ' ' . $attrs;
+
+        return '<style data-storefront-float-layer-critical' . $attrs . '>' . "\n"
+            . self::FLOAT_LAYER_CRITICAL_CSS . "\n"
+            . '</style>';
     }
 
     public function __construct(

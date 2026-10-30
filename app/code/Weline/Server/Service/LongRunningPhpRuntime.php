@@ -29,6 +29,17 @@ class LongRunningPhpRuntime
     private const OPCACHE_MEMORY_CEILING_MB = 256;
 
     /**
+     * opcache.interned_strings_buffer sizing, in MB (user directive 2026-10-30).
+     * The host php.ini default is 8MB and this key was absent from the startup
+     * args, so Workers ran with a permanently saturated interned buffer; once
+     * full, OPcache stops sharing strings and rewrites them per-script, which
+     * measured ~4.4x opcode inflation on the same locale bag. See the sizing
+     * note at the argument injection site for the cold-vs-warm measurements.
+     * 40MB sits above the measured 32MB elbow to leave head-room for 38 locales.
+     */
+    private const OPCACHE_INTERNED_STRINGS_BUFFER_MB = 40;
+
+    /**
      * Disk bytecode cache, relative to the framework base path. Shared across
      * process generations, unlike the per-process CLI OPcache segment.
      */
@@ -77,16 +88,45 @@ class LongRunningPhpRuntime
                     'opcache.memory_consumption=' . $opcacheMb,
                 ];
 
+                // Interned strings buffer (user directive 2026-10-30 → 40MB).
+                // Why this matters here: the host php.ini default is 8MB, and this
+                // key is NOT in the six startup args, so every Worker inherited the
+                // 8MB default and sat permanently in the "buffer full" state. Once
+                // interned storage is full, OPcache stops sharing strings and
+                // rewrites them into each script's own opcode block instead, which
+                // measured 4.4x inflation on the same locale bag in the same process:
+                //   zh_Hans_CN.shared.php, interned free=5.52MB → shared opcode=1.110MB
+                //   zh_Hans_CN.shared.php, interned free=0.00MB → shared opcode=4.908MB
+                // Sizing note: measured cold-start of 80 bags showed isb=8 → 143.45MB
+                // and isb=16 → 145.24MB (no gain, +1.79MB), while a warm layout
+                // (layout + 320 templates + 80 bags) showed isb=8 → 255.94MB,
+                // isb=16 → 218.63MB, isb=32 → 197.72MB (58.22MB saved at 8→32).
+                // So the benefit only materialises once the working set is warm,
+                // which is the normal steady state of these long-running Workers.
+                // 40MB is chosen above the measured 32MB point for head-room across
+                // 38 locales; cost is a one-off per-process segment allocation.
+                $arguments[] = '-d';
+                $arguments[] = 'opcache.interned_strings_buffer='
+                    . self::OPCACHE_INTERNED_STRINGS_BUFFER_MB;
+
                 // Shared on-disk bytecode cache: survives process exits, so a
                 // recycled Worker reloads opcode instead of re-parsing ~13k
-                // scripts. consistency_checks is intentionally left at its
-                // default (On) so deploy-time edits never serve stale bytecode.
+                // scripts.
+                //
+                // 盘缓存必须配合时间戳校验：file_cache_consistency_checks 只校验
+                // 缓存文件自身完整性，不比对源文件 mtime。宿主机 php.ini 把
+                // validate_timestamps 设为 Off 时，实测会让 Worker 长期执行旧字节码
+                // （ConnectionPool.php 的 .bin 曾落后源文件 17 小时，热重载后仍缺新方法）。
                 $fileCache = self::ensureFileCacheDirectory();
                 if ($fileCache !== '') {
                     $arguments[] = '-d';
                     $arguments[] = 'opcache.file_cache=' . $fileCache;
                     $arguments[] = '-d';
                     $arguments[] = 'opcache.file_cache_only=0';
+                    $arguments[] = '-d';
+                    $arguments[] = 'opcache.validate_timestamps=1';
+                    $arguments[] = '-d';
+                    $arguments[] = 'opcache.revalidate_freq=0';
                 }
 
                 // Tracing JIT is ON by default (user directive 2026-10-29).
@@ -147,6 +187,137 @@ class LongRunningPhpRuntime
         }
 
         return $path;
+    }
+
+    /**
+     * 启动期一次的陈旧 .bin 清理（由 `server:start` / `server:reload` 的 CLI 调用）。
+     *
+     * 不放在 ensureFileCacheDirectory()：那里每个 Worker 启动都会经过，会把盘缓存
+     * 打成"每个进程都扫一遍"的重活；JIT=on 又不会回填，反复扫描没有收益。
+     * 用 flock + stamp 记录本次计数，使"第二次启动 removed=0"可被外部核对。
+     *
+     * @return array{scanned:int, removed:int, kept:int, orphan:int, dir:string}
+     */
+    public static function pruneStaleFileCacheOnStartup(): array
+    {
+        $dir = self::ensureFileCacheDirectory();
+        if ($dir === '') {
+            return ['scanned' => 0, 'removed' => 0, 'kept' => 0, 'orphan' => 0, 'dir' => ''];
+        }
+
+        $stampPath = \rtrim($dir, '/\\') . \DIRECTORY_SEPARATOR . '.prune.stamp';
+        $lock = @\fopen($stampPath . '.lock', 'c');
+        if (\is_resource($lock)) {
+            @\flock($lock, LOCK_EX);
+        }
+
+        try {
+            $result = self::pruneStaleFileCache($dir);
+            $payload = \json_encode([
+                'at' => \date('c'),
+                'scanned' => $result['scanned'],
+                'removed' => $result['removed'],
+                'kept' => $result['kept'],
+                'orphan' => $result['orphan'] ?? 0,
+            ], JSON_UNESCAPED_SLASHES);
+            @\file_put_contents($stampPath, (string) $payload);
+            // 无论 removed 是否为 0 都留一行：否则"跳过 / 0 删除 / 未执行"三种情况无法区分。
+            @\error_log('[opcache] stale bytecode prune ' . (string) $payload);
+        } finally {
+            if (\is_resource($lock)) {
+                @\flock($lock, LOCK_UN);
+                @\fclose($lock);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * 清理陈旧字节码缓存：源文件不存在，或源文件 mtime 比 .bin 新，则删除该 .bin。
+     *
+     * 为什么必须有这一步：`opcache.file_cache_consistency_checks` 只校验缓存文件自身完整性，
+     * 不比对源文件时间戳；宿主机 `validate_timestamps=Off` 时，进程会长期执行旧字节码
+     * （实测 ConnectionPool 的 .bin 落后源文件 17 小时，热重载后仍缺新方法）。
+     * unlink 对正在读取该 .bin 的进程是安全的（POSIX：已打开的 fd 继续有效）。
+     *
+     * @param string|null $dir 测试用覆盖目录；null 用生产缓存目录
+     * @return array{scanned:int, removed:int, kept:int, dir:string}
+     */
+    public static function pruneStaleFileCache(?string $dir = null): array
+    {
+        $dir = $dir ?? self::ensureFileCacheDirectory();
+        $result = ['scanned' => 0, 'removed' => 0, 'kept' => 0, 'orphan' => 0, 'dir' => $dir];
+        if ($dir === '' || !\is_dir($dir)) {
+            return $result;
+        }
+
+        $prefixLength = \strlen(\rtrim($dir, '/\\') . \DIRECTORY_SEPARATOR);
+        try {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::LEAVES_ONLY
+            );
+        } catch (\Throwable) {
+            return $result;
+        }
+
+        foreach ($iterator as $file) {
+            if (!$file instanceof \SplFileInfo || !$file->isFile()) {
+                continue;
+            }
+            $path = $file->getPathname();
+            if (!\str_ends_with($path, '.bin')) {
+                continue;
+            }
+            $result['scanned']++;
+
+            // 缓存键 = {system_id}/{源文件绝对路径}.bin：去掉首层 system_id 与末尾 .bin
+            // 即源文件绝对路径（与 cache:complicategc --bin-gc 的判定一致）。
+            $relative = \substr($path, $prefixLength);
+            $segments = \explode(\DIRECTORY_SEPARATOR, $relative);
+            if (\count($segments) < 2) {
+                $result['kept']++;
+                continue;
+            }
+            \array_shift($segments);
+            $source = \implode(\DIRECTORY_SEPARATOR, $segments);
+            $source = \substr($source, 0, -4);
+            // 缓存键去掉了绝对路径的前导分隔符（/Users/... → Users/...），这里补回，
+            // 否则所有 .bin 都会被判成「源文件不存在」而误删整库缓存。
+            // Windows 盘符（C:/...）本身就是绝对路径，不再补前导分隔符。
+            if (!\preg_match('#\A[A-Za-z]:[\\\\/]#', $source)) {
+                $source = \DIRECTORY_SEPARATOR . $source;
+            }
+
+            // 只允许处理本项目根下的缓存：换软链 / 迁移 / BP 变化时还原出的路径可能指向
+            // 别的项目，对它们一律只统计不删除，避免把整库有效字节码删光。
+            $projectRoot = \rtrim((string) (\defined('BP') ? \BP : ''), '/\\');
+            if ($projectRoot === '' || !\str_starts_with($source, $projectRoot . \DIRECTORY_SEPARATOR)) {
+                $result['orphan']++;
+                $result['kept']++;
+                continue;
+            }
+
+            $stale = !\is_file($source);
+            if (!$stale) {
+                $sourceMtime = @\filemtime($source);
+                $stale = $sourceMtime !== false && $sourceMtime > (int) $file->getMTime();
+            }
+
+            if ($stale) {
+                if (@\unlink($path)) {
+                    $result['removed']++;
+                    continue;
+                }
+                $result['kept']++;
+                continue;
+            }
+
+            $result['kept']++;
+        }
+
+        return $result;
     }
 
     public function apply(): void

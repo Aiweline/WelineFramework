@@ -38,7 +38,7 @@ $this->setData('seo', [
         .not-found-layout {
             margin: 0;
             background: var(--color-bg-canvas, #ffffff);
-            color: var(--color-text-primary, #0f1111);
+            color: var(--color-text-primary, var(--color-text, #111827));
             font-family: "Commerce Ember", Arial, sans-serif;
         }
 
@@ -48,7 +48,7 @@ $this->setData('seo', [
 
         .not-found__intro {
             background: var(--color-bg-canvas, #ffffff);
-            border-bottom: 1px solid var(--color-border-default, #ddd);
+            border-bottom: 1px solid var(--color-border-default, #e5e7eb);
         }
 
         .not-found__intro-inner {
@@ -81,7 +81,7 @@ $this->setData('seo', [
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            color: var(--color-text-secondary, #565959);
+            color: var(--color-text-secondary, #4b5563);
         }
 
         .not-found__title {
@@ -89,7 +89,7 @@ $this->setData('seo', [
             font-size: clamp(1.45rem, 2.4vw, 1.85rem);
             line-height: 1.25;
             font-weight: 700;
-            color: var(--color-text-primary, #0f1111);
+            color: var(--color-text-primary, var(--color-text, #111827));
         }
 
         .not-found__lead,
@@ -97,7 +97,7 @@ $this->setData('seo', [
             margin: 0;
             max-width: 42rem;
             line-height: 1.55;
-            color: var(--color-text-secondary, #565959);
+            color: var(--color-text-secondary, #4b5563);
         }
 
         .not-found__hint {
@@ -119,22 +119,23 @@ $this->setData('seo', [
             min-height: 2rem;
             padding: 0.35rem 0.95rem;
             border-radius: 999px;
-            border: 1px solid var(--color-primary-border, #cc7700);
-            /* 实心 primary 底 + on-primary 墨：两端同色，白字稳过 4.5:1（默认盘 #ffffff on #2563eb=5.17:1）。
-               原为 linear-gradient(180deg, #ffe08a, var(--color-primary))，白字压顶端浅黄实测 1.29:1
-               （视觉上等同白底白字）；任何单一墨色都无法同时满足黄端与蓝端（深墨压蓝端仅 3.15:1），
+            border: 1px solid var(--color-primary-border, #0a4f4a);
+            /* 实心 primary 底 + on-primary 墨：两端同色，浅墨稳过 4.5:1
+               （默认盘 #f8fafc on #0f766e 按 WCAG 公式为 5.23:1）。原为
+               linear-gradient(180deg, 自造浅端, var(--color-primary))，浅端压浅墨实测
+               1.29:1（视觉上等同白底白字）；任何单一墨色都无法同时满足浅端与深端，
                故取消自造渐变，只消费主题盘 Token。 */
-            background: var(--color-primary, #ff9900);
-            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset;
-            color: var(--color-on-primary, #111);
+            background: var(--color-primary, #0f766e);
+            box-shadow: 0 1px 0 color-mix(in srgb, var(--color-on-primary, #f8fafc) 40%, transparent) inset;
+            color: var(--color-on-primary, #f8fafc);
             font-size: 0.92rem;
             font-weight: 700;
             text-decoration: none;
         }
 
         .not-found__home-link:hover {
-            background: var(--color-primary-hover, #e68900);
-            color: var(--color-on-primary, #111);
+            background: var(--color-primary-hover, #0d5f59);
+            color: var(--color-on-primary, #f8fafc);
         }
 
         .not-found__back-link {
@@ -156,7 +157,7 @@ $this->setData('seo', [
 
         .not-found__shop {
             box-sizing: border-box;
-            background: var(--color-bg-secondary, #eaeded);
+            background: var(--color-bg-secondary, #f3f4f6);
             padding-block: 1.35rem 2.5rem;
             /* 通栏底色 + 版心沟槽：面板靠 section 的 inline padding 内缩，避免窄屏卡片贴边 */
             padding-inline: var(--weline-layout-content-padding-inline);
@@ -168,10 +169,10 @@ $this->setData('seo', [
             max-width: 100%;
             margin-inline: auto;
             padding: 1.15rem 1.15rem 1.35rem;
-            border: 1px solid var(--color-border-default, #d5d9d9);
+            border: 1px solid var(--color-border-default, #e5e7eb);
             border-radius: 8px;
-            background: var(--color-bg-primary, #fff);
-            box-shadow: 0 1px 2px rgba(15, 17, 17, 0.06);
+            background: var(--color-bg-primary, #ffffff);
+            box-shadow: 0 1px 2px color-mix(in srgb, var(--color-text-primary, #111827) 8%, transparent);
         }
 
         /* 404 底部扩展槽：与 .terms-bottom-slot / .policy-bottom-slot 同一条版心数学，
@@ -244,13 +245,13 @@ $this->setData('seo', [
                     class="not-found__intro-inner not-found-container">
                 <div class="not-found__visual" aria-hidden="true">
                     <svg viewBox="0 0 240 200" role="img" focusable="false">
-                        <rect x="28" y="56" width="118" height="92" rx="10" fill="#ffd699"/>
-                        <rect x="38" y="66" width="98" height="72" rx="8" fill="#fffaf0" stroke="#ff9900" stroke-width="3"/>
-                        <path d="M170 72c18 0 34 14 34 34s-16 34-34 34h-10V72h10z" fill="#ff9900"/>
-                        <circle cx="194" cy="106" r="18" fill="#fffaf0" stroke="#ff9900" stroke-width="3"/>
-                        <text x="194" y="113" text-anchor="middle" font-size="20" font-weight="700" fill="#c45500">?</text>
-                        <path d="M78 118h38M78 104h48" stroke="#cc7700" stroke-width="4" stroke-linecap="round"/>
-                        <ellipse cx="120" cy="168" rx="62" ry="10" fill="#eaeded"/>
+                        <rect x="28" y="56" width="118" height="92" rx="10" fill="var(--color-primary-bg-subtle, #f0fdfa)"/>
+                        <rect x="38" y="66" width="98" height="72" rx="8" fill="var(--color-bg-canvas, #ffffff)" stroke="var(--color-primary, #0f766e)" stroke-width="3"/>
+                        <path d="M170 72c18 0 34 14 34 34s-16 34-34 34h-10V72h10z" fill="var(--color-primary, #0f766e)"/>
+                        <circle cx="194" cy="106" r="18" fill="var(--color-bg-canvas, #ffffff)" stroke="var(--color-primary, #0f766e)" stroke-width="3"/>
+                        <text x="194" y="113" text-anchor="middle" font-size="20" font-weight="700" fill="var(--color-primary-text-emphasis, #115e59)">?</text>
+                        <path d="M78 118h38M78 104h48" stroke="var(--color-primary-border, #0a4f4a)" stroke-width="4" stroke-linecap="round"/>
+                        <ellipse cx="120" cy="168" rx="62" ry="10" fill="var(--color-bg-secondary, #f3f4f6)"/>
                     </svg>
                 </div>
                 <div class="not-found__message">

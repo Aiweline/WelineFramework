@@ -4,6 +4,15 @@
     gap: var(--weline-space-3);
 }
 
+/*
+ * 平台品牌标识色作用域变量声明（单一作者：默认值只在此声明为主题盘 Token）。
+ * 各平台官方标识色属业务数据真实色（主题规则白名单），由部件模板以
+ * data-widget-style="--btn-color:<平台色>" 逐元素传入，不复制进 CSS，
+ * 避免同一色值出现两个作者。未传入时回落到主题盘主色，不落字面色。
+ * 平台色数据来源：app/code/Weline/Theme/Helper/SocialIconHelper::getAvailableIcons()
+ */
+.wc-theme_widget_social_share .share-btn { --btn-color: var(--weline-theme-primary); }
+
 .wc-theme_widget_social_share.layout-vertical {
     flex-direction: column;
     align-items: flex-start;
@@ -33,7 +42,7 @@
     border: none;
     cursor: pointer;
     transition: all var(--weline-theme-transition-base);
-    background: var(--btn-color);
+    background: var(--btn-color, var(--weline-theme-primary));
     color: var(--weline-theme-on-primary);
 }
 

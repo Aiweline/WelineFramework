@@ -61,7 +61,7 @@ $groups = [
         body.sitemap-layout {
             margin: 0;
             min-height: 100vh;
-            color: var(--color-text-primary, #0f1111);
+            color: var(--color-text-primary, var(--color-text, #111827));
             background: var(--color-bg-canvas, #ffffff);
             font-family: "Commerce Ember", Arial, sans-serif;
         }
@@ -73,7 +73,7 @@ $groups = [
         .sitemap-page__main {
             flex: 1 0 auto;
             width: 100%;
-            background: linear-gradient(180deg, #eaeded 0, #f3f3f3 12rem);
+            background: linear-gradient(180deg, var(--color-bg-secondary, #f3f4f6) 0, var(--color-bg-muted, #f3f3f3) 12rem);
         }
         .sitemap-page__stage {
             box-sizing: border-box;
@@ -88,9 +88,9 @@ $groups = [
             padding: clamp(1.35rem, 3vw, 1.85rem) clamp(1.15rem, 2.5vw, 1.75rem);
             border-radius: 8px;
             background:
-                radial-gradient(ellipse at top right, rgba(255, 153, 0, .14), transparent 46%),
-                linear-gradient(135deg, #131921 0%, #232f3e 58%, #37475a 100%);
-            color: #fff;
+                radial-gradient(ellipse at top right, color-mix(in srgb, var(--color-primary, #0f766e) 14%, transparent), transparent 46%),
+                linear-gradient(135deg, var(--color-bg-dark-secondary, #111827) 0%, var(--color-bg-dark, #1f2937) 58%, var(--color-bg-dark-tertiary, #374151) 100%);
+            color: var(--color-text-on-dark, #f8fafc);
         }
         .sitemap-page__eyebrow {
             margin: 0 0 0.4rem;
@@ -98,20 +98,20 @@ $groups = [
             font-weight: 700;
             letter-spacing: 0.06em;
             text-transform: uppercase;
-            color: #febd69;
+            color: var(--color-primary-light, #14b8a6);
         }
         .sitemap-page__hero h1 {
             margin: 0;
             font-size: clamp(1.55rem, 3.2vw, 2.1rem);
             line-height: 1.2;
             font-weight: 700;
-            color: #ffffff;
+            color: var(--color-text-on-dark, #f8fafc);
         }
         .sitemap-page__hero-lead {
             margin: 0.75rem 0 0;
             max-width: 46rem;
             line-height: 1.65;
-            color: #dddddd;
+            color: var(--color-text-on-dark-muted, #cbd5e1);
         }
         .sitemap-page__grid {
             display: grid;
@@ -119,17 +119,17 @@ $groups = [
             gap: 1rem;
         }
         .sitemap-page__card {
-            background: #fff;
-            border: 1px solid #ddd;
+            background: var(--color-bg-primary, #ffffff);
+            border: 1px solid var(--color-border-default, #e5e7eb);
             border-radius: 8px;
-            box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
+            box-shadow: 0 1px 2px color-mix(in srgb, var(--color-text-primary, #111827) 8%, transparent);
             padding: 1.15rem 1.25rem 1.35rem;
         }
         .sitemap-page__card h2 {
             margin: 0 0 0.85rem;
             font-size: 1.05rem;
             font-weight: 700;
-            border-left: 4px solid #ff9900;
+            border-left: 4px solid var(--color-primary, #0f766e);
             padding-left: 0.55rem;
         }
         .sitemap-page__card ul {
@@ -140,21 +140,21 @@ $groups = [
             gap: 0.45rem;
         }
         .sitemap-page__card a {
-            color: #007185;
+            color: var(--color-link, #0f766e);
             text-decoration: none;
             font-size: 0.95rem;
             line-height: 1.4;
         }
         .sitemap-page__card a:hover {
-            color: #c45500;
+            color: var(--color-link-hover, #115e59);
             text-decoration: underline;
         }
         .sitemap-page__note {
             margin-top: 1rem;
             font-size: 0.9rem;
-            color: #565959;
+            color: var(--color-text-secondary, #4b5563);
         }
-        .sitemap-page__note a { color: #007185; }
+        .sitemap-page__note a { color: var(--color-link, #0f766e); }
         @media (max-width: 900px) {
             .sitemap-page__grid { grid-template-columns: 1fr; }
         }

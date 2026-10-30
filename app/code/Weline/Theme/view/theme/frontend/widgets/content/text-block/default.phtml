@@ -17,7 +17,7 @@
  * @param title {default="内容标题",type="string",label="标题"}
  * @param content {default="",type="rich_text",label="内容"}
  * @param alignment {default="left",type="select",label="对齐方式",options={left:"左对齐",center:"居中",right:"右对齐"}}
- * @param background_color {default="transparent",type="color",label="背景颜色"}
+ * @param background_color {default="transparent",type="select",label="背景颜色",options={transparent:"透明（默认）",canvas:"画布白",surface:"纸面",surface-muted:"纸面·次级",primary-subtle:"主色淡底",on-dark:"深色面"}}
  * @param padding {default="var(--spacing-component-padding)",type="string",label="内边距"}
  */
 
@@ -35,10 +35,18 @@ $alignment = strtolower(trim((string)($this->getData('alignment') ?? 'left')));
 if (!in_array($alignment, ['left', 'center', 'right'], true)) {
     $alignment = 'left';
 }
-$backgroundColor = ThemeUiColor::sanitize(
-    $this->getData('background_color') ?? '',
-    'transparent'
-);
+// 语义档位 → 主题盘 Token（变量单一作者：本部件不持有任何字面色）。
+$textBlockSurfacePresets = [
+    'transparent' => 'transparent',
+    'canvas' => 'var(--weline-theme-canvas)',
+    'surface' => 'var(--weline-theme-surface)',
+    'surface-muted' => 'var(--weline-theme-surface-muted)',
+    'primary-subtle' => 'var(--weline-theme-primary-subtle)',
+    'on-dark' => 'var(--color-bg-dark)',
+];
+$surfaceKey = (string)($this->getData('background_color') ?? 'transparent');
+$backgroundColor = $textBlockSurfacePresets[$surfaceKey]
+    ?? ThemeUiColor::sanitize($surfaceKey, $textBlockSurfacePresets['transparent']);
 $padding = \Weline\Theme\Helper\SiteBlockConfig::length($this->getData('padding'), 'var(--spacing-component-padding)');
 
 $rootStyle = '--wc-text-bg:' . $backgroundColor . ';--wc-text-padding:' . $padding . ';';

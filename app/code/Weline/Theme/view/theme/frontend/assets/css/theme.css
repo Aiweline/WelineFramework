@@ -4,7 +4,22 @@
  * 只包含通用的、基础的样式。
  * 布局特定样式：layouts/{layoutType}/{layoutOption}.css。
  * 认证页版面留白与 .auth-form Flash：assets/css/auth-form-wflash.css（account_auth 按需加载）。
+ *
+ * ── 级联层约束（架构硬约束，勿删本层）────────────────────────────
+ * 本文件全部规则收敛在具名层 `@layer weline-theme`。该层在
+ * foundation.css 的注册序列
+ * `@layer weline-theme, reset, tokens, base, layout, components, utilities, page;`
+ * 中排在**第一位**，因此**优先级最低**（CSS 层叠中后声明的层优先级更高，
+ * 已用逐层 --probe-ord 实验反推证实）：自定义主题只要把 CSS 另外引入
+ * （写入本序中任一层，或直接未分层引入），即可正常覆盖本文件骨架，
+ * 无需 `!important`。
+ *
+ * 若把本层去掉（回到未分层），未分层规则会无条件压过所有 @layer 规则，
+ * 自定义主题写进任何层都无法覆盖骨架——「另外引入 CSS 即继承」失效。
+ * 审计：ThemeCssContractsTest「theme.css 必须收敛到 @layer weline-theme」。
  */
+
+@layer weline-theme {
 
 /* ========== 基础页面结构 ========== */
 /* Off-canvas chrome (mini-cart etc.) must never create a horizontal page gutter. */
@@ -2100,7 +2115,7 @@ table.table tbody tr:hover {
     display: flex;
     align-items: center;
     min-height: var(--weline-control-height, var(--weline-theme-control-height));
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-strong, var(--weline-theme-border-color));
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
     border-radius: var(--weline-radius-md, var(--weline-theme-radius-md, 8px));
     background: var(--weline-theme-surface);
     box-shadow: var(--theme-input-shadow, none);
@@ -3024,7 +3039,7 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 [data-surface="inverse"] .delivery-panel .w-button[data-variant="outline"][data-tone="neutral"],
 .w-surface-inverse .delivery-panel .w-button[data-variant="outline"][data-tone="neutral"] {
     color: var(--weline-theme-text);
-    border-color: var(--weline-theme-border-strong);
+    border-color: var(--weline-theme-border-color-strong);
     background: transparent;
 }
 
@@ -3091,3 +3106,5 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
     color: var(--_paper-text);
     color-scheme: light;
 }
+
+} /* ← 闭合 @layer weline-theme：勿删，否则返回未分层，自定义主题无法覆盖骨架 */

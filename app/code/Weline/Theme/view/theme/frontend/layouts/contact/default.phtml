@@ -141,12 +141,19 @@ $mailHref = $contactEmail !== '' ? ('mailto:' . $contactEmail) : '#';
             color: var(--weline-layout-link-color);
         }
 
+        /*
+         * 布局不越权改部件前景：这里原先写了 color: var(--weline-layout-text-primary)
+         * 的宽泛标签规则，特异性 (0,1,1) 压过部件自身对反色面的绑定
+         * `.categories-sidebar-title{color:var(--weline-theme-text-on-dark)}`（0,1,0），
+         * 把深色 header（background-color: var(--weline-chrome-bg-dark-secondary)）
+         * 内的标题压成深墨，实测 1.2:1。深色面/白纸面的前景由承载它的部件自己
+         * 成对绑定，布局只负责排版属性（margin / letter-spacing）。
+         */
         .contact-layout h1,
         .contact-layout h2,
         .contact-layout h3 {
             margin: 0;
             letter-spacing: 0;
-            color: var(--weline-layout-text-primary);
         }
 
         .contact-layout h1 {
@@ -164,7 +171,21 @@ $mailHref = $contactEmail !== '' ? ('mailto:' . $contactEmail) : '#';
             line-height: var(--weline-layout-line-height-tight);
         }
 
-        .contact-layout p {
+        /*
+         * 2026-10-30 越权收窄（WO-UI-CONTRAST-PAIRING）
+         * 该布局的插槽（.contact-layout__hero-slot / __help-slot /
+         * __content-root-slot 等）会注入第三方部件，例如 Cookie 同意横幅
+         * （.w-consent-banner__text 就是 <p>）。原来的 `.contact-layout p`
+         * 特异性 (0,1,1) 会越权命中插槽里的部件段落，把部件自己成对绑定的
+         * 反色浅墨（#f0f2f2）压成布局副墨（--weline-layout-text-secondary
+         * → rgb(71,85,105)），在深底横幅上实测 1.79:1。
+         *
+         * 布局只该管「自己的段落」，不该管插槽里部件的段落：这里排除带
+         * `w-` 前缀的部件类（框架部件命名约定），保留布局自有段落类
+         * （contact-layout__lead / __note 等）。布局自有段落的墨色由
+         * 下面各 __* 类单独声明，不受影响。
+         */
+        .contact-layout p:not([class*="w-"]) {
             margin: 0;
             color: var(--weline-layout-text-secondary);
             line-height: var(--weline-layout-line-height-relaxed);

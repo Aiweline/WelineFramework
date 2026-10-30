@@ -20,7 +20,7 @@
  *
  * @param link_groups {default=[],type="array",label="链接分组",description="每组包含title和links数组"}
  * @param columns {default="4",type="select",label="列数",options={2:"2列",3:"3列",4:"4列"}}
- * @param text_color {default="var(--weline-theme-text-on-dark, #f8fafc)",type="color",label="文字颜色"}
+ * @param text_color {default="on-dark",type="select",label="文字颜色",options={on-dark:"深色背景浅字（默认）",on-dark-muted:"深色背景次级字",inverse:"反色面文字",text:"正文墨色",text-muted:"次级墨色"}}
  */
 
 use Weline\Theme\Helper\FooterDefaultLinksHelper;
@@ -37,10 +37,17 @@ $columns = (string)($this->getData('columns') ?? '4');
 if (!in_array($columns, ['2', '3', '4'], true)) {
     $columns = '4';
 }
-$textColor = ThemeUiColor::sanitize(
-    $this->getData('text_color') ?? '',
-    'var(--weline-theme-text-on-dark, #f8fafc)'
-);
+// 语义档位 → 主题盘 Token（变量单一作者：本部件不持有任何字面色）。
+$footerInkPresets = [
+    'on-dark' => 'var(--weline-theme-text-on-dark, #f8fafc)',
+    'on-dark-muted' => 'var(--weline-theme-text-on-dark-muted, #cbd5e1)',
+    'inverse' => 'var(--weline-theme-text-inverse, #ffffff)',
+    'text' => 'var(--weline-theme-text, #111827)',
+    'text-muted' => 'var(--weline-theme-text-muted, #556074)',
+];
+$inkKey = (string)($this->getData('text_color') ?? 'on-dark');
+$textColor = $footerInkPresets[$inkKey]
+    ?? ThemeUiColor::sanitize($inkKey, $footerInkPresets['on-dark']);
 
 if (empty($linkGroups)) {
     $linkGroups = FooterDefaultLinksHelper::widgetLinkGroups();

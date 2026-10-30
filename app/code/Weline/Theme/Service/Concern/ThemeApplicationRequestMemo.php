@@ -5,6 +5,7 @@ namespace Weline\Theme\Service\Concern;
 
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Websites\Api\Theme\ThemeApplicationInterface;
+use Weline\Websites\Api\Theme\ThemeApplicationRepositoryInterface;
 
 /**
  * Request-scoped memo for `websites_theme_application` reads made by Theme.
@@ -46,7 +47,7 @@ final class ThemeApplicationRequestMemo
 
     /** @return list<array<string, mixed>> */
     public static function listForArea(
-        ThemeApplicationInterface $applications,
+        ThemeApplicationRepositoryInterface $applications,
         string $storeMode,
         string $area,
     ): array {

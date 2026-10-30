@@ -123,8 +123,8 @@ $milestones = [
         body.about-layout {
             margin: 0;
             min-height: 100vh;
-            color: var(--color-text-primary, #1c1c1c);
-            background: var(--color-bg-canvas, #f7f4ef);
+            color: var(--color-text-primary, var(--color-text, #111827));
+            background: var(--color-bg-canvas, #ffffff);
             font-family: var(--font-family-base);
         }
 
@@ -133,8 +133,8 @@ $milestones = [
         }
 
         .doc-about__breadcrumb {
-            border-bottom: 1px solid var(--color-border-default, #d8d2c6);
-            background: var(--color-bg-secondary, #ede9e1);
+            border-bottom: 1px solid var(--color-border-default, #e5e7eb);
+            background: var(--color-bg-secondary, #f3f4f6);
         }
 
         .doc-about__inner {
@@ -146,11 +146,11 @@ $milestones = [
 
         .doc-about__hero {
             background:
-                radial-gradient(ellipse at top right, rgba(184, 74, 60, 0.22), transparent 48%),
-                linear-gradient(135deg, var(--color-bg-dark-secondary, #1a1c1f) 0%, var(--color-bg-dark, #1f2124) 58%, var(--color-bg-dark-tertiary, #2c3036) 100%);
+                radial-gradient(ellipse at top right, color-mix(in srgb, var(--color-primary, #0f766e) 22%, transparent), transparent 48%),
+                linear-gradient(135deg, var(--color-bg-dark-secondary, #111827) 0%, var(--color-bg-dark, #1f2937) 58%, var(--color-bg-dark-tertiary, #374151) 100%);
             /* Local inverse token rebind — beats global h1/a paper ink on dark heroes. */
-            --_inverse-text: var(--color-text-on-dark, #f7f4ef);
-            --_inverse-muted: var(--color-text-on-dark-muted, #d4cfc5);
+            --_inverse-text: var(--color-text-on-dark, #f8fafc);
+            --_inverse-muted: var(--color-text-on-dark-muted, #cbd5e1);
             --weline-theme-text: var(--_inverse-text);
             --weline-theme-text-secondary: var(--_inverse-muted);
             --color-text-primary: var(--_inverse-text);
@@ -178,7 +178,7 @@ $milestones = [
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: none;
-            color: var(--color-primary-light, #d4786a);
+            color: var(--color-primary-light, #14b8a6);
         }
 
         .doc-about__hero h1 {
@@ -186,7 +186,7 @@ $milestones = [
             font-size: clamp(1.75rem, 4vw, 2.65rem);
             line-height: 1.15;
             font-weight: 700;
-            color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
+            color: var(--_inverse-text, var(--color-text-on-dark, #f8fafc));
         }
 
         .doc-about__hero-lead,
@@ -194,7 +194,7 @@ $milestones = [
             margin: 0.85rem 0 0;
             max-width: 40rem;
             line-height: 1.65;
-            color: var(--_inverse-muted, var(--color-text-on-dark-muted, #d4cfc5));
+            color: var(--_inverse-muted, var(--color-text-on-dark-muted, #cbd5e1));
         }
 
         .doc-about__hero-actions {
@@ -219,41 +219,40 @@ $milestones = [
         }
 
         .doc-about__btn--primary {
-            border-color: var(--color-primary-border, #963b30);
-            /* 实心 primary 底 + on-primary 墨（默认盘 #b84a3c 上 #f7f4ef = 4.69:1）。
-               原为 linear-gradient(180deg, #d4786a → var(--color-primary))，浅端实测
-               #f7f4ef on #d4786a = 2.86:1（白字压浅红，远低于正文 4.5:1）；
-               hover 浅端 #c45d4f 也只有 3.81:1。渐变自造的浅端无法达标，
+            border-color: var(--color-primary-border, #0a4f4a);
+            /* 实心 primary 底 + on-primary 墨（默认盘 #0f766e 上 #f8fafc 按 WCAG 公式 = 5.23:1）。
+               原为 linear-gradient(180deg, 自造浅端 → var(--color-primary))，浅端压浅墨实测
+               2.86:1（远低于正文 4.5:1）；渐变自造的浅端无法达标，
                故取消渐变，只消费主题盘 Token。 */
-            background: var(--color-primary, #b84a3c);
+            background: var(--color-primary, #0f766e);
             box-shadow: none;
-            color: var(--color-on-primary, #f7f4ef);
+            color: var(--color-on-primary, #f8fafc);
         }
 
         .doc-about__btn--primary:hover {
-            background: var(--color-primary-hover, #963b30);
-            color: var(--color-on-primary, #f7f4ef);
+            background: var(--color-primary-hover, #0d5f59);
+            color: var(--color-on-primary, #f8fafc);
             text-decoration: none;
         }
 
         .doc-about__hero a.doc-about__btn--ghost,
         .doc-about__btn--ghost {
-            border-color: color-mix(in srgb, var(--_inverse-text, #f7f4ef) 55%, transparent);
+            border-color: color-mix(in srgb, var(--_inverse-text, #f8fafc) 55%, transparent);
             background: transparent;
-            color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
+            color: var(--_inverse-text, var(--color-text-on-dark, #f8fafc));
         }
 
         .doc-about__hero a.doc-about__btn--ghost:hover,
         .doc-about__btn--ghost:hover {
-            border-color: var(--color-primary-light, #d4786a);
-            color: var(--color-primary-light, #d4786a);
+            border-color: var(--color-primary-light, #14b8a6);
+            color: var(--color-primary-light, #14b8a6);
             text-decoration: none;
         }
 
         .doc-about__hero-card {
-            border: 1px solid rgba(247, 244, 239, 0.14);
+            border: 1px solid color-mix(in srgb, var(--color-text-on-dark, #f8fafc) 14%, transparent);
             border-radius: 10px;
-            background: rgba(28, 28, 28, 0.28);
+            background: color-mix(in srgb, var(--color-bg-dark-secondary, #111827) 28%, transparent);
             padding: 1.25rem 1.35rem;
             backdrop-filter: blur(4px);
         }
@@ -261,19 +260,19 @@ $milestones = [
         .doc-about__hero-card h2 {
             margin: 0 0 0.65rem;
             font-size: 1.05rem;
-            color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
+            color: var(--_inverse-text, var(--color-text-on-dark, #f8fafc));
         }
 
         .doc-about__hero-card p {
             margin: 0;
             line-height: 1.6;
-            color: var(--_inverse-muted, var(--color-text-on-dark-muted, #d4cfc5));
+            color: var(--_inverse-muted, var(--color-text-on-dark-muted, #cbd5e1));
             font-size: 0.95rem;
         }
 
         .doc-about__stats {
-            background: var(--color-bg-secondary, #ede9e1);
-            border-bottom: 1px solid var(--color-border-default, #d8d2c6);
+            background: var(--color-bg-secondary, #f3f4f6);
+            border-bottom: 1px solid var(--color-border-default, #e5e7eb);
         }
 
         .doc-about__stats-grid {
@@ -295,13 +294,13 @@ $milestones = [
         .doc-about__stat strong {
             display: block;
             font-size: clamp(1.2rem, 2.4vw, 1.55rem);
-            color: var(--color-text-primary, #1c1c1c);
+            color: var(--color-text-primary, var(--color-text, #111827));
         }
 
         .doc-about__stat span {
             display: block;
             margin-top: 0.25rem;
-            color: var(--color-text-secondary, #4a4a48);
+            color: var(--color-text-secondary, #4b5563);
             font-size: 0.9rem;
         }
 
@@ -310,7 +309,7 @@ $milestones = [
         }
 
         .doc-about__section--muted {
-            background: var(--color-bg-secondary, #ede9e1);
+            background: var(--color-bg-secondary, #f3f4f6);
         }
 
         .doc-about__section-head {
@@ -320,13 +319,13 @@ $milestones = [
         .doc-about__section-head h2 {
             margin: 0;
             font-size: clamp(1.35rem, 2.4vw, 1.75rem);
-            color: var(--color-text-primary, #1c1c1c);
+            color: var(--color-text-primary, var(--color-text, #111827));
         }
 
         .doc-about__section-head p {
             margin: 0.55rem 0 0;
             max-width: 42rem;
-            color: var(--color-text-secondary, #4a4a48);
+            color: var(--color-text-secondary, #4b5563);
             line-height: 1.65;
         }
 
@@ -338,10 +337,10 @@ $milestones = [
         }
 
         .doc-about__panel {
-            border: 1px solid var(--color-border-default, #d8d2c6);
+            border: 1px solid var(--color-border-default, #e5e7eb);
             border-radius: 8px;
-            background: var(--color-bg-primary, #fffefa);
-            box-shadow: 0 1px 2px rgba(28, 28, 28, 0.06);
+            background: var(--color-bg-primary, #ffffff);
+            box-shadow: 0 1px 2px color-mix(in srgb, var(--color-text-primary, var(--color-text, #111827)) 8%, transparent);
             padding: 1.25rem 1.35rem;
         }
 
@@ -352,7 +351,7 @@ $milestones = [
 
         .doc-about__panel p {
             margin: 0;
-            color: var(--color-text-secondary, #4a4a48);
+            color: var(--color-text-secondary, #4b5563);
             line-height: 1.65;
         }
 
@@ -367,9 +366,9 @@ $milestones = [
         }
 
         .doc-about__value {
-            border: 1px solid var(--color-border-default, #d8d2c6);
+            border: 1px solid var(--color-border-default, #e5e7eb);
             border-radius: 8px;
-            background: var(--color-bg-primary, #fffefa);
+            background: var(--color-bg-primary, #ffffff);
             padding: 1.1rem 1.15rem;
             min-height: 100%;
         }
@@ -377,12 +376,12 @@ $milestones = [
         .doc-about__value h3 {
             margin: 0 0 0.5rem;
             font-size: 1rem;
-            color: var(--color-text-primary, #1c1c1c);
+            color: var(--color-text-primary, var(--color-text, #111827));
         }
 
         .doc-about__value p {
             margin: 0;
-            color: var(--color-text-secondary, #4a4a48);
+            color: var(--color-text-secondary, #4b5563);
             line-height: 1.55;
             font-size: 0.93rem;
         }
@@ -397,27 +396,27 @@ $milestones = [
             grid-template-columns: 5.5rem minmax(0, 1fr);
             gap: 0.85rem;
             align-items: start;
-            border: 1px solid var(--color-border-default, #d8d2c6);
+            border: 1px solid var(--color-border-default, #e5e7eb);
             border-radius: 8px;
-            background: var(--color-bg-primary, #fffefa);
+            background: var(--color-bg-primary, #ffffff);
             padding: 0.95rem 1.1rem;
         }
 
         .doc-about__milestone strong {
-            color: var(--color-primary-text-emphasis, #7a3028);
+            color: var(--color-primary-text-emphasis, #115e59);
             font-size: 1rem;
         }
 
         .doc-about__milestone p {
             margin: 0;
-            color: var(--color-text-secondary, #4a4a48);
+            color: var(--color-text-secondary, #4b5563);
             line-height: 1.55;
         }
 
         .doc-about__cta {
-            background: var(--color-bg-dark, #1f2124);
-            --_inverse-text: var(--color-text-on-dark, #f7f4ef);
-            --_inverse-muted: var(--color-text-on-dark-muted, #d4cfc5);
+            background: var(--color-bg-dark, #1f2937);
+            --_inverse-text: var(--color-text-on-dark, #f8fafc);
+            --_inverse-muted: var(--color-text-on-dark-muted, #cbd5e1);
             --weline-theme-text: var(--_inverse-text);
             --color-text-primary: var(--_inverse-text);
             --color-text-secondary: var(--_inverse-muted);
@@ -440,12 +439,12 @@ $milestones = [
         .doc-about__cta h2 {
             margin: 0;
             font-size: clamp(1.2rem, 2.2vw, 1.55rem);
-            color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
+            color: var(--_inverse-text, var(--color-text-on-dark, #f8fafc));
         }
 
         .doc-about__cta p {
             margin: 0.4rem 0 0;
-            color: var(--_inverse-muted, var(--color-text-on-dark-muted, #d4cfc5));
+            color: var(--_inverse-muted, var(--color-text-on-dark-muted, #cbd5e1));
             line-height: 1.55;
         }
 

@@ -273,6 +273,115 @@ final class SystemConfigReadWriteCacheTest extends TestCase
         self::assertSame($ops[0]['keys'], $ops[1]['keys']);
     }
 
+    public function testScopedRowReaderUsesRequestMemo(): void
+    {
+        $this->config->rows = [$this->row('title', 'old', 1)];
+
+        $first = $this->config->getScopedConfigRow('title', self::MODULE, self::AREA, self::SCOPE, 'default');
+        $readsAfterFirst = $this->config->singleReads;
+        $second = $this->config->getScopedConfigRow('title', self::MODULE, self::AREA, self::SCOPE, 'default');
+
+        self::assertSame('old', $first[SystemConfig::schema_fields_VALUE] ?? null);
+        self::assertSame($first, $second);
+        self::assertSame(1, $readsAfterFirst);
+        self::assertSame(
+            $readsAfterFirst,
+            $this->config->singleReads,
+            'repeated exact-row read of the same key must come from the request memo',
+        );
+    }
+
+    public function testScopedRowRequestMemoIsInvalidatedByWrite(): void
+    {
+        // Exact-row reader: no module snapshot involved, so the request memo and
+        // its read count are directly observable.
+        $first = $this->config->getScopedConfigRow('late', self::MODULE, self::AREA, self::SCOPE, 'default');
+        self::assertNull($first);
+        $readsAfterFirst = $this->config->singleReads;
+        self::assertGreaterThan(0, $readsAfterFirst);
+
+        // Row appears without an in-request write yet: the negative memo must win.
+        $this->config->rows = [$this->row('late', 'late', 1)];
+        $second = $this->config->getScopedConfigRow('late', self::MODULE, self::AREA, self::SCOPE, 'default');
+        self::assertNull($second);
+        self::assertSame($readsAfterFirst, $this->config->singleReads, 'repeated exact-row read must come from the request memo');
+
+        // A write in the same request bumps the mutation generation (this write
+        // short-circuits as a conflict, which is enough to invalidate the memo).
+        $this->config->testConnection = $this->createStub(ConnectionFactory::class);
+        $transactions = $this->createStub(TransactionCoordinatorInterface::class);
+        $transactions->method('isActive')->willReturn(true);
+        ObjectManager::setInstance(TransactionCoordinatorInterface::class, $transactions);
+        $guard = (new \ReflectionClass(SecurityPolicyConfigGuard::class))->newInstanceWithoutConstructor();
+        ObjectManager::setInstance(SecurityPolicyConfigGuard::class, $guard);
+        $save = $this->config->saveScopeConfig(
+            self::MODULE,
+            self::AREA,
+            ['late' => 'late'],
+            self::SCOPE,
+            'default',
+            ['base_versions' => ['late' => 0]],
+        );
+        self::assertSame('conflict', $save['status']);
+
+        // Read-after-write: the memo captured before the write must not hide the row.
+        $third = $this->config->getScopedConfigRow('late', self::MODULE, self::AREA, self::SCOPE, 'default');
+        self::assertIsArray($third);
+        self::assertSame('late', $third[SystemConfig::schema_fields_VALUE] ?? null);
+        self::assertGreaterThan($readsAfterFirst, $this->config->singleReads);
+    }
+
+    public function testMutationGenerationUsesRequestSharedCarrier(): void
+    {
+        // E1: with a request identity, the mutation generation must live on the
+        // request-shared carrier so every Fiber copy of this request sees the same
+        // invalidation point (Context-local generation is per Fiber).
+        RequestContext::init();
+        RequestContext::setId('sysconfig-shared-generation-test');
+        try {
+            $key = (new \ReflectionClassConstant(SystemConfig::class, 'MUTATION_GENERATION_KEY'))->getValue();
+            $before = RequestContext::sharedGeneration($key);
+
+            $this->config->testConnection = $this->createStub(ConnectionFactory::class);
+            $transactions = $this->createStub(TransactionCoordinatorInterface::class);
+            $transactions->method('isActive')->willReturn(true);
+            ObjectManager::setInstance(TransactionCoordinatorInterface::class, $transactions);
+            $guard = (new \ReflectionClass(SecurityPolicyConfigGuard::class))->newInstanceWithoutConstructor();
+            ObjectManager::setInstance(SecurityPolicyConfigGuard::class, $guard);
+            $this->config->saveScopeConfig(
+                self::MODULE,
+                self::AREA,
+                ['title' => 'edit'],
+                self::SCOPE,
+                'default',
+                ['base_versions' => ['title' => 0]],
+            );
+
+            self::assertSame($before + 1, RequestContext::sharedGeneration($key));
+        } finally {
+            RequestContext::cleanup();
+        }
+    }
+
+
+    public function testKillSwitchDisablesScopedRowRequestMemo(): void
+    {
+        // C2 coverage: `request_memo.disabled` equivalent must make the
+        // single-value memo inert — every read falls through to the row loader.
+        $this->config->rows = [$this->row('title', 'old', 1)];
+        RequestContext::overrideSharedMemoEnabled(false);
+        try {
+            $this->config->singleReads = 0;
+            $first = $this->config->getScopedConfigRow('title', self::MODULE, self::AREA, self::SCOPE, 'default');
+            $second = $this->config->getScopedConfigRow('title', self::MODULE, self::AREA, self::SCOPE, 'default');
+            self::assertSame('old', $first[SystemConfig::schema_fields_VALUE] ?? null);
+            self::assertSame($first, $second);
+            self::assertSame(2, $this->config->singleReads, 'kill switch off => two authoritative reads');
+        } finally {
+            RequestContext::overrideSharedMemoEnabled(null);
+        }
+    }
+
     private function map(): array
     {
         return $this->config->getConfigMapByModule(self::MODULE, self::AREA, self::SCOPE, 'default');

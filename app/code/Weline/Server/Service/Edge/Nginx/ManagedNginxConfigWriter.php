@@ -231,7 +231,7 @@ NGINX;
     gzip_comp_level {$gzipLevel};
     gzip_min_length 256;
     gzip_proxied any;
-    gzip_types text/plain text/css text/xml text/javascript application/javascript application/json application/xml image/svg+xml;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/json application/xml image/svg+xml application/feed+json application/rss+xml application/atom+xml application/ld+json application/manifest+json application/xhtml+xml;
     gzip_vary on;
 NGINX;
         }

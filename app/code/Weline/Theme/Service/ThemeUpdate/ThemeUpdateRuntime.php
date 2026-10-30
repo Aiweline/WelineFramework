@@ -25,6 +25,24 @@ final class ThemeUpdateRuntime
     private const REQUEST_STATE_KEY = 'theme_update.runtime.active';
     private const POINTER_FILE_TTL_SECONDS = 10;
 
+    /**
+     * 请求级 memo：generationIdentity() 的结果。
+     *
+     * 缓存健全性的每一个页面都要算一次 page_generation（Widget 资源按 key 逐条推导，
+     * 实测 3N+1 次），而 generationIdentity() 内部要 `themeIdChain()`（每层一次 DB load）
+     * × `scopeCandidates()` × `getPublished()` × `storefrontTuEpoch()`，单次 1.5–6.3ms。
+     * 这不是「可以有」的优化：一次 N=12 的渲染光键推导就 105ms，N=39 达 670ms。
+     *
+     * 语义前提（与 active() 同一假设，见 {@see self::active()}）：本请求内指针、部署
+     * 构建号与应用主题都稳定 —— active() 早已把 resolve() 的结果按 REQUEST_STATE_KEY
+     * 缓存在 RequestContext；这里只是把同一稳定性假设覆盖到 identity 这一段。
+     * `forceBatch()` / `reset()` 会改变状态，两者都会清掉本键。
+     *
+     * 无请求 id（CLI / 单元测试）时 RequestContext::sharedHas() 恒 false ⇒ 不缓存，
+     * 逐次实算，行为与改动前一致。
+     */
+    private const GENERATION_IDENTITY_MEMO_KEY = 'theme_update.runtime.generation_identity.v1';
+
     /** @var array{at:int,mtime:int,map:array<string,mixed>,epoch:int}|null */
     private static ?array $pointerFileCache = null;
 
@@ -37,6 +55,7 @@ final class ThemeUpdateRuntime
     {
         self::$forced = $active;
         RequestContext::remove(self::REQUEST_STATE_KEY);
+        RequestContext::remove(self::GENERATION_IDENTITY_MEMO_KEY);
     }
 
     /**
@@ -224,26 +243,67 @@ final class ThemeUpdateRuntime
         }
     }
 
-    /** @return array{themeCode:string,versionNumber:int,themeId:int}|null */
+    /**
+     * 本请求内的 generation identity（请求级 memo，见 GENERATION_IDENTITY_MEMO_KEY）。
+     *
+     * memo key 内嵌 `$forced` 指纹：forceBatch() 同时显式清 memo，指纹是第二道保险
+     * （防止别的代码路径直接改 $forced 而不清 memo）。null 结果也缓存（负缓存），
+     * 否则 Resolver 抛异常的请求每次都要重新付一遍 try/catch + DB 探测的代价。
+     *
+     * @return array{themeCode:string,versionNumber:int,themeId:int}|null
+     */
     private static function generationIdentity(): ?array
     {
-        if (!\class_exists('\\Weline\\Theme\\Service\\ThemePublishedVersionRuntimeResolver')) {
-            return null;
-        }
-        try {
-            $themeId = self::appliedThemeId();
-            /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
-            $resolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class);
-            $identity = $resolver->resolveGenerationIdentity($themeId > 0 ? $themeId : null);
+        $memoKey = self::generationIdentityMemoKey();
+        if (RequestContext::sharedHas($memoKey)) {
+            /** @var array{themeCode:string,versionNumber:int,themeId:int}|null $cached */
+            $cached = RequestContext::sharedGet($memoKey);
 
-            return [
-                'themeCode' => \trim((string)($identity['themeCode'] ?? '')),
-                'versionNumber' => (int)($identity['versionNumber'] ?? 0),
-                'themeId' => (int)($identity['themeId'] ?? 0),
-            ];
-        } catch (\Throwable) {
-            return null;
+            return $cached;
         }
+
+        $identity = null;
+        if (\class_exists('\\Weline\\Theme\\Service\\ThemePublishedVersionRuntimeResolver')) {
+            try {
+                $themeId = self::appliedThemeId();
+                /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
+                $resolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class);
+                $resolved = $resolver->resolveGenerationIdentity($themeId > 0 ? $themeId : null);
+
+                $identity = [
+                    'themeCode' => \trim((string)($resolved['themeCode'] ?? '')),
+                    'versionNumber' => (int)($resolved['versionNumber'] ?? 0),
+                    'themeId' => (int)($resolved['themeId'] ?? 0),
+                ];
+            } catch (\Throwable) {
+                $identity = null;
+            }
+        }
+        RequestContext::sharedSet($memoKey, $identity);
+
+        return $identity;
+    }
+
+    /**
+     * generation identity 的请求级 memo key。
+     *
+     * 无请求 id 时 RequestContext::sharedHas() 恒 false，调用方自然退化为逐次实算。
+     */
+    private static function generationIdentityMemoKey(): string
+    {
+        $forced = self::$forced;
+        if ($forced === null) {
+            return self::GENERATION_IDENTITY_MEMO_KEY . '.auto';
+        }
+
+        return self::GENERATION_IDENTITY_MEMO_KEY . '.forced.'
+            . \substr(\hash('sha256', \json_encode([
+                'pair_segment' => (string)($forced['pair_segment'] ?? ''),
+                'static_build' => (string)($forced['static_build'] ?? ''),
+                'epoch' => (int)($forced['epoch'] ?? 0),
+                'theme_id' => (int)($forced['theme_id'] ?? 0),
+                'theme_prefix' => (string)($forced['theme_prefix'] ?? ''),
+            ]) ?: ''), 0, 16);
     }
 
     /**
@@ -400,6 +460,7 @@ final class ThemeUpdateRuntime
     public static function reset(): void
     {
         RequestContext::remove(self::REQUEST_STATE_KEY);
+        RequestContext::remove(self::GENERATION_IDENTITY_MEMO_KEY);
         self::$forced = null;
         StaticBuildId::override(null);
     }
@@ -565,7 +626,7 @@ final class ThemeUpdateRuntime
      * 代次指针行。theme_id 优先行内字段，旧指针只写在 key 的中段（website|theme|area）。
      *
      * @param array<string,mixed> $row
-     * @return array{batch_id:string,static_ns:string,entity_root:string,theme_prefix:string,epoch:int,theme_id:int,pair_segment:string}|null
+     * @return array{batch_id:string,static_ns:string,entity_root:string,theme_prefix:string,epoch:int,theme_id:int,pair_segment:string,static_build:string}|null
      */
     private static function pointerEntry(string $key, array $row): ?array
     {
@@ -587,6 +648,10 @@ final class ThemeUpdateRuntime
             'epoch' => \max(1, (int)($row['epoch'] ?? 1)),
             'theme_id' => \max(0, $themeId),
             'pair_segment' => \trim((string)($row['pair_segment'] ?? '')),
+            // 指针里已落盘的静态世代目录名（promote 时由 persistPointerConfig 写入）。
+            // 不透出它，pinnedStaticBuild() 恒为空，生成侧会退回部署构建号，而发布侧
+            // 实际建的是本批次世代段 → URL 与磁盘目录不一致 → 首屏静态资源 404。
+            'static_build' => \strtolower(\trim((string)($row['static_build'] ?? ''))),
         ];
     }
 

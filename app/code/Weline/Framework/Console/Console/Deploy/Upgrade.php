@@ -244,11 +244,21 @@ class Upgrade extends CommandAbstract
             try {
                 if (!\Weline\Framework\Deploy\StaticBuildId::isFlatMode()
                     && class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)) {
+                    // 落点必须与 StaticBuildId::versionedPath() 发出的 URL 同源：
+                    // 主题对前缀 `{code}/v{n}` 要带 pinned/部署构建号段，裸构建号不能加 tu-。
                     $generation = (string)\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pairSegment();
-                    $generation = $generation !== '' ? $generation : (string)\Weline\Framework\Deploy\StaticBuildId::current();
-                    $backfill = \Weline\Framework\Deploy\StaticIntegrityGuard::backfillGeneration($staticRoot, $generation);
-                    if (($backfill['copied'] ?? 0) > 0) {
-                        $this->printer->note(__('主题代次目录已补齐 %{1} 个文件', [$backfill['copied']]));
+                    if ($generation !== '') {
+                        $pinned = (string)\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pinnedStaticBuild();
+                        $build = $pinned !== '' ? $pinned : (string)$buildId;
+                        $generation = $build !== '' ? $generation . '/' . $build : '';
+                    } else {
+                        $generation = (string)$buildId;
+                    }
+                    if ($generation !== '') {
+                        $backfill = \Weline\Framework\Deploy\StaticIntegrityGuard::backfillGeneration($staticRoot, $generation);
+                        if (($backfill['copied'] ?? 0) > 0) {
+                            $this->printer->note(__('主题代次目录已补齐 %{1} 个文件', [$backfill['copied']]));
+                        }
                     }
                 }
             } catch (\Throwable) {

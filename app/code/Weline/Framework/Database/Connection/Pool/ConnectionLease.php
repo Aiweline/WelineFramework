@@ -96,12 +96,12 @@ final class ConnectionLease
         if ($this->ownerKey === $current) {
             return true;
         }
-        // A fiber-scoped lease held while the current context is the main process
-        // means the owning fiber has already finished (fibers cannot outlive the
-        // script that scheduled them). Treat it as stale so the process can take
-        // over instead of failing with database_connector_owner_mismatch.
+        // 主进程上下文只有在「持有租约的 Fiber 已终止」时才允许接管：
+        // WLS 下请求 Fiber 会在 FPC/共享缓存等让出点挂起，此时它仍活着并持有连接，
+        // 若按 owner 前缀直接下放，主上下文会与挂起请求共用同一条 PDO。
         if (str_starts_with($this->ownerKey, 'fiber:')
-            && str_starts_with($current, 'process:')) {
+            && str_starts_with($current, 'process:')
+            && $this->isOwnerFiberDead()) {
             return true;
         }
 

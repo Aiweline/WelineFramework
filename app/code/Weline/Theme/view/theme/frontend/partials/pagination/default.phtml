@@ -144,9 +144,9 @@ if ($endPage - $startPage < $maxVisible - 1) {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: var(--pagination-item-size);
-    height: var(--pagination-item-size);
-    padding: 0 var(--pagination-item-padding);
+    min-width: var(--size-control-md);
+    height: var(--size-control-md);
+    padding: 0 var(--spacing-2);
     color: var(--color-text-primary);
     text-decoration: none;
     border: var(--border-width-thin) solid var(--color-border-light);
@@ -184,8 +184,8 @@ if ($endPage - $startPage < $maxVisible - 1) {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: var(--pagination-item-size);
-    height: var(--pagination-item-size);
+    min-width: var(--size-control-md);
+    height: var(--size-control-md);
     color: var(--color-text-tertiary);
     font-size: var(--font-size-sm);
 }
@@ -207,8 +207,8 @@ if ($endPage - $startPage < $maxVisible - 1) {
 
     .pagination-partial__link,
     .pagination-partial__current {
-        min-width: var(--pagination-item-size-mobile);
-        height: var(--pagination-item-size-mobile);
+        min-width: var(--size-control-sm);
+        height: var(--size-control-sm);
         padding: 0 var(--spacing-2);
         font-size: var(--font-size-xs);
     }

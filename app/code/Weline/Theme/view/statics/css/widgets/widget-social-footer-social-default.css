@@ -24,6 +24,15 @@
     text-decoration: none;
 }
 
+/*
+ * 平台品牌标识色作用域变量声明（单一作者：默认值只在此声明为主题盘 Token）。
+ * 各平台官方标识色属业务数据真实色（主题规则白名单），由部件模板以
+ * data-widget-style="--brand-color:<平台色>" 逐元素传入，不复制进 CSS，
+ * 避免同一色值出现两个作者。未传入时回落到主题盘中性墨，不落字面色。
+ * 平台色数据来源：app/code/Weline/Theme/Helper/SocialIconHelper::getAvailableIcons()
+ */
+.wc-theme_widget_footer_social .social-link { --brand-color: var(--weline-theme-text-muted); }
+
 .wc-theme_widget_footer_social[data-style="colored"] .social-link {
     background: var(--brand-color);
     color: var(--color-bg-primary);

@@ -1188,6 +1188,20 @@ final class ThemeUpdateBatchService
             }
             if (!$flatMode) {
                 $this->overlayCompiledThemeUi($batchRoot, $deployRoot);
+                // 增量镜像只搬「本批次真正变更过的文件」，于是新段是「上一代 + 本批次变更」的残卷：
+                // 凡上一代没带、本批次又没变的文件永远进不来，旧 HTML 引用它们就 404。
+                // 这里按规范树把缺口补链（优先取本批次根，退回规范平铺树），让新段成为完整快照。
+                $filled = $this->backfillDeployRoot($deployRoot, $pubStatic, $batchRoot, $themeCode);
+                if ($filled > 0) {
+                    \Weline\Framework\App\Env::log('theme/theme_update_mirror', \sprintf(
+                        'batch=%s pair=%s/v%d deploy=%s backfilled=%d',
+                        $batchId,
+                        $themeCode,
+                        $versionNumber,
+                        $deployId,
+                        $filled
+                    ));
+                }
                 if ($pinned === '') {
                     self::retireStaleThemePairDirs($pubStatic, $themeCode, $versionNumber, $deployId);
                 }
@@ -1222,6 +1236,17 @@ final class ThemeUpdateBatchService
         }
         if (!$flatMode) {
             $this->overlayCompiledThemeUi($batchRoot, $deployRoot);
+            $filled = $this->backfillDeployRoot($deployRoot, $pubStatic, $batchRoot, $themeCode);
+            if ($filled > 0) {
+                \Weline\Framework\App\Env::log('theme/theme_update_mirror', \sprintf(
+                    'batch=%s pair=%s/v%d deploy=%s backfilled=%d (no-manifest)',
+                    $batchId,
+                    $themeCode,
+                    $versionNumber,
+                    $deployId,
+                    $filled
+                ));
+            }
             if ($pinned === '') {
                 self::retireStaleThemePairDirs($pubStatic, $themeCode, $versionNumber, $deployId);
             }
@@ -1313,6 +1338,78 @@ final class ThemeUpdateBatchService
     }
 
     /** 递归硬链接覆盖（目标存在则先删）。 */
+    /**
+     * 把发布段的主题子树补成完整快照：只补「段内缺失」的文件，不覆盖已有内容。
+     *
+     * 数据源优先级：本批次根（内容与本次构建一致）→ 规范平铺树（`pub/static/Weline`）。
+     * 仅处理主题自有子树（`Weline/Theme` 与设计命名空间 `Weline/{themeCode}`），
+     * 与 mirrorThemeStaticToDeploy 的镜像范围保持一致。
+     *
+     * @return int 补链文件数
+     */
+    private function backfillDeployRoot(string $deployRoot, string $pubStatic, string $batchRoot, string $themeCode): int
+    {
+        $filled = 0;
+        // 来源按优先级排列：批次根最权威，平铺树是兜底。
+        $sources = [
+            $batchRoot . DIRECTORY_SEPARATOR . 'Weline',
+            $pubStatic . DIRECTORY_SEPARATOR . 'Weline',
+        ];
+        $subtrees = ['Theme'];
+        if ($themeCode !== '' && $themeCode !== 'Theme') {
+            $subtrees[] = $themeCode;
+        }
+        foreach ($subtrees as $subtree) {
+            $destRoot = $deployRoot . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . $subtree;
+            foreach ($sources as $sourceWeline) {
+                $src = $sourceWeline . DIRECTORY_SEPARATOR . $subtree;
+                if (!is_dir($src)) {
+                    continue;
+                }
+                $filled += $this->backfillTree($src, $destRoot);
+            }
+        }
+
+        return $filled;
+    }
+
+    /**
+     * 递归补链：目标缺失才写，已存在的跳过（不覆盖发布段内已有内容）。
+     */
+    private function backfillTree(string $src, string $dst): int
+    {
+        $filled = 0;
+        foreach ((array)@scandir($src) as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $from = $src . DIRECTORY_SEPARATOR . $item;
+            $to = $dst . DIRECTORY_SEPARATOR . $item;
+            if (is_dir($from) && !is_link($from)) {
+                $filled += $this->backfillTree($from, $to);
+                continue;
+            }
+            if (!is_file($from) || is_link($from)) {
+                continue;
+            }
+            if (is_link($to) || is_file($to)) {
+                continue;
+            }
+            $dir = dirname($to);
+            if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+                continue;
+            }
+            if (!@link($from, $to)) {
+                @copy($from, $to);
+            }
+            if (is_file($to)) {
+                $filled++;
+            }
+        }
+
+        return $filled;
+    }
+
     private function overlayTreeTo(string $src, string $dst): void
     {
         if (is_link($dst)) {

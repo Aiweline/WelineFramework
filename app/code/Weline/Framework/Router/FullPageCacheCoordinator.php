@@ -194,6 +194,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private const MEMO_EFFECTIVE_FPC_POLICY = 'fpc.memo.effective_policy.v1';
     private const MEMO_QUERY_ALLOWLIST = 'fpc.memo.query_allowlist.v1';
     private const MEMO_FPC_SNAPSHOT = 'fpc.memo.fpc_snapshot.v1';
+    private const MEMO_SAME_ORIGIN_HOSTS = 'fpc.memo.same_origin_hosts.v1';
 
     private ?CacheManager $cacheManager;
     private ?CachePoolInterface $cachePool;
@@ -1174,6 +1175,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         RequestContext::remove(self::MEMO_EFFECTIVE_FPC_POLICY);
         RequestContext::remove(self::MEMO_QUERY_ALLOWLIST);
         RequestContext::remove(self::MEMO_FPC_SNAPSHOT);
+        RequestContext::remove(self::MEMO_SAME_ORIGIN_HOSTS);
     }
 
     public static function clearProcessCache(): void
@@ -6327,12 +6329,91 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private function bodyContainsIgnorableHtmlUrlQuery(string $body): bool
     {
         foreach ($this->extractHtmlUrlAttributeValues($body) as $url) {
+            // Only the page's own URLs matter: the body is keyed by this request's
+            // canonical URI, so a third-party asset link (?utm_source=... on a CDN
+            // image) can never make the stored body disagree with its cache key.
+            // Treating those as pollution blocked publish outright — measured on
+            // /product/*: can_publish allowed=true 45x, fpc_publish_store 0x, every
+            // wikimedia thumb URL carries utm_* so the page never entered FPC.
+            if (!$this->isSameOriginUrl($url)) {
+                continue;
+            }
             if ($this->urlContainsIgnorableQuery($url)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * Whether a URL extracted from the rendered body belongs to this storefront.
+     *
+     * Relative / scheme-less / fragment / non-navigational URLs count as "own"
+     * (the conservative side of the guard). Absolute and protocol-relative URLs
+     * count as "own" only when their host matches the request host or the host of
+     * the raw full URI (proxy setups where those differ are still covered).
+     */
+    private function isSameOriginUrl(string $url): bool
+    {
+        $url = \trim($url);
+        if ($url === '') {
+            return false;
+        }
+        $head = \strtolower(\substr($url, 0, 11));
+        if ($url[0] === '#' || \str_starts_with($head, 'data:') || \str_starts_with($head, 'mailto:')
+            || \str_starts_with($head, 'tel:') || \str_starts_with($head, 'javascript:')) {
+            return false;
+        }
+        $parts = \parse_url($url);
+        $host = \is_array($parts) ? \strtolower((string)($parts['host'] ?? '')) : '';
+        if ($host === '') {
+            return true;
+        }
+
+        return \in_array($host, $this->sameOriginHosts(), true);
+    }
+
+    /**
+     * Hosts that count as "this storefront" for the pollution guard, normalized
+     * without a leading `www.` so www/non-www aliases compare equal.
+     *
+     * @return list<string>
+     */
+    private function sameOriginHosts(): array
+    {
+        $memo = RequestContext::get(self::MEMO_SAME_ORIGIN_HOSTS);
+        if (\is_array($memo)) {
+            return $memo;
+        }
+        $candidates = [
+            (string)WelineEnv::server('HTTP_HOST', ''),
+            (string)($_SERVER['HTTP_HOST'] ?? ''),
+        ];
+        $rawParts = \parse_url($this->getRawFullUri());
+        if (\is_array($rawParts)) {
+            $candidates[] = (string)($rawParts['host'] ?? '');
+        }
+        $hosts = [];
+        foreach ($candidates as $candidate) {
+            $candidate = \strtolower(\trim($candidate));
+            if ($candidate === '') {
+                continue;
+            }
+            $bare = \preg_replace('/:\d+$/', '', $candidate) ?? $candidate;
+            if ($bare === '') {
+                continue;
+            }
+            foreach ([$bare, \preg_replace('/^www\./', '', $bare) ?? $bare] as $variant) {
+                if ($variant !== '') {
+                    $hosts[$variant] = true;
+                }
+            }
+        }
+        $hosts = \array_keys($hosts);
+        RequestContext::set(self::MEMO_SAME_ORIGIN_HOSTS, $hosts);
+
+        return $hosts;
     }
 
     private function bodyContainsRawIgnorableRequestQuery(string $body): bool

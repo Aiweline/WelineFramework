@@ -1,6 +1,21 @@
 /* Weline UI source: css/foundation.css */
 /* Weline UI source: css/foundation.css */
-@layer reset, tokens, base, layout, components, utilities, page;
+/*
+ * 级联层顺序（**首次注册即固定**；后声明的层优先级更高——已用浏览器层叠实验
+ * 逐层写入 --probe-ord 反推证实：本序中索引越大优先级越高）。
+ *
+ * `weline-theme` **刻意排在第一位 = 优先级最低**：它是默认主题骨架
+ * （view/theme/frontend/assets/css/theme.css 的全部规则收敛于此层）。
+ * 自定义主题只要把 CSS 另外引入，写入本序中任一层（reset/tokens/base/
+ * layout/components/utilities/page 优先级均高于 weline-theme），
+ * 即可正常覆盖默认骨架，无需 !important —— 这就是「引入即继承」。
+ *
+ * 注意：本行必须是最早的 @layer 顺序声明（早于所有其它样式表），否则
+ * 层序会被别处的声明抢先固定，`weline-theme` 的最低位失效。
+ * 若删掉 `weline-theme`，theme.css 会退回未分层，未分层规则无条件压过所有
+ * @layer 规则，自定义主题失效。审计：ThemeCssContractsTest。
+ */
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 
 @layer tokens {
     :root {

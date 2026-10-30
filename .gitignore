@@ -334,3 +334,7 @@ var/ai_acquisition_extension/
 # 融媒体扩展包产物（按需打包，不进 Git）
 app/code/Weline/Social/view/statics/icons/social-extension.zip
 app/code/Weline/Social/view/statics/downloads/*.zip
+
+# Agent 截图/配图工作产物（本地验收用，不进 Git）
+/.screenshots/
+/vibe_images/

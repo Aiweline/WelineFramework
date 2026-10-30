@@ -23,7 +23,7 @@
  * @param icp_link {default="https://beian.miit.gov.cn/",type="string",label="ICP备案链接"}
  * @param police_number {default="",type="string",label="公安备案号"}
  * @param police_link {default="",type="string",label="公安备案链接"}
- * @param text_color {default="var(--weline-theme-text-on-dark-muted, #cbd5e1)",type="color",label="文字颜色"}
+ * @param text_color {default="on-dark-muted",type="select",label="文字颜色",options={on-dark:"深色背景浅字",on-dark-muted:"深色背景次级字（默认）",inverse:"反色面文字",text:"正文墨色",text-muted:"次级墨色"}}
  */
 
 use Weline\Theme\Helper\ThemeUiColor;
@@ -40,10 +40,17 @@ $icpLink = $this->getData('icp_link') ?? 'https://beian.miit.gov.cn/';
 $policeNumber = $this->getData('police_number') ?? '';
 $policeLink = $this->getData('police_link') ?? '';
 $additionalText = $this->getData('additional_text') ?? '';
-$textColor = ThemeUiColor::sanitize(
-    $this->getData('text_color') ?? '',
-    'var(--weline-theme-text-on-dark-muted, #cbd5e1)'
-);
+// 语义档位 → 主题盘 Token（变量单一作者：本部件不持有任何字面色）。
+$footerInkPresets = [
+    'on-dark' => 'var(--weline-theme-text-on-dark, #f8fafc)',
+    'on-dark-muted' => 'var(--weline-theme-text-on-dark-muted, #cbd5e1)',
+    'inverse' => 'var(--weline-theme-text-inverse, #ffffff)',
+    'text' => 'var(--weline-theme-text, #111827)',
+    'text-muted' => 'var(--weline-theme-text-muted, #556074)',
+];
+$inkKey = (string)($this->getData('text_color') ?? 'on-dark-muted');
+$textColor = $footerInkPresets[$inkKey]
+    ?? ThemeUiColor::sanitize($inkKey, $footerInkPresets['on-dark-muted']);
 $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
 
 $siteName = 'WeShop';

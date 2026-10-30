@@ -48,6 +48,10 @@
     color: var(--color-text-faint);
     text-decoration: underline;
     text-underline-offset: 2px;
+    /* 2026-10-29 无障碍：触摸目标需 ≥24px（Lighthouse tap-targets）；行内链默认只有 20px 高。 */
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 1.5rem;
 }
 
 .w-consent-banner__link:hover {

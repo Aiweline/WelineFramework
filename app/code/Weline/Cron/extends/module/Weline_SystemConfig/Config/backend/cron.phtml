@@ -1,7 +1,7 @@
 <?php
 /**
- * @meta.title {default="计划任务 CPU 预算",description="计划任务调度子进程的默认 CPU 额度：核数、单核占用上限与是否强制节流"}
- * @meta.description {default="额度上限 = CPU 个数 × 单核百分比 / 100 个核当量，超出部分通过睡眠出让。任务行自身声明非 0 时优先于本页默认值。"}
+ * @meta.title {default="计划任务调度配置",description="计划任务调度子进程的默认 CPU 额度（核数、单核占用上限、是否强制节流）与自动运行的主机负载闸门"}
+ * @meta.description {default="CPU 额度 = CPU 个数 × 单核百分比 / 100 个核当量，超出部分通过睡眠出让。负载闸门按 1 分钟负载 ÷ CPU 核数 × 100% 判定，超上限时整轮自动调度跳过。任务行自身声明非 0 时优先于本页默认值。"}
  * @config.area {backend}
  * @config.sort {52}
  * @config.acl {Weline_Cron::cron_system_config}
@@ -41,5 +41,22 @@
         default="1"
         scope="global"
         description="开启后超出额度的任务通过睡眠出让 CPU；关闭仍会统计实际 CPU 用量与本可让出的时长，但不装闹钟、不睡眠。"
+    />
+</w:config:group>
+
+<w:config:group code="cron_load_gate" label="负载闸门" description="主机负载超过上限时，crontab 触发的整轮自动调度直接跳过；显式运行（-f、指定任务名、后台手动运行）不受影响。" sort="20">
+    <w:config:hint type="info" title="负载怎么算" collapsed="0">
+负载 = 1 分钟平均负载 ÷ CPU 核数 × 100%。例如 10 核机器 load1=7.5 即 75%。超过上限时本轮不自动执行计划任务、不派子进程、不改任务状态，下一分钟重新判定；取不到负载（如 Windows）时放行。
+    </w:config:hint>
+
+    <w:config:field
+        key="cron/load/max_percent"
+        label="自动运行负载上限（%）"
+        type="number"
+        value-type="int"
+        default="70"
+        scope="global"
+        validation="min:1|max:100"
+        description="主机 1 分钟负载占 CPU 核数的百分比超过本值时，本轮自动调度跳过，范围 1-100，默认 70。"
     />
 </w:config:group>

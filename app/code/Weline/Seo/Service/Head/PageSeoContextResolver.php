@@ -1387,12 +1387,22 @@ class PageSeoContextResolver
                         continue;
                     }
                     $context[$listKey] = array_values($provided[$listKey]);
-                } else {
+                } elseif ($listKey === 'feeds') {
+                    // feeds 是「多来源并列」语义，天然要并集去重。
                     $existing = isset($context[$listKey]) && is_array($context[$listKey]) && $this->isList($context[$listKey])
                         ? $context[$listKey]
                         : [];
-                    $merged = array_values(array_merge($existing, $provided[$listKey]));
-                    $context[$listKey] = $listKey === 'feeds' ? $this->normalizeFeeds($merged) : $merged;
+                    $context[$listKey] = $this->normalizeFeeds(array_values(array_merge($existing, $provided[$listKey])));
+                } else {
+                    // schema_nodes / item_list / faqs / qa_list 是「同一事实的单一定稿」，不能叠加：
+                    // 叠加会让上一轮（甚至别站的 provider）内容继续留在页面里，形成两套互相矛盾的品牌事实。
+                    // 实测症状：playinginchina 首页 JSON-LD 出现 9 条 Amayum 的 WelineFramework FAQ。
+                    $providedList = array_values($provided[$listKey]);
+                    if ($providedList !== []) {
+                        $context[$listKey] = $providedList;
+                    } elseif (!isset($context[$listKey]) || !is_array($context[$listKey])) {
+                        $context[$listKey] = [];
+                    }
                 }
                 unset($provided[$listKey]);
             }

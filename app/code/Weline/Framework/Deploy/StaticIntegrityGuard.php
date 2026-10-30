@@ -54,16 +54,37 @@ final class StaticIntegrityGuard
     /**
      * 把规范静态树补齐进指定代次目录（仅补缺失文件，不覆盖代次内已有内容）。
      *
+     * 入参可能是三种形状，落点各不相同，必须与 StaticBuildId::versionedPath() 生成的 URL 同源：
+     * - `{code}/v{n}`（主题对前缀，如 `playinginchina/v2`）→ `{root}/{pair}/{build}/Weline`
+     * - 裸 12 位构建号（部署构建号）→ `{root}/{build}/Weline`
+     * - `tu-*`（主题更新批次号）→ `{root}/{tu-x}/Weline`
+     *
      * @return array{copied:int,generation:string}
      */
     public static function backfillGeneration(string $staticRoot, string $generation): array
     {
         $root = \rtrim($staticRoot, '/\\');
-        $generation = \trim($generation);
+        $generation = \trim($generation, " \t\n\r\0\x0B/");
         if ($generation === '') {
             return ['copied' => 0, 'generation' => ''];
         }
-        if (!\str_starts_with($generation, 'tu-')) {
+        // 主题对前缀：URL 是 /static/{code}/v{n}/{build}/…，落点也必须带 build 段。
+        if (\str_contains($generation, '/')) {
+            $build = '';
+            try {
+                $build = StaticBuildId::current($root);
+            } catch (\Throwable) {
+                $build = '';
+            }
+            if ($build === '') {
+                // 没有部署构建号时无从确定段名，不猜：保持原样返回，避免又造一个没人取的目录。
+                return ['copied' => 0, 'generation' => $generation];
+            }
+            $generation = $generation . '/' . $build;
+        } elseif (\preg_match('/^[0-9a-f]{12}$/i', $generation) === 1) {
+            // 裸构建号本身就是末级段名，绝不能加 tu- 前缀（否则补进没人取的目录）。
+            $generation = \strtolower($generation);
+        } elseif (!\str_starts_with($generation, 'tu-')) {
             $generation = 'tu-' . $generation;
         }
         $canonical = $root . '/Weline';

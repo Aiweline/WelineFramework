@@ -27,6 +27,8 @@ class BackfillFeed implements CommandInterface
             echo 'articles: ' . $stats['articles'] . "\n";
             echo 'blog_categories: ' . $stats['blog_categories'] . "\n";
             echo 'catalog_categories: ' . $stats['catalog_categories'] . "\n";
+            // 存量污染的成品行修复：sitemap 枚举不到的产品靠这一条按库内现存行反查。
+            echo 'repaired_url_titled_products: ' . $service->repairUrlTitledProducts($limit) . "\n";
 
             return true;
         } catch (\Throwable $e) {

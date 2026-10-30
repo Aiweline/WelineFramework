@@ -4,7 +4,7 @@
  */
 .weline-amz-card-widget {
     --amz-card-bg: var(--weline-chrome-bg-primary);
-    --amz-card-border: var(--weline-theme-border-subtle);
+    --amz-card-border: var(--weline-theme-border-color-subtle);
     --amz-card-text: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary)));
     --amz-card-text-muted: var(--weline-theme-body-text-muted);
     --amz-card-link: var(--color-text-primary);

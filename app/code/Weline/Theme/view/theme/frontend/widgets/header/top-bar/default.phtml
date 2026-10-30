@@ -24,7 +24,7 @@
  * @param link_url {default="",type="string",label="链接地址",i18n=false}
  * @param show_icon {default=true,type="bool",label="显示喇叭图标",i18n=false}
  * @param closeable {default=false,type="bool",label="允许关闭",i18n=false}
- * @param text_color {default="",type="color",label="文字色",i18n=false}
+ * @param text_color {default="",type="select",label="文字色",i18n=false,options={"":"跟随主题（默认）",on-dark:"深底浅字",on-dark-muted:"深底次级字",text:"正文墨",text-muted:"次级墨",primary:"主题主色"}}
  */
 
 use Weline\Theme\Helper\ThemeUiColor;
@@ -43,7 +43,18 @@ $linkText = WidgetI18n::label(trim((string)($this->getData('link_text') ?? '')),
 $linkUrl = \Weline\Theme\Helper\LegacyMediaUrl::sanitize((string)($this->getData('link_url') ?? ''));
 $showIcon = (bool)($this->getData('show_icon') ?? true);
 $closeable = (bool)($this->getData('closeable') ?? false);
-$textColor = ThemeUiColor::sanitize((string)($this->getData('text_color') ?? ''), '');
+// 语义档位 → 主题盘 Token（变量单一作者：本部件不持有任何字面色）。
+$noticeInkPresets = [
+    '' => '',
+    'on-dark' => 'var(--weline-theme-text-on-dark)',
+    'on-dark-muted' => 'var(--weline-theme-text-on-dark-muted)',
+    'text' => 'var(--weline-theme-text)',
+    'text-muted' => 'var(--weline-theme-text-muted)',
+    'primary' => 'var(--weline-theme-primary)',
+];
+$inkKey = (string)($this->getData('text_color') ?? '');
+$textColor = $noticeInkPresets[$inkKey]
+    ?? ThemeUiColor::sanitize($inkKey, '');
 
 $rootStyle = $textColor !== '' ? ('--wc-notice-text:' . $textColor . ';') : '';
 ?>

@@ -125,7 +125,7 @@ $resolveSlideBackground = static function (array $slide, int $index) use ($defau
         return 'background: ' . $gradient . ';';
     }
     if ($image !== '' && $image !== $placeholder && !str_contains($image, 'placeholder.png')) {
-        return 'background-image:linear-gradient(rgba(0,0,0,0.25),rgba(0,0,0,0.25)),url("'
+        return 'background-image:linear-gradient(var(--color-bg-overlay, rgb(15 23 42 / 0.42)),var(--color-bg-overlay, rgb(15 23 42 / 0.42))),url("'
             . $image
             . '");background-size:cover;background-position:center;';
     }
@@ -392,8 +392,18 @@ if (empty($slides)) {
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
+        <?php
+        /*
+         * 暂停键不再挂全局 .w-button/.w-button-outline：
+         * assets/css/theme.css 未进 @layer，按层叠法规定义在 layer 里的部件 CSS 永远压不过它
+         * （实测 .w-button-outline 的 color/background/border-color 全胜，按钮在主色渐变上
+         * 呈现主色墨写主色底 = 1.17:1）。部件样式只能在未分层域里取胜，故这里只保留
+         * 部件自有 class slider-pause，视觉全部由 widget-banner-hero-slider-default.css 提供。
+         * 键盘可达性（focus ring）由该部件 CSS 的 :focus-visible 规则保证。
+         */
+        ?>
         <?php if ($autoplay && count($slides) > 1): ?>
-            <button type="button" class="slider-pause w-button w-button-outline" data-slider-pause aria-pressed="false" data-play-label="@lang{播放轮播}" data-pause-label="@lang{暂停轮播}"><lang>暂停轮播</lang></button>
+            <button type="button" class="slider-pause" data-slider-pause aria-pressed="false" data-play-label="@lang{播放轮播}" data-pause-label="@lang{暂停轮播}"><lang>暂停轮播</lang></button>
         <?php endif; ?>
     </div>
 

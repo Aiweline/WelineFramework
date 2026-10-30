@@ -21,6 +21,7 @@ use Weline\Cron\Helper\Process;
 use Weline\Cron\Model\CronTask;
 use Weline\Cron\Service\CronCpuBudgetPolicy;
 use Weline\Cron\Service\CronCpuGovernor;
+use Weline\Cron\Service\CronHostLoadGate;
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
@@ -168,6 +169,23 @@ class Run implements CommandInterface
         }
         array_shift($args);
         $task_names = $args;
+        # 自动调度整轮先过主机负载闸门：超阈值只跳过本轮，不派子进程、不改任务行状态。
+        # 显式入口（-f / 指定任务名 / -p 受管子进程 / 后台手动 SSE）不经过本闸门。
+        if (!$process && !$force && $task_names === [] && !$manualSse) {
+            $loadBlock = ObjectManager::getInstance(CronHostLoadGate::class)->blocksAutomation();
+            if ($loadBlock !== null) {
+                $this->printing->note((string)__(
+                    '主机负载 %{1}% 超过计划任务自动运行上限 %{2}%（load1=%{3} / %{4} 核），本轮不自动执行，下一轮重新判定。',
+                    [
+                        \number_format($loadBlock['percent'], 1, '.', ''),
+                        $loadBlock['threshold'],
+                        \number_format($loadBlock['load1'], 2, '.', ''),
+                        $loadBlock['cores'],
+                    ],
+                ));
+                return;
+            }
+        }
         if (!is_bool($force)) {
             # 解锁任务
             if (empty($task_names)) {

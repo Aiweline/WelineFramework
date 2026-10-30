@@ -18,6 +18,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Runtime\Runtime;
 
 /**
  * 文件信息
@@ -213,8 +214,9 @@ class ConfigProvider extends DataObject implements ConfigProviderInterface
     public function getOptions(): array
     {
         $defaultOptions = [
-            // 持久连接：默认启用，除非主动销毁否则保持连接
-            \PDO::ATTR_PERSISTENT => $this->isPersistent(),
+            // 持久连接只在 FPM 语义下有意义。WLS 由 ConnectionPool 持有连接生命周期，
+            // 再开 PDO 持久连接会让同 DSN 的多个 PDO 塌缩到同一条物理连接，事务互相污染。
+            \PDO::ATTR_PERSISTENT => $this->isPersistent() && !Runtime::isWls(),
             
             // 错误模式：使用异常模式，提高错误处理性能
             \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
@@ -267,8 +269,10 @@ class ConfigProvider extends DataObject implements ConfigProviderInterface
         }
         
         // 合并用户自定义选项（用户选项优先级更高）
+        // 必须用 array_replace：PDO 属性键是数字常量，array_merge 会重新编号，
+        // 导致 ATTR_PERSISTENT/ATTR_TIMEOUT/ATTR_ERRMODE 全部错位失效。
         $userOptions = $this->getData('options') ?? [];
-        return array_merge($defaultOptions, $userOptions);
+        return array_replace($defaultOptions, $userOptions);
     }
 
     /**

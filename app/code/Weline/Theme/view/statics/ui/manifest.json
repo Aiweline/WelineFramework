@@ -11,7 +11,7 @@
             "ui-core"
         ]
     },
-    "build_id": "0d0d67b1e4ca9b39be69c72cbb903d58c454b462baab0edcc4f7cc25b74ff5e6",
+    "build_id": "3e494abcfd7fb413532d549fe07a8225433e22c6035cc3f665600ca70cfdaca0",
     "bundles": {
         "acl-role-assign-css": {
             "bytes": 2931,
@@ -336,10 +336,10 @@
             "type": "js"
         },
         "foundation": {
-            "bytes": 169658,
+            "bytes": 171654,
             "file": "weline-foundation.css",
-            "gzip_bytes": 26389,
-            "sha256": "f89f12143dcdfc7c4e378b369548f2a9cb9195605a658f999b07e7a288f6eb5d",
+            "gzip_bytes": 27575,
+            "sha256": "e49bfdf1755a2878abfbf53f983bb67eea8f87a519ff0bec9d4b87e8bec30e92",
             "type": "css"
         },
         "frontend": {
@@ -588,10 +588,10 @@
             "type": "css"
         },
         "ui-core": {
-            "bytes": 180904,
+            "bytes": 181496,
             "file": "weline-ui.js",
-            "gzip_bytes": 38833,
-            "sha256": "e4dbcc68566a9853cbebbb1b4401e0f7e8ce3839287eb5172291e41493e646ac",
+            "gzip_bytes": 38988,
+            "sha256": "c0b1dbb4794e381623fd01759ccb0073ee595c3eb52c53ee126a4bb9a42ff676",
             "type": "js"
         },
         "ui-critical": {

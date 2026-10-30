@@ -37,6 +37,8 @@ SQLite 连接不允许父调度器在上一代受管子任务仍运行时继续�
 
 MySQL、MariaDB 和 PostgreSQL 保持 **独立任务并发**：每个 due 任务各自 `claimTaskLaunch` + spawn，**不再**做全局软并发上限 / 主机容量 defer（旧 `ManagedChildAdmission` / `host_capacity_admission` 已撤）。原因：大量 `* * * * *` 任务 + 低上限（尤其 2 核机有效并发=1）会造成整轮 defer，任务系统性饿死。SQLite 仍单飞（见上）。普通调度不转发子任务日志，后台手动 SSE 仍按原协议转发。单任务仍靠 `BLOCK`/`RUNNING` 代次围栏互斥，禁止同任务双跑。
 
+**主机负载闸门**（2026-10-30）与上面撤掉的容量 defer 不是同一件事，勿混为一谈：`CronHostLoadGate` 只拦「自动调度整轮」——无任务名、无 `-f`、无 `-p`、无手动 SSE 时，`loadavg_1 / 核数 × 100` 超过后台 `cron/load/max_percent`（默认 70）就本轮直接返回、不派子进程、不改任务行；显式运行（`-f`、指定任务名、后台手动运行）一律放行，且阈值可后台改。取不到负载样本（Windows 等）时 fail-open 放行。核数探测必须覆盖 macOS（crontab 的 PATH 只有 `/usr/bin:/bin`，`sysctl` 在 `/usr/sbin`，须用绝对路径），否则分母退化为 1 会把百分比放大 N 倍。
+
 **调度进度条**：`CronStatus::displayProgressBar` 仅在交互 TTY 输出 ANSI/`\r`；crontab 重定向到 `var/cron.log` 的非 TTY 路径必须静默，禁止把进度条灌进日志。
 
 ## 日志和清理

@@ -1954,6 +1954,16 @@ class Start extends CommandAbstract
             $this->printer->error(__('WLS 运行时产物预检失败：%{1}', [$exception->getMessage()]));
             return 1;
         }
+        // 启动前清一次陈旧字节码：盘缓存不比对源文件 mtime，宿主机 validate_timestamps=Off
+        // 时新进程会继续执行旧代码（实测旧 .bin 落后源文件 17 小时）。
+        try {
+            $opcachePrune = \Weline\Server\Service\LongRunningPhpRuntime::pruneStaleFileCacheOnStartup();
+            if (($opcachePrune['removed'] ?? 0) > 0) {
+                $this->printer->note(__('已清理陈旧 OPcache 字节码缓存：%{1} 个', [$opcachePrune['removed']]));
+            }
+        } catch (\Throwable) {
+            // 缓存清理失败不影响启动（正确性由 validate_timestamps=1 兜底）
+        }
         if (empty($policyCheck['valid'])) {
             $this->printer->error(__('WLS 运行时策略不支持当前拓扑：%{1}', [
                 $runtimeSelection->effectiveTopology->value,

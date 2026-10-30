@@ -37,8 +37,8 @@ $this->setData('seo', [
     <style>
         .error-layout {
             margin: 0;
-            background: var(--color-bg-canvas, #ffffff);
-            color: var(--color-text-primary, #0f1111);
+            background: var(--color-bg-canvas);
+            color: var(--color-text-primary);
             font-family: "Commerce Ember", Arial, sans-serif;
         }
 
@@ -47,8 +47,8 @@ $this->setData('seo', [
         }
 
         .error__intro {
-            background: var(--color-bg-canvas, #ffffff);
-            border-bottom: 1px solid var(--color-border-default, #ddd);
+            background: var(--color-bg-canvas);
+            border-bottom: 1px solid var(--color-border-default);
         }
 
         .error__intro-inner {
@@ -81,7 +81,7 @@ $this->setData('seo', [
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            color: var(--color-text-secondary, #565959);
+            color: var(--color-text-secondary);
         }
 
         .error__title {
@@ -89,7 +89,7 @@ $this->setData('seo', [
             font-size: clamp(1.45rem, 2.4vw, 1.85rem);
             line-height: 1.25;
             font-weight: 700;
-            color: var(--color-text-primary, #0f1111);
+            color: var(--color-text-primary);
         }
 
         .error__lead,
@@ -97,7 +97,7 @@ $this->setData('seo', [
             margin: 0;
             max-width: 42rem;
             line-height: 1.55;
-            color: var(--color-text-secondary, #565959);
+            color: var(--color-text-secondary);
         }
 
         .error__hint {
@@ -119,18 +119,31 @@ $this->setData('seo', [
             min-height: 2rem;
             padding: 0.35rem 0.95rem;
             border-radius: 999px;
-            border: 1px solid var(--color-primary-border, #cc7700);
-            background: linear-gradient(180deg, #ffe08a 0%, var(--color-primary, #ff9900) 100%);
-            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset;
-            color: var(--color-on-primary, #111);
+            border: 1px solid var(--color-primary);
+            /* Gradient must stay on the deep end of the primary ramp so
+               --color-on-primary (near-white) keeps >=4.5:1 on BOTH stops.
+               The previous literal light stop measured 1.49:1 against the
+               near-white on-primary ink; deriving both stops from
+               --color-primary makes the palette the single author. */
+            background: linear-gradient(
+                180deg,
+                color-mix(in srgb, var(--color-primary) 82%, var(--color-text-primary)) 0%,
+                var(--color-primary) 100%
+            );
+            box-shadow: 0 1px 0 color-mix(in srgb, var(--color-on-primary) 40%, transparent) inset;
+            color: var(--color-on-primary);
             font-size: 0.92rem;
             font-weight: 700;
             text-decoration: none;
         }
 
         .error__home-link:hover {
-            background: linear-gradient(180deg, #ffd56b 0%, var(--color-primary-hover, #e68900) 100%);
-            color: var(--color-on-primary, #111);
+            background: linear-gradient(
+                180deg,
+                var(--color-primary) 0%,
+                var(--color-primary-hover) 100%
+            );
+            color: var(--color-on-primary);
         }
 
         .error__back-link {
@@ -194,13 +207,13 @@ $this->setData('seo', [
                     class="error__intro-inner error-container">
                 <div class="error__visual" aria-hidden="true">
                     <svg viewBox="0 0 240 200" role="img" focusable="false">
-                        <rect x="28" y="56" width="118" height="92" rx="10" fill="#ffd699"/>
-                        <rect x="38" y="66" width="98" height="72" rx="8" fill="#fffaf0" stroke="#ff9900" stroke-width="3"/>
-                        <path d="M170 72c18 0 34 14 34 34s-16 34-34 34h-10V72h10z" fill="#ff9900"/>
-                        <circle cx="194" cy="106" r="18" fill="#fffaf0" stroke="#ff9900" stroke-width="3"/>
-                        <text x="194" y="113" text-anchor="middle" font-size="18" font-weight="700" fill="#c45500">!</text>
-                        <path d="M78 118h38M78 104h48" stroke="#cc7700" stroke-width="4" stroke-linecap="round"/>
-                        <ellipse cx="120" cy="168" rx="62" ry="10" fill="#eaeded"/>
+                        <rect x="28" y="56" width="118" height="92" rx="10" fill="color-mix(in srgb, var(--color-primary) 30%, var(--color-bg-canvas))"/>
+                        <rect x="38" y="66" width="98" height="72" rx="8" fill="var(--color-bg-canvas)" stroke="var(--color-primary)" stroke-width="3"/>
+                        <path d="M170 72c18 0 34 14 34 34s-16 34-34 34h-10V72h10z" fill="var(--color-primary)"/>
+                        <circle cx="194" cy="106" r="18" fill="var(--color-bg-canvas)" stroke="var(--color-primary)" stroke-width="3"/>
+                        <text x="194" y="113" text-anchor="middle" font-size="18" font-weight="700" fill="var(--color-primary-hover)">!</text>
+                        <path d="M78 118h38M78 104h48" stroke="var(--color-primary)" stroke-width="4" stroke-linecap="round"/>
+                        <ellipse cx="120" cy="168" rx="62" ry="10" fill="color-mix(in srgb, var(--color-text-primary) 8%, transparent)"/>
                     </svg>
                 </div>
                 <div class="error__message">

@@ -10,6 +10,7 @@ namespace Weline\Theme\Service\LayoutEntity;
 final class ThemeLayoutEntitySolidifyLeaseStore
 {
     private const TTL_SECONDS = 300;
+    private const BATCH_ROOT_PREFIX = 'tu-';
 
     public function __construct(
         private readonly ThemeLayoutEntityPaths $paths,
@@ -106,9 +107,60 @@ final class ThemeLayoutEntitySolidifyLeaseStore
 
     private function pathFor(ThemeLayoutEntitySolidifySerialKey $key): string
     {
+        $canonical = $this->canonicalLeasePath($key);
+        if (is_file($canonical)) {
+            return $canonical;
+        }
+        foreach ($this->batchLeasePaths($key) as $candidate) {
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return $canonical;
+    }
+
+    /** 线上规范根的 lease 路径（首次获取默认落这里，语义与改动前一致）。 */
+    private function canonicalLeasePath(ThemeLayoutEntitySolidifySerialKey $key): string
+    {
         return rtrim($this->paths->stateRoot(), '/\\')
             . DIRECTORY_SEPARATOR . (string)$key->themeId
             . DIRECTORY_SEPARATOR . '.solidify-leases'
             . DIRECTORY_SEPARATOR . $key->slotHash() . '.lease';
+    }
+
+    /**
+     * 批次根（`tu-<ts>-<hash>/<themeId>/`）下的候选 lease 路径，新批次优先。
+     *
+     * Leases are acquired while a request/worker still runs inside a theme-update batch root,
+     * but drain and the pending check resolve paths from stateRoot() (top level). Without this
+     * fallback those leases are never seen, so their TTL expiry in isPending() never fires and
+     * `lease_busy` blocks the queue forever (measured: 6 leases 1248s..5389s past a 300s TTL).
+     *
+     * @return list<string>
+     */
+    private function batchLeasePaths(ThemeLayoutEntitySolidifySerialKey $key): array
+    {
+        $root = rtrim($this->paths->stateRoot(), '/\\');
+        $batches = [];
+        foreach (@scandir($root) ?: [] as $name) {
+            if (!str_starts_with($name, self::BATCH_ROOT_PREFIX)) {
+                continue;
+            }
+            if (is_dir($root . DIRECTORY_SEPARATOR . $name)) {
+                $batches[] = $name;
+            }
+        }
+        rsort($batches, SORT_STRING);
+        $out = [];
+        $slot = $key->slotHash() . '.lease';
+        foreach ($batches as $batch) {
+            $dir = $root . DIRECTORY_SEPARATOR . $batch
+                . DIRECTORY_SEPARATOR . (string)$key->themeId
+                . DIRECTORY_SEPARATOR . '.solidify-leases';
+            $out[] = $dir . DIRECTORY_SEPARATOR . $slot;
+        }
+
+        return $out;
     }
 }

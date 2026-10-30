@@ -14,6 +14,9 @@ final class ThemeLayoutEntitySolidifyJobStore
 {
     public const DEFAULT_TTL_SECONDS = 86400;
 
+    /** 请求期批次根目录名前缀（`tu-<timestamp>-<hash>/<themeId>/`）。 */
+    private const BATCH_ROOT_PREFIX = 'tu-';
+
     public function __construct(
         private readonly ThemeLayoutEntityPaths $paths,
     ) {
@@ -254,12 +257,14 @@ final class ThemeLayoutEntitySolidifyJobStore
         }
         $out = [];
         $limit = max(1, min(200, $limit));
-        $themeDirs = @scandir($root) ?: [];
-        foreach ($themeDirs as $themeName) {
-            if ($themeName === '.' || $themeName === '..' || !ctype_digit($themeName)) {
-                continue;
-            }
-            $jobDir = $root . DIRECTORY_SEPARATOR . $themeName . DIRECTORY_SEPARATOR . '.solidify-jobs';
+        // 线上规范根（<themeId>/）之外，请求期还会把 job 落到批次根（tu-<ts>-<hash>/<themeId>/）。
+        // 只认 ctype_digit 会漏掉全部批次期入队的任务，排水永远消费不到 → 布局槽长期
+        // pending → 请求闸门 forbid 共享缓存 → 页面 no-store/BYPASS（ThemeLayoutEntityPaths
+        // stateRoot() 注释记录的死锁）。这里同时扫描两类根，按 serial key 去重。
+        $scanRoots = $this->pendingScanRoots($root);
+        $seen = [];
+        foreach ($scanRoots as $slotRoot) {
+            $jobDir = $slotRoot . DIRECTORY_SEPARATOR . '.solidify-jobs';
             if (!is_dir($jobDir)) {
                 continue;
             }
@@ -276,6 +281,11 @@ final class ThemeLayoutEntitySolidifyJobStore
                 if ($parsed === null) {
                     continue;
                 }
+                $serial = $parsed['key']->toString();
+                if (isset($seen[$serial])) {
+                    continue;
+                }
+                $seen[$serial] = true;
                 $out[] = $parsed;
                 if (count($out) >= $limit) {
                     return $out;
@@ -284,6 +294,44 @@ final class ThemeLayoutEntitySolidifyJobStore
         }
 
         return $out;
+    }
+
+    /**
+     * 排水扫描根：线上规范根 `<themeId>` + 批次根 `tu-*​/<themeId>`。
+     *
+     * @return list<string>
+     */
+    private function pendingScanRoots(string $root): array
+    {
+        $roots = [];
+        $entries = @scandir($root) ?: [];
+        foreach ($entries as $name) {
+            if ($name === '.' || $name === '..') {
+                continue;
+            }
+            $path = $root . DIRECTORY_SEPARATOR . $name;
+            if (!is_dir($path)) {
+                continue;
+            }
+            if (ctype_digit($name)) {
+                $roots[] = $path;
+                continue;
+            }
+            if (!str_starts_with($name, self::BATCH_ROOT_PREFIX)) {
+                continue;
+            }
+            foreach (@scandir($path) ?: [] as $sub) {
+                if ($sub === '.' || $sub === '..' || !ctype_digit($sub)) {
+                    continue;
+                }
+                $subPath = $path . DIRECTORY_SEPARATOR . $sub;
+                if (is_dir($subPath)) {
+                    $roots[] = $subPath;
+                }
+            }
+        }
+
+        return $roots;
     }
 
     /**
@@ -459,9 +507,59 @@ final class ThemeLayoutEntitySolidifyJobStore
 
     private function pathFor(ThemeLayoutEntitySolidifySerialKey $key): string
     {
+        $canonical = $this->canonicalJobPath($key);
+        if (is_file($canonical)) {
+            return $canonical;
+        }
+        foreach ($this->batchJobPaths($key) as $candidate) {
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return $canonical;
+    }
+
+    /** 线上规范根的 job 路径（写入默认落这里，语义与改动前一致）。 */
+    private function canonicalJobPath(ThemeLayoutEntitySolidifySerialKey $key): string
+    {
         return rtrim($this->paths->stateRoot(), '/\\')
             . DIRECTORY_SEPARATOR . (string)$key->themeId
             . DIRECTORY_SEPARATOR . '.solidify-jobs'
             . DIRECTORY_SEPARATOR . $key->slotHash() . '.json';
+    }
+
+    /**
+     * 批次根（`tu-<ts>-<hash>/<themeId>/`）下的候选 job 路径，新批次优先。
+     *
+     * 请求期入队落在批次根，而 CLI/Cron 排水与请求闸门读的是 stateRoot() 顶层；
+     * 不做这层兜底就会 `job_missing`（排水全 skip、闸门 $pending 判不出年龄而永不放开 FPC）。
+     *
+     * @return list<string>
+     */
+    private function batchJobPaths(ThemeLayoutEntitySolidifySerialKey $key): array
+    {
+        $root = rtrim($this->paths->stateRoot(), '/\\');
+        $batches = [];
+        foreach (@scandir($root) ?: [] as $name) {
+            if (!str_starts_with($name, self::BATCH_ROOT_PREFIX)) {
+                continue;
+            }
+            if (is_dir($root . DIRECTORY_SEPARATOR . $name)) {
+                $batches[] = $name;
+            }
+        }
+        // 新批次优先：一拍降序，命中即用。
+        rsort($batches, SORT_STRING);
+        $out = [];
+        $slot = $key->slotHash() . '.json';
+        foreach ($batches as $batch) {
+            $dir = $root . DIRECTORY_SEPARATOR . $batch
+                . DIRECTORY_SEPARATOR . (string)$key->themeId
+                . DIRECTORY_SEPARATOR . '.solidify-jobs';
+            $out[] = $dir . DIRECTORY_SEPARATOR . $slot;
+        }
+
+        return $out;
     }
 }

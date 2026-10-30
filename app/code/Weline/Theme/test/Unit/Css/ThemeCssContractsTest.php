@@ -51,7 +51,56 @@ final class ThemeCssContractsTest extends TestCase
             'WidgetThemeTokenHardcode::testWidgetVisualSourcesHaveZeroTokenHardcodes' => function () {
             $this->assert_WidgetThemeTokenHardcode_testWidgetVisualSourcesHaveZeroTokenHardcodes();
         },
+            'ThemeCascadeLayer::testThemeCssIsFullyWrappedInLowestPriorityLayer' => function () {
+            $this->assert_ThemeCascadeLayer_testThemeCssIsFullyWrappedInLowestPriorityLayer();
+        },
         ];
+    }
+
+    /**
+     * 「另外引入 CSS 即继承」架构契约（HARD）：theme.css 必须整体收敛在具名层
+     * `@layer weline-theme`，且该层在 foundation.css 的最早顺序声明中排在**第一位**
+     * （CSS 层叠中后声明层优先级更高 ⇒ 第一位 = 最低优先级）。任一条不成立，
+     * 默认骨架就会无条件压过自定义主题，`!important` 之外无解。
+     */
+    private function assert_ThemeCascadeLayer_testThemeCssIsFullyWrappedInLowestPriorityLayer(): void
+    {
+        $themeCss = BP . 'app/code/Weline/Theme/view/theme/frontend/assets/css/theme.css';
+        $foundation = BP . 'app/code/Weline/Theme/view/ui/css/foundation.css';
+        foreach ([$themeCss, $foundation] as $file) {
+            self::assertFileExists($file);
+        }
+
+        $theme = (string)file_get_contents($themeCss);
+        $openers = preg_match_all('/@layer\s+weline-theme\s*\{/', $theme);
+        self::assertSame(1, $openers, 'theme.css 必须恰好有 1 个 @layer weline-theme { 块开启者，实际 ' . $openers);
+
+        // 层包裹必须从头到尾覆盖：第一个块开启者之前不得有任何规则文本（注释除外）
+        $pos = (int)strpos($theme, '@layer weline-theme {');
+        $head = substr($theme, 0, $pos);
+        $stripped = preg_replace('!/\*.*?\*/!s', '', $head);
+        $stripped = preg_replace('!//[^\n]*!', '', (string)$stripped);
+        self::assertSame('', trim((string)$stripped), '@layer weline-theme { 之前不得有规则（未分层规则会无条件压过所有层）');
+
+        // 花括号配平（去掉注释后统计）
+        $noComments = preg_replace('!/\*.*?\*/!s', '', $theme);
+        self::assertSame(
+            substr_count((string)$noComments, '{'),
+            substr_count((string)$noComments, '}'),
+            'theme.css 去掉注释后花括号必须配平（层块未闭合会让后续规则逃逸出层）'
+        );
+
+        // 层序声明：weline-theme 必须在最早声明的序列里，且排在第一位（最低优先级）
+        $fs = (string)file_get_contents($foundation);
+        $seqs = [];
+        preg_match_all('/@layer\s+([a-z0-9_,\s-]+);/i', $fs, $m);
+        foreach ($m[1] as $seq) {
+            $seqs[] = array_map('trim', explode(',', $seq));
+        }
+        self::assertNotEmpty($seqs, 'foundation.css 必须存在 @layer 顺序声明');
+        $firstSeq = $seqs[0];
+        self::assertSame('weline-theme', $firstSeq[0] ?? null, 'foundation.css 最早层序中 weline-theme 必须排第一位（= 最低优先级），实际 ' . implode(',', $firstSeq));
+        self::assertContains('page', $firstSeq, '层序必须仍包含框架层 page，否则骨架分层失效');
     }
 
 private function assert_HomepageHeroFrameFill_testDefaultHomepageShellDoesNotClampWFrameTo40vh20rem(): void

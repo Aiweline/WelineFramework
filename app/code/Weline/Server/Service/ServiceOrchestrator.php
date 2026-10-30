@@ -1571,6 +1571,17 @@ class ServiceOrchestrator
                     . ' @' . $throwable->getFile() . ':' . $throwable->getLine()
                 );
                 throw $throwable;
+            } finally {
+                // Master 主循环任务没有请求边界：每个调度都是一条新 Fiber，
+                // 任务里取到的数据库连接（owner=fiber:pid:seq）若不在这里结算，
+                // 就会永久占住池位（实测每 90s 一条，8 小时累积 86 条 idle backend）。
+                if (\class_exists(\Weline\Framework\Database\Connection\Pool\ConnectionPool::class)) {
+                    try {
+                        \Weline\Framework\Database\Connection\Pool\ConnectionPool::requestEndCleanup();
+                    } catch (\Throwable) {
+                        // 结算失败不能影响主循环任务本身
+                    }
+                }
             }
         });
 

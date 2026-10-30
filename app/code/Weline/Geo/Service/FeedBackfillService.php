@@ -251,6 +251,121 @@ final class FeedBackfillService
     }
 
     /**
+     * 修复存量「标题被写成 URL」的 product feed 行。
+     *
+     * Sitemap 只覆盖在售产品，未在 sitemap 里出现的产品（如 ticket-* 明细）永远进不了
+     * backfillProducts 的枚举范围，所以污染行必须按库里现存行反查，而不能指望重新枚举。
+     * 键与 FeedItemObserver 的 upsert 口径一致：(feed_id, item_type, item_id)，因此这里
+     * 走同一条 requestSubmit 链路即可原地更新，不会产生新行。
+     */
+    public function repairUrlTitledProducts(int $limit = 5000): int
+    {
+        if (!\class_exists(\Weline\Geo\Model\FeedItem::class)) {
+            return 0;
+        }
+        $repaired = 0;
+        try {
+            $feedItem = ObjectManager::getInstance(\Weline\Geo\Model\FeedItem::class);
+            $rows = $feedItem->reset()
+                ->where(\Weline\Geo\Model\FeedItem::schema_fields_ITEM_TYPE, 'product')
+                ->where(\Weline\Geo\Model\FeedItem::schema_fields_TITLE, 'http%', 'LIKE')
+                ->limit($limit)
+                ->select()
+                ->fetchArray();
+            if (!\is_array($rows) || $rows === []) {
+                return 0;
+            }
+            $byWebsite = [];
+            foreach ($rows as $row) {
+                $url = trim((string)($row[\Weline\Geo\Model\FeedItem::schema_fields_URL] ?? ''));
+                $productId = (int)($row[\Weline\Geo\Model\FeedItem::schema_fields_ITEM_ID] ?? 0);
+                if ($url === '' || $productId <= 0) {
+                    continue;
+                }
+                $byWebsite[$productId] = $url;
+            }
+            foreach ($this->websiteIds() as $websiteId) {
+                $resolved = $this->resolveProductNames($websiteId, \array_keys($byWebsite));
+                foreach ($resolved as $productId => $info) {
+                    if ($repaired >= $limit) {
+                        return $repaired;
+                    }
+                    $this->feedSubmit->requestSubmit($byWebsite[$productId], 'product', [
+                        'subject_type' => 'product',
+                        'subject_id' => $productId,
+                        'item_type' => 'product',
+                        'item_id' => $productId,
+                        'website_id' => $websiteId,
+                        'title' => $info['name'],
+                        'content' => $info['description'],
+                        'is_published' => 1,
+                        'published_at' => time(),
+                        'updated_at' => date('Y-m-d H:i:s'),
+                    ]);
+                    $repaired++;
+                }
+            }
+        } catch (\Throwable $e) {
+            if (defined('DEV') && DEV) {
+                w_log_error('GEO url-titled feed repair failed: ' . $e->getMessage());
+            }
+        }
+
+        return $repaired;
+    }
+
+    /**
+     * 按产品 id 批量取真实名称/描述（站点级兜底层 store_id=0 必须包含）。
+     *
+     * @param list<int> $productIds
+     * @return array<int, array{name:string, description:string}>
+     */
+    private function resolveProductNames(int $websiteId, array $productIds): array
+    {
+        $productIds = \array_values(\array_unique(\array_filter(\array_map('intval', $productIds))));
+        if ($productIds === [] || !\class_exists(\Weline\Product\Repository\AttributeValueRepository::class)) {
+            return [];
+        }
+        $best = [];
+        try {
+            $attributes = ObjectManager::getInstance(\Weline\Product\Repository\AttributeValueRepository::class);
+            foreach (\array_chunk($productIds, 128) as $chunk) {
+                $attrRows = $attributes->listExplicitRows($websiteId, 'product', $chunk, [0], null, ['name', 'description']);
+                foreach ($attrRows as $attrRow) {
+                    $code = (string)($attrRow['attribute_code'] ?? '');
+                    if ($code !== 'name' && $code !== 'description') {
+                        continue;
+                    }
+                    $value = trim((string)($attrRow['value'] ?? ''));
+                    if ($value === '' || \preg_match('#^https?://#i', $value) === 1) {
+                        continue;
+                    }
+                    $productId = (int)($attrRow['entity_id'] ?? 0);
+                    if ($productId <= 0 || isset($best[$productId][$code])) {
+                        continue;
+                    }
+                    $best[$productId][$code] = $value;
+                }
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+        $out = [];
+        foreach ($best as $productId => $byCode) {
+            $name = (string)($byCode['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+            $out[$productId] = [
+                'name' => $name,
+                'description' => (string)($byCode['description'] ?? ''),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * @return list<int>
      */
     private function websiteIds(): array

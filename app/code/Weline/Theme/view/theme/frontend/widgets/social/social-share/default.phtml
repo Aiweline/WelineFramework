@@ -33,6 +33,8 @@ $style = $this->getData('style') ?? 'icon';
 $layout = $this->getData('layout') ?? 'horizontal';
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT;
 
+// 平台品牌色为各平台官方标识色（业务数据真实色，白名单），不参与主题换肤；
+// 邮件/复制链接无品牌色，改走主题盘中性墨 Token，不留字面中性色。
 $platformConfig = [
     'facebook' => ['icon' => 'circle', 'name' => 'Facebook', 'color' => '#1877f2', 'url' => 'https://www.facebook.com/sharer/sharer.php?u={url}'],
     'twitter' => ['icon' => 'circle', 'name' => 'Twitter/X', 'color' => '#000', 'url' => 'https://twitter.com/intent/tweet?url={url}&text={title}'],
@@ -43,8 +45,8 @@ $platformConfig = [
     'wechat' => ['icon' => 'circle', 'name' => '微信', 'color' => '#07c160', 'url' => '#', 'action' => 'qrcode'],
     'weibo' => ['icon' => 'circle', 'name' => '微博', 'color' => '#e6162d', 'url' => 'https://service.weibo.com/share/share.php?url={url}&title={title}'],
     'qq' => ['icon' => 'circle', 'name' => 'QQ', 'color' => '#12b7f5', 'url' => 'https://connect.qq.com/widget/shareqq/index.html?url={url}&title={title}'],
-    'email' => ['icon' => 'mail', 'name' => (string)__('邮件'), 'color' => '#666', 'url' => 'mailto:?subject={title}&body={url}'],
-    'copy' => ['icon' => 'link', 'name' => (string)__('复制链接'), 'color' => '#333', 'url' => '#', 'action' => 'copy'],
+    'email' => ['icon' => 'mail', 'name' => (string)__('邮件'), 'color' => 'var(--weline-theme-text-muted, #556074)', 'url' => 'mailto:?subject={title}&body={url}'],
+    'copy' => ['icon' => 'link', 'name' => (string)__('复制链接'), 'color' => 'var(--weline-theme-text-secondary, #475569)', 'url' => '#', 'action' => 'copy'],
 ];
 ?>
 
@@ -67,7 +69,8 @@ $platformConfig = [
                     data-platform="<?= $esc((string)$platform) ?>"
                     data-url="<?= $esc($config['url']) ?>"
                     data-action="<?= $esc($config['action'] ?? 'share') ?>"
-                    data-widget-style="--btn-color: <?= $esc($config['color']) ?>;"
+                    data-brand="<?= $esc((string)$platform) ?>"
+                    data-widget-style="--btn-color: <?= $esc((string)$config['color']) ?>;"
                     title="<?= $esc($config['name']) ?>">
                 <w:icon name="config.icon|share" size="sm"></w:icon>
                 <?php if ($style !== 'icon'): ?>

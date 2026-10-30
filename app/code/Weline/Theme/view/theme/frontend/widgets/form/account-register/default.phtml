@@ -17,8 +17,8 @@
  * @widget.supports {["layout-account-auth-content","account-auth-content","account-auth","auth-form","account-register","register"]}
  *
  * @param background_image {default="",type="media_image",label="背景图",description="全宽舞台背景；留空则使用色块渐变"}
- * @param background_color {default="#1f2124",type="color",label="背景主色"}
- * @param accent_color {default="#b84a3c",type="color",label="背景点缀色",description="无背景图时与主色组成水墨渐隐"}
+ * @param background_color {default="dark",type="select",label="背景主色",options={dark:"深色舞台（默认）",dark-secondary:"深色舞台·更深",dark-tertiary:"深色舞台·较浅",primary:"主题主色",surface:"主题浅纸面"}}
+ * @param accent_color {default="primary",type="select",label="背景点缀色",options={primary:"主题主色",primary-light:"主题主色·亮",primary-hover:"主题主色·悬停",secondary:"主题次级色"}}
  * @param overlay_opacity {default="0.35",type="select",label="背景遮罩",options={0:"无遮罩",0.2:"20%",0.35:"35%",0.5:"50%",0.65:"65%"}}
  * @param promo_eyebrow {default="Weline Account",type="string",label="舞台眉题"}
  * @param promo_title {default="加入我们",type="string",label="舞台标题"}
@@ -44,17 +44,26 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
 
 $backgroundImage = LegacyMediaUrl::sanitize($this->getData('background_image') ?? '', true);
 $backgroundImageFileHtml = (string)($this->getData('background_image_file_html') ?? '');
-// 旧亚马逊舞台色 → 水墨玄墨/朱砂
+// 语义档位 → 主题盘 Token（变量单一作者：本部件不持有任何字面色，也不承载定制主题视觉）。
+$stagePresets = [
+    'dark' => 'var(--color-bg-dark, #1f2937)',
+    'dark-secondary' => 'var(--color-bg-dark-secondary, #111827)',
+    'dark-tertiary' => 'var(--color-bg-dark-tertiary, #374151)',
+    'primary' => 'var(--color-primary, #0f766e)',
+    'surface' => 'var(--color-bg-primary, #ffffff)',
+];
+$accentPresets = [
+    'primary' => 'var(--color-primary, #0f766e)',
+    'primary-light' => 'var(--color-primary-light, #14b8a6)',
+    'primary-hover' => 'var(--color-primary-hover, #0d5f59)',
+    'secondary' => 'var(--color-accent, #0f766e)',
+];
 $rawBackgroundColor = trim((string)($this->getData('background_color') ?? ''));
 $rawAccentColor = trim((string)($this->getData('accent_color') ?? ''));
-if ($rawBackgroundColor === '' || strcasecmp($rawBackgroundColor, '#1b2430') === 0) {
-    $rawBackgroundColor = '#1f2124';
-}
-if ($rawAccentColor === '' || strcasecmp($rawAccentColor, '#e08a2a') === 0) {
-    $rawAccentColor = '#b84a3c';
-}
-$backgroundColor = ThemeUiColor::sanitize($rawBackgroundColor, '#1f2124');
-$accentColor = ThemeUiColor::sanitize($rawAccentColor, '#b84a3c');
+$backgroundColor = $stagePresets[$rawBackgroundColor]
+    ?? ThemeUiColor::sanitize($rawBackgroundColor, $stagePresets['dark']);
+$accentColor = $accentPresets[$rawAccentColor]
+    ?? ThemeUiColor::sanitize($rawAccentColor, $accentPresets['primary']);
 
 $overlayOpacity = (float)($this->getData('overlay_opacity') ?? 0.35);
 if ($overlayOpacity < 0) {

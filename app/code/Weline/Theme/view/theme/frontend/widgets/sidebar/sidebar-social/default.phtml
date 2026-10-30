@@ -66,7 +66,7 @@ if ($customLinks) {
                     'platform' => $platform,
                     'name' => SocialIconHelper::getName($platform) ?? $link['name'] ?? $platform,
                     'url' => $url,
-                    'color' => SocialIconHelper::getColor($platform) ?? '#666',
+                    'color' => SocialIconHelper::getColor($platform) ?? 'var(--weline-theme-text-muted, #556074)',
                 ];
             }
         }
@@ -86,7 +86,7 @@ if (empty($socials)) {
                 'platform' => $platform,
                 'name' => SocialIconHelper::getName($platform) ?? ucfirst($platform),
                 'url' => $url,
-                'color' => SocialIconHelper::getColor($platform) ?? '#666',
+                'color' => SocialIconHelper::getColor($platform) ?? 'var(--weline-theme-text-muted, #556074)',
             ];
         }
     }
@@ -113,6 +113,7 @@ if ($socials === [] && $wechatQr === '' && $wechatQrFileHtml === '' && !$isPrevi
                title="<?= $esc((string)$social['name']) ?>"
                target="_blank"
                rel="noopener noreferrer"
+               data-brand="<?= $esc((string)$social['platform']) ?>"
                data-widget-style="--brand-color: <?= $esc((string)$social['color']) ?>;">
                 <?= SocialIconHelper::renderIcon($social['platform'], ['class' => 'social-icon', 'width' => '20', 'height' => '20']) ?>
             </a>

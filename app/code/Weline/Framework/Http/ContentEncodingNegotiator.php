@@ -112,13 +112,27 @@ final class ContentEncodingNegotiator
         if ($contentType === '') {
             return true;
         }
+        // 先去参数（`; charset=utf-8`），只按 MIME 本体判定，避免参数干扰后缀匹配。
+        $mime = \trim((string)\strtok($contentType, ';'));
+        if ($mime === '') {
+            return true;
+        }
 
-        return \str_starts_with($contentType, 'text/')
-            || \str_contains($contentType, 'application/json')
-            || \str_contains($contentType, 'application/javascript')
-            || \str_contains($contentType, 'application/xml')
-            || \str_contains($contentType, 'application/xhtml+xml')
-            || \str_contains($contentType, 'image/svg+xml');
+        if (\str_starts_with($mime, 'text/')) {
+            return true;
+        }
+        // 结构化后缀：`application/feed+json`、`application/atom+xml`、`application/rss+xml` 等。
+        // 原实现用 str_contains 精确子串，这类 MIME 本体里没有 `application/json`，于是漏判 → 不压缩。
+        if (\str_starts_with($mime, 'application/')
+            && (\str_ends_with($mime, '+json') || \str_ends_with($mime, '+xml'))) {
+            return true;
+        }
+
+        return \str_contains($mime, 'application/json')
+            || \str_contains($mime, 'application/javascript')
+            || \str_contains($mime, 'application/xml')
+            || \str_contains($mime, 'application/xhtml+xml')
+            || \str_contains($mime, 'image/svg+xml');
     }
 
     private static function codingQuality(string $acceptEncoding, string $coding): float

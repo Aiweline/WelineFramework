@@ -15,6 +15,26 @@ final class ConnectionPoolExhaustionFakePdo extends PDO
     public function __construct()
     {
     }
+
+    public function inTransaction(): bool
+    {
+        return false;
+    }
+
+    public function exec(string $statement): int|false
+    {
+        return 0;
+    }
+
+    public function getAttribute(int $attribute): mixed
+    {
+        return $attribute === PDO::ATTR_DRIVER_NAME ? 'pgsql' : null;
+    }
+
+    public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): \PDOStatement|false
+    {
+        return false;
+    }
 }
 
 final class ConnectionPoolExhaustionTest extends TestCase
@@ -76,8 +96,23 @@ final class ConnectionPoolExhaustionTest extends TestCase
     }
 
     /**
-     * 行为验证：池饱和且调用方未显式传超时时，必须走默认预算并在有界时间内失败，
-     * 而不是把请求 Fiber 阻塞数十秒。
+     * 配置预算必须落在安全区间：env 的 acquire_timeout_ms 不得把单次等待重新拉回 10s+。
+     */
+    public function testConfiguredDefaultBudgetStaysWithinSafeRange(): void
+    {
+        $budget = ConnectionPool::resolveAcquireTimeoutSeconds();
+
+        self::assertGreaterThan(0.0, $budget, '默认预算必须大于 0，否则完全放弃背压');
+        self::assertLessThanOrEqual(
+            5.0,
+            $budget,
+            'db.pool.acquire_timeout_ms 过大（实测 ' . \round($budget, 2) . 's），会把局部过载放大成整站不可用'
+        );
+    }
+
+    /**
+     * 行为验证：池饱和且调用方显式给预算时，必须在有界时间内失败，
+     * 而不是把请求 Fiber 阻塞数十秒（预算来源与 env 解耦，避免环境配置影响断言）。
      */
     public function testSaturatedPoolFailsFastWithinBoundedBudget(): void
     {
@@ -89,14 +124,14 @@ final class ConnectionPoolExhaustionTest extends TestCase
 
         $startedAt = \microtime(true);
         try {
-            ConnectionPool::getConnection($config, $factory);
+            ConnectionPool::getConnection($config, $factory, 0.2);
             self::fail('Expected the saturated pool to reject the overflow acquire.');
         } catch (ConnectionPoolExhaustedException $exception) {
             $elapsed = \microtime(true) - $startedAt;
             self::assertLessThan(
-                10.0,
+                3.5,
                 $elapsed,
-                '默认获取预算必须有界；实测耗时 ' . \round($elapsed, 2) . 's'
+                '显式预算必须有界；实测耗时 ' . \round($elapsed, 2) . 's'
             );
             self::assertStringContainsString('max_size=1', $exception->getMessage());
         }

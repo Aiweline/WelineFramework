@@ -169,6 +169,12 @@ final class Connector extends Query implements
             function () {
                 // PostgreSQL DSN 格式: pgsql:host=hostname;port=5432;dbname=database;user=username;password=password
                 $dsn = "pgsql:host={$this->configProvider->getHostName()};port={$this->configProvider->getHostPort()};dbname={$this->configProvider->getDatabase()}";
+                // 连接归因写进 DSN：DSN 参数属于启动包，不会被归还时的 DISCARD ALL 重置
+                // （实测：DSN 传 application_name → DISCARD ALL 后仍保留），比建连后再 SET 省一次 RTT。
+                $applicationName = \Weline\Framework\Database\Connection\Pool\ConnectionPool::applicationNameFor($this->configProvider);
+                if ($applicationName !== '') {
+                    $dsn .= ';application_name=' . $applicationName;
+                }
                 if ($this->configProvider->getCharset()) {
                     $dsn .= ";options='--client_encoding={$this->configProvider->getCharset()}'";
                 }

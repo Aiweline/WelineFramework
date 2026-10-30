@@ -559,11 +559,14 @@ class Doctor extends CommandAbstract
         }
 
         // 权威默认值在 worker_runtime_common.php::wlsResolveFiberAdmissionConfig()：
-        // 未配置 max_active 时按 12 处理。
+        // 未配置 max_active 时按 6 处理（Doctor 必须与运行时同源，不能各自默认）。
         $configured = \array_key_exists('max_active', $fiber);
-        $maxActive = $configured ? \max(0, (int)$fiber['max_active']) : 12;
+        $maxActive = $configured ? \max(0, (int)$fiber['max_active']) : 6;
         $dbConfig = \is_array($env['db']['master'] ?? null) ? $env['db']['master'] : [];
         $poolSize = (int)($dbConfig['pool_size'] ?? 10);
+        $modulePoolSizes = self::resolveModuleDbPoolSizes();
+        $poolCount = 1 + \count($modulePoolSizes);
+        $poolBudget = $poolSize + \array_sum($modulePoolSizes);
         $ok = $maxActive === 0 || $poolSize >= $maxActive;
         $message = null;
         if (!$ok) {
@@ -571,16 +574,44 @@ class Doctor extends CommandAbstract
                 . '] 的 wls.fiber.max_active (' . $maxActive
                 . ')：并发取连接上限高于池上限，必然产生 ConnectionPoolExhaustedException。'
                 . ' 请提高 pool_size，或降低该实例 fiber.max_active；'
-                . ' 并保证 PostgreSQL max_connections ≥ Worker 峰值 × pool_size。';
+                . ' 并保证 PostgreSQL max_connections ≥ Worker 峰值 × 池数 × max_active。';
         }
 
         return [
             'ok' => $ok,
             'pool_size' => $poolSize,
+            'pool_count' => $poolCount,
+            'pool_budget' => $poolBudget,
+            'module_pools' => $modulePoolSizes,
             'fiber_max_active' => $maxActive,
             'fiber_max_active_configured' => $configured,
             'message' => $message,
         ];
+    }
+
+    /**
+     * 模块分库（`app/code/<Vendor>/<Module>/etc/db.php`）的每库池大小。
+     *
+     * 容量预算必须按「主库 + 各模块库」累加：每个模块库都是独立连接池，
+     * 只算 db.master.pool_size 会把集群连接需求低估 (1+N) 倍。
+     *
+     * @return array<string, int> 模块名 => pool_size
+     */
+    private static function resolveModuleDbPoolSizes(): array
+    {
+        $definitions = APP_CODE_PATH === '' ? [] : (\glob(APP_CODE_PATH . '*/*/etc/db.php') ?: []);
+        $sizes = [];
+        foreach ($definitions as $file) {
+            $config = include $file;
+            if (!\is_array($config)) {
+                continue;
+            }
+            $master = \is_array($config['master'] ?? null) ? $config['master'] : $config;
+            $relative = \str_replace(APP_CODE_PATH, '', \dirname($file, 2));
+            $sizes[$relative] = (int)($master['pool_size'] ?? 10);
+        }
+
+        return $sizes;
     }
 
     /**

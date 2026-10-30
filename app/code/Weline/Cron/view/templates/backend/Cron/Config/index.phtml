@@ -1,6 +1,6 @@
 <?php
 /**
- * 计划任务 CPU 预算配置：内嵌 Weline_Cron backend 区全部已声明配置（cron/cpu/*）。
+ * 计划任务调度配置：内嵌 Weline_Cron backend 区全部已声明配置（cron/cpu/*、cron/load/*）。
  *
  * @var \Weline\Framework\View\Template $this
  */
@@ -16,7 +16,7 @@ $taskListUrl = $this->request->getUrlBuilder()->getBackendUrl('*/backend/cron/li
     <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
         <div class="w-stack" style="--w-gap:var(--weline-space-1);">
             <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
-                <lang>本页嵌入计划任务模块在统一配置中心声明的 CPU 预算字段。任务行自身声明了非 0 的 CPU 个数或百分比时，以任务行为准；本页只是未声明任务的默认值。切换作用范围后按新范围加载。</lang>
+                <lang>本页嵌入计划任务模块在统一配置中心声明的调度配置（CPU 预算与负载闸门）。任务行自身声明了非 0 的 CPU 个数或百分比时，以任务行为准；本页只是未声明任务的默认值。负载闸门超上限时只跳过自动调度整轮，显式运行不受影响。切换作用范围后按新范围加载。</lang>
             </p>
         </div>
         <div class="w-cluster" style="--w-gap:var(--weline-space-2);">

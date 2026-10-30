@@ -15,21 +15,21 @@
  * @widget.supports {["layout-homepage-promo","layout-homepage-hero","layout-cms-hero","layout-default-content"]}
  *
  * @param background_image {default="",type="media_image",label="背景图片",description="从媒体库选择背景图"}
- * @param background_color {default="var(--weline-theme-primary-subtle)",type="color",label="背景颜色"}
+ * @param background_color {default="primary-subtle",type="select",label="背景颜色",options={primary-subtle:"主色淡底（默认）",primary:"主题主色",primary-surface:"主色面",surface:"纸面",surface-muted:"纸面·次级",canvas:"画布白"}}
  * @param text {default="精选上新 · 本季新品",type="string",label="促销文字"}
- * @param text_color {default="var(--weline-theme-primary-text-emphasis)",type="color",label="文字颜色"}
+ * @param text_color {default="primary-text-emphasis",type="select",label="文字颜色",options={primary-text-emphasis:"主色强调墨（默认）",text:"正文墨",text-muted:"次级墨",on-primary:"主色底浅字",on-dark:"深底浅字"}}
  * @param text_show_background {default=false,type="bool",label="促销文字显示背景"}
- * @param text_background_color {default="var(--weline-theme-primary-surface)",type="color",label="促销文字背景色"}
+ * @param text_background_color {default="primary-surface",type="select",label="促销文字背景色",options={primary-surface:"主色面（默认）",primary-subtle:"主色淡底",surface:"纸面",surface-muted:"纸面·次级",canvas:"画布白"}}
  * @param text_show_border {default=false,type="bool",label="促销文字显示边框"}
- * @param text_border_color {default="var(--weline-theme-primary-text-emphasis)",type="color",label="促销文字边框色"}
+ * @param text_border_color {default="primary-text-emphasis",type="select",label="促销文字边框色",options={primary-text-emphasis:"主色强调墨（默认）",border:"主题边界",primary:"主题主色",text:"正文墨"}}
  * @param text_show_shadow {default=false,type="bool",label="促销文字显示阴影"}
  * @param link {default="",type="string",label="链接地址"}
  * @param closeable {default=true,type="bool",label="允许关闭"}
  * @param countdown_end {default="",type="string",label="倒计时结束时间",description="格式：2026-12-31 23:59:59"}
  * @param countdown_show_background {default=true,type="bool",label="倒计时显示背景"}
- * @param countdown_background_color {default="",type="color",label="倒计时背景色",description="空则跟随文字色半透明"}
+ * @param countdown_background_color {default="",type="select",label="倒计时背景色",description="空则跟随文字色半透明",options={"":"跟随文字色（默认）",primary:"主题主色",primary-surface:"主色面",primary-subtle:"主色淡底",surface:"纸面",on-dark:"深色面"}}
  * @param countdown_show_border {default=false,type="bool",label="倒计时显示边框"}
- * @param countdown_border_color {default="var(--weline-theme-primary-text-emphasis)",type="color",label="倒计时边框色"}
+ * @param countdown_border_color {default="primary-text-emphasis",type="select",label="倒计时边框色",options={primary-text-emphasis:"主色强调墨（默认）",border:"主题边界",primary:"主题主色",text:"正文墨"}}
  * @param countdown_show_shadow {default=false,type="bool",label="倒计时显示阴影"}
  */
 
@@ -55,29 +55,44 @@ if ($backgroundImageFileHtml !== '') {
         $backgroundImageFileHtml
     );
 }
-$backgroundColor = ThemeUiColor::sanitize(
-    $this->getData('background_color') ?? '',
-    'var(--weline-theme-primary-subtle)'
-);
+// 语义档位 → 主题盘 Token（变量单一作者：本部件不持有任何字面色）。
+$promoSurfacePresets = [
+    'primary-subtle' => 'var(--weline-theme-primary-subtle)',
+    'primary-surface' => 'var(--weline-theme-primary-surface)',
+    'primary' => 'var(--weline-theme-primary)',
+    'surface' => 'var(--weline-theme-surface)',
+    'surface-muted' => 'var(--weline-theme-surface-muted)',
+    'canvas' => 'var(--weline-theme-canvas)',
+    'on-dark' => 'var(--color-bg-dark)',
+];
+$promoInkPresets = [
+    'primary-text-emphasis' => 'var(--weline-theme-primary-text-emphasis)',
+    'text' => 'var(--weline-theme-text)',
+    'text-muted' => 'var(--weline-theme-text-muted)',
+    'on-primary' => 'var(--weline-theme-on-primary)',
+    'on-dark' => 'var(--weline-theme-text-on-dark)',
+];
+$promoEdgePresets = [
+    'primary-text-emphasis' => 'var(--weline-theme-primary-text-emphasis)',
+    'border' => 'var(--weline-theme-border-color)',
+    'primary' => 'var(--weline-theme-primary)',
+    'text' => 'var(--weline-theme-text)',
+];
+$backgroundColor = $promoSurfacePresets[(string)($this->getData('background_color') ?? '')]
+    ?? ThemeUiColor::sanitize($this->getData('background_color') ?? '', $promoSurfacePresets['primary-subtle']);
 $promoTextRaw = trim((string)($this->getData('text') ?? ''));
 if ($promoTextRaw === '') {
     $promoTextRaw = '精选上新 · 本季新品';
 }
 $text = WidgetI18n::label($promoTextRaw, '精选上新 · 本季新品');
-$textColor = ThemeUiColor::sanitize(
-    $this->getData('text_color') ?? '',
-    'var(--weline-theme-primary-text-emphasis)'
-);
+$textColor = $promoInkPresets[(string)($this->getData('text_color') ?? '')]
+    ?? ThemeUiColor::sanitize($this->getData('text_color') ?? '', $promoInkPresets['primary-text-emphasis']);
 $textShowBackground = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('text_show_background'), false);
 $textShowBorder = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('text_show_border'), false);
-$textBackgroundColor = ThemeUiColor::sanitize(
-    $this->getData('text_background_color') ?? '',
-    'var(--weline-theme-primary-surface)'
-);
-$textBorderColor = ThemeUiColor::sanitize(
-    $this->getData('text_border_color') ?? '',
-    'var(--weline-theme-primary-text-emphasis)'
-);
+$textBackgroundColor = $promoSurfacePresets[(string)($this->getData('text_background_color') ?? '')]
+    ?? ThemeUiColor::sanitize($this->getData('text_background_color') ?? '', $promoSurfacePresets['primary-surface']);
+$textBorderColor = $promoEdgePresets[(string)($this->getData('text_border_color') ?? '')]
+    ?? ThemeUiColor::sanitize($this->getData('text_border_color') ?? '', $promoEdgePresets['primary-text-emphasis']);
 $textShowShadow = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('text_show_shadow'), false);
 $link = \Weline\Theme\Helper\SiteBlockConfig::link($this->getData('link') ?? '');
 $closeable = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('closeable'), true);
@@ -85,14 +100,14 @@ $countdownEnd = trim((string)($this->getData('countdown_end') ?? ''));
 $hasCountdown = $countdownEnd !== '';
 $countdownShowBackground = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('countdown_show_background'), true);
 $countdownShowBorder = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('countdown_show_border'), false);
-$countdownBackgroundRaw = trim((string)($this->getData('countdown_background_color') ?? ''));
-$countdownBackgroundColor = $countdownBackgroundRaw !== ''
-    ? ThemeUiColor::sanitize($countdownBackgroundRaw, '')
-    : '';
-$countdownBorderColor = ThemeUiColor::sanitize(
-    $this->getData('countdown_border_color') ?? '',
-    'var(--weline-theme-primary-text-emphasis)'
-);
+$countdownBackgroundRaw = (string)($this->getData('countdown_background_color') ?? '');
+$countdownBackgroundColor = $countdownBackgroundRaw !== '' && isset($promoSurfacePresets[$countdownBackgroundRaw])
+    ? $promoSurfacePresets[$countdownBackgroundRaw]
+    : ($countdownBackgroundRaw !== ''
+        ? ThemeUiColor::sanitize($countdownBackgroundRaw, '')
+        : '');
+$countdownBorderColor = $promoEdgePresets[(string)($this->getData('countdown_border_color') ?? '')]
+    ?? ThemeUiColor::sanitize($this->getData('countdown_border_color') ?? '', $promoEdgePresets['primary-text-emphasis']);
 $countdownShowShadow = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('countdown_show_shadow'), false);
 
 $textChipClass = 'promo-text'

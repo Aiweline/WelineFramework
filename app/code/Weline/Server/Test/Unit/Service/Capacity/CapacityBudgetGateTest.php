@@ -73,4 +73,22 @@ final class CapacityBudgetGateTest extends TestCase
         self::assertTrue($result['ok']);
         self::assertNull($result['reason']);
     }
+
+    /**
+     * 集群连接预算必须按「Worker 数 × fiber.max_active × 池数」估算，
+     * 不能再用 workers × pool_size（只算主库、把 pool_size 当并发，且漏掉模块分库）。
+     */
+    public function testClusterBudgetUsesFiberConcurrencyAndPoolCount(): void
+    {
+        $env = [
+            'wls' => ['fiber' => ['max_active' => 6]],
+            'db' => ['master' => ['pool_size' => 150, 'max_connections' => 200]],
+        ];
+
+        $result = CapacityBudgetGate::checkScaleUp('default', 9, $env, 200);
+        self::assertTrue($result['ok']);
+        self::assertSame(9 * 6, $result['details']['needed']);
+        self::assertSame(6, $result['details']['fiber_max_active']);
+        self::assertSame(1, $result['details']['pool_count']);
+    }
 }

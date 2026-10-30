@@ -145,16 +145,49 @@
     pointer-events: auto;
 }
 
+/*
+ * 文案底板：hero 的背景是「图片或饱和渐变 + 白色压亮罩」（首页布局
+ * layout-homepage-default.css 的 .homepage-hero .slide-overlay 是 105deg 白色
+ * 82%→34%→transparent，与 tone 无关），文字框内亮度会横跨 0.48→0.12，
+ * 数学上不存在一种前景色能同时满足 4.5:1（实测 slide0 标题框左端
+ * rgb(170,187,221) 右端 rgb(52,92,188)）。故把文案承载面改成不透明纸面：
+ * 对比度与背景明暗彻底解耦，自定义主题继承默认主题时也必然达标。
+ * 纸占比 96%（留 4% 主色带一丝品牌倾向）：底色实测 rgb(246,249,254)，
+ * 墨阶 #172033 = 15.4:1、次级墨 #475569 = 7.18:1，全部越过 7:1 目标线；
+ * 压到 93% 时底色 rgb(240,244,254) 会把次级墨拉到 6.88:1，差一点不达标。
+ */
 .wc-theme_widget_hero_slider .slide-text {
     box-sizing: border-box;
     width: 100%;
     max-width: var(--size-content-640);
-    padding: 0;
-    background: transparent;
+    padding: var(--weline-space-5) var(--weline-space-6);
+    background: color-mix(in srgb, var(--color-bg-canvas) 96%, var(--weline-theme-primary) 4%);
     border: none;
-    border-radius: 0;
-    box-shadow: none;
+    border-radius: var(--weline-radius-lg);
+    box-shadow: var(--weline-theme-shadow-sm);
     backdrop-filter: none;
+}
+
+/*
+ * 板内前景统一回墨阶：底板已是不透明纸面，tone 的浅纸分支在此失去意义
+ * （浅纸压浅板 = 白字白底）。三张 slide 的文案位置 left/center/right 都落在
+ * 板内，因此不按 tone 分叉，统一取主题墨阶。
+ * 选择器带 .slide-content 一级：同特异性无法稳压后面 :219/:235/:249 的
+ * [data-tone="dark"] 分支，必须靠特异性而非顺序取胜。
+ */
+.wc-theme_widget_hero_slider .slide-content .slide-text .slide-title,
+.wc-theme_widget_hero_slider .slide-content .slide[data-tone="dark"] .slide-text .slide-title {
+    color: var(--weline-theme-text);
+}
+
+.wc-theme_widget_hero_slider .slide-content .slide-text .slide-subtitle,
+.wc-theme_widget_hero_slider .slide-content .slide[data-tone="dark"] .slide-text .slide-subtitle {
+    color: var(--weline-theme-text-secondary);
+}
+
+.wc-theme_widget_hero_slider .slide-content .slide-text .slide-kicker,
+.wc-theme_widget_hero_slider .slide-content .slide[data-tone="dark"] .slide-text .slide-kicker {
+    color: var(--weline-theme-primary);
 }
 
 .wc-theme_widget_hero_slider .text-left .slide-text {
@@ -275,6 +308,12 @@
     border-color: color-mix(in srgb, var(--color-text-on-dark) 70%, transparent);
 }
 
+.wc-theme_widget_hero_slider .slide-content .slide-text .slide-button-secondary,
+.wc-theme_widget_hero_slider .slide-content .slide[data-tone="dark"] .slide-text .slide-button-secondary {
+    color: var(--weline-theme-primary);
+    border-color: var(--weline-theme-primary);
+}
+
 .wc-theme_widget_hero_slider .slide-button-secondary:hover {
     background: color-mix(in srgb, var(--weline-theme-primary) 12%, transparent);
     transform: translateY(var(--spacing-neg-1_5));
@@ -372,6 +411,53 @@
     z-index: 10;
 }
 
+/*
+ * 轮播暂停键压在 slide 渐变上，复用 .w-button-outline 会拿主色墨写主色底：
+ * 实测 fg rgb(37,99,235) 对渐变邻域 rgb(84,117,207) = 1.17:1，远低于 4.5:1。
+ * 与 .slide-text 同因同治：改成不透明纸面承载 + 墨阶文字，对比度与 slide
+ * 渐变明暗彻底解耦（自定义主题继承默认主题时也必然达标）。
+ * 纸占比与 .slide-text 同源（96% canvas + 4% primary），实测底色
+ * rgb(246,249,254)，墨阶 #172033 = 15.4:1，hover 取主色实底 + on-primary 文字。
+ *
+ * 模板已摘掉 w-button/w-button-outline（theme.css 未进 @layer，分层部件 CSS
+ * 按层叠法定论永远压不过它），因此这里必须自带按钮骨架（盒模型/字级/字重/
+ * 光标/伪元素复位），否则按钮会退化成浏览器默认按钮。
+ * 只写 var(--token)，不落任何字面色值。
+ */
+.wc-theme_widget_hero_slider .slider-pause {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--weline-layout-spacing-sm);
+    box-sizing: border-box;
+    min-height: var(--weline-component-control-height);
+    padding: var(--weline-space-2) var(--weline-space-4);
+    border-radius: var(--weline-layout-radius-md);
+    background: color-mix(in srgb, var(--color-bg-canvas) 96%, var(--weline-theme-primary) 4%);
+    border: none;
+    color: var(--weline-theme-text);
+    box-shadow: var(--weline-theme-shadow-sm);
+    font: inherit;
+    font-size: var(--weline-layout-font-size-sm);
+    font-weight: var(--weline-layout-font-weight-semibold);
+    line-height: 1.25;
+    text-align: center;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+
+.wc-theme_widget_hero_slider .slider-pause:hover,
+.wc-theme_widget_hero_slider .slider-pause:focus-visible {
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
+}
+
+.wc-theme_widget_hero_slider .slider-pause:focus-visible {
+    outline: 0;
+    box-shadow: var(--weline-component-focus-ring);
+}
+
 /* 指示点 */
 .wc-theme_widget_hero_slider .slider-dots {
     position: absolute;
@@ -422,23 +508,29 @@
 
     .wc-theme_widget_hero_slider .slide-text {
         max-width: none;
+        padding: var(--weline-space-4) var(--weline-space-5);
     }
 
-    .wc-theme_widget_hero_slider .slide-kicker,
-    .wc-theme_widget_hero_slider .slide[data-tone="light"] .slide-kicker {
-        color: var(--color-primary-light);
+    /*
+     * 窄屏同守板内墨阶：底板在断点下仍是纸面，此处原先把 kicker/title/subtitle
+     * 拉回 --color-primary-light 与 --color-text-on-dark(-muted)，等于在浅板上写
+     * 浅字。用 .slide-content 提升特异性压过前面 tone 分支，仅保留字号/间距。
+     */
+    .wc-theme_widget_hero_slider .slide-content .slide-text .slide-kicker,
+    .wc-theme_widget_hero_slider .slide-content .slide[data-tone="light"] .slide-text .slide-kicker {
+        color: var(--weline-theme-primary);
     }
 
-    .wc-theme_widget_hero_slider .slide-title,
-    .wc-theme_widget_hero_slider .slide[data-tone="light"] .slide-title {
+    .wc-theme_widget_hero_slider .slide-content .slide-text .slide-title,
+    .wc-theme_widget_hero_slider .slide-content .slide[data-tone="light"] .slide-text .slide-title {
         font-size: var(--weline-layout-font-size-2xl);
-        color: var(--color-text-on-dark);
+        color: var(--weline-theme-text);
     }
 
-    .wc-theme_widget_hero_slider .slide-subtitle,
-    .wc-theme_widget_hero_slider .slide[data-tone="light"] .slide-subtitle {
+    .wc-theme_widget_hero_slider .slide-content .slide-text .slide-subtitle,
+    .wc-theme_widget_hero_slider .slide-content .slide[data-tone="light"] .slide-text .slide-subtitle {
         font-size: var(--weline-layout-font-size-base);
-        color: var(--color-text-on-dark-muted);
+        color: var(--weline-theme-text-secondary);
         margin-bottom: var(--weline-space-5);
     }
 
