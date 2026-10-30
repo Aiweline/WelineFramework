@@ -28,6 +28,73 @@ final class StorefrontProcessL1HydrateCoordinator
     private static float $reclaimCoalesceUntil = 0.0;
 
     /**
+     * 同因失败退避状态（每 Worker 一进程）。
+     *
+     * 场景：homepage 已命中但 chrome bags 仍 shared_miss/key_unresolved 时，Layer B
+     * 会每 30s 重试一次；若失败原因逐字不变（bag_errors 指纹相同），重试永远不会
+     * 成功却无限期刷日志、重复重算 key。这里把「同因连续失败」记成指纹，
+     * 超过基础次数后指数退避（封顶 300s）。**指纹一变就立刻回到基础间隔**，
+     * 保证 Layer A 把 chrome Shared 填上后非 owner Worker 能马上拉到。
+     */
+    private static string $lastFailureFingerprint = '';
+
+    private static int $sameFailureStreak = 0;
+
+    private static float $backoffSeconds = 0.0;
+
+    /**
+     * 记录一轮失败的指纹，返回本轮应使用的重试间隔（秒）。
+     *
+     * @param string $fingerprint 失败指纹（reason + bag_errors 的 hash）；'' 表示非同类失败
+     * @param float $baseSeconds 基础间隔，默认 30s（与既有 Layer B 节流一致）
+     * @param int $graceStreak 保持基础间隔的次数，超过后才开始退避
+     */
+    public static function observeFailure(
+        string $fingerprint,
+        float $baseSeconds = 30.0,
+        int $graceStreak = 3,
+    ): float {
+        if ($fingerprint === '' || $fingerprint !== self::$lastFailureFingerprint) {
+            // 原因变化（含 Layer A 补齐后的 shared_hit → 无 error）→ 立即恢复基础间隔。
+            self::$lastFailureFingerprint = $fingerprint;
+            self::$sameFailureStreak = $fingerprint === '' ? 0 : 1;
+            self::$backoffSeconds = 0.0;
+
+            return $baseSeconds;
+        }
+        ++self::$sameFailureStreak;
+        if (self::$sameFailureStreak <= $graceStreak) {
+            return $baseSeconds;
+        }
+        self::$backoffSeconds = \min(
+            300.0,
+            $baseSeconds * (2 ** (self::$sameFailureStreak - $graceStreak)),
+        );
+
+        return self::$backoffSeconds;
+    }
+
+    /** 当前记录的失败指纹（'' = 尚无失败或最近一轮成功）。 */
+    public static function lastFailureFingerprint(): string
+    {
+        return self::$lastFailureFingerprint;
+    }
+
+    /** 当前退避秒数（0 = 未进入退避）。 */
+    public static function currentBackoffSeconds(): float
+    {
+        return self::$backoffSeconds;
+    }
+
+    /** 某一轮成功后清零退避状态。 */
+    public static function resetFailureBackoff(): void
+    {
+        self::$lastFailureFingerprint = '';
+        self::$sameFailureStreak = 0;
+        self::$backoffSeconds = 0.0;
+    }
+
+    /**
      * Ask the current Worker to run Layer B soon (idle Fiber).
      * Cross-process CLI callers must not pretend bags are filled.
      */
@@ -92,6 +159,7 @@ final class StorefrontProcessL1HydrateCoordinator
         self::$pendingReason = '';
         self::$notBefore = 0.0;
         self::$reclaimCoalesceUntil = 0.0;
+        self::resetFailureBackoff();
     }
 
     public static function isEnabled(): bool

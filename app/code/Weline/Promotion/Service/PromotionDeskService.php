@@ -124,13 +124,15 @@ final class PromotionDeskService
     public function listCampaignRuns(): array
     {
         $collection = clone $this->campaignRun;
-        $collection->clear()
+        // normalizeRun() 形参声明为 PromotionCampaignRun，必须对象化。
+        $rows = $collection->clear()
             ->order(PromotionCampaignRun::schema_fields_UPDATED_AT, 'DESC')
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
         $items = [];
-        foreach ($collection->getItems() as $item) {
+        foreach ($rows as $item) {
             $items[] = $this->normalizeRun($item);
         }
 

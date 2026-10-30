@@ -41,7 +41,7 @@ final class DiskCodeCanonicalizer
             ->limit(self::MAX_CONFIGS + 1)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         if (count($rows) > self::MAX_CONFIGS) {
             throw new RuntimeException((string)__('存储磁盘配置数量超过迁移上限。'));
         }

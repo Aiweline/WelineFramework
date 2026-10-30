@@ -27,20 +27,23 @@ final class FrontendAccountFacade implements FrontendAccountFacadeInterface
             $users->concat_like('username,email', '%' . $search . '%');
         }
 
-        $users = $users
+        // 保留 query 引用：fetch() 返回 RowCollection（行在容器上），而分页
+        // 状态仍在 query model 上，两者不能混用同一个变量。
+        $collection = $users
             ->order(FrontendUser::schema_fields_ID, 'DESC')
             ->pagination(max(1, $page), max(1, $pageSize))
-            ->select()
-            ->fetch();
+            ->select();
+        $rows = $collection->fetchArray();
 
+        // 列表映射只需数组字段，不逐行构造模型对象。
         $identities = [];
-        foreach ($users->getItems() as $user) {
-            if ($user instanceof FrontendUser) {
-                $identities[] = $this->map($user);
+        foreach ($rows as $userRow) {
+            if (\is_array($userRow)) {
+                $identities[] = $this->map($userRow);
             }
         }
 
-        return new FrontendUserSearchResult($identities, $users->getPagination());
+        return new FrontendUserSearchResult($identities, $collection->getPagination());
     }
 
     public function find(int $userId): ?FrontendUserIdentity
@@ -94,13 +97,16 @@ final class FrontendAccountFacade implements FrontendAccountFacadeInterface
         return ObjectManager::getInstance(FrontendUser::class, [], false);
     }
 
-    private function map(FrontendUser $user): FrontendUserIdentity
+    /**
+     * @param array<string, mixed> $user fetch() 的数组行
+     */
+    private function map(array $user): FrontendUserIdentity
     {
         return new FrontendUserIdentity(
-            (int) ($user->getId() ?: $user->getData(FrontendUser::schema_fields_ID)),
-            (string) ($user->getData(FrontendUser::schema_fields_username) ?: ''),
-            (string) ($user->getData('email') ?: ''),
-            (string) ($user->getData(FrontendUser::schema_fields_avatar) ?: ''),
+            (int) ($user[FrontendUser::schema_fields_ID] ?? 0),
+            (string) ($user[FrontendUser::schema_fields_username] ?? ''),
+            (string) ($user['email'] ?? ''),
+            (string) ($user[FrontendUser::schema_fields_avatar] ?? ''),
         );
     }
 }

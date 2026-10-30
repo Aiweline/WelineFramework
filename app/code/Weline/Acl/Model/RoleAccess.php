@@ -139,7 +139,8 @@ class RoleAccess extends Model
             ->order($order_field, $order_sort)
             ->select()
             ->fetch()
-            ->getItems()
+            // 下方 setData()/getData() 需要模型对象。
+            ->toModels()
         ) {
             foreach ($subs as &$sub) {
                 $sub->setData('source_id', $sub->getData('a_source_id'));
@@ -283,13 +284,12 @@ class RoleAccess extends Model
             ->group('module')
             ->order('module', 'ASC')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         
         $modules = [];
         foreach ($acls as $acl) {
-            $module = $acl->getModule();
-            if (!empty($module)) {
+            $module = (string)($acl['module'] ?? '');
+            if ($module !== '') {
                 $modules[] = $module;
             }
         }
@@ -312,13 +312,12 @@ class RoleAccess extends Model
             ->group('type')
             ->order('type', 'ASC')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         
         $types = [];
         foreach ($acls as $acl) {
-            $type = $acl->getType();
-            if (!empty($type)) {
+            $type = (string)($acl['type'] ?? '');
+            if ($type !== '') {
                 $types[] = $type;
             }
         }

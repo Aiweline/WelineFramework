@@ -100,10 +100,11 @@ class Daemon extends CommandAbstract
         }
 
         // 检查所有映射（包括已停止的）
+        // 下方 getId()/getData()，必须对象化。
         $allMappings = $this->syncMapping->clear()
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         foreach ($allMappings as $mapping) {
             $mappingId = $mapping->getId();

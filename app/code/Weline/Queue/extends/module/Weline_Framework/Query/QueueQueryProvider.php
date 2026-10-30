@@ -146,10 +146,11 @@ class QueueQueryProvider implements QueryProviderInterface
 
         $queue->additional('AND (t.enable = 1 OR t.enable IS NULL)')
             ->order('main_table.queue_id', 'DESC');
-        $queue->pagination($page, $pageSize)->select()->fetch();
+        // 行在 fetchArray() 返回值上；对 $queue 调 getItems() 恒为空。
+        $items = $queue->pagination($page, $pageSize)->select()->fetchArray();
 
         return [
-            'items' => $queue->getItems(),
+            'items' => $items,
             'pagination' => $queue->getPagination(),
         ];
     }

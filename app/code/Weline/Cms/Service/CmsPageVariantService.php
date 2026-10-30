@@ -246,13 +246,14 @@ final class CmsPageVariantService
             }
         }
 
+        // 下方 instanceof PageLocale + getStoreId()/getLocaleCode()，必须对象化。
         $rows = (clone $this->localeModel)->clearData()->reset()
             ->where(PageLocale::schema_fields_PAGE_ID, $source->getPageId())
             ->order(PageLocale::schema_fields_ID, 'ASC')
             ->limit(1001)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         if (count($rows) > 1000) {
             throw new \RuntimeException((string)__('CMS 页面变体数量超过单次复制上限。'));
         }
@@ -440,12 +441,13 @@ final class CmsPageVariantService
     {
         $change = function () use ($page, $status): int {
             $currentPage = $this->lockPageForMutation($page);
+            // 下方 instanceof PageLocale + setData()->save()，必须对象化。
             $items = (clone $this->localeModel)->clearData()->reset()
                 ->where(PageLocale::schema_fields_PAGE_ID, $currentPage->getPageId())
                 ->limit(1001)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             if (count($items) > 1000) {
                 throw new \RuntimeException((string)__('CMS 页面变体数量超过单次状态变更上限。'));
             }
@@ -488,7 +490,8 @@ final class CmsPageVariantService
         if ($this->supportsForUpdate($expected)) {
             $query->additional('FOR UPDATE');
         }
-        $items = array_values($query->select()->fetch()->getItems());
+        // 乐观锁校验用 instanceof Page + 模型方法，必须对象化。
+        $items = array_values($query->select()->fetch()->toModels());
         $current = $items[0] ?? null;
         if (!$current instanceof Page) {
             throw new \RuntimeException((string)__('CMS 页面已被其他请求删除。'));

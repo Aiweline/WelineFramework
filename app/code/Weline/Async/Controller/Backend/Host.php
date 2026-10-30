@@ -39,7 +39,8 @@ class Host extends BackendController
             ->order(SyncHost::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetch()
-            ->getItems();
+            // 模板里用 getData()/getId()，必须对象化。
+            ->toModels();
 
         // 检查项目配置文件
         $projectConfig = null;

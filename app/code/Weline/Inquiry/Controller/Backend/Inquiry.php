@@ -17,8 +17,8 @@ final class Inquiry extends BackendController
     public function index(): string
     {
         $this->assign('page_title', (string)__('询盘表单'));
-        $this->form->reset()->order(Form::schema_fields_UPDATED_AT, 'DESC')->pagination()->select()->fetch();
-        $this->assign('forms', $this->form->getItems()); $this->assign('pagination', $this->form->getPagination());
+        $forms = $this->form->reset()->order(Form::schema_fields_UPDATED_AT, 'DESC')->pagination()->select()->fetchArray();
+        $this->assign('forms', $forms); $this->assign('pagination', $this->form->getPagination());
         return $this->fetch();
     }
     #[Acl('Weline_Inquiry::manage', '编辑询盘表单', 'edit', '编辑询盘字段与翻译', 'Weline_Inquiry::root')]

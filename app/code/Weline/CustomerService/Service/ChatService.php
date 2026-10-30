@@ -87,8 +87,7 @@ class ChatService
         $agents = $agentModel->reset()
             ->where(ServiceAgent::schema_fields_IS_ACTIVE, 1)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         $candidates = [];
         foreach ($agents as $agentRow) {
@@ -314,8 +313,7 @@ class ChatService
             ->order(ChatMessage::schema_fields_ID, 'DESC')
             ->limit(8)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         if ($items === []) {
             return false;
@@ -721,10 +719,7 @@ class ChatService
             ->order(ChatMessage::schema_fields_ID, 'DESC')
             ->limit($limit, $offset)
             ->select()
-            ->fetch()
-            ->getItems();
-
-        $messages = is_array($messages) ? $messages : [];
+            ->fetchArray();
 
         return array_reverse($messages);
     }
@@ -748,10 +743,7 @@ class ChatService
             ->order(ChatMessage::schema_fields_ID, 'DESC')
             ->limit(max(1, $limit), 0)
             ->select()
-            ->fetch()
-            ->getItems();
-
-        $messages = is_array($messages) ? $messages : [];
+            ->fetchArray();
 
         return array_reverse($messages);
     }
@@ -778,10 +770,9 @@ class ChatService
             ->order(ChatMessage::schema_fields_ID, 'ASC')
             ->limit($limit, 0)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
-        return is_array($messages) ? $messages : [];
+        return $messages;
     }
 
     public function getMessagesForCustomerView(
@@ -993,8 +984,7 @@ class ChatService
                 'IN'
             )
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         $transferred = 0;
         $now = date('Y-m-d H:i:s');
@@ -1054,8 +1044,7 @@ class ChatService
                 'IN'
             )
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         $released = 0;
         $now = date('Y-m-d H:i:s');
@@ -1112,11 +1101,12 @@ class ChatService
         if ($fromIds !== []) {
             /** @var ServiceAgent $agentModel */
             $agentModel = ObjectManager::getInstance(ServiceAgent::class);
+            // 走对象分支调用 getId()/getName()/getUserId()，保留对象口径。
             $agents = $agentModel->reset()
                 ->where(ServiceAgent::schema_fields_ID, array_values($fromIds), 'IN')
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             $userIds = [];
             foreach ($agents as $agentRow) {
                 if ($agentRow instanceof ServiceAgent) {

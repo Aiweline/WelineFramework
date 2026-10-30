@@ -562,12 +562,13 @@ class SeoWebsiteStats extends Model
     {
         $model = clone $this;
         $model->clearData()->clearQuery();
-        $model->where(self::schema_fields_WEBSITE_ID, $websiteId)
+        $items = $model->where(self::schema_fields_WEBSITE_ID, $websiteId)
             ->where(self::schema_fields_ACCOUNT_ID, $accountId)
             ->where(self::schema_fields_PLATFORM, self::ACCEPTANCE_PLATFORM)
             ->select()
-            ->fetch();
-        foreach ($model->getItems() as $item) {
+            ->fetch()
+            ->toModels();
+        foreach ($items as $item) {
             if ($item instanceof self) {
                 return $item;
             }

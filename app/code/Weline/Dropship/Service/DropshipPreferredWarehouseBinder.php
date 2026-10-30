@@ -76,13 +76,15 @@ final class DropshipPreferredWarehouseBinder
     {
         /** @var DropshipListing $model */
         $model = $this->objectManager->getInstance(DropshipListing::class, [], false);
+        // 行在 fetch()->toModels() 上：fetch() 多行返回数组容器（getItems() 是数组行），
+        // 消费方用 instanceof + getData()，故显式对象化（否则 instanceof 会把全部行过滤掉）。
         $items = $model->reset()
             ->where(DropshipListing::schema_fields_WEBSITE_ID, $websiteId)
             ->where(DropshipListing::schema_fields_STORE_ID, $storeId)
             ->where(DropshipListing::schema_fields_LOCAL_OFFER_ID, $offerIds, 'IN')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $map = [];
         if (!is_array($items)) {

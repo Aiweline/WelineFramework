@@ -45,13 +45,13 @@ class Account extends BackendController
         $this->assign('user_type', $userType);
         
         // 获取对应类型的站点列表
-        $sites = clone $this->multipassSite;
-        $sites = $sites->clear()
+        // 模板用 $site->getData()，必须对象化。
+        $sites = (clone $this->multipassSite)->clear()
             ->where('user_type', $userType)
             ->where('is_enabled', 1)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         
         $this->assign('sites', $sites);
         
@@ -72,13 +72,13 @@ class Account extends BackendController
         $this->assign('user_type', $userType);
         
         // 获取对应类型的站点列表
-        $sites = clone $this->multipassSite;
-        $sites = $sites->clear()
+        // 模板用 $site->getData()，必须对象化。
+        $sites = (clone $this->multipassSite)->clear()
             ->where('user_type', $userType)
             ->where('is_enabled', 1)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         
         $this->assign('sites', $sites);
         
@@ -99,13 +99,13 @@ class Account extends BackendController
         $this->assign('user_type', $userType);
         
         // 获取对应类型的站点列表
-        $sites = clone $this->multipassSite;
-        $sites = $sites->clear()
+        // 模板用 $site->getData()，必须对象化。
+        $sites = (clone $this->multipassSite)->clear()
             ->where('user_type', $userType)
             ->where('is_enabled', 1)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         
         $this->assign('sites', $sites);
         

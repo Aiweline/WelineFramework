@@ -47,7 +47,7 @@ class ReindexListing implements \Weline\Framework\Event\ObserverInterface
             }
         }
 
-        $indexers = $this->indexer->select()->fetch()->getItems();
+        $indexers = $this->indexer->select()->fetch()->toModels();
         $indexersItems = [];
         foreach ($indexers as $indexer) {
             $indexersItems[$indexer->getName()][] = $indexer->getData('module_table');

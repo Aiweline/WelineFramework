@@ -4605,11 +4605,12 @@ XML;
         try {
             // 获取模块的所有表
             $moduleTableModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\ModuleTable::class);
+            // 下方 getData('name')，必须对象化。
             $moduleTables = $moduleTableModel->reset()
                 ->where('module_name', $moduleName)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             
             if (empty($moduleTables)) {
                 $backupInfo['message'] = __('模块没有注册的数据库表');

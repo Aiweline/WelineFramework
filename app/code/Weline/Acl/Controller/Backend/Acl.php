@@ -177,8 +177,9 @@ class Acl extends \Weline\Framework\App\Controller\BackendPageController
 
         $aclModel->reset();
         $applyFilters($aclModel, $search, $typeFilter, $moduleFilter, $tagFilters, true);
-        $aclModel->pagination()->select()->fetch();
-        $this->assign('acls', $aclModel->getItems());
+        // 模板大量调用 getType()/getMethod()/getSourceId()，必须对象化。
+        $acls = $aclModel->pagination()->select()->fetch()->toModels();
+        $this->assign('acls', $acls);
         unset($aclModel->pagination['html']);
         $this->assign('pagination', $aclModel->getPagination('pagination-rounded', $listBaseRoute, true));
         $this->assign('filter_types', $filterTypes);

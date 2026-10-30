@@ -50,7 +50,7 @@ final class OssMultipartCleanupProcessor
             ->limit($limit)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         $result = ['resolved' => 0, 'failed' => 0, 'dead' => 0];
         $cleanupFailure = null;
         foreach ($rows as $task) {

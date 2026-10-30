@@ -113,7 +113,8 @@ class Document extends DevToolRestController
                     ->order(Catalog::schema_fields_ID, 'ASC')
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    // buildCatalogTree() 需 Catalog 模型对象。
+                    ->toModels();
 
                 return $this->buildCatalogTree($catalogs);
             });
@@ -126,13 +127,14 @@ class Document extends DevToolRestController
 
     private function buildModules(): array
     {
+        // 下方 getData() 需要模型对象。
         $modules = $this->documentModel->clear()
             ->fields(DocumentModel::schema_fields_MODULE_NAME)
             ->where(DocumentModel::schema_fields_MODULE_NAME, '', '!=')
             ->group(DocumentModel::schema_fields_MODULE_NAME)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $moduleList = [];
         foreach ($modules as $module) {
@@ -179,8 +181,10 @@ class Document extends DevToolRestController
             ->order(DocumentModel::schema_fields_ID, 'DESC')
             ->limit($pageSize, ($page - 1) * $pageSize);
 
+        // 下方 getId()/getTitle()/getData() 需要 Document 模型对象。
+        $docs = $query->select()->fetch()->toModels();
         $items = [];
-        foreach ($query->select()->fetch()->getItems() as $doc) {
+        foreach ($docs as $doc) {
             $items[] = [
                 'id' => $doc->getId(),
                 'title' => $doc->getTitle(),

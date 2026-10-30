@@ -29,26 +29,8 @@ class LatestArtifact
             return null;
         }
 
-        $items = $result->getItems();
-        if (!$items) {
-            return $result->getData(AppArtifact::schema_fields_ID) ? clone $result : null;
-        }
-
-        $latest = null;
-        foreach ($items as $item) {
-            if (!$item instanceof AppArtifact
-                || $item->getData(AppArtifact::schema_fields_platform) !== $platform
-                || $item->getData(AppArtifact::schema_fields_status) !== AppArtifact::STATUS_RELEASED
-            ) {
-                continue;
-            }
-            if (!$latest
-                || (int)$item->getData(AppArtifact::schema_fields_build_ts) > (int)$latest->getData(AppArtifact::schema_fields_build_ts)
-            ) {
-                $latest = clone $item;
-            }
-        }
-
-        return $latest;
+        // find() 已按 build_ts DESC + LIMIT 1 取到最新一条；
+        // Model::getItems() 在多行/单行 fetch 后都恒为空，不可用于取列表。
+        return $result->getData(AppArtifact::schema_fields_ID) ? clone $result : null;
     }
 }

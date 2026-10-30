@@ -84,7 +84,7 @@ class Push extends FrontendRestController
             $rows = $device->clear()
                 ->where(AppDeviceToken::schema_fields_token_hash, $tokenHash)
                 ->fetch()
-                ->getItems();
+                ->toModels();
             foreach ($rows as $row) {
                 $row->setData([AppDeviceToken::schema_fields_enabled => 0]);
                 $row->save();

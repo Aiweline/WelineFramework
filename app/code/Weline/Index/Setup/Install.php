@@ -27,8 +27,8 @@ class Install implements InstallInterface
     {
         /** @var Setting $setting */
         $setting = ObjectManager::getInstance(Setting::class);
-        $exists = $setting->clear()->select()->fetch();
-        if ($exists->getItems() !== []) {
+        $exists = $setting->clear()->select()->fetchArray();
+        if ($exists !== []) {
             return;
         }
         $list = [

@@ -43,7 +43,8 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface, Scope
         // scanned Models. Persist the EAV entity row from the definition first.
         $this->ensureRegisteredFromDefinition($entity);
         $entityCode = $this->normalizeCode($entity->getEntityCode(), 'eav_entity_code_invalid');
-        $types = (clone $this->typeModel)->clear()->select()->fetch()->getItems();
+        // 逐条 instanceof Type + getCode()/getFieldType()，必须对象化。
+        $types = (clone $this->typeModel)->clear()->select()->fetch()->toModels();
 
         foreach ($types as $type) {
             if (!$type instanceof Type) {
@@ -246,7 +247,8 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface, Scope
             ->where(EavAttribute::schema_fields_eav_entity_id, (int)$entityRow->getId())
             ->select()
             ->fetch()
-            ->getItems();
+            // 逐条 instanceof EavAttribute + toRecord()，必须对象化。
+            ->toModels();
         $records = [];
 
         foreach ($attributes as $attribute) {

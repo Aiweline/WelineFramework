@@ -49,19 +49,26 @@ class Currency extends BackendController
             $currencyModel->concat_like('code,name,symbol', "%$search%");
         }
         
-        $currencies = $currencyModel->order('currency_id', 'desc')
+        // 行在 fetch()->toModels() 上：fetch() 多行返回数组容器（getItems() 是数组行），
+        // 消费方要模型方法（formatAmount/setData），故显式对象化。
+        $currencyModels = $currencyModel->order('currency_id', 'desc')
             ->pagination()
             ->select()
-            ->fetch();
-        
+            ->fetch()
+            ->toModels();
+
         // 处理货币数据，添加格式化示例
-        $currencyItems = $currencies->getItems();
-        foreach ($currencyItems as $currency) {
-            $currency->setData('formatted_example', $currency->formatAmount(1234.56));
+        // 模板按 {{currency.xxx}} 数组取值，故把模型行回写成数组行（含 formatted_example）。
+        $currencyItems = [];
+        foreach ($currencyModels as $currency) {
+            $row = $currency->getData();
+            $row['formatted_example'] = $currency->formatAmount(1234.56);
+            $currencyItems[] = $row;
         }
-        
+
         $this->assign('currencies', $currencyItems);
-        $this->assign('pagination', $currencies->getPagination());
+        // 分页态挂在 model 上（fetch() 返回的是数组容器，取不到分页）。
+        $this->assign('pagination', $currencyModel->getPagination());
         return $this->fetch();
     }
 

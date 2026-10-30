@@ -49,8 +49,7 @@ class Session extends BackendController
 
             $sessions = $query->order(ChatSession::schema_fields_CREATED_AT, 'DESC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
 
             // 获取关联信息
             foreach ($sessions as &$sessionData) {
@@ -114,8 +113,7 @@ class Session extends BackendController
                 ->where(ChatMessage::schema_fields_session_id, $sessionId)
                 ->order(ChatMessage::schema_fields_created_at, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
 
             $this->assign('session', $session->getData());
             $this->assign('messages', $messages);

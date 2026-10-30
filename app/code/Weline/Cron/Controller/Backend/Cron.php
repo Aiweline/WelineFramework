@@ -103,11 +103,10 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
             ->select(CronTask::schema_fields_MODULE)
             ->group(CronTask::schema_fields_MODULE)
             ->order(CronTask::schema_fields_MODULE, 'ASC')
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $list = [];
         foreach ($items as $item) {
-            $name = $item->getData(CronTask::schema_fields_MODULE);
+            $name = $item[CronTask::schema_fields_MODULE] ?? null;
             if ($name !== null && $name !== '') {
                 $list[] = $name;
             }

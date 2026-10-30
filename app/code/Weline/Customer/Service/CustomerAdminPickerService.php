@@ -43,7 +43,7 @@ final class CustomerAdminPickerService
         }
 
         $collection = $query->pagination($page, $limit);
-        $rows = $collection->select()->fetch()->getItems();
+        $rows = $collection->select()->fetchArray();
         $items = [];
         foreach ($rows as $row) {
             $data = is_object($row) && method_exists($row, 'getData') ? $row->getData() : (array) $row;

@@ -90,8 +90,7 @@ class StatisticsService
             ->where(ChatSession::schema_fields_CREATED_AT, $dateRange['start'], '>=')
             ->where(ChatSession::schema_fields_CREATED_AT, $dateRange['end'], '<=')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         
         // 提取唯一的客服ID
         $agentIds = [];
@@ -176,8 +175,7 @@ class StatisticsService
             ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
             ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         
         if (empty($sessions)) {
             return 0;
@@ -215,8 +213,7 @@ class StatisticsService
             ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
             ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         
         if (empty($sessions)) {
             return 0;
@@ -293,15 +290,13 @@ class StatisticsService
             ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
             ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $transferredOut = $sessionModel->reset()
             ->where(ChatSession::schema_fields_TRANSFERRED_FROM_AGENT_ID, $agentId)
             ->where(ChatSession::schema_fields_TRANSFERRED_AT, $startDate, '>=')
             ->where(ChatSession::schema_fields_TRANSFERRED_AT, $endDate, '<=')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         $byId = [];
         foreach (array_merge(is_array($owned) ? $owned : [], is_array($transferredOut) ? $transferredOut : []) as $row) {
@@ -372,8 +367,7 @@ class StatisticsService
             ->where(ChatMessage::schema_fields_sender_type, ChatMessage::SENDER_TYPE_CUSTOMER)
             ->order(ChatMessage::schema_fields_created_at, 'ASC')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         $times = [];
         foreach ($customerMessages as $customerMsg) {
@@ -441,8 +435,7 @@ class StatisticsService
             ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
             ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         
         if (empty($sessions)) {
             return 0.0;
@@ -478,8 +471,7 @@ class StatisticsService
             ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
             ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         
         if (empty($sessions)) {
             return 0.0;
@@ -517,8 +509,7 @@ class StatisticsService
             ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
             ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         
         if (empty($sessions)) {
             return 0.0;

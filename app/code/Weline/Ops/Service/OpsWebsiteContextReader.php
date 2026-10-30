@@ -246,13 +246,14 @@ final class OpsWebsiteContextReader
             /** @var \Weline\Product\Model\Shard\Product $product */
             $product = ObjectManager::create(\Weline\Product\Model\Shard\Product::class, [], false)
                 ->forWebsite($websiteId);
+            // 下方 getData()，必须对象化。
             $items = $product->clear()
                 ->where(\Weline\Product\Model\Shard\Product::schema_fields_STATUS, \Weline\Product\Model\Shard\Product::STATUS_PUBLISHED)
                 ->order(\Weline\Product\Model\Shard\Product::schema_fields_UPDATED_AT, 'DESC')
                 ->limit(self::MAX_PRODUCT_SAMPLES)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             if ($items === []) {
                 $gaps[] = 'products_empty';
 
@@ -357,6 +358,7 @@ final class OpsWebsiteContextReader
             try {
                 /** @var \Weline\Cms\Model\Page $page */
                 $page = ObjectManager::getInstance(\Weline\Cms\Model\Page::class);
+                // 下方 getData()，必须对象化。
                 $items = $page->clear()
                     ->where(\Weline\Cms\Model\Page::schema_fields_WEBSITE_ID, $websiteId)
                     ->where(\Weline\Cms\Model\Page::schema_fields_STATUS, \Weline\Cms\Model\Page::STATUS_PUBLISHED)
@@ -364,7 +366,7 @@ final class OpsWebsiteContextReader
                     ->limit(self::MAX_POLICY_PAGES)
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
                 foreach ($items as $row) {
                     $title = trim((string)$row->getData(\Weline\Cms\Model\Page::schema_fields_TITLE));
                     $identifier = trim((string)$row->getData(\Weline\Cms\Model\Page::schema_fields_IDENTIFIER));
@@ -438,6 +440,7 @@ final class OpsWebsiteContextReader
         try {
             /** @var \Weline\Faq\Model\FaqItem $faq */
             $faq = ObjectManager::getInstance(\Weline\Faq\Model\FaqItem::class);
+            // 下方 getData()，必须对象化。
             $items = $faq->clear()
                 ->where(\Weline\Faq\Model\FaqItem::schema_fields_WEBSITE_ID, $websiteId)
                 ->where(\Weline\Faq\Model\FaqItem::schema_fields_STATUS, \Weline\Faq\Model\FaqItem::STATUS_ENABLED)
@@ -445,7 +448,7 @@ final class OpsWebsiteContextReader
                 ->limit(self::MAX_FAQ_THEMES)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             if ($items === []) {
                 // fallback global website_id=0
                 $items = $faq->clear()
@@ -455,7 +458,7 @@ final class OpsWebsiteContextReader
                     ->limit(self::MAX_FAQ_THEMES)
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
             }
             $themes = [];
             foreach ($items as $row) {

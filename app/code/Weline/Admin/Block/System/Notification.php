@@ -36,7 +36,7 @@ class Notification extends \Weline\Framework\View\Block
         /**@var SystemNotification $notificationsModel */
         $notificationsModel = ObjectManager::getInstance(SystemNotification::class);
         //        $this->cache->set($cache_key, $notices);
-        return $notificationsModel->where(SystemNotification::schema_fields_is_read, false)->select()->fetch()->getItems();
+        return $notificationsModel->where(SystemNotification::schema_fields_is_read, false)->select()->fetchArray();
     }
 //
 //    function getTotals()

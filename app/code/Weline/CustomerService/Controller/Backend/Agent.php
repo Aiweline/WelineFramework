@@ -48,8 +48,7 @@ class Agent extends BackendController
 
             $agents = $agent->reset()
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
 
             // 获取关联的用户信息和统计数据
             $userDirectory = ObjectManager::getInstance(RuntimeProviderResolver::class)

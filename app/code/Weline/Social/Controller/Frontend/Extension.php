@@ -611,7 +611,8 @@ class Extension extends FrontendController
                 ->limit(1)
                 ->select()
                 ->fetch();
-            $items = \is_object($rows) && \method_exists($rows, 'getItems') ? $rows->getItems() : $rows;
+            // 下方用 instanceof SocialExtensionStep 分支，保留对象口径。
+            $items = \is_object($rows) && \method_exists($rows, 'toModels') ? $rows->toModels() : $rows;
             $item = \is_array($items) ? ($items[0] ?? null) : null;
             if ($item instanceof SocialExtensionStep) {
                 return (int)($item->getData(SocialExtensionStep::schema_fields_STEP_NO) ?? 0) + 1;
@@ -638,7 +639,8 @@ class Extension extends FrontendController
                 ->where(SocialExtensionStep::schema_fields_JOB_ID, $jobId)
                 ->select()
                 ->fetch();
-            $items = \is_object($rows) && \method_exists($rows, 'getItems') ? $rows->getItems() : $rows;
+            // 下方用 instanceof SocialExtensionStep 分支，保留对象口径。
+            $items = \is_object($rows) && \method_exists($rows, 'toModels') ? $rows->toModels() : $rows;
             foreach ((array)$items as $item) {
                 $action = $item instanceof SocialExtensionStep
                     ? (string)$item->getData(SocialExtensionStep::schema_fields_ACTION)

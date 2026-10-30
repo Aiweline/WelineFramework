@@ -64,7 +64,7 @@ final class ReviewAiModerationService
             ->select()
             ->fetch();
 
-        foreach ($query->getItems() as $review) {
+        foreach ($query->toModels() as $review) {
             if (!$review instanceof ProductReview) {
                 continue;
             }

@@ -305,8 +305,7 @@ class ResponseRedirectBefore implements ObserverInterface
                     ->where(\Weline\Websites\Model\WebsiteDomain::schema_fields_DOMAIN, $host)
                     ->limit(1)
                     ->select()
-                    ->fetch()
-                    ->getItems();
+                    ->fetchArray();
                 if ($rows !== []) {
                     return true;
                 }
@@ -316,7 +315,7 @@ class ResponseRedirectBefore implements ObserverInterface
             }
             /** @var \Weline\Websites\Model\Website $websites */
             $websites = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-            $items = $websites->reset()->select()->fetch()->getItems();
+            $items = $websites->reset()->select()->fetchArray();
             foreach ($items as $item) {
                 $data = \is_object($item) && \method_exists($item, 'getData')
                     ? $item->getData()

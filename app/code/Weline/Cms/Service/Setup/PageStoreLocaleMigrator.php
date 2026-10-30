@@ -57,13 +57,14 @@ final class PageStoreLocaleMigrator
     ): void {
         $lastPageId = 0;
         while (true) {
+            // 逐条 instanceof Page + getPageId()，必须对象化。
             $pages = (clone $pagePrototype)->clearData()->reset()
                 ->where(Page::schema_fields_ID, $lastPageId, '>')
                 ->order(Page::schema_fields_ID, 'ASC')
                 ->limit(200)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             if ($pages === []) {
                 break;
             }
@@ -84,13 +85,14 @@ final class PageStoreLocaleMigrator
                 foreach ($websiteStores as $store) {
                     $this->assertStoreCode((string)$store->code);
                 }
+                // 逐条 instanceof PageLocale，必须对象化。
                 $rows = (clone $localePrototype)->clearData()->reset()
                     ->where(PageLocale::schema_fields_PAGE_ID, $page->getPageId())
                     ->order(PageLocale::schema_fields_ID, 'ASC')
                     ->limit(1001)
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
                 if (count($rows) > 1000) {
                     throw new \RuntimeException((string)__('单个 CMS 页面的历史语言变体超过升级上限。'));
                 }
@@ -133,13 +135,14 @@ final class PageStoreLocaleMigrator
         // already removed. Audit the locale table independently before DDL.
         $lastLocaleId = 0;
         while (true) {
+            // 逐条 instanceof PageLocale + getPageLocaleId()，必须对象化。
             $rows = (clone $localePrototype)->clearData()->reset()
                 ->where(PageLocale::schema_fields_ID, $lastLocaleId, '>')
                 ->order(PageLocale::schema_fields_ID, 'ASC')
                 ->limit(500)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             if ($rows === []) {
                 return;
             }
@@ -251,13 +254,14 @@ final class PageStoreLocaleMigrator
     ): void {
         $lastPageId = 0;
         while (true) {
+            // 逐条 instanceof Page + getPageId()，必须对象化。
             $pages = (clone $pagePrototype)->clearData()->reset()
                 ->where(Page::schema_fields_ID, $lastPageId, '>')
                 ->order(Page::schema_fields_ID, 'ASC')
                 ->limit(200)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             if ($pages === []) {
                 return;
             }
@@ -272,13 +276,14 @@ final class PageStoreLocaleMigrator
                 if ($defaultStore === null) {
                     throw new \RuntimeException((string)__('CMS 页面所属网站缺少默认店铺，升级已停止。'));
                 }
+                // 逐条 instanceof PageLocale + 模型方法，必须对象化。
                 $existing = (clone $localePrototype)->clearData()->reset()
                     ->where(PageLocale::schema_fields_PAGE_ID, $page->getPageId())
                     ->order(PageLocale::schema_fields_ID, 'ASC')
                     ->limit(1001)
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
                 if (count($existing) > 1000) {
                     throw new \RuntimeException((string)__('单个 CMS 页面的历史语言变体超过升级上限。'));
                 }
@@ -298,6 +303,7 @@ final class PageStoreLocaleMigrator
                     }
                 }
 
+                // 下方 instanceof PageLocale + getData()，必须对象化。
                 $sourceRows = (clone $localePrototype)->clearData()->reset()
                     ->where(PageLocale::schema_fields_PAGE_ID, $page->getPageId())
                     ->where(PageLocale::schema_fields_STORE_ID, $defaultStore->id)
@@ -305,7 +311,7 @@ final class PageStoreLocaleMigrator
                     ->limit(1001)
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
                 if (count($sourceRows) > 1000) {
                     throw new \RuntimeException((string)__('单个 CMS 页面的默认店铺语言变体超过升级上限。'));
                 }
@@ -374,13 +380,14 @@ final class PageStoreLocaleMigrator
     ): void {
         $lastId = 0;
         while (true) {
+            // 逐条 instanceof PageLocale + getPageLocaleId()，必须对象化。
             $rows = (clone $localePrototype)->clearData()->reset()
                 ->where(PageLocale::schema_fields_ID, $lastId, '>')
                 ->order(PageLocale::schema_fields_ID, 'ASC')
                 ->limit(500)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             if ($rows === []) {
                 return;
             }

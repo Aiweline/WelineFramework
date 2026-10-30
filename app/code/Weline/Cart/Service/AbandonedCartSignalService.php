@@ -54,13 +54,14 @@ final class AbandonedCartSignalService
         if ($updatedBefore !== '') {
             $model->where(Cart::schema_fields_UPDATED_AT, $updatedBefore, '<=');
         }
-        $model->order(Cart::schema_fields_UPDATED_AT, 'ASC')
+        $rows = $model->order(Cart::schema_fields_UPDATED_AT, 'ASC')
             ->limit(\min(500, $limit * 3))
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
         $items = [];
-        foreach ($model->getItems() as $row) {
+        foreach ($rows as $row) {
             if (!$row instanceof Cart) {
                 continue;
             }

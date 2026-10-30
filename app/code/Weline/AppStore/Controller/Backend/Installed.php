@@ -23,11 +23,11 @@ class Installed extends BackendController
         /** @var AppStoreInstalledModule $moduleModel */
         $moduleModel = ObjectManager::getInstance(AppStoreInstalledModule::class);
 
-        $moduleModel->reset()
+        $moduleRows = $moduleModel->reset()
             ->order('installed_at', 'DESC')
             ->select()
-            ->fetch();
-        $modules = $this->recoverFileOnlyInstalledModules($moduleModel->getItems());
+            ->fetchArray();
+        $modules = $this->recoverFileOnlyInstalledModules($moduleRows);
         $locale = \Weline\Framework\Env\WelineEnv::getLang();
         $tagFilter = trim((string)$this->request->getGet('tag', ''));
         $surfaceFilter = trim((string)$this->request->getGet('surface', ''));
@@ -374,12 +374,11 @@ class Installed extends BackendController
 
         /** @var AppStoreInstalledModule $moduleModel */
         $moduleModel = ObjectManager::getInstance(AppStoreInstalledModule::class);
-        $moduleModel->reset()
+
+        return $moduleModel->reset()
             ->order('installed_at', 'DESC')
             ->select()
-            ->fetch();
-
-        return $moduleModel->getItems();
+            ->fetchArray();
     }
 
     private function discoverMarketplaceModuleDirectories(): array

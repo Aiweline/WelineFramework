@@ -221,7 +221,7 @@ final class SitemapEdgeMapCoordinator
                 ->where(\Weline\Cdn\Model\Domain::schema_fields_ENABLED, 1)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             if ($domains === []) {
                 return [
                     'success' => true,

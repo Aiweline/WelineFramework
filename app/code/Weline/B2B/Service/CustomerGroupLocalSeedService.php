@@ -92,7 +92,7 @@ final class CustomerGroupLocalSeedService
                 ->where(LocalDescription::schema_fields_local_code, $locale)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             foreach ($items as $item) {
                 if ($item instanceof LocalDescription) {
                     $text = trim((string)$item->getData($field));

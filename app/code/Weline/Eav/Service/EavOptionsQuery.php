@@ -144,7 +144,10 @@ final class EavOptionsQuery implements EavOptionsQueryInterface
                 $query->where(EavAttribute::schema_fields_has_option, 1);
             }
 
-            $attributes = $query->select()->fetch();
+            // 用 fetchArray() 而不是 fetch()：这里对结果做 is_array() 判断并按数组下标取值，
+            // 而 fetch() 的返回值不是数组（旧行为是模型外壳，现在是 RowCollection），
+            // is_array() 恒 false 会让下面的格式化整段不执行、attributes 恒为空。
+            $attributes = $query->select()->fetchArray();
             $formattedAttributes = [];
             if (is_array($attributes)) {
                 foreach ($attributes as $attribute) {
@@ -180,7 +183,8 @@ final class EavOptionsQuery implements EavOptionsQueryInterface
     public function queryEntities(): array
     {
         try {
-            $entities = $this->eavEntity->reset()->select()->fetch();
+            // 同 queryAttributes()：下游做 is_array() 判断，必须取纯数组。
+            $entities = $this->eavEntity->reset()->select()->fetchArray();
             $formattedEntities = [];
             if (is_array($entities)) {
                 foreach ($entities as $entity) {

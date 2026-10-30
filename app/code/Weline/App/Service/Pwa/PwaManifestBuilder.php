@@ -261,11 +261,29 @@ final class PwaManifestBuilder
         if ($url === '') {
             return '';
         }
-        if (\str_starts_with($url, 'http://') || \str_starts_with($url, 'https://') || \str_starts_with($url, '//')) {
+        // Prefer same-origin relative icon paths. Absolute http:// icons become mixed
+        // content under CF Flexible / satellite :80 origin snapshots and fail BP audits.
+        if (\str_starts_with($url, '//')) {
+            $url = 'https:' . $url;
+        }
+        if (\str_starts_with($url, 'http://')) {
+            $url = 'https://' . \substr($url, 7);
+        }
+        if (\str_starts_with($url, 'https://')) {
+            $host = (string)\parse_url($url, PHP_URL_HOST);
+            $path = (string)\parse_url($url, PHP_URL_PATH);
+            $originHost = (string)\parse_url(\trim($origin), PHP_URL_HOST);
+            if ($host !== '' && $originHost !== '' && \strcasecmp($host, $originHost) === 0 && $path !== '') {
+                return $path;
+            }
+
+            return $url;
+        }
+        if (\str_starts_with($url, '/')) {
             return $url;
         }
 
-        return \rtrim($origin, '/') . '/' . \ltrim($url, '/');
+        return '/' . \ltrim($url, '/');
     }
 
     private function iconType(string $src): string

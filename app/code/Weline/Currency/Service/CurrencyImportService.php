@@ -63,10 +63,12 @@ class CurrencyImportService
         try {
             // 未指定目标时，只刷新目录里已有的币种，避免把 API 全量币种灌进本站目录。
             if ($targetCurrencies === []) {
+                // 行在 fetch()->toModels() 上：fetch() 多行返回数组容器（getItems() 是数组行），
+                // 消费方要模型方法（getCode()），故显式对象化。
                 $existing = $this->currencyModel->clear()
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
                 foreach ($existing as $row) {
                     $code = strtoupper(trim((string) $row->getCode()));
                     if ($code !== '') {

@@ -51,7 +51,8 @@ class Set extends \Weline\Framework\App\Controller\BackendController
         if ($search = $this->request->getGet('search')) {
             $this->set->where('concat(local.name,main_table.name,entity.name,entity.code)', "%$search%", 'like');
         }
-        $groups = $this->set->pagination()->select()->fetch()->getItems();
+        // 行取数组（getItems() 也是数组行）；分页仍在 $this->set 上取。
+        $groups = $this->set->pagination()->select()->fetchArray();
         $this->assign('sets', $groups);
         $this->assign('columns', $this->set->columns());
         $this->assign('pagination', $this->set->getPagination());

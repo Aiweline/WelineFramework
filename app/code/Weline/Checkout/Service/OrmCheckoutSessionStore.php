@@ -145,14 +145,16 @@ final class OrmCheckoutSessionStore implements CheckoutSessionStoreInterface
         }
         $model = clone $this->model;
         $model->clear();
-        $model->where(CheckoutSession::schema_fields_CART_FINGERPRINT, $fp)
+        // 下方 instanceof CheckoutSession + getData()，必须对象化。
+        $rows = $model->where(CheckoutSession::schema_fields_CART_FINGERPRINT, $fp)
             ->where(CheckoutSession::schema_fields_STATE, CheckoutSession::STATE_QUOTED)
             ->order(CheckoutSession::schema_fields_CREATED_AT, 'DESC')
             ->limit(8)
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
         $now = time();
-        foreach ($model->getItems() as $row) {
+        foreach ($rows as $row) {
             if (!$row instanceof CheckoutSession) {
                 continue;
             }
@@ -243,13 +245,15 @@ final class OrmCheckoutSessionStore implements CheckoutSessionStoreInterface
         }
         $model = clone $this->model;
         $model->clear();
-        $model->where(CheckoutSession::schema_fields_STATE, CheckoutSession::STATE_SUBMITTED)
+        // 下方 instanceof CheckoutSession + getData() + withinSubmittedSuccessGrace()，必须对象化。
+        $rows = $model->where(CheckoutSession::schema_fields_STATE, CheckoutSession::STATE_SUBMITTED)
             ->where(CheckoutSession::schema_fields_SUBMITTED_RESULT_JSON, '%' . $orderUuid . '%', 'like')
             ->order(CheckoutSession::schema_fields_CREATED_AT, 'DESC')
             ->limit(20)
             ->select()
-            ->fetch();
-        foreach ($model->getItems() as $row) {
+            ->fetch()
+            ->toModels();
+        foreach ($rows as $row) {
             if (!$row instanceof CheckoutSession) {
                 continue;
             }

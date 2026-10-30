@@ -47,12 +47,12 @@ class Config extends \Weline\Framework\App\Controller\BackendPageController
      */
     public function index(): string
     {
-        // 获取所有渠道配置（fetch 后 getItems 取模型对象）
-        $this->providerModel->clear()
+        // 获取所有渠道配置（fetch()->toModels() 取模型对象，模板需要 getId/getData）
+        $providers = $this->providerModel->clear()
             ->order('priority', 'DESC')
             ->select()
-            ->fetch();
-        $providers = $this->providerModel->getItems();
+            ->fetch()
+            ->toModels();
 
         $this->assign('providers', $providers);
         return $this->fetch();

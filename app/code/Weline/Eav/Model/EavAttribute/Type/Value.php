@@ -77,8 +77,9 @@ class Value extends \Weline\Framework\Database\Model implements \Weline\Framewor
         /**@var \Weline\Eav\Model\EavAttribute\Type $type */
         $type = ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute\Type::class);
 
-        $types = $type->select()->fetch()->getItems();
-        $entities = $entity->clear()->select()->fetch()->getItems();
+        // 逐条调用 getCode()，必须对象化。
+        $types = $type->select()->fetch()->toModels();
+        $entities = $entity->clear()->select()->fetch()->toModels();
         /**@var EavEntity $entity */
         foreach ($entities as $entity) {
             /**@var \Weline\Eav\Model\EavAttribute\Type $type */

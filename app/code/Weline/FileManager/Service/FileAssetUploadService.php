@@ -414,7 +414,7 @@ final class FileAssetUploadService
         if ($this->supportsForUpdate()) {
             $query->additional('FOR UPDATE');
         }
-        $items = array_values($query->select()->fetch()->getItems());
+        $items = array_values($query->select()->fetch()->toModels());
         $current = $items[0] ?? null;
         if (!$current instanceof FileAsset
             || $current->getAssetId() === ''
@@ -445,7 +445,8 @@ final class FileAssetUploadService
         if ($this->supportsForUpdate()) {
             $query->additional('FOR UPDATE');
         }
-        $items = array_values($query->select()->fetch()->getItems());
+        // 同上一处：instanceof FileAsset + 模型方法，必须对象化。
+        $items = array_values($query->select()->fetch()->toModels());
         $current = $items[0] ?? null;
         if (!$current instanceof FileAsset
             || $current->getAssetId() === ''

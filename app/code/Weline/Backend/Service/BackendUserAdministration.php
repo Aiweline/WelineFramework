@@ -27,23 +27,24 @@ final class BackendUserAdministration implements BackendUserAdministrationInterf
             $users->concat_like('username,email', '%' . $search . '%');
         }
 
-        $collection = $users->order()
+        // 保留 query 引用：行由 fetchArray() 以数组返回，分页状态仍在 query 上。
+        $query = $users->order()
             ->pagination()
-            ->select()
-            ->fetch();
+            ->select();
+        $items = $query->fetchArray();
 
-        return $this->mapPage($collection->getItems(), $collection->getPagination());
+        return $this->mapPage($items, $query->getPagination());
     }
 
     public function listWithRoles(): BackendUserPage
     {
-        $collection = $this->newUser()
+        $query = $this->newUser()
             ->order('main_table.create_time')
             ->pagination()
-            ->select()
-            ->fetch();
+            ->select();
+        $items = $query->fetchArray();
 
-        return $this->mapPage($collection->getItems(), $collection->getPagination());
+        return $this->mapPage($items, $query->getPagination());
     }
 
     public function find(int $userId): ?BackendUserRecord
@@ -154,8 +155,8 @@ final class BackendUserAdministration implements BackendUserAdministrationInterf
     public function assignRole(int $userId, ?int $roleId): void
     {
         $userRole = $this->newUserRole();
-        $existing = $userRole->where(UserRole::schema_fields_USER_ID, $userId)->select()->fetch();
-        $items = $existing->getItems();
+        // 只判断「是否存在唯一一条」并取其主键，取数组即可。
+        $items = $userRole->where(UserRole::schema_fields_USER_ID, $userId)->select()->fetchArray();
 
         if (count($items) === 1 && $roleId !== null) {
             $row = reset($items);

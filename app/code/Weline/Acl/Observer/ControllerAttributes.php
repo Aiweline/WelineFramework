@@ -1115,11 +1115,12 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                 $query->where(Acl::schema_fields_MODULE, $moduleName);
             }
             
-            $results = $query->select()->fetch();
+            // 行在 fetch()->toModels() 上；对 $query 模型调 getItems() 恒为空。
+            $results = $query->select()->fetch()->toModels();
             
-            if ($results && $results->getItems()) {
+            if ($results !== []) {
                 // 优先查找 method 字段为空的权限（类级别权限通常 method 为空）
-                foreach ($results->getItems() as $item) {
+                foreach ($results as $item) {
                     $method = $item->getData(Acl::schema_fields_METHOD);
                     if (empty($method)) {
                         $parentSourceId = $item->getData(Acl::schema_fields_SOURCE_ID);
@@ -1132,7 +1133,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                 }
                 
                 // 如果没找到 method 为空的，尝试通过权限ID模式匹配
-                foreach ($results->getItems() as $item) {
+                foreach ($results as $item) {
                     $parentSourceId = $item->getData(Acl::schema_fields_SOURCE_ID);
                     if ($parentSourceId && $parentSourceId !== $currentSourceId) {
                         // 检查权限ID是否可能是父级（通过模式匹配）

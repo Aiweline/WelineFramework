@@ -827,12 +827,13 @@ final class B2BHangOrderService
         }
         try {
             $model = $this->newRecord();
-            $model->clear()
+            $rows = $model->clear()
                 ->where(B2BOrderHangRecord::schema_fields_CUSTOMER_ID, $customerId)
                 ->order(B2BOrderHangRecord::schema_fields_UPDATED_AT_EPOCH, 'DESC')
                 ->select()
-                ->fetch();
-            foreach ($model->getItems() ?? [] as $row) {
+                ->fetch()
+                ->toModels();
+            foreach ($rows as $row) {
                 if (!$row instanceof B2BOrderHangRecord) {
                     continue;
                 }

@@ -479,7 +479,8 @@ final class FileAssetMutationService
             if ($this->supportsForUpdate()) {
                 $query->additional('FOR UPDATE');
             }
-            foreach ($query->select()->fetch()->getItems() as $current) {
+            // 乐观锁校验用 instanceof FileAsset + 模型方法，必须对象化。
+            foreach ($query->select()->fetch()->toModels() as $current) {
                 if (!$current instanceof FileAsset) {
                     continue;
                 }
@@ -548,12 +549,13 @@ final class FileAssetMutationService
     /** @return list<FileAsset> */
     private function storedOnDisk(string $diskCode): array
     {
+        // 返回 list<FileAsset>，用 instanceof 过滤，必须对象化。
         $rows = (clone $this->assets)->clearData()->reset()
             ->where(FileAsset::schema_fields_DISK_CODE, $diskCode)
             ->limit(self::MAX_DIRECTORY_ASSETS + 1)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         if (count($rows) > self::MAX_DIRECTORY_ASSETS) {
             throw new \RuntimeException((string)__('磁盘中的文件资源超过单次目录操作扫描上限。'));
         }

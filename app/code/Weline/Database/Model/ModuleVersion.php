@@ -57,7 +57,7 @@ class ModuleVersion extends Model
             ->limit(1)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         $version = $items[0] ?? null;
         return $version && $version->getId() ? $version->getData(self::schema_fields_CURRENT_VERSION) : null;
     }
@@ -75,7 +75,7 @@ class ModuleVersion extends Model
             ->limit(1)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         $version = $items[0] ?? null;
         return $version && $version->getId() ? $version->getData(self::schema_fields_LAST_MIGRATION) : null;
     }
@@ -104,7 +104,7 @@ class ModuleVersion extends Model
             ->order(self::schema_fields_UPDATED_AT, 'DESC')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
     }
     
     /**
@@ -117,7 +117,7 @@ class ModuleVersion extends Model
         $modules = $this->reset()
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         
         $stats = [
             'total_modules' => count($modules),

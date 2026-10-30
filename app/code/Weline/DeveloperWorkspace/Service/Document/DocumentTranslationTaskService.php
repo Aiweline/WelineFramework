@@ -49,12 +49,13 @@ class DocumentTranslationTaskService
         $config = $this->configService->getConfig();
 
         if (!empty($config['scopes']['documents']) || !empty($config['scopes']['api_documents'])) {
+            // 下方 instanceof Document + getId()/getModuleName()，必须对象化。
             $documents = $this->documentModel->clear()
                 ->order(Document::schema_fields_ID, 'ASC')
                 ->limit(max(1, $limit), 0)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             foreach ($documents as $document) {
                 if (!$document instanceof Document || !$document->getId()) {
                     continue;
@@ -71,13 +72,14 @@ class DocumentTranslationTaskService
         }
 
         if (!empty($config['scopes']['catalogs'])) {
+            // 下方 instanceof Catalog + getId()，必须对象化。
             $catalogs = $this->catalogModel->clear()
                 ->where(Catalog::schema_fields_is_active, 1)
                 ->order(Catalog::schema_fields_ID, 'ASC')
                 ->limit(max(1, $limit), 0)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             foreach ($catalogs as $catalog) {
                 if (!$catalog instanceof Catalog || !$catalog->getId()) {
                     continue;
@@ -198,11 +200,12 @@ class DocumentTranslationTaskService
     {
         $jobs = [];
         foreach ([TranslationJob::STATUS_FAILED, TranslationJob::STATUS_BLOCKED_CONFIG] as $status) {
+            // 下方 instanceof TranslationJob + setData()->save()，必须对象化。
             $rows = $this->jobModel->clear()
                 ->where(TranslationJob::schema_fields_STATUS, $status)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             foreach ($rows as $row) {
                 $jobs[] = $row;
             }
@@ -486,6 +489,7 @@ class DocumentTranslationTaskService
             if ($remaining <= 0) {
                 break;
             }
+            // 下方 instanceof TranslationJob + getId()，必须对象化。
             $rows = $this->jobModel->clear()
                 ->where(TranslationJob::schema_fields_STATUS, $status)
                 ->order(TranslationJob::schema_fields_PRIORITY, 'DESC')
@@ -493,8 +497,8 @@ class DocumentTranslationTaskService
                 ->limit($remaining, 0)
                 ->select()
                 ->fetch()
-                ->getItems();
-            $items = array_merge($items, is_array($rows) ? $rows : []);
+                ->toModels();
+            $items = array_merge($items, $rows);
         }
 
         $claimed = [];

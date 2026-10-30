@@ -270,7 +270,7 @@ class BackupManager
             $query->limit((int) $filters['limit']);
         }
 
-        $items = $query->select()->fetch()->getItems();
+        $items = $query->select()->fetch()->toModels();
         $result = [];
 
         foreach ($items as $item) {
@@ -294,7 +294,7 @@ class BackupManager
             ->where('created_at', $cutoffDate, '<')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $result = [
             'deleted_count' => 0,

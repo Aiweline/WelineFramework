@@ -50,12 +50,13 @@ final class ReviewAdminService
         $query = $query
             ->order(ProductReview::schema_fields_CREATED_AT, 'DESC')
             ->pagination(max(1, $page), max(1, min(100, $pageSize)))
-            ->select()
-            ->fetch();
-
+            ->select();
+        // getPaginationState() 在 Model 上；fetch() 之后拿到的是 RowCollection，没有该方法，必须先取。
         $pagination = $query->getPaginationState();
+        $rows = $query->fetch();
+
         $items = [];
-        foreach ($query->getItems() as $review) {
+        foreach ($rows->toModels() as $review) {
             if (!$review instanceof ProductReview) {
                 continue;
             }

@@ -55,11 +55,12 @@ final class OpsProgramService
      */
     public function listEnabled(): array
     {
+        // 下方 instanceof + getData()/getId()，必须对象化。
         $items = $this->program->clear()
             ->where(OpsWebsiteProgram::schema_fields_ENABLED, 1)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         $out = [];
         foreach ($items as $item) {
             if (!$item instanceof OpsWebsiteProgram) {

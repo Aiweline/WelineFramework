@@ -115,11 +115,12 @@ class ConfigService
         /** @var SyncMapping $mappingModel */
         $mappingModel = ObjectManager::getInstance(SyncMapping::class);
         
+        // generateWatcherConfig() 需 SyncMapping 模型对象。
         $mappings = $mappingModel->clear()
             ->where(SyncMapping::schema_fields_STATUS, 1)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         
         $configs = [];
         foreach ($mappings as $mapping) {

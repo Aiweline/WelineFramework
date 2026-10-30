@@ -113,7 +113,8 @@ public function getTitle()
      */
     public function loadByCatalogId(int $id): array
     {
-        return $this->where(self::schema_fields_CATEGORY_ID, $id)->select()->fetch()->getItems();
+        // 契约 @return Document[]，必须对象化。
+        return $this->where(self::schema_fields_CATEGORY_ID, $id)->select()->fetch()->toModels();
     }
     
     public function getModuleName(): string

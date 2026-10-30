@@ -28,20 +28,21 @@ final class BackendAccountFacade implements BackendAccountFacadeInterface
             $users->concat_like('username,email', '%' . $search . '%');
         }
 
-        $users = $users
+        // 保留 query 引用：行由 fetchArray() 以数组返回，分页状态仍在 query 上。
+        $collection = $users
             ->order(BackendUser::schema_fields_ID, 'DESC')
             ->pagination(max(1, $page), max(1, $pageSize))
-            ->select()
-            ->fetch();
+            ->select();
+        $rows = $collection->fetchArray();
 
         $identities = [];
-        foreach ($users->getItems() as $user) {
-            if ($user instanceof BackendUser) {
-                $identities[] = $this->map($user);
+        foreach ($rows as $userRow) {
+            if (\is_array($userRow)) {
+                $identities[] = $this->map($userRow);
             }
         }
 
-        return new BackendUserSearchResult($identities, $users->getPagination());
+        return new BackendUserSearchResult($identities, $collection->getPagination());
     }
 
     public function find(int $userId): ?BackendUserIdentity
@@ -98,15 +99,18 @@ final class BackendAccountFacade implements BackendAccountFacadeInterface
         return ObjectManager::getInstance(BackendUser::class, [], false);
     }
 
-    private function map(BackendUser $user): BackendUserIdentity
+    /**
+     * @param array<string, mixed> $user fetchArray() 的数组行
+     */
+    private function map(array $user): BackendUserIdentity
     {
         return new BackendUserIdentity(
-            (int) ($user->getId() ?: $user->getData(BackendUser::schema_fields_ID)),
-            (string) ($user->getData(BackendUser::schema_fields_username) ?: ''),
-            (string) ($user->getData(BackendUser::schema_fields_email) ?: ''),
-            (string) ($user->getData(BackendUser::schema_fields_avatar) ?: ''),
-            $user->getIsEnabled(),
-            $user->getIsDeleted(),
+            (int) ($user[BackendUser::schema_fields_ID] ?? 0),
+            (string) ($user[BackendUser::schema_fields_username] ?? ''),
+            (string) ($user[BackendUser::schema_fields_email] ?? ''),
+            (string) ($user[BackendUser::schema_fields_avatar] ?? ''),
+            (bool) ($user[BackendUser::schema_fields_is_enabled] ?? false),
+            (bool) ($user[BackendUser::schema_fields_is_deleted] ?? false),
         );
     }
 }

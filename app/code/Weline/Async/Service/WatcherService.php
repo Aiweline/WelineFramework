@@ -262,10 +262,11 @@ class WatcherService
         /** @var SyncMapping $mappingModel */
         $mappingModel = ObjectManager::getInstance(SyncMapping::class);
         
+        // 下方 getId()/getData()，必须对象化。
         $mappings = $mappingModel->clear()
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         
         $status = [];
         

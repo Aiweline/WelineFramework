@@ -109,6 +109,22 @@ class State extends DataObject
             return \Weline\Framework\Phrase\CliLanguage::resolveConfigured();
         }
 
+        // 请求初始化已把有效语言写进上下文；同一请求内直接取，不再重走
+        // 区域判定 + 网站/后台默认语言的完整链路。
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $cached = $context->get('state.area_default_language', null);
+            if (\is_string($cached) && $cached !== '') {
+                return $cached;
+            }
+            $routeLang = (string)$context->get('route.language', '');
+            if ($routeLang !== '' && self::isLanguageSegmentCandidate(self::normalizeLanguageSegment($routeLang))) {
+                $context->set('state.area_default_language', $routeLang);
+
+                return $routeLang;
+            }
+        }
+
         if (self::currentAreaIsBackend()) {
             return self::resolveBackendEffectiveDefaultLanguage();
         }
@@ -121,6 +137,14 @@ class State extends DataObject
      */
     public static function resolveBackendEffectiveDefaultLanguage(): string
     {
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $cached = $context->get('state.backend_default_language', null);
+            if (\is_string($cached) && $cached !== '') {
+                return $cached;
+            }
+        }
+
         // Backend LocalizationProvider (priority >= 200) supplies personal language.
         // Do not soft-pull BackendPersonalLanguage FQCN from Framework.
         try {
@@ -130,12 +154,21 @@ class State extends DataObject
                 \Weline\Framework\App\Localization\LocalizationProviderRegistry::BACKEND_TIER_MIN_PRIORITY
             );
             if (\is_string($personal) && $personal !== '') {
+                if ($context !== null) {
+                    $context->set('state.backend_default_language', $personal);
+                }
+
                 return $personal;
             }
         } catch (\Throwable) {
         }
 
-        return self::resolveBackendDefaultLanguage();
+        $resolved = self::resolveBackendDefaultLanguage();
+        if ($context !== null) {
+            $context->set('state.backend_default_language', $resolved);
+        }
+
+        return $resolved;
     }
 
     private static function currentAreaIsBackend(): bool
@@ -489,19 +522,9 @@ class State extends DataObject
             return self::rememberWebsiteDefaultLanguage($scope, $code);
         }
 
-        if ($allowedMap !== []) {
-            try {
-                $codes = ObjectManager::getInstance(LocalizationProviderRegistry::class)->preferredLanguageCodes();
-                foreach ($codes as $code) {
-                    $code = self::normalizeLanguageSegment((string)$code);
-                    if ($code !== '' && self::isLanguageSegmentCandidate($code)) {
-                        return self::rememberWebsiteDefaultLanguage($scope, $code);
-                    }
-                }
-            } catch (\Throwable) {
-            }
-        }
-
+        // 兜底禁止「取允许列表第一个当默认语言」：允许列表是排序后的全集，
+        // 首项只是字母序（实测 sv_SE），不是站点默认。站点没配默认语言时，
+        // 应回落到框架默认语言，而不是随机某个允许语言。
         return self::rememberWebsiteDefaultLanguage($scope, 'zh_Hans_CN');
     }
 
@@ -576,9 +599,16 @@ class State extends DataObject
      */
     public static function resetLangLocalCache(): void
     {
+        // 唯一的「显示语言已变化」信号：语言/币种被覆盖、切换或请求重新初始化时调用。
+        // WelineEnv::getLangLocal() 与 Phrase\Parser 的区域词典都挂在这个信号上。
         $context = Context::getCurrent();
         if ($context !== null) {
-            $context->set(self::LANG_LOCAL_CONTEXT_CACHE, null);
+            $context->remove(self::LANG_LOCAL_CONTEXT_CACHE);
+            $context->remove('state.lang_cache');
+            $context->remove('state.currency_cache');
+            $context->remove('state.area_default_language');
+            $context->remove('state.backend_default_language');
+            $context->remove('state.lang_allowed_probe');
         }
     }
 
@@ -600,6 +630,22 @@ class State extends DataObject
         $allowedMap = self::resolveAllowedLanguageCodeMap();
         if ($allowedMap !== []) {
             return isset($allowedMap[strtolower($code)]);
+        }
+
+        // 无允许表时按请求记忆一次：同一请求里同一个语言码的探测结果不变。
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $known = $context->get('state.lang_allowed_probe', null);
+            $known = \is_array($known) ? $known : [];
+            $key = \strtolower($code);
+            if (\array_key_exists($key, $known)) {
+                return (bool)$known[$key];
+            }
+            $allowed = self::probeLanguageExistsInStore($code);
+            $known[$key] = $allowed;
+            $context->set('state.lang_allowed_probe', $known);
+
+            return $allowed;
         }
 
         return self::probeLanguageExistsInStore($code);

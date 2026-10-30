@@ -229,9 +229,11 @@ class TopicCollector
      */
     public function getTopicByCode(string $code): ?array
     {
+        // find() 是「取一条实体」语义，fetch() 返回模型对象；
+        // select()->fetch() 走多行数组形态，$topic->getId() 会挂在 RowCollection 上。
         $topic = $this->topicModel->clearQuery()
             ->where(NotificationTopic::schema_fields_topic_code, $code)
-            ->select()
+            ->find()
             ->fetch();
 
         if ($topic && $topic->getId()) {

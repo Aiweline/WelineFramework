@@ -42,6 +42,8 @@ final class RequestLifecycleTraceState
     public float $wlsDurationMs = 0.0;
     public int $droppedSpanCount = 0;
     public int $themeDroppedSpanCount = 0;
+    /** One-shot log latch for rejected impossible durations (epoch-as-duration bugs). */
+    public bool $invalidDurationLogged = false;
 
     /**
      * WLS entry→response envelope (ms), kept even when the handle span is
@@ -110,6 +112,13 @@ class RequestLifecycleTrace
     /** 极端重试/风暴时防止静态 span 无限增长导致 OOM（可被 wls.debug.request_trace_max_spans 覆盖） */
     private const DEFAULT_MAX_SPANS = 4096;
     private const MAX_SUMMARY_PHASES = 48;
+
+    /**
+     * 单 span 时长合理性上限（毫秒）。24h 远大于任何真实请求阶段，却远小于
+     * 「把绝对 epoch 当差值」类缺陷的产物（约 1.79e12 ms ≈ 56 年）。
+     * 命中即丢弃并计数，避免污染 max_span / 排行统计（见 Core.php 配对计时修法）。
+     */
+    private const MAX_SANE_SPAN_MS = 86_400_000.0;
 
     private const HEAVY_ROUTE_PREFIXES = [
         '/websites/backend/site-builder-agent/',
@@ -873,6 +882,22 @@ class RequestLifecycleTrace
             return;
         }
         $state = self::state();
+        // 计时源缺陷防线：绝对时间戳被当成差值时会产出「年份级」时长，污染
+        // max_span/排行并让监控失真。这里可观测地拒收（计数 + 每请求一次日志），
+        // 真正修法在调用方：起点用 0.0 表示「未武装」时，终点必须复用起点捕获
+        // 的布尔值，不能用当前武装态（见 Router\Core::action_execute）。
+        if (!\is_finite($durationMs) || $durationMs < 0.0 || $durationMs > self::MAX_SANE_SPAN_MS) {
+            ++$state->droppedSpanCount;
+            if (!$state->invalidDurationLogged) {
+                $state->invalidDurationLogged = true;
+                \error_log(
+                    '[RequestLifecycleTrace] dropped impossible span duration: '
+                    . $name . '=' . $durationMs . 'ms (timer source defect)'
+                );
+            }
+
+            return;
+        }
         // Keep scalar DB/WLS totals even when detailed spans have reached the cap.
         // Accumulate before rounding so many sub-centisecond calls are not lost.
         if ($category === 'db') {

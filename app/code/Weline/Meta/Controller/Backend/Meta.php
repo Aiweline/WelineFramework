@@ -41,10 +41,11 @@ class Meta extends BackendController
             $meta->where(MetaModel::schema_fields_FILE_PATH, '%' . $search . '%', 'LIKE');
         }
 
-        $metas = $meta->pagination()->select()->fetch();
+        $query = $meta->pagination()->select();
+        $metas = $query->fetchArray();
 
-        $this->assign('metas', $metas->getItems());
-        $this->assign('pagination', $metas->getPagination());
+        $this->assign('metas', $metas);
+        $this->assign('pagination', $query->getPagination());
         return $this->fetch();
     }
 

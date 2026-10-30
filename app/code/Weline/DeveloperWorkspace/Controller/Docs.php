@@ -112,13 +112,14 @@ class Docs extends FrontendController
         
         // 如果指定了分类ID，加载该分类下的文档列表
         if ($catalogId) {
+            // 下方 instanceof Document + getDocumentView()，必须对象化。
             $documents = $this->documentModel->clear()
                 ->where(Document::schema_fields_CATEGORY_ID, $catalogId)
                 ->order('sort_order', 'ASC')
                 ->order('id', 'DESC')
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             foreach ($documents as $document) {
                 if (!$document instanceof Document || !$document->getId()) {
                     continue;
@@ -175,6 +176,7 @@ class Docs extends FrontendController
             }
             
             // 查询所有这些分类下的文档
+            // 下方 instanceof Document + getDocumentView()，必须对象化。
             $documents = $this->documentModel->clear()
                 ->where(Document::schema_fields_CATEGORY_ID, $catalogIds, 'in')
                 ->order(Document::schema_fields_SORT_ORDER, 'ASC')
@@ -182,7 +184,7 @@ class Docs extends FrontendController
                 ->order(Document::schema_fields_ID, 'ASC')
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             
             $documentsByCatalogId = [];
             foreach ($documents as $doc) {
@@ -649,6 +651,7 @@ class Docs extends FrontendController
             $locale = $this->getRequestLocale();
             $sourceLocale = (string)$this->translationConfigService->getConfig()['source_locale'];
 
+            // 下方 getDocumentView() 需要 Document 模型对象。
             $documents = $this->documentModel->clear()
                 ->where(Document::schema_fields_TITLE, '%' . $keyword . '%', 'LIKE')
                 ->where(Document::schema_fields_summary, '%' . $keyword . '%', 'LIKE', 'OR')
@@ -657,7 +660,7 @@ class Docs extends FrontendController
                 ->limit(50)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             
             $result = [];
             $seen = [];
@@ -677,6 +680,7 @@ class Docs extends FrontendController
             }
 
             if ($locale !== $sourceLocale) {
+                // 下方 instanceof Translation + getData()，必须对象化。
                 $translations = ObjectManager::make(Translation::class)->clear()
                     ->where(Translation::schema_fields_LOCALE, $locale)
                     ->where(Translation::schema_fields_TITLE, '%' . $keyword . '%', 'LIKE')
@@ -686,7 +690,7 @@ class Docs extends FrontendController
                     ->limit(50)
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
 
                 foreach ($translations as $translation) {
                     if (!$translation instanceof Translation) {

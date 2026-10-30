@@ -47,7 +47,8 @@ class SocialMediaAssetService
             ->select()
             ->fetch();
 
-        $items = \is_object($rows) && \method_exists($rows, 'getItems') ? $rows->getItems() : $rows;
+        // 返回 SocialMediaAsset 对象，必须对象化。
+        $items = \is_object($rows) && \method_exists($rows, 'toModels') ? $rows->toModels() : $rows;
         if (!\is_array($items) || $items === []) {
             return null;
         }

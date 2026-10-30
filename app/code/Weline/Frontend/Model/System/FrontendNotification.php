@@ -59,8 +59,8 @@ class FrontendNotification extends Model
     /** 种子数据：默认两条欢迎通知（由 Setup/Install 调用） */
     public function seedInitialNotifications(): void
     {
-        $exists = $this->clear()->select()->fetch();
-        if ($exists->getItems() !== []) {
+        $exists = $this->clear()->select()->fetchArray();
+        if ($exists !== []) {
             return;
         }
         $this->setTitle('欢迎来到 WelineFramework 后端！')

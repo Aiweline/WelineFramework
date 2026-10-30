@@ -572,11 +572,11 @@ final class SeoOptimizationControlCenterService
         $experiments = [];
         foreach ($runIds as $runId) {
             $model = clone $this->experimentModel;
-            $model->clearData()->clearQuery()
+            $rows = $model->clearData()->clearQuery()
                 ->where(SeoOptimizationExperiment::schema_fields_RUN_ID, $runId)
                 ->order(SeoOptimizationExperiment::schema_fields_ID, 'DESC')
-                ->limit(1)->select()->fetch();
-            foreach ($this->items($model->getItems()) as $row) {
+                ->limit(1)->select()->fetchArray();
+            foreach ($this->items($rows) as $row) {
                 $experiments[] = [
                     'experiment_id' => (int)($row[SeoOptimizationExperiment::schema_fields_ID] ?? 0),
                     'run_id' => 'run_' . (int)($row[SeoOptimizationExperiment::schema_fields_RUN_ID] ?? 0),

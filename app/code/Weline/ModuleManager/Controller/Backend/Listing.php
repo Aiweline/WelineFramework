@@ -76,12 +76,12 @@ class Listing extends \Weline\Framework\App\Controller\BackendController
             'pageSize' => $pageSize,
         ], static fn (mixed $value): bool => $value !== '');
 
-        $module->order(Module::schema_fields_NAME, 'ASC')
+        // 模板用 getName()/getPosition()/getStatus()，必须对象化；分页仍在 $module 上取。
+        $modules = $module->order(Module::schema_fields_NAME, 'ASC')
             ->pagination($page, $pageSize, $paginationParams)
             ->select()
-            ->fetch();
-
-        $modules = $module->getItems();
+            ->fetch()
+            ->toModels();
         $paginationData = $module->getPaginationData();
         $total = (int) ($paginationData['totalSize'] ?? 0);
         $visibleCount = count($modules);

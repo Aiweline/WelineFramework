@@ -117,8 +117,7 @@ class OrderPaidObserver implements ObserverInterface
             $rows = $itemModel->clear()
                 ->where('order_uuid', $orderUuid)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             $out = [];
             foreach ($rows as $row) {
                 if (is_object($row) && method_exists($row, 'getData')) {

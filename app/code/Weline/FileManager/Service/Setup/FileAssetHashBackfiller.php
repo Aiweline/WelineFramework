@@ -50,7 +50,8 @@ final class FileAssetHashBackfiller
             if ($lastId !== '') {
                 $query->where(FileAsset::schema_fields_ID, $lastId, '>');
             }
-            $rows = $query->select()->fetch()->getItems();
+            // 逐行用 instanceof FileAsset + 模型方法，必须对象化。
+            $rows = $query->select()->fetch()->toModels();
             if ($rows === []) {
                 return;
             }
@@ -95,7 +96,8 @@ final class FileAssetHashBackfiller
             if ($lastId !== '') {
                 $query->where(FileAsset::schema_fields_ID, $lastId, '>');
             }
-            $rows = $query->select()->fetch()->getItems();
+            // 同上：instanceof FileAsset + 模型方法，必须对象化。
+            $rows = $query->select()->fetch()->toModels();
             if ($rows === []) {
                 return;
             }

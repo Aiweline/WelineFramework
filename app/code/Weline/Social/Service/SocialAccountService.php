@@ -30,7 +30,8 @@ class SocialAccountService
             ->select()
             ->fetch();
 
-        $items = \is_object($rows) && \method_exists($rows, 'getItems') ? $rows->getItems() : $rows;
+        // 走对象分支调用 toSafeArray()，必须对象化。
+        $items = \is_object($rows) && \method_exists($rows, 'toModels') ? $rows->toModels() : $rows;
         if (!\is_array($items)) {
             return [];
         }

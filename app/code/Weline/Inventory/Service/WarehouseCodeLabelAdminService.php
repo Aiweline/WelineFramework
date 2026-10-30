@@ -67,7 +67,7 @@ final class WarehouseCodeLabelAdminService
             ->order(WarehouseCodeLabel::schema_fields_ID, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $out = [];
         foreach ($items as $item) {
@@ -215,7 +215,7 @@ final class WarehouseCodeLabelAdminService
             ->where(WarehouseCodeLabel::schema_fields_CODE, $code)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         foreach ($items as $item) {
             if ($item instanceof WarehouseCodeLabel) {
                 return $item;
@@ -296,7 +296,7 @@ final class WarehouseCodeLabelAdminService
                 ->where(WarehouseCodeLabelLocal::schema_fields_local_code, $locale)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             foreach ($items as $item) {
                 if ($item instanceof WarehouseCodeLabelLocal) {
                     $name = trim((string)$item->getData(WarehouseCodeLabel::schema_fields_LABEL_NAME));

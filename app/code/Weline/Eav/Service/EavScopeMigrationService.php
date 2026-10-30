@@ -510,8 +510,9 @@ final class EavScopeMigrationService
     private function listValueTables(): array
     {
         $fromRegistry = [];
-        $entities = (clone $this->entityModel)->clear()->select()->fetch()->getItems();
-        $types = (clone $this->typeModel)->clear()->select()->fetch()->getItems();
+        // 下方用 instanceof EavEntity/类型对象，必须对象化。
+        $entities = (clone $this->entityModel)->clear()->select()->fetch()->toModels();
+        $types = (clone $this->typeModel)->clear()->select()->fetch()->toModels();
         foreach ($entities as $entity) {
             if (!$entity instanceof EavEntity) {
                 continue;

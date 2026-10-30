@@ -23,8 +23,8 @@ final class SmtpServiceCatalogService
         /** @var SmtpService $model */
         $model = ObjectManager::getInstance(SmtpService::class);
         $collection = $model->clear()->order(SmtpService::schema_fields_ID, 'DESC')->select()->fetch();
-        $rows = is_object($collection) && method_exists($collection, 'getItems')
-            ? $collection->getItems()
+        $rows = is_object($collection) && method_exists($collection, 'toModels')
+            ? $collection->toModels()
             : (is_iterable($collection) ? $collection : []);
         $out = [];
         foreach ($rows as $row) {
@@ -785,8 +785,8 @@ final class SmtpServiceCatalogService
             ->order(SmtpAccount::schema_fields_EMAIL, 'ASC')
             ->select()
             ->fetch();
-        $rows = is_object($collection) && method_exists($collection, 'getItems')
-            ? $collection->getItems()
+        $rows = is_object($collection) && method_exists($collection, 'toModels')
+            ? $collection->toModels()
             : (is_iterable($collection) ? $collection : []);
         $out = [];
         foreach ($rows as $row) {
@@ -1116,8 +1116,8 @@ final class SmtpServiceCatalogService
         /** @var MailDomain $domainModel */
         $domainModel = ObjectManager::getInstance(MailDomain::class);
         $collection = $domainModel->clear()->order(MailDomain::schema_fields_ID, 'ASC')->select()->fetch();
-        $rows = is_object($collection) && method_exists($collection, 'getItems')
-            ? $collection->getItems()
+        $rows = is_object($collection) && method_exists($collection, 'toModels')
+            ? $collection->toModels()
             : (is_iterable($collection) ? $collection : []);
 
         $existingByDomain = [];

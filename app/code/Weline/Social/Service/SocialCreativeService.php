@@ -144,7 +144,8 @@ class SocialCreativeService
             ->limit(\max(1, \min(50, $limit)))
             ->select()
             ->fetch();
-        $items = \is_object($rows) && \method_exists($rows, 'getItems') ? $rows->getItems() : $rows;
+        // 下方用 instanceof 过滤并调用 toArrayData()，必须对象化。
+        $items = \is_object($rows) && \method_exists($rows, 'toModels') ? $rows->toModels() : $rows;
         if (!\is_array($items)) {
             return [];
         }

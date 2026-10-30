@@ -103,12 +103,12 @@ final class QueueAdminListingView
             $queueListing->where('main_table.' . Queue::schema_fields_status, $status);
         }
 
-        $queueListing->additional('AND (t.enable = 1 OR t.enable IS NULL)')
+        // 行在 fetchArray() 返回值上；compactListingItems() 也只吃数组行。
+        $items = $queueListing->additional('AND (t.enable = 1 OR t.enable IS NULL)')
             ->order('main_table.queue_id', 'DESC')
             ->pagination($page, self::PAGE_SIZE, $paginationParams)
             ->select()
-            ->fetch();
-        $items = $queueListing->getItems();
+            ->fetchArray();
         if ($snapshot) {
             $this->compactListingItems($items);
         }

@@ -71,14 +71,14 @@ class AppStoreQueryProvider implements QueryProviderInterface
 
         /** @var AppStoreInstalledModule $moduleModel */
         $moduleModel = ObjectManager::getInstance(AppStoreInstalledModule::class);
-        $moduleModel->reset()
+        $moduleRows = $moduleModel->reset()
             ->order(AppStoreInstalledModule::schema_fields_installed_at, 'DESC')
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $items = [];
         $seenModuleNames = [];
-        foreach (($moduleModel->getItems() ?? []) as $module) {
+        foreach ($moduleRows as $module) {
             $data = is_object($module) && method_exists($module, 'getData') ? $module->getData() : (array)$module;
             $moduleName = (string)($data[AppStoreInstalledModule::schema_fields_module_name] ?? $data['module_name'] ?? '');
             if ($moduleName === '') {

@@ -53,7 +53,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
             ->select()
             ->fetch();
         
-        $this->assign('users', $users->getItems());
+        $this->assign('users', $users->toModels());
         $this->assign('pagination', $users->getPagination());
         return $this->fetch();
     }
@@ -64,7 +64,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
         // 获取所有角色
         /** @var Role $role */
         $role = ObjectManager::getInstance(Role::class);
-        $roles = $role->select()->fetch()->getItems();
+        $roles = $role->select()->fetch()->toModels();
         $this->assign('roles', $roles);
         
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('*/api/backend/user/add'));
@@ -95,7 +95,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
         // 获取所有角色
         /** @var Role $role */
         $role = ObjectManager::getInstance(Role::class);
-        $roles = $role->select()->fetch()->getItems();
+        $roles = $role->select()->fetch()->toModels();
         $this->assign('roles', $roles);
         
         $this->assign('user', $user);

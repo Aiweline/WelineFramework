@@ -96,11 +96,19 @@ ${functionList}
                 throw new \Error('无法动态代理final方法' . $method->name);
             }
             // 获取返回类型签名
+            $returnTypeName = '';
             $methodReturnType = $method->getReturnType();
             if ($methodReturnType === null) {
                 $methodReturnType = '';
             } else {
-                $methodReturnType = ': ' . $methodReturnType->getName();
+                // (string) 同时正确输出 named / nullable(?T) / union(A|B) / intersection(A&B)；
+                // ReflectionUnionType / ReflectionIntersectionType **没有 getName()**，
+                // 旧写法对 union 返回类型直接 fatal：Call to undefined method ReflectionUnionType::getName()。
+                // 且 getName() 会丢掉可空标记（?array → array），使产物与源方法签名不一致。
+                $returnTypeName = \Weline\Framework\Plugin\Proxy\Generator::normalizeReturnTypeName(
+                    (string) $methodReturnType
+                );
+                $methodReturnType = ': ' . $returnTypeName;
             }
             // 方法参数
             $args = [];
@@ -127,18 +135,36 @@ ${functionList}
             }
             $method_modifier = ($method->isPublic() ? 'public' : ($method->isPrivate() ? 'private' : 'protected'));
             // 方法模板
-            $func_tpl = '
+            // void / never 方法禁止 `return <expr>`（PHP Fatal），必须产出无 return 的调用形态；
+            // 其余返回类型（含无返回类型、union、可空、self/static）保持原 `return` 语义。
+            $bareReturnType = \strtolower(\ltrim(\ltrim($returnTypeName, '?'), '\\'));
+            $needsReturn = !\in_array($bareReturnType, ['void', 'never'], true);
+            $pluginCallHead = '
+        ${construct_content}
+        $pluginInfo = $this->pluginsManager->getPluginInfo($this->subjectType, \'${methodName}\');';
+            $func_tpl = $needsReturn
+                ? '
     ${func_doc}
     ' . $method_modifier . ' function ${methodName}(
         ${arguments}
     )${returntype}
-    {
-        ${construct_content}
-        $pluginInfo = $this->pluginsManager->getPluginInfo($this->subjectType, \'${methodName}\');
+    {' . $pluginCallHead . '
         if (!$pluginInfo) {
             return parent::${methodName}(${parameters});
         } else {
             return $this->___callPlugins(\'${methodName}\', func_get_args(), $pluginInfo);
+        } 
+    }'
+                : '
+    ${func_doc}
+    ' . $method_modifier . ' function ${methodName}(
+        ${arguments}
+    )${returntype}
+    {' . $pluginCallHead . '
+        if (!$pluginInfo) {
+            parent::${methodName}(${parameters});
+        } else {
+            $this->___callPlugins(\'${methodName}\', func_get_args(), $pluginInfo);
         } 
     }';
             $construct_func_tpl = '
@@ -235,12 +261,75 @@ ${functionList}
             $typeName = $refType instanceof \ReflectionNamedType
                 ? $refType->getName()
                 : (string) $refType;
+            // 类名补命名空间反斜杠必须在加 `?` **之前**：先加 `?` 会让
+            // class_exists('?Foo') 恒为 false，类名就丢了绝对命名空间（会解析到错误类）。
             if (\strpos($typeName, '|') === false && \class_exists($typeName)) {
                 $typeName = '\\' . $typeName;
+            }
+            // 可空标记 `?T` 是被拦截方法签名的一部分，必须一并复刻。
+            // 只取 getName() 会生成 `string $scope = null`，PHP 8.4 报
+            // "Implicitly marking parameter as nullable is deprecated" 且签名与父类不一致。
+            // `mixed` 已天然含 null（不能写成 ?mixed）；union 已由 (string) 完整输出。
+            if ($refType instanceof \ReflectionNamedType
+                && $refType->allowsNull()
+                && \strtolower(\ltrim($typeName, '\\')) !== 'mixed'
+                && \strtolower(\ltrim($typeName, '\\')) !== 'null'
+            ) {
+                $typeName = '?' . $typeName;
             }
         }
 
         return $typeName;
+    }
+
+    /**
+     * 规范化返回类型名，供拦截器产物使用。
+     *
+     * 生成物是 namespace 文件（例如 `namespace Weline\SystemConfig\...;`）且不注入 `use`，
+     * 所以类型里的类名必须写成绝对形式（前导 `\`），否则会按产物所在 namespace 解析到错误类。
+     * 相对类名 `self` / `static` / `parent` 必须保持原样（`\self` 是 SyntaxError）。
+     *
+     * @param string $typeName 形如 `string` / `?Foo` / `A|B` / `A&B` / `self` / `mixed` / `void`
+     */
+    public static function normalizeReturnTypeName(string $typeName): string
+    {
+        $typeName = \trim($typeName);
+        if ($typeName === '') {
+            return '';
+        }
+        $nullable = \str_starts_with($typeName, '?');
+        $bare = $nullable ? \substr($typeName, 1) : $typeName;
+        $lower = \strtolower($bare);
+        if (\in_array($lower, ['self', 'static', 'parent', 'mixed', 'void', 'never', 'null', 'false', 'true'], true)) {
+            return $typeName;
+        }
+        // union / intersection：逐段补前导 `\`（仅真实类），系统类型原样保留。
+        if (\strpbrk($bare, '|&') !== false) {
+            $separator = \str_contains($bare, '&') ? '&' : '|';
+            $segments = \preg_split('/[|&]/', $bare) ?: [];
+            $segments = \array_map(static function (string $segment): string {
+                $segment = \trim($segment);
+                if ($segment === '' || \str_starts_with($segment, '\\')) {
+                    return $segment;
+                }
+                $segmentLower = \strtolower($segment);
+                if (\in_array($segmentLower, ['null', 'false', 'true', 'self', 'static', 'parent', 'mixed'], true)) {
+                    return $segment;
+                }
+
+                return \class_exists($segment) || \interface_exists($segment) ? '\\' . $segment : $segment;
+            }, $segments);
+
+            return implode($separator, $segments);
+        }
+        if (\str_starts_with($bare, '\\')) {
+            return $typeName;
+        }
+        if (\class_exists($bare) || \interface_exists($bare)) {
+            $bare = '\\' . $bare;
+        }
+
+        return ($nullable ? '?' : '') . $bare;
     }
 
     /**

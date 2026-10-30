@@ -162,7 +162,8 @@ abstract class EavModel extends Model implements EavInterface
             ->where($this->attribute::schema_fields_eav_entity_id, $this->getEavEntityId())
             ->select()
             ->fetch()
-            ->getItems();
+            // 逐条调用 current_setEntity()/getData()，必须对象化。
+            ->toModels();
         $cache_data = [];
         foreach ($attributes as $attribute) {
             /**@var EavAttribute $attribute */

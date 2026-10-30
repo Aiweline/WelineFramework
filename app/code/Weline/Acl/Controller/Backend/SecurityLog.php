@@ -50,10 +50,10 @@ class SecurityLog extends BackendController
             }
             
             $query->order(SecurityLogModel::schema_fields_CREATED_AT, 'DESC');
-            $collection = $query->pagination($page, $limit);
-            
-            $logs = $collection->getItems();
-            $total = $collection->getTotal();
+            // 原先 $collection 就是 model，getItems() 恒为空 → 日志列表始终空白。
+            $pagedQuery = $query->pagination($page, $limit);
+            $logs = $pagedQuery->select()->fetchArray();
+            $total = (int)$pagedQuery->getTotal();
             $totalPages = (int)ceil($total / $limit);
             
             // 事件类型列表

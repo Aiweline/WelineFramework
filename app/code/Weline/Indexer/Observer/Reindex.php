@@ -47,7 +47,7 @@ class Reindex implements \Weline\Framework\Event\ObserverInterface
             # 查找自定义索引是否在数据库中
             foreach ($args_indexers as $args_indexer) {
                 $this->printing->note(__("开始重建指定索引：%{1}", $args_indexer));
-                $indexers = $this->indexer->where('name', $args_indexer)->select()->fetch()->getItems();
+                $indexers = $this->indexer->where('name', $args_indexer)->select()->fetch()->toModels();
                 if (!$indexers) {
                     $this->printing->error(__('索引器 %{1} 找不到', $args_indexer));
                     continue;
@@ -56,10 +56,10 @@ class Reindex implements \Weline\Framework\Event\ObserverInterface
                     if (class_exists($indexer->getModuleModel())) {
                         /**@var AbstractModel $model */
                         $model = ObjectManager::getInstance($indexer->getModuleModel());
-                        $this->printing->note(__("开始重建索引：%{1}", $indexer['name']));
+                        $this->printing->note(__("开始重建索引：%{1}", $indexer->getName()));
                         $this->printing->note(__("索引模型：%{1}", $model::class));
                         $model->reindex($model->getTable());
-                        $this->printing->success(__("索引重建完成：%{1}", $indexer['name']));
+                        $this->printing->success(__("索引重建完成：%{1}", $indexer->getName()));
                     } else {
                         $this->printing->error(__('索引模型不存在'));
                         return;
@@ -68,7 +68,7 @@ class Reindex implements \Weline\Framework\Event\ObserverInterface
             }
         } else {
             # 检索Model模型
-            $indexers = $this->indexer->select()->fetch()->getItems();
+            $indexers = $this->indexer->select()->fetch()->toModels();
             $indexersItems = [];
             foreach ($indexers as $indexer) {
                 $indexersItems[$indexer->getName()][] = $indexer;

@@ -30,7 +30,7 @@ final class FrontendUserAdministration implements FrontendUserAdministrationInte
         $collection = $users
             ->order(FrontendUser::schema_fields_ID, 'DESC')
             ->pagination($page, $pageSize);
-        $items = $collection->select()->fetch()->getItems();
+        $items = $collection->select()->fetchArray();
         $total = (int)$collection->getTotal();
 
         $rows = [];

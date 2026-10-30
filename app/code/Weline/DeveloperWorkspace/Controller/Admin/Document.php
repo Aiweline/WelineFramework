@@ -80,12 +80,13 @@ class Document extends \Weline\Framework\App\Controller\BackendController
             $query->where('main_table.category_id', $this->getCategoryFilterIds((int)$categoryId), 'in');
         }
         
+        // 行在 fetchArray() 返回值上；分页仍在 $documentModel 上取。
         $documents = $query->pagination(
                            intval($this->request->getParam('page', 1)),
                            intval($this->request->getParam('pageSize', 10)),
                            $this->request->getParams()
-                       )->order('doc_id', 'desc')->select()->fetch();
-        $this->assign('documents', $documents->getItems());
+                       )->order('doc_id', 'desc')->select()->fetchArray();
+        $this->assign('documents', $documents);
         $this->assign('pagination', $documentModel->getPaginationState());
         $this->assign('selectedCategoryId', $categoryId);
         $this->assign('documentLocales', $this->getSupportedDocumentLocales());
@@ -361,15 +362,17 @@ class Document extends \Weline\Framework\App\Controller\BackendController
                 $query->where('main_table.category_id', $this->getCategoryFilterIds((int)$categoryId), 'in');
             }
             
+            // 逐条 getData()，必须对象化。
             $documents = $query->pagination($page, $pageSize, $this->request->getParams())
                                ->order('doc_id', 'desc')
                                ->select()
-                               ->fetch();
+                               ->fetch()
+                               ->toModels();
             
             /** @var DocumentTranslationReadService $translationReadService */
             $translationReadService = ObjectManager::getInstance(DocumentTranslationReadService::class);
             $items = [];
-            foreach ($documents->getItems() as $doc) {
+            foreach ($documents as $doc) {
                 // 如果是自动导入的文档，使用模块名作为作者
                 $authorName = '';
                 $isAutoImported = (bool)$doc->getData('is_auto_imported');

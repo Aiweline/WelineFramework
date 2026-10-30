@@ -50,8 +50,10 @@ class Pwa extends FrontendController
     public function sw(): Response
     {
         $js = <<<'JS'
-const CACHE = 'weline-shell-v3';
-const PRECACHE = ['/manifest.webmanifest', '/pwa-icon-192.png'];
+const CACHE = 'weline-shell-v4';
+// Do not precache manifest: lang/currency query variants + CF edge must stay fresh,
+// otherwise mixed-content http:// icon src from an old shell cache fails BP audits.
+const PRECACHE = ['/pwa-icon-192.png'];
 self.addEventListener('install', (e) => {
   self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE).catch(() => {})));
@@ -67,6 +69,11 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // Always network for manifests so PWA icon scheme fixes publish immediately.
+  if (url.pathname === '/manifest.webmanifest' || url.pathname === '/site.webmanifest') {
+    e.respondWith(fetch(req, { cache: 'no-store' }).catch(() => caches.match(req)));
+    return;
+  }
   const isAsset = /\.(?:css|js|mjs|png|jpe?g|webp|avif|svg|ico|woff2?|ttf|otf)(?:$|\?)/i.test(url.pathname);
   if (isAsset) {
     // 静态资源：网络优先（带条件校验），断网回缓存。
@@ -138,12 +145,29 @@ JS;
 
     private function origin(): string
     {
-        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        // CF Flexible / satellite :80 often makes isSecure() false while the
+        // public surface is HTTPS. Prefer forwarded proto, then force https for
+        // public storefront hosts so PWA icon src never emits mixed content.
+        $forwarded = \strtolower(\trim((string)(
+            $this->request->getServer('HTTP_X_FORWARDED_PROTO')
+            ?: $this->request->getServer('HTTP_X_FORWARDED_SCHEME')
+            ?: ''
+        )));
+        if (\str_contains($forwarded, ',')) {
+            $forwarded = \trim(\explode(',', $forwarded, 2)[0]);
+        }
+        $scheme = $forwarded === 'https' || $forwarded === 'http'
+            ? $forwarded
+            : ($this->request->isSecure() ? 'https' : 'http');
         $host = (string)(
             $this->request->getServer('HTTP_HOST')
             ?: $this->request->getServer('SERVER_NAME')
             ?: 'localhost'
         );
+        $hostLower = \strtolower(\preg_replace('/:\d+$/', '', $host) ?? $host);
+        if ($scheme !== 'https' && (\str_ends_with($hostLower, 'playinginchina.com') || \str_ends_with($hostLower, 'weline.com'))) {
+            $scheme = 'https';
+        }
 
         return $scheme . '://' . $host;
     }

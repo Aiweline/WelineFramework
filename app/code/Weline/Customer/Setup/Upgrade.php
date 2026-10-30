@@ -6,7 +6,7 @@ namespace Weline\Customer\Setup;
 
 use Weline\Customer\Model\Customer;
 use Weline\Customer\Model\Type;
-use Weline\Framework\Database\Connection\ConnectionFactory;
+use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;

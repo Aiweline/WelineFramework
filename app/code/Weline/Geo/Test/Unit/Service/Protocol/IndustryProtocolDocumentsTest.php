@@ -56,14 +56,15 @@ class IndustryProtocolDocumentsTest extends TestCase
 
         self::assertSame(['# RSL license: https://shop.example/license.xml'], $lines['global_lines']);
         self::assertSame([], preg_grep('/^License:/i', $lines['global_lines']), 'REP has no License directive; consoles report it as unknown');
-        self::assertContains('Content-Signal: search=yes, ai-input=yes, ai-train=yes', $lines['star_lines']);
+        self::assertContains('# Content-Signal: search=yes, ai-input=yes, ai-train=yes', $lines['star_lines']);
+        self::assertSame([], preg_grep('/^Content-Signal:/i', $lines['star_lines']), 'bare Content-Signal fails Lighthouse robots-txt');
 
         $closed = IndustryProtocolDocuments::robotsContribution('https://shop.example', true, false);
-        self::assertContains('Content-Signal: search=yes, ai-input=no, ai-train=yes', $closed['star_lines']);
+        self::assertContains('# Content-Signal: search=yes, ai-input=no, ai-train=yes', $closed['star_lines']);
 
         $blocked = IndustryProtocolDocuments::robotsContribution('not a url', false, true);
         self::assertSame([], $blocked['global_lines']);
-        self::assertContains('Content-Signal: search=no, ai-input=no, ai-train=no', $blocked['star_lines']);
+        self::assertContains('# Content-Signal: search=no, ai-input=no, ai-train=no', $blocked['star_lines']);
     }
 
     public function testHeadLinksTheIndustryDocuments(): void

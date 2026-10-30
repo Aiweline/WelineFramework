@@ -52,12 +52,13 @@ class Mapping extends BackendController
             return $this->redirect('async/backend/host');
         }
 
+        // 下方 setData()/getId()，必须对象化。
         $mappings = $this->syncMapping->clear()
             ->where(SyncMapping::schema_fields_HOST_ID, $hostId)
             ->order(SyncMapping::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         // 获取每个映射的运行状态
         foreach ($mappings as $mapping) {
@@ -85,10 +86,11 @@ class Mapping extends BackendController
             $query = $this->syncMapping->clear();
             $query->where(SyncMapping::schema_fields_HOST_ID, $hostId);
             
+            // 下方 getId()/getData()，必须对象化。
             $mappings = $query->order(SyncMapping::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
 
             $data = [];
             foreach ($mappings as $mapping) {

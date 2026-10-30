@@ -65,8 +65,7 @@ final class SeoLane implements OpsLaneContributionInterface
                 $items = $model->clear()
                     ->where('website_id', max(0, $websiteId))
                     ->select()
-                    ->fetch()
-                    ->getItems();
+                    ->fetchArray();
                 $connected = is_countable($items) && count($items) > 0;
                 $summary = $connected
                     ? (string)__('站点已绑定 SEO 账户（含 GSC 通道时可用于日更分析）')

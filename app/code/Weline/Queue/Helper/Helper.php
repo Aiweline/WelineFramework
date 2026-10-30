@@ -128,6 +128,7 @@ class Helper
 //                    ->delete()->bound_values);
                 if ($attrIds) {
                     /**@var Type\Attributes[] $notBeLongTypeAttrs */
+                    // 下方 getAttributeId() 需要模型对象。
                     $notBeLongTypeAttrs = $queueTypeAttributeModel
                         ->clearData()
                         ->reset()
@@ -135,7 +136,7 @@ class Helper
                         ->where($queueTypeAttributeModel::schema_fields_attribute_id, $attrIds, 'not in')
                         ->select()
                         ->fetch()
-                        ->getItems();
+                        ->toModels();
                     # 先查找不属于当前队列的属性
                     /** @var EavAttribute $eavAttribute */
                     $eavAttribute = ObjectManager::getInstance(EavAttribute::class);

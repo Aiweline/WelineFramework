@@ -86,18 +86,20 @@ class NotificationService
         }
 
         // 未读优先，再按通知时间倒序
-        $query->order('main_table.' . UserNotificationStatus::schema_fields_is_read, 'ASC')
+        // 多行 select()->fetch() 返回 RowCollection（行是关联数组），模型自身的 items 不再被填充，
+        // 必须从 fetch 结果取行，否则列表恒为空。
+        $rows = $query->order('main_table.' . UserNotificationStatus::schema_fields_is_read, 'ASC')
             ->order('n.create_time', 'DESC')
             ->pagination($page, $limit)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
-        $items = $this->statusModel->getItems();
+        $items = $rows;
         $pagination = $this->statusModel->getPaginationState();
 
         $notifications = [];
         foreach ($items as $item) {
-            $data = $item->getData();
+            $data = is_array($item) ? $item : $item->getData();
             $type = NotificationType::fromString($data['type'] ?? 'info');
             $topicInfo = $this->topicCollector->getTopicByCode($data['topic_code'] ?? '');
 
@@ -541,33 +543,31 @@ class NotificationService
             $userField = 'main_table.' . UserNotificationStatus::schema_fields_user_id;
 
             $prev = clone $this->statusModel;
-            $prev->clearQuery()
+            $prevRows = $prev->clearQuery()
                 ->joinModel(SystemNotification::class, 'n', $baseJoin, 'inner', $baseFields)
                 ->where($userField, $userId)
                 ->where('n.create_time', $currentTime, '>')
                 ->order('n.create_time', 'ASC')
                 ->limit(1)
                 ->select()
-                ->fetch();
-            $prevItems = $prev->getItems();
-            if (!empty($prevItems)) {
-                $d = $prevItems[0]->getData();
+                ->fetchArray();
+            if (!empty($prevRows)) {
+                $d = is_array($prevRows[0]) ? $prevRows[0] : $prevRows[0]->getData();
                 $prevId = (int) ($d['notification_id'] ?? 0);
                 $prevTitle = $d['title'] ?? '';
             }
 
             $next = clone $this->statusModel;
-            $next->clearQuery()
+            $nextRows = $next->clearQuery()
                 ->joinModel(SystemNotification::class, 'n', $baseJoin, 'inner', $baseFields)
                 ->where($userField, $userId)
                 ->where('n.create_time', $currentTime, '<')
                 ->order('n.create_time', 'DESC')
                 ->limit(1)
                 ->select()
-                ->fetch();
-            $nextItems = $next->getItems();
-            if (!empty($nextItems)) {
-                $d = $nextItems[0]->getData();
+                ->fetchArray();
+            if (!empty($nextRows)) {
+                $d = is_array($nextRows[0]) ? $nextRows[0] : $nextRows[0]->getData();
                 $nextId = (int) ($d['notification_id'] ?? 0);
                 $nextTitle = $d['title'] ?? '';
             }

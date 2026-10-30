@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Product',
-    'version' => '1.1.29',
+    'version' => '1.1.31',
     'requires' => [
         'Weline_Catalog' => '*',
         'Weline_DataTable' => '*',
@@ -14,6 +14,8 @@ return [
         'Weline_FileManager' => '*',
     ],
     'optional' => [
+        'Weline_Ai' => '*',
+        'Weline_Queue' => '>=1.2.5',
         'Weline_Api' => '*',
         'Weline_DeveloperWorkspace' => '*',
         'Weline_Cart' => '*',

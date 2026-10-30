@@ -128,7 +128,21 @@ final class CustomerAuthReturnUrlService
         // Absolute URL: peel origin with a UTF-8-safe host match. Never run PHP
         // parse_url() on a fully decoded query — it replaces bytes like 0x8A with
         // "_" and breaks WQB1 encoding for account.socialQuickPrompt return_url.
-        if (preg_match('#^(https?)://(?:([^/@?#]+)@)?([^/?#]+)(.*)$#i', $candidate, $absolute) === 1) {
+        // 分隔符用 `~`：本模式以 `$` 结尾，用 `#` 作分隔符时 `$#` 会被 PCRE 解析成
+        // 「结尾断言 + 结束分隔符」，修饰符位置错位 → Unknown modifier ']'，preg 静默
+        // 返回 false，导致所有绝对 URL 返回地址被丢弃（曾刷 878 条 warning）。
+        $absoluteMatch = preg_match('~^(https?)://(?:([^/@?#]+)@)?([^/?#]+)(.*)$~i', $candidate, $absolute);
+        if ($absoluteMatch === false) {
+            // 正则失效时 fail-closed，并留下可观测证据，避免静默吞掉返回地址。
+            w_log_warning(
+                'customer.return_url.absolute_match_regex_failed: ' . preg_last_error_msg(),
+                [],
+                'CustomerAuthReturnUrlService'
+            );
+
+            return '';
+        }
+        if ($absoluteMatch === 1) {
             if (($absolute[2] ?? '') !== '') {
                 return '';
             }

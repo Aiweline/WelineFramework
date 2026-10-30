@@ -490,6 +490,7 @@ class IdentityBridgeService
             return [];
         }
 
+        // 下方 instanceof AccountBinding + getId()/getAppId()，必须对象化。
         $items = $this->newBindingModel()
             ->where(AccountBinding::schema_fields_LOCAL_CUSTOMER_ID, $customerId)
             ->where(AccountBinding::schema_fields_STATUS, AccountBinding::STATUS_ACTIVE)
@@ -497,10 +498,10 @@ class IdentityBridgeService
             ->pagination(1, 100)
             ->select()
             ->fetch()
-            ->getItems() ?? [];
+            ->toModels();
 
         $bindings = [];
-        foreach ((array) $items as $binding) {
+        foreach ($items as $binding) {
             if (!$binding instanceof AccountBinding || !$binding->getId()) {
                 continue;
             }
@@ -577,14 +578,13 @@ class IdentityBridgeService
 
     public function listTrustedApps(int $limit = 50): array
     {
-        $items = $this->newTrustedAppModel()
+        // 调用方模板用 $app->getData()，必须对象化。
+        return $this->newTrustedAppModel()
             ->order(TrustedApp::schema_fields_ID, 'DESC')
             ->pagination(1, $limit)
             ->select()
             ->fetch()
-            ->getItems() ?? [];
-
-        return is_array($items) ? $items : [];
+            ->toModels();
     }
 
     public function listDeveloperApplicationsForCustomer(int $customerId, int $limit = 50): array
@@ -593,16 +593,15 @@ class IdentityBridgeService
             return [];
         }
 
-        $items = $this->newTrustedAppModel()
+        // 同 listTrustedApps()：需要 TrustedApp 模型对象。
+        return $this->newTrustedAppModel()
             ->where(TrustedApp::schema_fields_APPLICANT_CUSTOMER_ID, $customerId)
             ->where(TrustedApp::schema_fields_STATUS, [TrustedApp::STATUS_ACTIVE, TrustedApp::STATUS_DISABLED], 'in')
             ->order(TrustedApp::schema_fields_ID, 'DESC')
             ->pagination(1, $limit)
             ->select()
             ->fetch()
-            ->getItems() ?? [];
-
-        return is_array($items) ? $items : [];
+            ->toModels();
     }
 
     public function countBindingsForApp(int $appId): int
@@ -707,15 +706,16 @@ class IdentityBridgeService
             return [];
         }
 
+        // 下方 instanceof IdentityToken + isExpired()/isRevoked()，必须对象化。
         $rows = $this->newTokenModel()
             ->where(IdentityToken::schema_fields_BINDING_ID, $bindingId)
             ->where(IdentityToken::schema_fields_REVOKED_AT, 0)
             ->select()
             ->fetch()
-            ->getItems() ?? [];
+            ->toModels();
 
         $tokens = [];
-        foreach ((array) $rows as $token) {
+        foreach ($rows as $token) {
             if (!$token instanceof IdentityToken || !$token->getId() || $token->isExpired() || $token->isRevoked()) {
                 continue;
             }

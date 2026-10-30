@@ -125,7 +125,7 @@ class Progress extends BackendController
         try {
             /** @var Website $model */
             $model = ObjectManager::getInstance(Website::class);
-            $rows = $model->clear()->select()->fetch()->getItems();
+            $rows = $model->clear()->select()->fetch()->toModels();
             $plain = [];
             foreach (is_array($rows) ? $rows : [] as $row) {
                 if (is_object($row) && method_exists($row, 'getData')) {

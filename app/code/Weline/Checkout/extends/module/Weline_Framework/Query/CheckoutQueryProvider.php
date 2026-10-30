@@ -915,6 +915,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 }
                 /** @var \Weline\Payment\Model\PaymentTransaction $tx */
                 $tx = ObjectManager::getInstance(\Weline\Payment\Model\PaymentTransaction::class);
+                // 下方 getData() 需要模型对象。
                 $rows = $tx->clear()
                     ->where(\Weline\Payment\Model\PaymentTransaction::schema_fields_ORDER_ID, $orderUuid)
                     ->where(
@@ -925,7 +926,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     ->limit(1)
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
                 foreach ($rows as $row) {
                     if (!is_object($row) || !method_exists($row, 'getData')) {
                         continue;

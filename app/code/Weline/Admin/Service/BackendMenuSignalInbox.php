@@ -105,14 +105,15 @@ final class BackendMenuSignalInbox implements BackendMenuSignalInboxInterface
 
         $readIds = $this->readItemIds($code, $backendUserId);
         $notice = $this->notice();
-        $notice->where(BackendMenuSignalNotice::schema_fields_SIGNAL_CODE, $code)
+        $rows = $notice->where(BackendMenuSignalNotice::schema_fields_SIGNAL_CODE, $code)
             ->order(BackendMenuSignalNotice::schema_fields_ID, 'DESC')
             ->limit(500)
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
         $items = [];
-        foreach ($notice->getItems() as $row) {
+        foreach ($rows as $row) {
             if (!$row instanceof BackendMenuSignalNotice) {
                 continue;
             }
@@ -143,13 +144,15 @@ final class BackendMenuSignalInbox implements BackendMenuSignalInboxInterface
     private function readItemIds(string $code, int $backendUserId): array
     {
         $read = $this->read();
-        $read->where(BackendMenuSignalRead::schema_fields_SIGNAL_CODE, $code)
+        $rows = $read->where(BackendMenuSignalRead::schema_fields_SIGNAL_CODE, $code)
             ->where(BackendMenuSignalRead::schema_fields_USER_ID, $backendUserId)
             ->where(BackendMenuSignalRead::schema_fields_IS_READ, 1)
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
+
         $ids = [];
-        foreach ($read->getItems() as $row) {
+        foreach ($rows as $row) {
             if (!$row instanceof BackendMenuSignalRead) {
                 continue;
             }

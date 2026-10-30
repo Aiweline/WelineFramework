@@ -174,6 +174,11 @@ final class RequestPipeline implements RequestPipelineInterface
             } else {
                 $app->startSessionIfNeeded();
             }
+        } elseif ($traceEnabled) {
+            // 阶段被主动跳过（如内部首页 FPC 预热不启会话）时，仍要产出计时键。
+            // 追踪开启时 $timings 是**固定键集合的契约**，下游 reader（WlsRuntime 汇总
+            // router_start_ms）不逐个判键；缺键会掉成 Undefined array key 警告。
+            $timings['session_start_ms'] = 0.0;
         }
 
         if ($traceEnabled) {

@@ -156,13 +156,15 @@ final class PromotionActivityThemeService
         $scopeFilter = $this->resolveApplicableScopeFilter($filters);
 
         $collection = clone $this->theme;
-        $collection->clear()->order(PromotionActivityTheme::schema_fields_SORT_ORDER, 'ASC')
+        // 下方 getData()，必须对象化。
+        $rows = $collection->clear()->order(PromotionActivityTheme::schema_fields_SORT_ORDER, 'ASC')
             ->order(PromotionActivityTheme::schema_fields_ID, 'ASC')
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
         $items = [];
-        foreach ($collection->getItems() as $item) {
+        foreach ($rows as $item) {
             $row = $this->normalizeThemeRow($item->getData());
             if ($scopeFilter !== null && !PromotionActivityThemeScopeMatcher::matches($row, $scopeFilter)) {
                 continue;
@@ -578,22 +580,25 @@ final class PromotionActivityThemeService
         ];
 
         $collection = clone $this->theme;
-        $collection->clear()
+        // 下方 getId() / setData()->save()，必须对象化。
+        $themes = $collection->clear()
             ->where(PromotionActivityTheme::schema_fields_PAGE_SLUG, 'deals')
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
-        foreach ($collection->getItems() as $item) {
+        foreach ($themes as $item) {
             $themeId = (int)$item->getId();
             if ($themeId <= 0) {
                 continue;
             }
             $locals = clone $this->themeLocal;
-            $locals->clear()
+            $localRows = $locals->clear()
                 ->where(PromotionActivityThemeLocal::schema_fields_ID, $themeId)
                 ->select()
-                ->fetch();
-            foreach ($locals->getItems() as $local) {
+                ->fetch()
+                ->toModels();
+            foreach ($localRows as $local) {
                 $changed = false;
                 $nav = trim((string)$local->getData(PromotionActivityThemeLocal::schema_fields_NAV_LABEL));
                 if (isset($legacyNav[$nav])) {
@@ -621,12 +626,14 @@ final class PromotionActivityThemeService
     public function retireGiftThemes(): void
     {
         $collection = clone $this->theme;
-        $collection->clear()
+        // 下方 getData()，必须对象化。
+        $themes = $collection->clear()
             ->where(PromotionActivityTheme::schema_fields_PAGE_SLUG, 'gifts')
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
-        foreach ($collection->getItems() as $item) {
+        foreach ($themes as $item) {
             $row = $this->normalizeThemeRow($item->getData());
             $themeId = (int)($row['id'] ?? 0);
             if ($themeId <= 0) {
@@ -850,15 +857,17 @@ final class PromotionActivityThemeService
     private function listActiveThemes(array $scope): array
     {
         $collection = clone $this->theme;
-        $collection->clear()
+        // 下方 getData()，必须对象化。
+        $rows = $collection->clear()
             ->where(PromotionActivityTheme::schema_fields_STATUS, PromotionActivityTheme::STATUS_ACTIVE)
             ->order(PromotionActivityTheme::schema_fields_SORT_ORDER, 'ASC')
             ->order(PromotionActivityTheme::schema_fields_ID, 'ASC')
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
         $items = [];
-        foreach ($collection->getItems() as $item) {
+        foreach ($rows as $item) {
             $row = $this->normalizeThemeRow($item->getData());
             if (!PromotionActivityThemeScopeMatcher::matches($row, $scope)) {
                 continue;

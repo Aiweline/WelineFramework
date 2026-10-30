@@ -323,7 +323,7 @@ class SetupTaskCollector
         try {
             /** @var Website $model */
             $model = ObjectManager::getInstance(Website::class);
-            $rows = $model->clear()->select()->fetch()->getItems();
+            $rows = $model->clear()->select()->fetch()->toModels();
             foreach (is_array($rows) ? $rows : [] as $row) {
                 $data = is_object($row) && method_exists($row, 'getData')
                     ? $row->getData()

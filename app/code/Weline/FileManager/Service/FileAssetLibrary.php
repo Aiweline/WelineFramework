@@ -503,7 +503,8 @@ final class FileAssetLibrary implements FileAssetLibraryInterface
         if ($this->supportsForUpdate()) {
             $query->additional('FOR UPDATE');
         }
-        $items = array_values($query->select()->fetch()->getItems());
+        // 乐观锁校验用 instanceof FileAsset + 模型方法，必须对象化。
+        $items = array_values($query->select()->fetch()->toModels());
         $current = $items[0] ?? null;
         if (!$current instanceof FileAsset) {
             throw new \RuntimeException((string)__('文件资源已被其他请求删除。'));

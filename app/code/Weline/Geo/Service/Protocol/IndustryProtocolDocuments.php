@@ -114,9 +114,12 @@ final class IndustryProtocolDocuments
 
         return [
             'global_lines' => $global,
+            // Content-Signal is not a standard robots.txt directive; Lighthouse / Google
+            // Search Console flag the bare form as "Unknown directive". Keep the signal as
+            // a comment so crawlers still see the intent without failing SEO audits.
             'star_lines' => [
                 '# Content-Signal: https://contentsignals.org/',
-                'Content-Signal: search=' . $search . ', ai-input=' . $aiInput . ', ai-train=' . $aiTrain,
+                '# Content-Signal: search=' . $search . ', ai-input=' . $aiInput . ', ai-train=' . $aiTrain,
             ],
         ];
     }

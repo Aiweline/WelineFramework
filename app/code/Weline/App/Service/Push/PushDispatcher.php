@@ -18,7 +18,7 @@ final class PushDispatcher
             ->where(AppDeviceToken::schema_fields_website_id, $websiteId)
             ->where(AppDeviceToken::schema_fields_enabled, 1)
             ->fetch()
-            ->getItems();
+            ->toModels();
         foreach ($rows as $row) {
             $resultData = $this->sendToPlatform(
                 (string)$row->getData(AppDeviceToken::schema_fields_platform),
@@ -51,7 +51,7 @@ final class PushDispatcher
             ->where(AppDeviceToken::schema_fields_website_id, $websiteId)
             ->where(AppDeviceToken::schema_fields_enabled, 1)
             ->fetch()
-            ->getItems();
+            ->toModels();
         return count($rows);
     }
 

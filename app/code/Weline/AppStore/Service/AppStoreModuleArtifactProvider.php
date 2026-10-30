@@ -142,7 +142,7 @@ final class AppStoreModuleArtifactProvider implements ModuleArtifactProviderInte
             ->limit(1)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         $item = $items[0] ?? null;
         return $item instanceof AppStoreInstalledModule ? $item : null;
     }

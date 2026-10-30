@@ -325,8 +325,7 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
             $agents = $agentModel->reset()
                 ->where(ServiceAgent::schema_fields_IS_ACTIVE, 1)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
 
             $hasOnlineAgent = false;
             foreach ($agents as $agent) {

@@ -142,6 +142,7 @@ class QueueDispatchService
     ): array {
         $query = clone $this->queue;
 
+        // 契约 @return list<Queue>，必须对象化。
         return $query->reset()
             ->where($query::schema_fields_finished, 0)
             ->where($query::schema_fields_auto, 1)
@@ -151,7 +152,7 @@ class QueueDispatchService
             ->pagination(1, $limit)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
     }
 
     public function reconcileRunningQueues(): void
@@ -357,13 +358,13 @@ class QueueDispatchService
 
     public function countRunningAutoQueues(): int
     {
+        // 只计数，取数组即可。
         $items = $this->queue->reset()
             ->where($this->queue::schema_fields_finished, 0)
             ->where($this->queue::schema_fields_auto, 1)
             ->where($this->queue::schema_fields_status, $this->queue::status_running)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         return \count($items);
     }
@@ -1793,12 +1794,13 @@ class QueueDispatchService
     /** @return list<Queue> */
     protected function loadRunningAutoQueues(): array
     {
+        // 契约 @return list<Queue>，必须对象化。
         return $this->queue->reset()
             ->where($this->queue::schema_fields_auto, 1)
             ->where($this->queue::schema_fields_status, $this->queue::status_running)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
     }
 
     protected function isManagedQueueWorkerRunning(
@@ -2124,6 +2126,7 @@ class QueueDispatchService
             return 0;
         }
         $query = clone $this->queue;
+        // 只计数，取数组即可。
         $items = $query->reset()
             ->joinModel(Type::class, 't', 'main_table.type_id=t.type_id', 'inner')
             ->where(Queue::schema_fields_finished, 0)
@@ -2131,8 +2134,7 @@ class QueueDispatchService
             ->where(Queue::schema_fields_status, Queue::status_running)
             ->where('t.' . Type::schema_fields_class, $queueClass)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         return \count($items);
     }

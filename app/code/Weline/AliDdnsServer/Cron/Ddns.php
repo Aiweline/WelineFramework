@@ -287,7 +287,7 @@ class Ddns implements \Weline\Cron\CronTaskInterface
         $ipv6 = $this->GetIP('ipv6');
 
         // 获取所有已绑定的要解析的域名
-        $domains = $this->ddnsDomains->select()->fetch()->getItems();
+        $domains = $this->ddnsDomains->select()->fetch()->toModels();
 
         // 循环检查所有已绑定的域名是否正确
         /**@var DdnsDomains $domain */

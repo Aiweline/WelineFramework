@@ -138,10 +138,11 @@ class MetaManager implements TaglibInterface
                     ->group(MetaModel::schema_fields_NAMESPACE)
                     ->order(MetaModel::schema_fields_NAMESPACE, 'ASC')
                     ->select()
-                    ->fetch();
+                    ->fetchArray();
                 
-                foreach ($namespaces->getItems() as $item) {
-                    $ns = (string)$item->getData(MetaModel::schema_fields_NAMESPACE);
+                // getItems() 返回数组行，按数组取字段。
+                foreach ($namespaces as $item) {
+                    $ns = (string)($item[MetaModel::schema_fields_NAMESPACE] ?? '');
                     if ($ns) {
                         $namespaceList[] = $ns;
                     }

@@ -30,17 +30,15 @@ class Url extends \Weline\Framework\App\Controller\BackendController
         if ($q) {
             $urlManager->where('path', "%{$q}%", 'like');
         }
-        $urlManager->pagination(
+        $items = $urlManager->pagination(
             $this->request->getParam('page', 1),
             $this->request->getParam('pageSize', 10),
             $this->request->getParams()
         )->select()
-         ->fetch();
-        /**@var UrlRewrite $item */
-        $items = $urlManager->getItems();
+         ->fetchArray();
         $moduleIds = [];
         foreach ($items as $item) {
-            $moduleId = (int)$item->getData(UrlManager::schema_fields_MODULE_ID);
+            $moduleId = (int)($item[UrlManager::schema_fields_MODULE_ID] ?? 0);
             if ($moduleId > 0) {
                 $moduleIds[] = $moduleId;
             }
@@ -52,10 +50,11 @@ class Url extends \Weline\Framework\App\Controller\BackendController
             $moduleNames = $provider->namesByIds($moduleIds);
         }
         foreach ($items as &$item) {
-            $moduleId = (int)$item->getData(UrlManager::schema_fields_MODULE_ID);
-            $item->setData('module_name', (string)($moduleNames[$moduleId] ?? ''));
-            $item->setData('can_rewrite', str_ends_with($item['path'], '::GET'));
+            $moduleId = (int)($item[UrlManager::schema_fields_MODULE_ID] ?? 0);
+            $item['module_name'] = (string)($moduleNames[$moduleId] ?? '');
+            $item['can_rewrite'] = str_ends_with((string)($item[UrlManager::schema_fields_PATH] ?? ''), '::GET');
         }
+        unset($item);
         $this->assign('urls', $items);
         $this->assign('has_urls', !empty($items));
         $this->assign('current_q', $q);

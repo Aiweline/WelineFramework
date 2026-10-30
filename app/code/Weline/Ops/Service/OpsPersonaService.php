@@ -515,13 +515,14 @@ PROMPT;
                 return $code;
             }
 
+            // 下方 getData()，必须对象化。
             foreach ($model->clear()
                 ->where(AiModel::schema_fields_STATUS, 'active')
                 ->where(AiModel::schema_fields_IS_ACTIVE, 1)
                 ->where(AiModel::schema_fields_PRIMARY_MODALITY, AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT)
                 ->select()
                 ->fetch()
-                ->getItems() as $row) {
+                ->toModels() as $row) {
                 $code = (string)$row->getData(AiModel::schema_fields_MODEL_CODE);
                 $supplier = strtolower((string)$row->getData(AiModel::schema_fields_SUPPLIER));
                 if ($code === '' || $this->isLocalOllamaSupplier($supplier, $code)) {

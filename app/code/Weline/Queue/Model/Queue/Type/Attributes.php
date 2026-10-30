@@ -98,12 +98,13 @@ class Attributes extends Model
         } elseif ($eav_entity_id) {
             $wheres[] = [EavAttribute::schema_fields_eav_entity_id, '=', $eav_entity_id];
         }
+        // 下方 current_setEntity()/getId() 需要模型对象。
         $attributes = $attribute->reset()->clearData()
             ->where($wheres)
             ->order(EavAttribute::schema_fields_dependence, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 //            ->getLastSql();
         $options_data = $options;
         /** @var EavAttribute $attr */

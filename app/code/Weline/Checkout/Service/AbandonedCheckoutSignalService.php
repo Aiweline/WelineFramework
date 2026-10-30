@@ -54,13 +54,15 @@ final class AbandonedCheckoutSignalService
         if ($createdBefore !== '') {
             $model->where(CheckoutSession::schema_fields_CREATED_AT, $createdBefore, '<=');
         }
-        $model->order(CheckoutSession::schema_fields_CREATED_AT, 'ASC')
+        // 下方 instanceof CheckoutSession + toDto()，必须对象化。
+        $rows = $model->order(CheckoutSession::schema_fields_CREATED_AT, 'ASC')
             ->limit(\min(500, $limit * 3))
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
         $items = [];
-        foreach ($model->getItems() as $row) {
+        foreach ($rows as $row) {
             if (!$row instanceof CheckoutSession) {
                 continue;
             }
@@ -146,15 +148,17 @@ final class AbandonedCheckoutSignalService
         $now = \gmdate('Y-m-d H:i:s');
         /** @var CheckoutSession $model */
         $model = ObjectManager::getInstance(CheckoutSession::class);
-        $model->clear()
+        // 下方 instanceof CheckoutSession + sessionMatchesIdentity()，必须对象化。
+        $rows = $model->clear()
             ->where(CheckoutSession::schema_fields_STATE, CheckoutSession::STATE_QUOTED)
             ->where(CheckoutSession::schema_fields_EXPIRES_AT, $now, '>=')
             ->order(CheckoutSession::schema_fields_CREATED_AT, 'DESC')
             ->limit(200)
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
-        foreach ($model->getItems() as $row) {
+        foreach ($rows as $row) {
             if (!$row instanceof CheckoutSession) {
                 continue;
             }

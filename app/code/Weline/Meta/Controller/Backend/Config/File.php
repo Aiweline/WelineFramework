@@ -36,11 +36,12 @@ class File extends BackendController
             ->group(MetaModel::schema_fields_NAMESPACE)
             ->order(MetaModel::schema_fields_NAMESPACE, 'ASC')
             ->select()
-            ->fetch();
+            ->fetchArray();
         
         $namespaceList = [];
-        foreach ($namespaces->getItems() as $item) {
-            $ns = (string)$item->getData(MetaModel::schema_fields_NAMESPACE);
+        // getItems() 返回数组行，按数组取字段。
+        foreach ($namespaces as $item) {
+            $ns = (string)($item[MetaModel::schema_fields_NAMESPACE] ?? '');
             if ($ns) {
                 $namespaceList[] = $ns;
             }
@@ -63,10 +64,10 @@ class File extends BackendController
                 ->group(MetaModel::schema_fields_META_TYPE)
                 ->order(MetaModel::schema_fields_META_TYPE, 'ASC')
                 ->select()
-                ->fetch();
+                ->fetchArray();
 
-            foreach ($typeResult->getItems() as $item) {
-                $t = (string)$item->getData(MetaModel::schema_fields_META_TYPE);
+            foreach ($typeResult as $item) {
+                $t = (string)($item[MetaModel::schema_fields_META_TYPE] ?? '');
                 if ($t && !in_array($t, $typeOptions, true)) {
                     $typeOptions[] = $t;
                 }
@@ -84,10 +85,10 @@ class File extends BackendController
                 ->group(MetaModel::schema_fields_CATEGORY)
                 ->order(MetaModel::schema_fields_CATEGORY, 'ASC')
                 ->select()
-                ->fetch();
+                ->fetchArray();
 
-            foreach ($categoryResult->getItems() as $item) {
-                $c = (string)$item->getData(MetaModel::schema_fields_CATEGORY);
+            foreach ($categoryResult as $item) {
+                $c = (string)($item[MetaModel::schema_fields_CATEGORY] ?? '');
                 if ($c && !in_array($c, $categoryOptions, true)) {
                     $categoryOptions[] = $c;
                 }
@@ -110,10 +111,10 @@ class File extends BackendController
                 ->group(MetaConfig::schema_fields_SCOPE)
                 ->order(MetaConfig::schema_fields_SCOPE, 'ASC')
                 ->select()
-                ->fetch();
+                ->fetchArray();
 
-            foreach ($scopeResult->getItems() as $item) {
-                $s = (string)$item->getData(MetaConfig::schema_fields_SCOPE);
+            foreach ($scopeResult as $item) {
+                $s = (string)($item[MetaConfig::schema_fields_SCOPE] ?? '');
                 if ($s && !in_array($s, $scopeOptions, true)) {
                     $scopeOptions[] = $s;
                 }
@@ -128,10 +129,10 @@ class File extends BackendController
                 ->group(MetaConfig::schema_fields_LOCALE)
                 ->order(MetaConfig::schema_fields_LOCALE, 'ASC')
                 ->select()
-                ->fetch();
+                ->fetchArray();
 
-            foreach ($localeResult->getItems() as $item) {
-                $l = (string)$item->getData(MetaConfig::schema_fields_LOCALE);
+            foreach ($localeResult as $item) {
+                $l = (string)($item[MetaConfig::schema_fields_LOCALE] ?? '');
                 if ($l && !in_array($l, $localeOptions, true)) {
                     $localeOptions[] = $l;
                 }
@@ -211,20 +212,21 @@ class File extends BackendController
             $metaModel->where(MetaModel::schema_fields_CATEGORY, $category);
         }
 
-        $result = $metaModel->select()->fetch();
+        $result = $metaModel->select()->fetchArray();
         $items = [];
-        foreach ($result->getItems() as $meta) {
-            $filePath = (string)$meta->getData(MetaModel::schema_fields_FILE_PATH);
-            $metaIdentify = (string)$meta->getData(MetaModel::schema_fields_META_IDENTIFY);
+        // getItems() 返回数组行，按数组取字段。
+        foreach ($result as $meta) {
+            $filePath = (string)($meta[MetaModel::schema_fields_FILE_PATH] ?? '');
+            $metaIdentify = (string)($meta[MetaModel::schema_fields_META_IDENTIFY] ?? '');
             $items[] = [
-                'meta_id' => (int)$meta->getData(MetaModel::schema_fields_ID),
+                'meta_id' => (int)($meta[MetaModel::schema_fields_ID] ?? 0),
                 'meta_identify' => $metaIdentify,
                 'file_path' => $filePath,
-                'file_full_path' => (string)$meta->getData(MetaModel::schema_fields_FILE_FULL_PATH),
-                'meta_type' => (string)$meta->getData(MetaModel::schema_fields_META_TYPE),
-                'area' => (string)$meta->getData(MetaModel::schema_fields_AREA),
-                'category' => (string)$meta->getData(MetaModel::schema_fields_CATEGORY),
-                'namespace' => (string)$meta->getData(MetaModel::schema_fields_NAMESPACE),
+                'file_full_path' => (string)($meta[MetaModel::schema_fields_FILE_FULL_PATH] ?? ''),
+                'meta_type' => (string)($meta[MetaModel::schema_fields_META_TYPE] ?? ''),
+                'area' => (string)($meta[MetaModel::schema_fields_AREA] ?? ''),
+                'category' => (string)($meta[MetaModel::schema_fields_CATEGORY] ?? ''),
+                'namespace' => (string)($meta[MetaModel::schema_fields_NAMESPACE] ?? ''),
                 'title' => $this->guessNodeTitle($filePath, $metaIdentify),
             ];
         }

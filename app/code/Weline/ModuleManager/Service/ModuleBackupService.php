@@ -46,11 +46,12 @@ class ModuleBackupService
 
         /** @var ModuleTable $moduleTableModel */
         $moduleTableModel = ObjectManager::getInstance(ModuleTable::class);
+        // 下方 getData()，必须对象化。
         $moduleTables     = $moduleTableModel
             ->where(ModuleTable::schema_fields_module_name, $moduleName)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         if (empty($moduleTables)) {
             return [
@@ -287,12 +288,13 @@ class ModuleBackupService
     {
         /** @var ModuleBackup $backupModel */
         $backupModel = ObjectManager::getInstance(ModuleBackup::class);
+        // 下方 getData()，必须对象化。
         $models      = $backupModel
             ->where(ModuleBackup::schema_fields_MODULE_NAME, $moduleName)
             ->order(ModuleBackup::schema_fields_BACKUP_TIMESTAMP, 'DESC')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $items = [];
         foreach ($models as $item) {
@@ -318,12 +320,13 @@ class ModuleBackupService
     {
         /** @var ModuleBackup $backupModel */
         $backupModel = ObjectManager::getInstance(ModuleBackup::class);
+        // 下方 setStatus()->save()，必须对象化。
         $items       = $backupModel
             ->where(ModuleBackup::schema_fields_MODULE_NAME, $moduleName)
             ->where(ModuleBackup::schema_fields_BACKUP_TIMESTAMP, $backupTimestamp)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         if (empty($items)) {
             return [
@@ -355,11 +358,12 @@ class ModuleBackupService
             $backupModel->where(ModuleBackup::schema_fields_BACKUP_TIMESTAMP, $backupTimestamp);
         }
 
+        // 返回 ModuleBackup 模型，必须对象化。
         $items = $backupModel
             ->order(ModuleBackup::schema_fields_BACKUP_TIMESTAMP, 'DESC')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         if (empty($items)) {
             return null;

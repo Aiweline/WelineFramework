@@ -33,7 +33,7 @@ class Listing extends BaseCommand
      */
     public function execute(array $args = [], array $data = [])
     {
-        $tasks     = $this->cronTask->select()->fetch()->getItems();
+        $tasks     = $this->cronTask->select()->fetch()->toModels();
         $taskTotal = count($tasks);
         $this->printing->note('定时任务总数：' . $taskTotal);
         $this->printing->setup(mb_str_pad(__('代码'), 35, ' ', STR_PAD_RIGHT, 'UTF-8') . mb_str_pad('名称', 55, ' ', STR_PAD_RIGHT, 'UTF-8') .'说明');

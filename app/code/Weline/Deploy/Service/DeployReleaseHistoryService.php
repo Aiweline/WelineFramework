@@ -440,12 +440,12 @@ class DeployReleaseHistoryService
      */
     private function collectionItems(mixed $collection): array
     {
-        if (!is_object($collection) || !method_exists($collection, 'getItems')) {
+        if (!is_object($collection) || !method_exists($collection, 'toModels')) {
             return [];
         }
 
         return array_values(array_filter(
-            $collection->getItems(),
+            $collection->toModels(),
             static fn (mixed $item): bool => $item instanceof DeployRelease
         ));
     }

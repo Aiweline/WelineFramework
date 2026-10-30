@@ -153,7 +153,8 @@ final class FileAssetReferenceIndexer
             if ($this->supportsForUpdate()) {
                 $query->additional('FOR UPDATE');
             }
-            $rows = $query->select()->fetch()->getItems();
+            // 逐行 instanceof FileAsset + 模型方法，必须对象化。
+            $rows = $query->select()->fetch()->toModels();
             $loaded = [];
             foreach ($rows as $asset) {
                 if (!$asset instanceof FileAsset) {

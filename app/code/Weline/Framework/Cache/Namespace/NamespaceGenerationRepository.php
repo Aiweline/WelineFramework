@@ -58,6 +58,51 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
     }
 
     /**
+     * Process-level ancestor cache: canonical namespace list => expanded
+     * ancestors + memo key. expandAncestors() re-validates every namespace and
+     * re-splits its segments on every call (measured 4.2-5.6us), and the SAME
+     * handful of namespace lists (content scope, storefront theme, phrase
+     * dictionary) is resolved dozens of times per render. The expansion is a
+     * pure function of the input list, so it is safe to keep across requests in
+     * one worker; an empty result is never cached (so a transient failure is
+     * retried instead of being pinned).
+     *
+     * @var array<string, array{ancestors: list<string>, memo: string}>|null
+     */
+    private static ?array $ancestorCache = null;
+
+    private const ANCESTOR_CACHE_MAX = 128;
+
+    /**
+     * @param list<string> $namespaces
+     * @return array{ancestors: list<string>, memo: string}
+     */
+    private function ancestorExpansion(array $namespaces): array
+    {
+        $cacheKey = \implode("\0", $namespaces);
+        self::$ancestorCache ??= [];
+        if (isset(self::$ancestorCache[$cacheKey])) {
+            return self::$ancestorCache[$cacheKey];
+        }
+
+        $ancestors = $this->path->expandAncestors($namespaces);
+        $sorted = $ancestors;
+        \sort($sorted, SORT_STRING);
+        $entry = [
+            'ancestors' => $ancestors,
+            // Fingerprint hash is memoised too: the resolution below is on the
+            // hot path of every cache read.
+            'memo' => 'framework.cache.namespace.vector.v1.'
+                . \substr(\hash('sha256', \implode("\0", $sorted)), 0, 32),
+        ];
+        if ($ancestors !== [] && \count(self::$ancestorCache) < self::ANCESTOR_CACHE_MAX) {
+            self::$ancestorCache[$cacheKey] = $entry;
+        }
+
+        return $entry;
+    }
+
+    /**
      * Resolve every unique ancestor in one first-access batch query.
      *
      * Request memo: the same namespace vector (e.g. storefront theme + phrase +
@@ -72,8 +117,9 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
      */
     public function resolveVector(array $namespaces): array
     {
-        $ancestors = $this->path->expandAncestors($namespaces);
-        $memoKey = self::requestVectorMemoKey($ancestors);
+        $expansion = $this->ancestorExpansion($namespaces);
+        $ancestors = $expansion['ancestors'];
+        $memoKey = $expansion['memo'] . '.g' . self::requestVectorMemoGeneration();
         if (RequestContext::sharedHas($memoKey)) {
             /** @var array{authority_clock:int,generations:array<string,int>} $cached */
             $cached = RequestContext::sharedGet($memoKey);

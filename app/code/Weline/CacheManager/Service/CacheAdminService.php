@@ -277,7 +277,7 @@ final class CacheAdminService
         try {
             /** @var CacheRecord $cacheModel */
             $cacheModel = ObjectManager::make(CacheRecord::class);
-            $items = $cacheModel->select()->fetch()->getItems();
+            $items = $cacheModel->select()->fetch()->toModels();
 
             foreach ($items as $item) {
                 if (!$item instanceof CacheRecord) {

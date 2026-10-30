@@ -84,8 +84,7 @@ class Integration extends BackendController
             ->order(ApiUser::schema_fields_ID, 'DESC')
             ->pagination(1, 5)
             ->select()
-            ->fetch()
-            ->getItems() ?? [];
+            ->fetchArray();
 
         return array_map(static function ($item) {
             $data = is_object($item) ? $item->getData() : (array)$item;

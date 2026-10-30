@@ -161,8 +161,9 @@ class SyncHost extends Model
     public function getMappings(): array
     {
         $mappingModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Async\Model\SyncMapping::class);
+        // 契约 @return SyncMapping[]，必须对象化。
         return $mappingModel->where(\Weline\Async\Model\SyncMapping::schema_fields_HOST_ID, $this->getId())
             ->fetch()
-            ->getItems();
+            ->toModels();
     }
 }

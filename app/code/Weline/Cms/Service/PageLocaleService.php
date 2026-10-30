@@ -154,13 +154,14 @@ class PageLocaleService
         }
 
         $store = $this->resolveStore($page, $storeId);
+        // 下方 instanceof PageLocale + getLocaleCode()，必须对象化。
         $items = (clone $this->localeModel())->clearData()->reset()
             ->where(\Weline\Cms\Model\PageLocale::schema_fields_PAGE_ID, $page->getPageId())
             ->where(\Weline\Cms\Model\PageLocale::schema_fields_STORE_ID, $store->id)
             ->limit(self::MAX_SUPPORTED_LOCALES + 1)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         if (count($items) > self::MAX_SUPPORTED_LOCALES) {
             throw new \RuntimeException((string)__('CMS 页面语言变体数量超过上限。'));
         }

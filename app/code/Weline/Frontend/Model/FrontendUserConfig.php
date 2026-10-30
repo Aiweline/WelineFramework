@@ -117,13 +117,12 @@ class FrontendUserConfig extends Model
         $configs = $this->clear()
             ->where(self::schema_fields_USER_ID, $userId)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         
         $result = [];
         foreach ($configs as $config) {
-            $key = $config->getData(self::schema_fields_CONFIG_KEY);
-            $value = $config->getData(self::schema_fields_CONFIG_VALUE);
+            $key = $config[self::schema_fields_CONFIG_KEY] ?? '';
+            $value = $config[self::schema_fields_CONFIG_VALUE] ?? null;
             $result[$key] = $value;
         }
         

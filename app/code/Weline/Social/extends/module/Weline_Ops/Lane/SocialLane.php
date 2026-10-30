@@ -62,12 +62,12 @@ final class SocialLane implements OpsLaneContributionInterface
             if (class_exists(\Weline\Social\Model\SocialWebsiteAccount::class)) {
                 /** @var \Weline\Social\Model\SocialWebsiteAccount $model */
                 $model = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Social\Model\SocialWebsiteAccount::class);
+                // 只判空，取数组即可。
                 $items = $model->clear()
                     ->where('website_id', max(0, $websiteId))
                     ->select()
-                    ->fetch()
-                    ->getItems();
-                $connected = is_countable($items) && count($items) > 0;
+                    ->fetchArray();
+                $connected = \count($items) > 0;
                 $summary = $connected
                     ? (string)__('已有站点社媒绑定')
                     : (string)__('请到社媒模块完成账户绑定');

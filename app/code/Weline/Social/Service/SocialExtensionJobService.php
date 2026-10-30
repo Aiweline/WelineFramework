@@ -208,7 +208,8 @@ class SocialExtensionJobService
             ->select()
             ->fetch();
 
-        $items = \is_object($rows) && \method_exists($rows, 'getItems') ? $rows->getItems() : $rows;
+        // 返回 SocialExtensionJob 对象，必须对象化。
+        $items = \is_object($rows) && \method_exists($rows, 'toModels') ? $rows->toModels() : $rows;
         if (!\is_array($items)) {
             return null;
         }
@@ -243,7 +244,8 @@ class SocialExtensionJobService
             ->select()
             ->fetch();
 
-        $items = \is_object($rows) && \method_exists($rows, 'getItems') ? $rows->getItems() : $rows;
+        // toArray() 的对象分支带类型转换，保留对象口径。
+        $items = \is_object($rows) && \method_exists($rows, 'toModels') ? $rows->toModels() : $rows;
         if (!\is_array($items)) {
             return [];
         }
@@ -324,7 +326,7 @@ class SocialExtensionJobService
                     ->limit(1)
                     ->select()
                     ->fetch();
-                $items = \is_object($rows) && \method_exists($rows, 'getItems') ? $rows->getItems() : $rows;
+                $items = \is_object($rows) && \method_exists($rows, 'toModels') ? $rows->toModels() : $rows;
                 $item = \is_array($items) ? ($items[0] ?? null) : null;
                 $data = $this->toArray($item);
                 if ($data === null) {
@@ -591,7 +593,7 @@ class SocialExtensionJobService
                 ->where(SocialExtensionJob::schema_fields_CREATED_AT, $cutoff, '<')
                 ->select()
                 ->fetch();
-            $items = \is_object($rows) && \method_exists($rows, 'getItems') ? $rows->getItems() : $rows;
+            $items = \is_object($rows) && \method_exists($rows, 'toModels') ? $rows->toModels() : $rows;
             if (!\is_array($items)) {
                 return 0;
             }
@@ -636,7 +638,7 @@ class SocialExtensionJobService
             ], 'IN')
             ->select()
             ->fetch();
-        $items = \is_object($rows) && \method_exists($rows, 'getItems') ? $rows->getItems() : $rows;
+        $items = \is_object($rows) && \method_exists($rows, 'toModels') ? $rows->toModels() : $rows;
         if (!\is_array($items)) {
             return [];
         }

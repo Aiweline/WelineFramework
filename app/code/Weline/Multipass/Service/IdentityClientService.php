@@ -48,15 +48,14 @@ class IdentityClientService
 
     public function listProviders(int $limit = 50): array
     {
-        $items = $this->newProviderModel()
+        // 调用方模板用 $provider->getData()，必须对象化。
+        return $this->newProviderModel()
             ->order(IdentityProvider::schema_fields_SORT_ORDER, 'ASC')
             ->order(IdentityProvider::schema_fields_ID, 'DESC')
             ->pagination(1, $limit)
             ->select()
             ->fetch()
-            ->getItems() ?? [];
-
-        return is_array($items) ? $items : [];
+            ->toModels();
     }
 
     public function saveProvider(array $data): IdentityProvider

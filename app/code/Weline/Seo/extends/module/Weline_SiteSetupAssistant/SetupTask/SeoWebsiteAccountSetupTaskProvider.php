@@ -46,7 +46,7 @@ class SeoWebsiteAccountSetupTaskProvider extends AbstractSetupTaskProvider
             if ($websiteId > 0) {
                 $q->where('website_id', $websiteId);
             }
-            $items = $q->select()->fetch()->getItems();
+            $items = $q->select()->fetchArray();
             return is_array($items) && $items !== [];
         } catch (\Throwable) {
             return false;

@@ -47,10 +47,11 @@ class Mapping extends BackendRestController
             $query = $this->syncMapping->clear();
             $query->where(SyncMapping::schema_fields_HOST_ID, $hostId);
             
+            // 下方 getId()/getData()，必须对象化。
             $mappings = $query->order(SyncMapping::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
 
             $data = [];
             foreach ($mappings as $mapping) {

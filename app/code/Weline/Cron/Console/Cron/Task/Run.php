@@ -1266,7 +1266,7 @@ class Run implements CommandInterface
             ->order(CronTask::schema_fields_ID, 'asc')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
     }
 
     private function flushCronCliStreams(): void

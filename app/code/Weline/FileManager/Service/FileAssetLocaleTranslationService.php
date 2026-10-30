@@ -52,7 +52,8 @@ class FileAssetLocaleTranslationService implements FileAssetLocaleTranslationInt
             ->where(FileAssetLocale::schema_fields_ASSET_ID, $asset->getAssetId())
             ->select()
             ->fetch()
-            ->getItems());
+            // 下方用 instanceof 过滤，必须对象化。
+            ->toModels());
         $out = [];
         foreach ($items as $row) {
             if (!$row instanceof FileAssetLocale) {
@@ -191,7 +192,8 @@ class FileAssetLocaleTranslationService implements FileAssetLocaleTranslationInt
                 ->limit($pageSize, $offset)
                 ->select()
                 ->fetch()
-                ->getItems());
+                // 下方用 instanceof FileAsset 过滤并调用模型方法，必须对象化。
+                ->toModels());
             if ($items === []) {
                 return false;
             }
@@ -256,7 +258,8 @@ class FileAssetLocaleTranslationService implements FileAssetLocaleTranslationInt
                 ->limit($scanPage, $cursor)
                 ->select()
                 ->fetch()
-                ->getItems());
+                // 同上一处：instanceof FileAsset + 模型方法，必须对象化。
+                ->toModels());
             if ($items === []) {
                 $exhausted = true;
                 break;

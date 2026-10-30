@@ -122,7 +122,7 @@ final class SearchProjectionPendingDrainer implements SearchProjectionPendingDra
             ->pagination(1, $limit)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $rows = [];
         foreach ($items as $item) {

@@ -368,11 +368,12 @@ final class ContinuePayBindingService implements ContinuePayBindingInterface
         try {
             /** @var \Weline\Order\Model\OrderItem $item */
             $item = ObjectManager::getInstance(\Weline\Order\Model\OrderItem::class);
+            // 下方 getData() 需要模型对象。
             $rows = $item->clear()
                 ->where(\Weline\Order\Model\OrderItem::schema_fields_ORDER_UUID, $orderUuid)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             $lines = [];
             foreach ($rows as $row) {
                 if (!is_object($row) || !method_exists($row, 'getData')) {
@@ -651,6 +652,7 @@ final class ContinuePayBindingService implements ContinuePayBindingInterface
         try {
             /** @var \Weline\Payment\Model\PaymentTransaction $tx */
             $tx = ObjectManager::getInstance(\Weline\Payment\Model\PaymentTransaction::class);
+            // 只判存在，取数组即可。
             $rows = $tx->clear()
                 ->where(\Weline\Payment\Model\PaymentTransaction::schema_fields_ORDER_ID, $orderUuid)
                 ->where(
@@ -659,10 +661,9 @@ final class ContinuePayBindingService implements ContinuePayBindingInterface
                 )
                 ->limit(1)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
 
-            return is_array($rows) && $rows !== [];
+            return $rows !== [];
         } catch (\Throwable) {
             return false;
         }

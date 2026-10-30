@@ -49,7 +49,7 @@ class Template extends BackendController
             ->order(SmtpMailTemplate::schema_fields_LOCALE, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         /** @var \Weline\I18n\Service\ActiveLocaleCodeProvider $localeProvider */
         $localeProvider = ObjectManager::getInstance(\Weline\I18n\Service\ActiveLocaleCodeProvider::class);

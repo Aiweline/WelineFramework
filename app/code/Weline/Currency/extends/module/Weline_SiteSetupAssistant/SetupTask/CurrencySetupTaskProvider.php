@@ -42,7 +42,8 @@ class CurrencySetupTaskProvider extends AbstractSetupTaskProvider
         try {
             /** @var Currency $model */
             $model = ObjectManager::getInstance(Currency::class);
-            $items = $model->clear()->limit(1)->select()->fetch()->getItems();
+            // 只判「有没有货币」，用数组行即可（fetch()->getItems() 语义同 fetchArray()，此处取更直白的写法）。
+            $items = $model->clear()->limit(1)->select()->fetchArray();
             return is_array($items) && $items !== [];
         } catch (\Throwable) {
             return false;

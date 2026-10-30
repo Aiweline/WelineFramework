@@ -129,7 +129,7 @@ class MailTemplateSetupCoverage
                 ->where(SmtpMailTemplate::schema_fields_STORAGE_SCOPE, $scopes, 'IN')
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             foreach ($rows as $row) {
                 $channel = trim((string)$row->getData(SmtpMailTemplate::schema_fields_CHANNEL_CODE));
                 $locale = trim((string)$row->getData(SmtpMailTemplate::schema_fields_LOCALE));

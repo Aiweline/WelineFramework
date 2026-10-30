@@ -84,7 +84,8 @@ class Start extends CommandAbstract
             $query->where(SyncMapping::schema_fields_HOST_ID, $hostId);
         }
 
-        $mappings = $query->select()->fetch()->getItems();
+        // 下方 getId()，必须对象化。
+        $mappings = $query->select()->fetch()->toModels();
 
         foreach ($mappings as $mapping) {
             $mappingId = $mapping->getId();

@@ -73,7 +73,7 @@ final class Upgrade implements UpgradeInterface
                 ->where(\Weline\Theme\Model\ThemeLayout::schema_fields_WIDGET_CODE, 'best-sellers-hero')
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             foreach ($rows as $row) {
                 if (!\is_object($row) || !\method_exists($row, 'getData')) {
                     continue;

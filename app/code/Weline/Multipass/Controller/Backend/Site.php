@@ -29,11 +29,12 @@ class Site extends BackendController
      */
     public function index()
     {
+        // 模板用 $site->getData()，必须对象化。
         $sites = $this->siteModel->clear()
             ->order('site_id', 'DESC')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         
         $this->assign([
             'sites' => $sites,
@@ -250,12 +251,13 @@ class Site extends BackendController
     public function getList()
     {
         try {
+            // 下方 getId()/getSiteName()/getSiteUrl() 需要模型对象。
             $sites = $this->siteModel->clear()
                 ->where(MultipassSite::schema_fields_IS_ENABLED, 1)
                 ->order(MultipassSite::schema_fields_SITE_NAME, 'ASC')
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             
             $list = [];
             foreach ($sites as $site) {

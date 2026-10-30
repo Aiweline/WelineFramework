@@ -56,12 +56,12 @@ final class Submission extends BackendController
 
         $this->submission->reset();
         $this->applyScopeFilter($scope);
-        $this->submission
+        $rows = $this->submission
             ->order(SubmissionModel::schema_fields_CREATED_AT, 'DESC')
             ->order(SubmissionModel::schema_fields_ID, 'DESC')
             ->pagination()
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $formNames = [];
         foreach ($this->form->reset()->select()->fetchArray() as $form) {
@@ -69,7 +69,7 @@ final class Submission extends BackendController
         }
 
         $items = [];
-        foreach ($this->submission->getItems() as $row) {
+        foreach ($rows as $row) {
             if ($row instanceof SubmissionModel) {
                 $item = $row->getData();
             } elseif (is_array($row)) {
@@ -82,7 +82,7 @@ final class Submission extends BackendController
         }
 
         $this->assign('submissions', $items);
-        $this->markMenuSignalRead($focusId);
+        $this->markMenuSignalRead($focusId, $rows);
         $this->assign('form_names', $formNames);
         $this->assign('pagination', $this->submission->getPagination());
 
@@ -159,7 +159,7 @@ final class Submission extends BackendController
         return $this->jsonResponse(['success' => true, 'items' => $items]);
     }
 
-    private function markMenuSignalRead(int $focusId): void
+    private function markMenuSignalRead(int $focusId, array $rows): void
     {
         $userId = $this->menuSignalActorId();
         if ($userId <= 0) {
@@ -171,7 +171,7 @@ final class Submission extends BackendController
             return;
         }
 
-        foreach ($this->submission->getItems() as $row) {
+        foreach ($rows as $row) {
             $id = is_array($row) ? (int)($row['submission_id'] ?? 0) : (int)$row->getData('submission_id');
             if ($id > 0) {
                 $this->menuSignalPublisher->markRead($id, $userId);

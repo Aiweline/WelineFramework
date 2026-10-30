@@ -140,11 +140,11 @@ final class CartDbStore implements CartStoreInterface
             return [];
         }
         $query = clone $this->model;
-        $query->clear()
+        $rows = $query->clear()
             ->where(Cart::schema_fields_SCOPE_KEY, $scope)
             ->select()
-            ->fetch();
-        $rows = $query->getItems();
+            ->fetch()
+            ->toModels();
         if (!is_array($rows) || $rows === []) {
             return [];
         }
@@ -182,8 +182,7 @@ final class CartDbStore implements CartStoreInterface
         if ($scope !== '') {
             $query->where(Cart::schema_fields_SCOPE_KEY, $scope);
         }
-        $query->select()->fetch();
-        $rows = $query->getItems();
+        $rows = $query->select()->fetch()->toModels();
         if (!is_array($rows) || $rows === []) {
             return [];
         }

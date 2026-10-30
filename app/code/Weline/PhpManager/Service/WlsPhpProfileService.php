@@ -159,7 +159,7 @@ class WlsPhpProfileService
             ->select()
             ->pagination(1, 1)
             ->fetch();
-        $items = $collection->getItems();
+        $items = $collection->toModels();
         $result = $items[0] ?? null;
 
         return $result instanceof WlsPhpProfile ? $result : null;

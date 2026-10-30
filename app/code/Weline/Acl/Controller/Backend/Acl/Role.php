@@ -48,8 +48,9 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
             $aclModelFields = implode(',', $roleModel->getModelFields());
             $roleModel->where('CONCAT(' . $aclModelFields . ')', '%' . $search . '%', 'like');
         }
-        $roleModel->pagination()->select()->fetch();
-        $this->assign('roles', $roleModel->getItems());
+        // 模板用 $value() 兼容数组/对象，取数组行；分页仍在 $roleModel 上。
+        $roles = $roleModel->pagination()->select()->fetchArray();
+        $this->assign('roles', $roles);
         $this->assign('pagination', $roleModel->getPaginationState());
         $this->assign('search', (string)($search ?? ''));
         return $this->fetch('index');
@@ -531,10 +532,15 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
             $roleModel->where(\Weline\Acl\Model\Role::schema_fields_ROLE_NAME, '%' . $keyword . '%', 'like');
         }
         
-        $roleModel->limit($limit)->order(\Weline\Acl\Model\Role::schema_fields_ROLE_NAME, 'ASC')->select()->fetch();
+        // 下方 getId()/getRoleName() 需要模型对象。
+        $roles = $roleModel->limit($limit)
+            ->order(\Weline\Acl\Model\Role::schema_fields_ROLE_NAME, 'ASC')
+            ->select()
+            ->fetch()
+            ->toModels();
         
         $data = [];
-        foreach ($roleModel->getItems() as $role) {
+        foreach ($roles as $role) {
             $data[] = [
                 'value' => (string)$role->getId(),
                 'label' => $role->getRoleName(),

@@ -74,6 +74,14 @@ final class HostLoadSampler
                 return $n;
             }
         }
+        // macOS / 无 /proc 宿主：必须走 sysctl，否则分母退化成 1，
+        // load1/1 再被夹到 1.0，开发机将恒判「满载」而永不预热。
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            $n = (int)\trim((string)@\shell_exec('sysctl -n hw.ncpu 2>/dev/null'));
+            if ($n > 0) {
+                return $n;
+            }
+        }
 
         return 1;
     }

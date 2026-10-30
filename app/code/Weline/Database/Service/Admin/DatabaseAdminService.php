@@ -85,7 +85,7 @@ class DatabaseAdminService
             ->where(ModuleTable::schema_fields_module_name, $module)
             ->select()
             ->fetch()
-            ->getItems() as $row) {
+            ->toModels() as $row) {
             $name = $this->normalizeTableName((string) $row->getName());
             if ($name !== '') {
                 $registered[$name] = true;

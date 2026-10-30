@@ -869,7 +869,8 @@ class PageService
         if (in_array($type, ['mysql', 'mariadb', 'pgsql', 'postgres', 'postgresql'], true)) {
             $page->additional('FOR UPDATE');
         }
-        $items = array_values($page->select()->fetch()->getItems());
+        // 返回 Page 模型（FOR UPDATE 行锁），必须对象化。
+        $items = array_values($page->select()->fetch()->toModels());
         $current = $items[0] ?? null;
         return $current instanceof Page ? $current : null;
     }

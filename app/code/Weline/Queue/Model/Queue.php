@@ -523,11 +523,12 @@ public function getTypeId(): int
     {
         /** @var EavAttribute $attributeModel */
         $attributeModel = ObjectManager::make(EavAttribute::class);
-        $attributeModel->clearData()->clearQuery()
+        // 下方 current_setEntity() 需要模型对象；对 $attributeModel 调 getItems() 恒为空。
+        $attributes = $attributeModel->clearData()->clearQuery()
             ->where(EavAttribute::schema_fields_eav_entity_id, $this->getEavEntityId())
             ->select()
-            ->fetch();
-        $attributes = $attributeModel->getItems();
+            ->fetch()
+            ->toModels();
         foreach ($attributes as $attribute) {
             $attribute->current_setEntity($this);
         }
@@ -638,8 +639,11 @@ public function getTypeId(): int
     {
         /**@var Queue $queue */
         $queue = ObjectManager::make(self::class);
+        // 原先 select() 后直接 getItems() 既漏了 fetch() 又调错对象，恒返回空。
         return $queue->where(self::schema_fields_status, self::status_running)
-            ->select()->getItems();
+            ->select()
+            ->fetch()
+            ->toModels();
     }
     public function validateAttribute(EavAttribute $attribute): bool|string
     {

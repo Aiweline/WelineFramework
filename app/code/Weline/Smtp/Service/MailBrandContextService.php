@@ -670,7 +670,7 @@ class MailBrandContextService
                 ->where(WebsiteLocalDescription::schema_fields_local_code, $locale)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             foreach ($items as $item) {
                 if (!$item instanceof WebsiteLocalDescription) {
                     continue;

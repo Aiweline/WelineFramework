@@ -73,11 +73,12 @@ class ModuleTableHandoverService
      */
     public function handoverAllMapped(string $fromModule, string $toModule, array $logicalTableToModel): array
     {
+        // 下方 instanceof ModuleTable + getName()，必须对象化。
         $items = $this->moduleTableModel->reset()
             ->where(ModuleTable::schema_fields_module_name, trim($fromModule))
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $map = [];
         foreach ($items as $it) {

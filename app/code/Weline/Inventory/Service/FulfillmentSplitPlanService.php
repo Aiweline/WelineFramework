@@ -143,7 +143,7 @@ final class FulfillmentSplitPlanService implements FulfillmentSplitPlanInterface
             ->where(WarehouseQuota::schema_fields_OFFER_ID, $offerId)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         $row = is_array($items) ? ($items[0] ?? null) : null;
         if (!$row instanceof WarehouseQuota) {
             // 无配额行：允许落到授权仓（开发/未 cutover 库存）以免阻塞；有配额则严格比较
@@ -168,7 +168,7 @@ final class FulfillmentSplitPlanService implements FulfillmentSplitPlanInterface
             ->order(WarehouseStoreAuthorization::schema_fields_WAREHOUSE_ID, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         $ids = [];
         if (is_array($items)) {
             foreach ($items as $item) {

@@ -55,11 +55,12 @@ class ModuleDataPackageService
 
         $chunkSize = max(100, (int) Env::get('mdp_chunk_rows', '10000', 'Weline_ModuleManager'));
 
+        // 下方 instanceof ModuleTable，必须对象化。
         $items = $this->moduleTableModel->reset()
             ->where(ModuleTable::schema_fields_module_name, $moduleName)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $packageId = 'mdp_' . preg_replace('/[^a-zA-Z0-9_]/', '_', $moduleName) . '_' . date('Y-m-d_His') . '_' . bin2hex(random_bytes(3));
         $root = $this->getPackagesRoot();

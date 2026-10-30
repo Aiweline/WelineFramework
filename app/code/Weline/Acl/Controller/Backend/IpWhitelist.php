@@ -44,13 +44,10 @@ class IpWhitelist extends BackendController
             }
             
             $query->order(IpWhitelistModel::schema_fields_CREATED_AT, 'DESC');
-            $collection = $query
-                ->pagination($page, $limit)
-                ->select()
-                ->fetch();
-            
-            $items = $collection->getItems();
-            $total = $collection->getTotal();
+            // 行在 fetchArray() 上；getTotal() 仍在 $query 上取。
+            $pagedQuery = $query->pagination($page, $limit)->select();
+            $items = $pagedQuery->fetchArray();
+            $total = (int)$pagedQuery->getTotal();
             $totalPages = (int)ceil($total / $limit);
             
             $this->assign('items', $items);

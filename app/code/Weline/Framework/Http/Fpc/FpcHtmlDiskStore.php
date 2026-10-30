@@ -69,6 +69,23 @@ final class FpcHtmlDiskStore
     /** Query the browser adds so Nginx and WLS select this generation's FPC. */
     public const PAGE_GEN_QUERY = 'w_pg';
 
+    /**
+     * 粗判是否为错误文档（404 / not_found 布局 / 维护页）。
+     * 只看文档头尾片段，避免整页扫描。
+     */
+    private static function looksLikeErrorDocument(string $html): bool
+    {
+        $head = \substr($html, 0, 4096);
+        if (\str_contains($head, 'data-layout="not_found"')
+            || \str_contains($head, 'data-page-type="not_found"')
+            || \str_contains($head, 'X-Weline-Error-Page')
+        ) {
+            return true;
+        }
+        // 维护页是另一条权威（pub/errors/maintenance），同样不进 FPC。
+        return \str_contains($head, 'data-weline-maintenance="1"');
+    }
+
     public static function root(): string
     {
         return \rtrim((string)Env::GENERATED_DIR, '\\/') . \DIRECTORY_SEPARATOR . 'html';
@@ -374,6 +391,16 @@ final class FpcHtmlDiskStore
             return false;
         }
         if ($html === '' && $brotli === '') {
+            return false;
+        }
+        // 404 / 错误页绝不能落 FPC：一旦落盘，边缘会把它当成正常叶长期命中，
+        // 即使源站修复了也会一直 404（实测首页被缓存后只能手动清叶才恢复）。
+        // 只有成功文档（200）允许发布；调用方传的是已渲染正文，这里做最后一道闸。
+        if ($html !== '' && self::looksLikeErrorDocument($html)) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[FpcHtmlDiskStore] publish refused: error document (404/not_found layout) for ' . $fullUri);
+            }
+
             return false;
         }
         // 集中修复：烘焙前把裸 /static/ 资产 URL 统一加构建代次（覆盖设计主题硬编码）。

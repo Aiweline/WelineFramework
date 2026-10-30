@@ -183,7 +183,8 @@ final class CustomerServiceSettings
 
             /** @var CustomerServiceConfig $legacy */
             $legacy = ObjectManager::getInstance(CustomerServiceConfig::class);
-            $rows = $legacy->reset()->select()->fetch()->getItems();
+            // 只按 key 读取旧表整表，数组行即可。
+            $rows = $legacy->reset()->select()->fetchArray();
             if ($rows === []) {
                 self::$processLegacySettled = true;
 

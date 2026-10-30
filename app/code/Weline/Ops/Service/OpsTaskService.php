@@ -185,11 +185,12 @@ final class OpsTaskService
             $q->where(OpsTask::schema_fields_SESSION_ID, '', '!=');
         }
 
+        // toView() 形参声明为 OpsTask，必须对象化。
         $items = $q->order(OpsTask::schema_fields_TASK_ID, 'DESC')
             ->limit(max(1, min(200, $limit)))
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $out = [];
         foreach ($items as $item) {

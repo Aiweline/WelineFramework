@@ -40,9 +40,9 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
             ->joinModel(UrlManager::class, 'um', 'main_table.url_id = CAST(um.url_id AS VARCHAR(255))', 'left')
             ->pagination()
             ->select()
-            ->fetch();
-        $this->assign('rewrites', $rewrites->getItems());
-        $this->assign('pagination', $rewrites->getPagination());
+            ->fetchArray();
+        $this->assign('rewrites', $rewrites);
+        $this->assign('pagination', $urlRewriteModel->getPagination());
         $this->assign('current_website_id', $websiteIdFilter ?? '');
         return $this->fetch();
     }

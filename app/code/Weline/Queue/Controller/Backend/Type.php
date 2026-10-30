@@ -36,8 +36,9 @@ class Type extends \Weline\Framework\App\Controller\BackendController
         if ($search !== '') {
             $this->type->where('concat(name,type_id)', "%$search%", 'LIKE');
         }
-        $this->type->pagination()->select()->fetch();
-        $this->assign('types', $this->type->getItems());
+        // 模板按数组键取值；对 $this->type 调 getItems() 恒为空。
+        $types = $this->type->pagination()->select()->fetchArray();
+        $this->assign('types', $types);
         $this->assign('pagination', $this->type->getPaginationState());
         $this->assign('q', $search);
         return $this->fetch();

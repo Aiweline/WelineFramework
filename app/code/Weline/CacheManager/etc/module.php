@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_CacheManager',
-    "version" => '1.2.1',
+    "version" => '1.2.2',
     "requires" => [
         'Weline_Admin' => '*',
     ],

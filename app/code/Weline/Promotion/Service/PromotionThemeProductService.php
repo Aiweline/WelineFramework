@@ -47,15 +47,17 @@ final class PromotionThemeProductService
         }
 
         $collection = clone $this->binding;
-        $collection->clear()
+        // 下方 getData()，必须对象化。
+        $rows = $collection->clear()
             ->where(PromotionActivityThemeProduct::schema_fields_THEME_ID, $themeId)
             ->order(PromotionActivityThemeProduct::schema_fields_SORT_ORDER, 'ASC')
             ->order(PromotionActivityThemeProduct::schema_fields_ID, 'ASC')
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
         $bindings = [];
-        foreach ($collection->getItems() as $item) {
+        foreach ($rows as $item) {
             $productId = (int)$item->getData(PromotionActivityThemeProduct::schema_fields_PRODUCT_ID);
             if ($productId <= 0) {
                 continue;
@@ -406,11 +408,13 @@ final class PromotionThemeProductService
 
         $pickMode = $this->normalizePickMode($pickMode);
         $collection = clone $this->binding;
-        $collection->clear()
+        // 下方 delete()，必须对象化。
+        $rows = $collection->clear()
             ->where(PromotionActivityThemeProduct::schema_fields_THEME_ID, $themeId)
             ->select()
-            ->fetch();
-        foreach ($collection->getItems() as $item) {
+            ->fetch()
+            ->toModels();
+        foreach ($rows as $item) {
             $item->delete();
         }
 
@@ -868,15 +872,17 @@ final class PromotionThemeProductService
         $websiteId = max(0, (int)($scope['website_id'] ?? 0));
         $theme = ObjectManager::getInstance(PromotionActivityTheme::class);
         $collection = clone $theme;
-        $collection->clear()
+        // 下方 getId()/getData()，必须对象化。
+        $rows = $collection->clear()
             ->where(PromotionActivityTheme::schema_fields_STATUS, PromotionActivityTheme::STATUS_ACTIVE)
             ->where(PromotionActivityTheme::schema_fields_WEBSITE_ID, $websiteId)
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
         /** @var array<int, list<array{theme_id:int,page_slug:string,label:string}>> $byProduct */
         $byProduct = [];
-        foreach ($collection->getItems() as $item) {
+        foreach ($rows as $item) {
             $themeId = (int)$item->getId();
             if ($themeId <= 0 || $themeId === $excludeThemeId) {
                 continue;

@@ -266,7 +266,7 @@ class Collect implements CommandInterface
     private function removeStaleTaskRecords(array $collectedClasses): int
     {
         $model = clone $this->cronTask;
-        $rows = $model->clearQuery()->select()->fetch()->getItems();
+        $rows = $model->clearQuery()->select()->fetch()->toModels();
         if ($rows === []) {
             return 0;
         }

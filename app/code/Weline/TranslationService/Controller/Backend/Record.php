@@ -87,17 +87,16 @@ class Record extends \Weline\Framework\App\Controller\BackendPageController
         // 获取总数
         $total = $query->count();
         
-        // 获取分页数据（fetch 后用 getItems 取模型对象，避免模板对数组行调用 getId/getData）
-        $query->clear()
+        // 获取分页数据（fetch()->toModels() 取模型对象，模板需要 getId/getData）
+        $records = $query->clear()
             ->order(TranslationRecord::schema_fields_CREATED_AT, 'DESC')
             ->limit($pageSize, ($page - 1) * $pageSize)
             ->select()
-            ->fetch();
-        $records = $this->recordModel->getItems();
+            ->fetch()
+            ->toModels();
         
         // 获取所有渠道（用于筛选）
-        $this->providerModel->clear()->select()->fetch();
-        $providers = $this->providerModel->getItems();
+        $providers = $this->providerModel->clear()->select()->fetch()->toModels();
         
         // 获取统计信息
         $stats = $this->getStatistics();
@@ -283,8 +282,7 @@ class Record extends \Weline\Framework\App\Controller\BackendPageController
         
         // 按渠道统计
         $providerStats = [];
-        $this->providerModel->clear()->select()->fetch();
-        $providers = $this->providerModel->getItems();
+        $providers = $this->providerModel->clear()->select()->fetch()->toModels();
         foreach ($providers as $provider) {
             $providerId = $provider->getId();
             $providerStats[$provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE)] = [

@@ -50,11 +50,12 @@ final class OpsRunLogService
         if ($kind !== '') {
             $q->where(OpsRunLog::schema_fields_KIND, $kind);
         }
+        // 下方 instanceof OpsRunLog + getData()/getId()，必须对象化。
         $items = $q->order(OpsRunLog::schema_fields_RUN_ID, 'DESC')
             ->limit(max(1, min(100, $limit)))
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         $out = [];
         foreach ($items as $item) {
             if (!$item instanceof OpsRunLog) {

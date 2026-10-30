@@ -23,13 +23,13 @@ class DownloadHistory extends BackendController
         /** @var AppStoreDownloadLog $logModel */
         $logModel = ObjectManager::getInstance(AppStoreDownloadLog::class);
 
-        $logModel->reset()
+        $logs = $logModel->reset()
             ->order('download_at', 'DESC')
             ->limit(50)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
-        $this->assign('logs', $logModel->getItems());
+        $this->assign('logs', $logs);
         $this->assign('page_title', __('下载历史'));
 
         return $this->fetch();

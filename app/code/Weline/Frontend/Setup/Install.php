@@ -26,7 +26,7 @@ class Install implements InstallInterface
     {
         /** @var FrontendUser $user */
         $user = ObjectManager::getInstance(FrontendUser::class);
-        $items = $user->clear()->select()->fetch()->getItems();
+        $items = $user->clear()->select()->fetchArray();
         if ($items !== []) {
             return;
         }

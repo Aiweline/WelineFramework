@@ -34,10 +34,15 @@ final class Session extends BackendController
             if ($checkoutEntry !== '') {
                 $session->where(CheckoutSession::schema_fields_CHECKOUT_ENTRY, $checkoutEntry);
             }
-            $session->pagination()->order(CheckoutSession::schema_fields_CREATED_AT, 'DESC')->select()->fetch();
+            // 行在 fetch()->toModels() 上；对 $session 调 getItems() 恒为空。
+            $sessionRows = $session->pagination()
+                ->order(CheckoutSession::schema_fields_CREATED_AT, 'DESC')
+                ->select()
+                ->fetch()
+                ->toModels();
             $presenter = ObjectManager::getInstance(CheckoutSessionAdminPresenter::class);
             $rows = [];
-            foreach ($session->getItems() as $item) {
+            foreach ($sessionRows as $item) {
                 if ($item instanceof CheckoutSession && $presenter instanceof CheckoutSessionAdminPresenter) {
                     $rows[] = $presenter->present($item);
                 }
@@ -72,11 +77,16 @@ final class Session extends BackendController
         try {
             /** @var CheckoutSession $session */
             $session = ObjectManager::getInstance(CheckoutSession::class);
-            $session->pagination()->order(CheckoutSession::schema_fields_CREATED_AT, 'DESC')->select()->fetch();
+            // 行在 fetch()->toModels() 上；对 $session 调 getItems() 恒为空。
+            $sessionRows = $session->pagination()
+                ->order(CheckoutSession::schema_fields_CREATED_AT, 'DESC')
+                ->select()
+                ->fetch()
+                ->toModels();
             $seenTokens = [];
             $recentRows = [];
             $now = time();
-            foreach ($session->getItems() as $item) {
+            foreach ($sessionRows as $item) {
                 if (!$item instanceof CheckoutSession || !$presenter instanceof CheckoutSessionAdminPresenter) {
                     continue;
                 }

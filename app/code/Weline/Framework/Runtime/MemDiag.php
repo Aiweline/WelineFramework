@@ -350,7 +350,6 @@ final class MemDiag
         }
         foreach ([
             [\Weline\Framework\Phrase\Parser::class, 'workerLayeredWordsCache', 'phrase_layered'],
-            [\Weline\Framework\Phrase\Parser::class, 'workerMaterializedWordsCache', 'phrase_materialized'],
             [\Weline\Framework\Phrase\Parser::class, 'workerTranslatedWordsCache', 'phrase_translated'],
             [\Weline\Framework\Phrase\Parser::class, 'workerModuleWordsCache', 'phrase_module'],
         ] as [$class, $prop, $key]) {

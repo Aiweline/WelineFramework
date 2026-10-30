@@ -74,16 +74,14 @@ class Console extends BackendController
                 ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_ACTIVE)
                 ->order(ChatSession::schema_fields_UPDATED_AT, 'DESC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
 
             // 获取等待分配的会话
             $waitingSessions = $session->reset()
                 ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_WAITING)
                 ->order(ChatSession::schema_fields_CREATED_AT, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             $waitingSessions = $this->chatService->normalizeSessionRows($waitingSessions);
             $waitingSessions = $this->chatService->enrichConsoleSessionRows($waitingSessions);
 
@@ -145,16 +143,14 @@ class Console extends BackendController
                 ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_ACTIVE)
                 ->order(ChatSession::schema_fields_UPDATED_AT, 'DESC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
 
             // 获取等待分配的会话
             $waitingSessions = $session->reset()
                 ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_WAITING)
                 ->order(ChatSession::schema_fields_CREATED_AT, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             $waitingSessions = $this->chatService->normalizeSessionRows($waitingSessions);
             $waitingSessions = $this->chatService->enrichConsoleSessionRows($waitingSessions);
 
@@ -514,8 +510,7 @@ class Console extends BackendController
             $agents = $agentModel->reset()
                 ->where(ServiceAgent::schema_fields_IS_ACTIVE, 1)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
 
             $result = [];
             foreach ($agents as $a) {
@@ -580,11 +575,10 @@ class Console extends BackendController
                 ->order(AgentPhrase::schema_fields_SORT, 'ASC')
                 ->order(AgentPhrase::schema_fields_ID, 'DESC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             $list = [];
             $usedCategories = [];
-            foreach (is_array($rows) ? $rows : [] as $row) {
+            foreach ($rows as $row) {
                 $data = is_array($row) ? $row : $row->getData();
                 $category = trim((string)($data[AgentPhrase::schema_fields_CATEGORY] ?? ''));
                 if ($category !== '') {
@@ -742,9 +736,8 @@ class Console extends BackendController
                 ->where(AgentPhrase::schema_fields_AGENT_ID, $agentId)
                 ->where(AgentPhrase::schema_fields_CATEGORY, $name)
                 ->select()
-                ->fetch()
-                ->getItems();
-            if (is_array($used) && count($used) > 0) {
+                ->fetchArray();
+            if (\count($used) > 0) {
                 return $this->jsonResponse(false, __('该分类下还有话术，请先移出或删除'));
             }
             /** @var AgentPhraseCategory $catModel */
@@ -778,10 +771,9 @@ class Console extends BackendController
                 ->order(AgentPhraseCategory::schema_fields_SORT, 'ASC')
                 ->order(AgentPhraseCategory::schema_fields_ID, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             $names = [];
-            foreach (is_array($rows) ? $rows : [] as $row) {
+            foreach ($rows as $row) {
                 $data = is_array($row) ? $row : $row->getData();
                 $name = trim((string)($data[AgentPhraseCategory::schema_fields_NAME] ?? ''));
                 if ($name !== '' && !in_array($name, $names, true)) {

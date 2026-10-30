@@ -37,7 +37,8 @@ class Host extends BackendRestController
             ->order(SyncHost::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetch()
-            ->getItems();
+            // 下方 getId()/getData()，必须对象化。
+            ->toModels();
 
         $data = [];
         foreach ($hosts as $host) {

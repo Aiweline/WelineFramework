@@ -61,7 +61,8 @@ class Group extends \Weline\Framework\App\Controller\BackendController
                 'like'
             );
         }
-        $groups = $this->group->pagination()->select()->fetch()->getItems();
+        // 行取数组（getItems() 也是数组行）；分页仍在 $this->group 上取。
+        $groups = $this->group->pagination()->select()->fetchArray();
         $this->assign('groups', $groups);
         $this->assign('search', $search);
         $this->assign('columns', $this->group->columns());

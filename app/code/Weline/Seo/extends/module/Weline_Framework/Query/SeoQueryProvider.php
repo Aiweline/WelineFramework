@@ -155,11 +155,12 @@ final class SeoQueryProvider implements QueryProviderInterface
         }
         $page = $this->page($params);
         $pageSize = $this->pageSize($params);
-        $model->order(SeoOptimizationRun::schema_fields_ID, 'DESC')
+        $rows = $model->order(SeoOptimizationRun::schema_fields_ID, 'DESC')
             ->limit($pageSize + 1, ($page - 1) * $pageSize)
-            ->select()->fetch();
+            ->select()
+            ->fetchArray();
 
-        return $this->paginator->page($this->items($model->getItems()), $page, $pageSize);
+        return $this->paginator->page($this->items($rows), $page, $pageSize);
     }
 
     /** @param array<string,mixed> $params @return array<string,mixed> */
@@ -288,11 +289,12 @@ final class SeoQueryProvider implements QueryProviderInterface
         }
         $page = $this->page($params);
         $pageSize = $this->pageSize($params);
-        $model->order(SeoOptimizationExperiment::schema_fields_ID, 'DESC')
+        $rows = $model->order(SeoOptimizationExperiment::schema_fields_ID, 'DESC')
             ->limit($pageSize + 1, ($page - 1) * $pageSize)
-            ->select()->fetch();
+            ->select()
+            ->fetchArray();
 
-        return $this->paginator->page($this->items($model->getItems()), $page, $pageSize);
+        return $this->paginator->page($this->items($rows), $page, $pageSize);
     }
 
     /** @param array<string,mixed> $params */
