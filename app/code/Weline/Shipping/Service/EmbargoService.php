@@ -266,25 +266,21 @@ final class EmbargoService
                             ->where(EmbargoRegion::schema_fields_SCOPE_ID, (int)$id)
                             ->where(EmbargoRegion::schema_fields_IS_ACTIVE, 1)
                             ->select()
-                            ->fetch()
-                            ->getItems();
+                            ->fetchArray();
                     } catch (\Throwable) {
                         return [];
                     }
                     foreach ($items as $item) {
-                        if (!$item instanceof EmbargoRegion) {
-                            continue;
-                        }
                         $rows[] = [
-                            'embargo_id' => (int)$item->getId(),
-                            'scope_type' => (string)$item->getData(EmbargoRegion::schema_fields_SCOPE_TYPE),
-                            'scope_id' => (int)$item->getData(EmbargoRegion::schema_fields_SCOPE_ID),
-                            'region_type' => (string)$item->getData(EmbargoRegion::schema_fields_REGION_TYPE),
-                            'country_code' => (string)$item->getData(EmbargoRegion::schema_fields_COUNTRY_CODE),
-                            'region_id' => (int)$item->getData(EmbargoRegion::schema_fields_REGION_ID),
-                            'region_code' => (string)$item->getData(EmbargoRegion::schema_fields_REGION_CODE),
-                            'street_id' => (int)$item->getData(EmbargoRegion::schema_fields_STREET_ID),
-                            'reason_code' => (string)$item->getData(EmbargoRegion::schema_fields_REASON_CODE),
+                            'embargo_id' => (int)($item[EmbargoRegion::schema_fields_ID] ?? 0),
+                            'scope_type' => (string)($item[EmbargoRegion::schema_fields_SCOPE_TYPE] ?? ''),
+                            'scope_id' => (int)($item[EmbargoRegion::schema_fields_SCOPE_ID] ?? 0),
+                            'region_type' => (string)($item[EmbargoRegion::schema_fields_REGION_TYPE] ?? ''),
+                            'country_code' => (string)($item[EmbargoRegion::schema_fields_COUNTRY_CODE] ?? ''),
+                            'region_id' => (int)($item[EmbargoRegion::schema_fields_REGION_ID] ?? 0),
+                            'region_code' => (string)($item[EmbargoRegion::schema_fields_REGION_CODE] ?? ''),
+                            'street_id' => (int)($item[EmbargoRegion::schema_fields_STREET_ID] ?? 0),
+                            'reason_code' => (string)($item[EmbargoRegion::schema_fields_REASON_CODE] ?? ''),
                         ];
                     }
                 }

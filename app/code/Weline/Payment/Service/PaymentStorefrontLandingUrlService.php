@@ -245,18 +245,19 @@ class PaymentStorefrontLandingUrlService
             // query-builder edge cases on residual WHERE from shared model instances.
             $rows = [];
             if ($websiteId >= 0) {
+                // 行在 fetch()->toModels() 上；对 $domain 调 getItems() 恒为空，且下方要 getData()。
                 $rows = $domain->clear()
                     ->where(\Weline\Websites\Model\WebsiteDomain::schema_fields_WEBSITE_ID, $websiteId)
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
             }
             if ($rows === []) {
                 $rows = $domain->clear()
                     ->where(\Weline\Websites\Model\WebsiteDomain::schema_fields_DOMAIN, $hostName)
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
             }
 
             $uriPath = '/';

@@ -314,17 +314,18 @@ class RegionLocalNameResolver
     {
         /** @var Region $model */
         $model = $this->objectManager->getInstance(Region::class);
+        // 名称解析只读，取数组行。
         $items = $model->reset()
             ->where(Region::schema_fields_ID, $ids, 'IN')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $out = [];
         foreach ($items as $item) {
-            if (!$item instanceof Region || !(int)$item->getId()) {
+            $regionId = (int)($item[Region::schema_fields_ID] ?? 0);
+            if ($regionId <= 0) {
                 continue;
             }
-            $out[(int)$item->getId()] = trim((string)$item->getData(Region::schema_fields_REGION_NAME));
+            $out[$regionId] = trim((string)($item[Region::schema_fields_REGION_NAME] ?? ''));
         }
 
         return $out;
@@ -343,19 +344,15 @@ class RegionLocalNameResolver
                 ->where(RegionLocalDescription::schema_fields_ID, $ids, 'IN')
                 ->where(RegionLocalDescription::schema_fields_local_code, $locale)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
         } catch (\Throwable) {
             return [];
         }
 
         $out = [];
         foreach ($items as $item) {
-            if (!$item instanceof RegionLocalDescription) {
-                continue;
-            }
-            $id = (int)$item->getData(RegionLocalDescription::schema_fields_ID);
-            $name = trim((string)$item->getData(RegionLocalDescription::schema_fields_REGION_NAME));
+            $id = (int)($item[RegionLocalDescription::schema_fields_ID] ?? 0);
+            $name = trim((string)($item[RegionLocalDescription::schema_fields_REGION_NAME] ?? ''));
             if ($id > 0 && $name !== '') {
                 $out[$id] = $name;
             }
@@ -375,14 +372,14 @@ class RegionLocalNameResolver
         $items = $model->reset()
             ->where(Street::schema_fields_ID, $ids, 'IN')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $out = [];
         foreach ($items as $item) {
-            if (!$item instanceof Street || !(int)$item->getId()) {
+            $streetId = (int)($item[Street::schema_fields_ID] ?? 0);
+            if ($streetId <= 0) {
                 continue;
             }
-            $out[(int)$item->getId()] = trim((string)$item->getData(Street::schema_fields_STREET_NAME));
+            $out[$streetId] = trim((string)($item[Street::schema_fields_STREET_NAME] ?? ''));
         }
 
         return $out;
@@ -401,19 +398,15 @@ class RegionLocalNameResolver
                 ->where(StreetLocalDescription::schema_fields_ID, $ids, 'IN')
                 ->where(StreetLocalDescription::schema_fields_local_code, $locale)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
         } catch (\Throwable) {
             return [];
         }
 
         $out = [];
         foreach ($items as $item) {
-            if (!$item instanceof StreetLocalDescription) {
-                continue;
-            }
-            $id = (int)$item->getData(StreetLocalDescription::schema_fields_ID);
-            $name = trim((string)$item->getData(StreetLocalDescription::schema_fields_STREET_NAME));
+            $id = (int)($item[StreetLocalDescription::schema_fields_ID] ?? 0);
+            $name = trim((string)($item[StreetLocalDescription::schema_fields_STREET_NAME] ?? ''));
             if ($id > 0 && $name !== '') {
                 $out[$id] = $name;
             }
@@ -433,14 +426,14 @@ class RegionLocalNameResolver
         $items = $model->reset()
             ->where(PostalPlace::schema_fields_ID, $ids, 'IN')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $out = [];
         foreach ($items as $item) {
-            if (!$item instanceof PostalPlace || !(int)$item->getId()) {
+            $placeId = (int)($item[PostalPlace::schema_fields_ID] ?? 0);
+            if ($placeId <= 0) {
                 continue;
             }
-            $out[(int)$item->getId()] = trim((string)$item->getData(PostalPlace::schema_fields_PLACE_NAME));
+            $out[$placeId] = trim((string)($item[PostalPlace::schema_fields_PLACE_NAME] ?? ''));
         }
 
         return $out;
@@ -459,19 +452,15 @@ class RegionLocalNameResolver
                 ->where(PostalPlaceLocalDescription::schema_fields_ID, $ids, 'IN')
                 ->where(PostalPlaceLocalDescription::schema_fields_local_code, $locale)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
         } catch (\Throwable) {
             return [];
         }
 
         $out = [];
         foreach ($items as $item) {
-            if (!$item instanceof PostalPlaceLocalDescription) {
-                continue;
-            }
-            $id = (int)$item->getData(PostalPlaceLocalDescription::schema_fields_ID);
-            $name = trim((string)$item->getData(PostalPlaceLocalDescription::schema_fields_PLACE_NAME));
+            $id = (int)($item[PostalPlaceLocalDescription::schema_fields_ID] ?? 0);
+            $name = trim((string)($item[PostalPlaceLocalDescription::schema_fields_PLACE_NAME] ?? ''));
             if ($id > 0 && $name !== '') {
                 $out[$id] = $name;
             }

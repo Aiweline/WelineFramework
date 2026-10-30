@@ -93,8 +93,9 @@ final class ReturnShippingQuoteService
                 ->where(RateTemplate::schema_fields_IS_ACTIVE, 1)
                 ->select()
                 ->fetch()
-                ->getItems();
-            $row = is_array($items) ? ($items[0] ?? null) : null;
+                // 返回模型对象给调用方，保留对象。
+                ->toModels();
+            $row = $items[0] ?? null;
             if ($row instanceof RateTemplate && (int)$row->getId() > 0) {
                 return $row;
             }

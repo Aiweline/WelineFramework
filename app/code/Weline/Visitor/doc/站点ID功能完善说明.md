@@ -91,13 +91,14 @@ $allPixels = Pixel::getUnDeaPixels();
 $websitePixels = Pixel::getUnDeaPixels(1);
 ```
 
-##### `getPixelsByWebsiteId(int $websiteId, array $conditions = []): array`
+##### `getPixelsByWebsiteId(int $websiteId, array $conditions = [], ?int $limit = null, ?int $offset = null): array`
 - 根据站点ID获取像素记录
 - 支持额外的查询条件
 - 灵活的条件格式支持
+- **返回数组行**（每行是关联数组）；需要模型对象时用 `getPixelModelsByWebsiteId()`
 
 ```php
-// 获取指定站点的所有记录
+// 获取指定站点的所有记录（数组行）
 $pixels = Pixel::getPixelsByWebsiteId(1);
 
 // 获取指定站点且未处理的记录
@@ -109,6 +110,23 @@ $pixels = Pixel::getPixelsByWebsiteId(1, [
 $pixels = Pixel::getPixelsByWebsiteId(1, [
     'value' => ['value' => 100, 'operator' => '>=']
 ]);
+
+// 数组行取值
+$totalValue = 0;
+foreach ($pixels as $row) {
+    $totalValue += (float)($row[Pixel::schema_fields_VALUE] ?? 0);
+}
+```
+
+##### `getPixelModelsByWebsiteId(int $websiteId, array $conditions = [], ?int $limit = null, ?int $offset = null): array`
+- 与 `getPixelsByWebsiteId()` 同条件，但显式返回**模型对象列表**
+- 需要逐行调用模型方法（`getPixelId()` / `delete()` 等）时用本方法
+
+```php
+$rows = Pixel::getPixelModelsByWebsiteId(1);
+foreach ($rows as $pixel) {
+    $pixel->delete();
+}
 ```
 
 ##### `getPixelsByWebsiteIdAndEvent(int $websiteId, string $event): array`

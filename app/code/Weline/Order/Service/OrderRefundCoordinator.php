@@ -2278,7 +2278,10 @@ final class OrderRefundCoordinator
      */
     private function modelItems(mixed $collection, string $class): array
     {
-        if (\is_object($collection) && method_exists($collection, 'getItems')) {
+        // 契约 @return T[] 且下方用 instanceof 过滤，必须对象化。
+        if (\is_object($collection) && method_exists($collection, 'toModels')) {
+            $collection = $collection->toModels();
+        } elseif (\is_object($collection) && method_exists($collection, 'getItems')) {
             $collection = $collection->getItems();
         }
         if (!\is_array($collection)) {

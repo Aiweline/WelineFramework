@@ -518,9 +518,8 @@ final class ShippingConfigurationAdminService
         $refs = $serviceProbe->reset()
             ->where(ShippingService::schema_fields_RATE_TEMPLATE_ID, $templateId)
             ->select()
-            ->fetch()
-            ->getItems();
-        if (is_array($refs) && $refs !== []) {
+            ->fetchArray();
+        if ($refs !== []) {
             throw new \RuntimeException((string)__('仍有配送服务引用该费用模板，请先解除绑定后再删除。'));
         }
         $model->delete();

@@ -29,22 +29,18 @@ final class ShippingServiceProfileCatalogProvider implements StorefrontShippingP
             ->order(ShippingProfile::schema_fields_IS_GENERAL, 'DESC')
             ->order(ShippingProfile::schema_fields_ID, 'ASC')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $out = [];
         foreach ($items as $item) {
-            if (!$item instanceof ShippingProfile) {
-                continue;
-            }
-            $code = trim((string)$item->getData(ShippingProfile::schema_fields_PROFILE_CODE));
+            $code = trim((string)($item[ShippingProfile::schema_fields_PROFILE_CODE] ?? ''));
             if ($code === '') {
                 continue;
             }
             $out[] = [
                 'code' => $code,
-                'label' => (string)$item->getData(ShippingProfile::schema_fields_PROFILE_NAME),
+                'label' => (string)($item[ShippingProfile::schema_fields_PROFILE_NAME] ?? ''),
                 'is_free_shipping' => false,
-                'is_general' => (bool)$item->getData(ShippingProfile::schema_fields_IS_GENERAL),
+                'is_general' => (bool)($item[ShippingProfile::schema_fields_IS_GENERAL] ?? false),
             ];
         }
 

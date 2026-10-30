@@ -201,18 +201,9 @@ class PixelChannelLookupService
             $model->where(PixelChannel::schema_fields_WEBSITE_ID, 0);
         }
         $model->order(PixelChannel::schema_fields_PRIORITY, 'ASC')
-            ->order(PixelChannel::schema_fields_WEBSITE_ID, 'DESC')
-            ->select()
-            ->fetch();
-        $items = $model->getItems() ?: [];
-        $rows = [];
-        foreach ($items as $item) {
-            $rows[] = \is_object($item) && \method_exists($item, 'getData')
-                ? (array)$item->getData()
-                : (array)$item;
-        }
+            ->order(PixelChannel::schema_fields_WEBSITE_ID, 'DESC');
 
-        return $rows;
+        return $model->select()->fetchArray();
     }
 
     /**

@@ -38,20 +38,16 @@ final class ShippingSurchargeService
             ->order(ShippingSurchargeRule::schema_fields_PRIORITY, 'DESC')
             ->order(ShippingSurchargeRule::schema_fields_ID, 'ASC')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         $hits = [];
-        foreach (is_array($items) ? $items : [] as $rule) {
-            if (!$rule instanceof ShippingSurchargeRule) {
-                continue;
-            }
-            $ruleCountry = strtoupper(trim((string)$rule->getData(ShippingSurchargeRule::schema_fields_COUNTRY_CODE)));
+        foreach ($items as $rule) {
+            $ruleCountry = strtoupper(trim((string)($rule[ShippingSurchargeRule::schema_fields_COUNTRY_CODE] ?? '')));
             if ($ruleCountry !== '' && $ruleCountry !== $country) {
                 continue;
             }
-            $matchType = (string)$rule->getData(ShippingSurchargeRule::schema_fields_MATCH_TYPE);
-            $matchValue = trim((string)$rule->getData(ShippingSurchargeRule::schema_fields_MATCH_VALUE));
+            $matchType = (string)($rule[ShippingSurchargeRule::schema_fields_MATCH_TYPE] ?? '');
+            $matchValue = trim((string)($rule[ShippingSurchargeRule::schema_fields_MATCH_VALUE] ?? ''));
             $ok = match ($matchType) {
                 ShippingSurchargeRule::MATCH_COUNTRY => $ruleCountry !== '' && $ruleCountry === $country,
                 ShippingSurchargeRule::MATCH_PROVINCE => $matchValue !== '' && (
@@ -67,8 +63,8 @@ final class ShippingSurchargeService
             if (!$ok) {
                 continue;
             }
-            $amountType = (string)$rule->getData(ShippingSurchargeRule::schema_fields_AMOUNT_TYPE);
-            $amountValue = (float)$rule->getData(ShippingSurchargeRule::schema_fields_AMOUNT_VALUE);
+            $amountType = (string)($rule[ShippingSurchargeRule::schema_fields_AMOUNT_TYPE] ?? '');
+            $amountValue = (float)($rule[ShippingSurchargeRule::schema_fields_AMOUNT_VALUE] ?? 0);
             if ($amountType === ShippingSurchargeRule::AMOUNT_PERCENT) {
                 $extra = (int)round($baseAmountMinor * max(0, $amountValue) / 100);
             } else {
@@ -79,9 +75,9 @@ final class ShippingSurchargeService
                 continue;
             }
             $hits[] = [
-                'rule_id' => (int)$rule->getId(),
-                'rule_code' => (string)$rule->getData(ShippingSurchargeRule::schema_fields_RULE_CODE),
-                'rule_name' => (string)$rule->getData(ShippingSurchargeRule::schema_fields_RULE_NAME),
+                'rule_id' => (int)($rule[ShippingSurchargeRule::schema_fields_ID] ?? 0),
+                'rule_code' => (string)($rule[ShippingSurchargeRule::schema_fields_RULE_CODE] ?? ''),
+                'rule_name' => (string)($rule[ShippingSurchargeRule::schema_fields_RULE_NAME] ?? ''),
                 'amount_minor' => $extra,
             ];
         }

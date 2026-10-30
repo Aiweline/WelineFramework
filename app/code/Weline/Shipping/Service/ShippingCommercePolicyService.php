@@ -75,8 +75,9 @@ final class ShippingCommercePolicyService
             ->where(ShippingCommercePolicy::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
-            ->getItems();
-        $row = is_array($items) ? ($items[0] ?? null) : null;
+            // 返回类型是 ?ShippingCommercePolicy，必须给模型对象。
+            ->toModels();
+        $row = $items[0] ?? null;
 
         return $row instanceof ShippingCommercePolicy && (int)$row->getId() > 0 ? $row : null;
     }

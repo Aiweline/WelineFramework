@@ -56,7 +56,8 @@ class FreeShippingRule extends BackendController
             ->order(FreeShippingRuleModel::schema_fields_PRIORITY, 'DESC')
             ->select()
             ->fetch()
-            ->getItems();
+            // 模板对每行调用 getData()，保留模型对象。
+            ->toModels();
 
         $this->assign('rules', $rules);
         $this->assign('condition_types_by_code', $this->conditionTypeAdmin->mapByCode());

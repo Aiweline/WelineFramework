@@ -118,12 +118,10 @@ class PixelEventService
             $sessions[$sessionId] = true;
         }
 
-        /** @var Pixel $pixel */
-        $pixel = ObjectManager::getInstance(Pixel::class);
         $deletedPixelIds = [];
         $matchedOwners = [];
         foreach (\array_keys($sessions) as $sessionId) {
-            $rows = $pixel->clear()->getPixelsByWebsiteId(
+            $rows = Pixel::getPixelModelsByWebsiteId(
                 $websiteId,
                 ['session_id' => $sessionId],
                 10000,

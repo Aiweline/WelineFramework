@@ -47,11 +47,11 @@ class PixelErrorMonitor extends BackendController
             if ($filters['theme_empty'] === '1') {
                 $model->where(PixelErrorIncident::schema_fields_THEME_PUBLISHED_VERSION_ID, '');
             }
-            $model->order(PixelErrorIncident::schema_fields_CREATED_AT, 'DESC')
+            // 模板兼容数组行，对 $model 调 getItems() 恒为空。
+            $rows = $model->order(PixelErrorIncident::schema_fields_CREATED_AT, 'DESC')
                 ->limit(100)
                 ->select()
-                ->fetch();
-            $rows = $model->getItems() ?: [];
+                ->fetchArray();
         } catch (\Throwable $e) {
             $loadError = $e->getMessage();
             MessageManager::warning((string)__('加载错误监控失败：%{1}', [$loadError]));

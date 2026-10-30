@@ -331,8 +331,7 @@ final class BackendOrderPaymentRecordsService
             ->where(PaymentAttempt::schema_fields_PAYABLE_ID, $payableId)
             ->order(AbstractModel::schema_fields_CREATE_TIME, 'DESC')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         $rows = [];
         foreach ($attempts as $attempt) {
@@ -387,8 +386,7 @@ final class BackendOrderPaymentRecordsService
             ->where(PaymentTransaction::schema_fields_ORDER_ID, $payableId)
             ->order(PaymentTransaction::schema_fields_ID, 'DESC')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $rows = [];
         foreach ($items as $item) {
             $data = $item instanceof PaymentTransaction ? $item->getData() : (array)$item;

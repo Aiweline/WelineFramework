@@ -436,16 +436,12 @@ class PaymentQueryProvider implements QueryProviderInterface
     {
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class);
+        // 下方 instanceof PaymentMethod + getData()，必须对象化。
         $rows = $paymentMethod
             ->order(PaymentMethod::schema_fields_SORT_ORDER, 'ASC')
             ->select()
-            ->fetch();
-        if (\is_object($rows) && method_exists($rows, 'getItems')) {
-            $rows = $rows->getItems();
-        }
-        if (!\is_array($rows)) {
-            return [];
-        }
+            ->fetch()
+            ->toModels();
 
         $methods = array_values(array_filter($rows, static fn(mixed $row): bool => $row instanceof PaymentMethod));
         $unique = [];

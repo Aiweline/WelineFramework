@@ -37,7 +37,8 @@ final class OriginalWarehouseLocator
             ->fetch();
         $allWarehouseUnits = [];
         $matches = [];
-        foreach ($rows->getItems() as $unit) {
+        // 逐行调用 getData()/$unit 判定，保留模型对象。
+        foreach ($rows->toModels() as $unit) {
             if (!$unit instanceof FulfillmentUnit) {
                 continue;
             }

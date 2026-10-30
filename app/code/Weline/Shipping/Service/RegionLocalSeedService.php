@@ -72,22 +72,22 @@ final class RegionLocalSeedService
                 ->order(Region::schema_fields_ID, 'ASC')
                 ->limit(self::PAGE_SIZE, $offset)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             if ($items === []) {
                 break;
             }
             $rows = [];
             foreach ($items as $item) {
-                if (!$item instanceof Region || !(int)$item->getId()) {
+                $itemId = (int)($item[Region::schema_fields_ID] ?? 0);
+                if ($itemId <= 0) {
                     continue;
                 }
-                $name = trim((string)$item->getData(Region::schema_fields_REGION_NAME));
+                $name = trim((string)($item[Region::schema_fields_REGION_NAME] ?? ''));
                 if ($name === '') {
                     continue;
                 }
                 $rows[] = [
-                    RegionLocalDescription::schema_fields_ID => (int)$item->getId(),
+                    RegionLocalDescription::schema_fields_ID => $itemId,
                     RegionLocalDescription::schema_fields_local_code => $locale,
                     RegionLocalDescription::schema_fields_REGION_NAME => $name,
                 ];
@@ -114,22 +114,22 @@ final class RegionLocalSeedService
                 ->order(Street::schema_fields_ID, 'ASC')
                 ->limit(self::PAGE_SIZE, $offset)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             if ($items === []) {
                 break;
             }
             $rows = [];
             foreach ($items as $item) {
-                if (!$item instanceof Street || !(int)$item->getId()) {
+                $itemId = (int)($item[Street::schema_fields_ID] ?? 0);
+                if ($itemId <= 0) {
                     continue;
                 }
-                $name = trim((string)$item->getData(Street::schema_fields_STREET_NAME));
+                $name = trim((string)($item[Street::schema_fields_STREET_NAME] ?? ''));
                 if ($name === '') {
                     continue;
                 }
                 $rows[] = [
-                    StreetLocalDescription::schema_fields_ID => (int)$item->getId(),
+                    StreetLocalDescription::schema_fields_ID => $itemId,
                     StreetLocalDescription::schema_fields_local_code => $locale,
                     StreetLocalDescription::schema_fields_STREET_NAME => $name,
                 ];
@@ -196,23 +196,23 @@ final class RegionLocalSeedService
                 ->order(Region::schema_fields_ID, 'ASC')
                 ->limit(self::PAGE_SIZE, $offset)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             if ($items === []) {
                 break;
             }
             $rows = [];
             foreach ($items as $item) {
-                if (!$item instanceof Region || !(int)$item->getId()) {
+                $itemId = (int)($item[Region::schema_fields_ID] ?? 0);
+                if ($itemId <= 0) {
                     continue;
                 }
-                $code = trim((string)$item->getData(Region::schema_fields_REGION_CODE));
+                $code = trim((string)($item[Region::schema_fields_REGION_CODE] ?? ''));
                 $name = $map[$code] ?? '';
                 if ($name === '') {
                     continue;
                 }
                 $rows[] = [
-                    RegionLocalDescription::schema_fields_ID => (int)$item->getId(),
+                    RegionLocalDescription::schema_fields_ID => $itemId,
                     RegionLocalDescription::schema_fields_local_code => $locale,
                     RegionLocalDescription::schema_fields_REGION_NAME => $name,
                 ];

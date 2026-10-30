@@ -36,24 +36,20 @@ final class ShippingSeasonalSurchargeService
             ->order(ShippingSeasonalRule::schema_fields_PRIORITY, 'DESC')
             ->order(ShippingSeasonalRule::schema_fields_ID, 'ASC')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         $hits = [];
-        foreach (is_array($items) ? $items : [] as $rule) {
-            if (!$rule instanceof ShippingSeasonalRule) {
-                continue;
-            }
-            $start = (string)$rule->getData(ShippingSeasonalRule::schema_fields_START_DATE);
-            $end = (string)$rule->getData(ShippingSeasonalRule::schema_fields_END_DATE);
+        foreach ($items as $rule) {
+            $start = (string)($rule[ShippingSeasonalRule::schema_fields_START_DATE] ?? '');
+            $end = (string)($rule[ShippingSeasonalRule::schema_fields_END_DATE] ?? '');
             if ($start !== '' && $today < $start) {
                 continue;
             }
             if ($end !== '' && $today > $end) {
                 continue;
             }
-            $amountType = (string)$rule->getData(ShippingSeasonalRule::schema_fields_AMOUNT_TYPE);
-            $amountValue = (float)$rule->getData(ShippingSeasonalRule::schema_fields_AMOUNT_VALUE);
+            $amountType = (string)($rule[ShippingSeasonalRule::schema_fields_AMOUNT_TYPE] ?? '');
+            $amountValue = (float)($rule[ShippingSeasonalRule::schema_fields_AMOUNT_VALUE] ?? 0);
             if ($amountType === ShippingSeasonalRule::AMOUNT_PERCENT) {
                 $extra = (int)round($baseAmountMinor * max(0, $amountValue) / 100);
             } else {
@@ -64,9 +60,9 @@ final class ShippingSeasonalSurchargeService
                 continue;
             }
             $hits[] = [
-                'rule_id' => (int)$rule->getId(),
-                'rule_code' => (string)$rule->getData(ShippingSeasonalRule::schema_fields_RULE_CODE),
-                'rule_name' => (string)$rule->getData(ShippingSeasonalRule::schema_fields_RULE_NAME),
+                'rule_id' => (int)($rule[ShippingSeasonalRule::schema_fields_ID] ?? 0),
+                'rule_code' => (string)($rule[ShippingSeasonalRule::schema_fields_RULE_CODE] ?? ''),
+                'rule_name' => (string)($rule[ShippingSeasonalRule::schema_fields_RULE_NAME] ?? ''),
                 'amount_minor' => $extra,
             ];
         }

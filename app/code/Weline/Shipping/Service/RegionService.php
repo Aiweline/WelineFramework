@@ -68,51 +68,54 @@ class RegionService
                 ->where(Region::schema_fields_IS_ACTIVE, 1)
                 ->order(Region::schema_fields_SORT_ORDER, 'ASC')
                 ->select()
-                ->fetch();
+                ->fetchArray();
         }
-        
-        foreach ($countryRegions->getItems() as $region) {
-            $regions[] = $this->buildNode($region);
+
+        foreach ($countryRegions as $regionRow) {
+            if (\is_array($regionRow)) {
+                $regions[] = $this->buildNode($regionRow);
+            }
         }
-        
+
         return $regions;
     }
 
     /**
      * 构建单个节点（递归）
-     * 
-     * @param Region $region
+     *
+     * @param array<string, mixed> $region 地区行
      * @return array
      */
-    private function buildNode(Region $region): array
+    private function buildNode(array $region): array
     {
         $regionName = $this->localizedRegionName(
-            (string)$region->getData(Region::schema_fields_COUNTRY_CODE),
-            (string)$region->getData(Region::schema_fields_REGION_CODE),
-            (string)$region->getData(Region::schema_fields_REGION_NAME),
-            (string)$region->getData(Region::schema_fields_REGION_TYPE),
-            (int)$region->getId(),
+            (string)($region[Region::schema_fields_COUNTRY_CODE] ?? ''),
+            (string)($region[Region::schema_fields_REGION_CODE] ?? ''),
+            (string)($region[Region::schema_fields_REGION_NAME] ?? ''),
+            (string)($region[Region::schema_fields_REGION_TYPE] ?? ''),
+            (int)($region[Region::schema_fields_ID] ?? 0),
         );
         $node = [
-            'region_id' => $region->getId(),
-            'country_code' => $region->getData(Region::schema_fields_COUNTRY_CODE),
-            'region_code' => $region->getData(Region::schema_fields_REGION_CODE),
+            'region_id' => $region[Region::schema_fields_ID] ?? null,
+            'country_code' => $region[Region::schema_fields_COUNTRY_CODE] ?? null,
+            'region_code' => $region[Region::schema_fields_REGION_CODE] ?? null,
             'region_name' => $regionName,
-            'region_default_name' => $region->getData(Region::schema_fields_REGION_NAME),
+            'region_default_name' => $region[Region::schema_fields_REGION_NAME] ?? null,
             'region_locale' => $this->currentLocale(),
-            'region_type' => $region->getData(Region::schema_fields_REGION_TYPE),
-            'postal_code_pattern' => $region->getData(Region::schema_fields_POSTAL_CODE_PATTERN),
-            'postal_code' => (string)$region->getData(Region::schema_fields_POSTAL_CODE),
-            'is_active' => $region->getData(Region::schema_fields_IS_ACTIVE),
-            'sort_order' => $region->getData(Region::schema_fields_SORT_ORDER),
+            'region_type' => $region[Region::schema_fields_REGION_TYPE] ?? null,
+            'postal_code_pattern' => $region[Region::schema_fields_POSTAL_CODE_PATTERN] ?? null,
+            'postal_code' => (string)($region[Region::schema_fields_POSTAL_CODE] ?? ''),
+            'is_active' => $region[Region::schema_fields_IS_ACTIVE] ?? null,
+            'sort_order' => $region[Region::schema_fields_SORT_ORDER] ?? null,
             'children' => [],
         ];
-        
-        $children = $region->getChildren($region->getId());
-        foreach ($children->getItems() as $child) {
-            $node['children'][] = $this->buildNode($child);
+
+        foreach ($this->getModel()->getChildren((int)($region[Region::schema_fields_ID] ?? 0)) as $childRow) {
+            if (\is_array($childRow)) {
+                $node['children'][] = $this->buildNode($childRow);
+            }
         }
-        
+
         return $node;
     }
 
@@ -169,9 +172,9 @@ class RegionService
             ->order(Region::schema_fields_SORT_ORDER, 'ASC')
             ->order(Region::schema_fields_REGION_NAME, 'ASC')
             ->select()
-            ->fetch();
+            ->fetchArray();
 
-        return $this->toRegionList($countries->getItems());
+        return $this->toRegionList($countries);
     }
 
     public function getChildrenList(?int $parentRegionId, ?string $countryCode = null, int $limit = 500): array
@@ -198,9 +201,9 @@ class RegionService
             ->order(Region::schema_fields_REGION_NAME, 'ASC')
             ->limit($limit)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
-        $regionList = $this->toRegionList($regions->getItems());
+        $regionList = $this->toRegionList($regions);
         if ($countryCode && empty($regionList)) {
             return $this->getFallbackChildren($parentRegionId, $countryCode);
         }
@@ -227,12 +230,11 @@ class RegionService
             ->where(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM, $norms, 'in')
             ->limit(max($limit * 3, 50))
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $normRank = array_flip($norms);
         usort($rows, static function ($a, $b) use ($normRank): int {
-            $an = (string)$a->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM);
-            $bn = (string)$b->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM);
+            $an = (string)($a[\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM] ?? '');
+            $bn = (string)($b[\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM] ?? '');
             $ar = $normRank[$an] ?? 99;
             $br = $normRank[$bn] ?? 99;
 
@@ -243,19 +245,19 @@ class RegionService
             if (count($out) >= $limit) {
                 break;
             }
-            $attachId = (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_ATTACH_REGION_ID);
+            $attachId = (int)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_ATTACH_REGION_ID] ?? 0);
             $out[] = [
-                'postal_place_id' => (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_ID),
-                'place_name' => (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PLACE_NAME),
-                'postal_code' => (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE),
-                'postal_code_norm' => (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM),
-                'attach_level' => (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_ATTACH_LEVEL),
-                'province_code' => (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_CODE),
-                'city_code' => (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_CODE),
-                'district_code' => (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_CODE),
-                'province_region_id' => (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_REGION_ID) ?: null,
-                'city_region_id' => (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_REGION_ID) ?: null,
-                'district_region_id' => (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_REGION_ID) ?: null,
+                'postal_place_id' => (int)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_ID] ?? 0),
+                'place_name' => (string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_PLACE_NAME] ?? ''),
+                'postal_code' => (string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE] ?? ''),
+                'postal_code_norm' => (string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM] ?? ''),
+                'attach_level' => (string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_ATTACH_LEVEL] ?? ''),
+                'province_code' => (string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_CODE] ?? ''),
+                'city_code' => (string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_CODE] ?? ''),
+                'district_code' => (string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_CODE] ?? ''),
+                'province_region_id' => (int)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_REGION_ID] ?? 0) ?: null,
+                'city_region_id' => (int)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_REGION_ID] ?? 0) ?: null,
+                'district_region_id' => (int)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_REGION_ID] ?? 0) ?: null,
                 'attach_region_id' => $attachId > 0 ? $attachId : null,
                 'needs_cascade_confirm' => $attachId <= 0,
             ];
@@ -282,8 +284,7 @@ class RegionService
             ->where(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM, $norms, 'in')
             ->limit(200)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $normRank = array_flip($norms);
         $supported = $this->websiteSupportedCountryCodes();
         $countrySortRanks = $this->countrySortRanks();
@@ -291,11 +292,11 @@ class RegionService
         $embargo = $this->objectManager->getInstance(EmbargoService::class);
         $seen = [];
         foreach ($rows as $row) {
-            $cc = strtoupper(trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_COUNTRY_CODE)));
+            $cc = strtoupper(trim((string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_COUNTRY_CODE] ?? '')));
             if ($cc === '' || !preg_match('/^[A-Z]{2}$/', $cc)) {
                 continue;
             }
-            $rowNorm = (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM);
+            $rowNorm = (string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM] ?? '');
             $matchRank = (int)($normRank[$rowNorm] ?? 99);
             $cascadeRank = $this->postalPlaceCascadeRank($row);
             if (isset($seen[$cc])) {
@@ -308,15 +309,15 @@ class RegionService
                     continue;
                 }
             }
-            $placeName = trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PLACE_NAME));
+            $placeName = trim((string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_PLACE_NAME] ?? ''));
             $eval = $embargo->evaluateAddress([
                 'country_code' => $cc,
-                'province_code' => (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_CODE),
-                'province_region_id' => (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_REGION_ID),
-                'city_code' => (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_CODE),
-                'city_region_id' => (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_REGION_ID),
-                'district_code' => (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_CODE),
-                'district_region_id' => (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_REGION_ID),
+                'province_code' => (string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_CODE] ?? ''),
+                'province_region_id' => (int)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_REGION_ID] ?? 0),
+                'city_code' => (string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_CODE] ?? ''),
+                'city_region_id' => (int)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_REGION_ID] ?? 0),
+                'district_code' => (string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_CODE] ?? ''),
+                'district_region_id' => (int)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_REGION_ID] ?? 0),
             ]);
             $isEmbargoed = !empty($eval['blocked']);
             $seen[$cc] = [
@@ -363,14 +364,16 @@ class RegionService
 
     /**
      * Lower is better: city/district with codes = 0, province = 1, bare = 2.
+     *
+     * @param array<string, mixed> $row fetchArray() 的行
      */
-    private function postalPlaceCascadeRank(object $row): int
+    private function postalPlaceCascadeRank(array $row): int
     {
-        $level = strtolower(trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_ATTACH_LEVEL)));
-        $cityCode = trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_CODE));
-        $cityId = (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_REGION_ID);
-        $districtCode = trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_CODE));
-        $districtId = (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_REGION_ID);
+        $level = strtolower(trim((string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_ATTACH_LEVEL] ?? '')));
+        $cityCode = trim((string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_CODE] ?? ''));
+        $cityId = (int)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_REGION_ID] ?? 0);
+        $districtCode = trim((string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_CODE] ?? ''));
+        $districtId = (int)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_REGION_ID] ?? 0);
         if (
             $level === 'city'
             || $level === 'district'
@@ -381,8 +384,8 @@ class RegionService
         ) {
             return 0;
         }
-        $provinceCode = trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_CODE));
-        $provinceId = (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_REGION_ID);
+        $provinceCode = trim((string)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_CODE] ?? ''));
+        $provinceId = (int)($row[\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_REGION_ID] ?? 0);
         if ($level === 'province' || $provinceCode !== '' || $provinceId > 0) {
             return 1;
         }
@@ -424,7 +427,9 @@ class RegionService
             ->where(Region::schema_fields_REGION_TYPE, Region::TYPE_COUNTRY)
             ->select()
             ->fetch()
-            ->getItems();
+            // 本方法要改字段并逐条 save()，必须拿到可写模型对象，
+            // 不能走 fetchArray() 的数组行。
+            ->toModels();
         $updated = 0;
         $skipped = 0;
         $nonMarketBase = 9000;
@@ -595,17 +600,16 @@ class RegionService
             ->order(\Weline\Shipping\Model\Street::schema_fields_STREET_NAME, 'ASC')
             ->limit($limit)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $out = [];
         foreach ($rows as $row) {
             $out[] = [
-                'street_id' => (int)$row->getId(),
-                'street_code' => (string)$row->getData(\Weline\Shipping\Model\Street::schema_fields_STREET_CODE),
-                'street_name' => (string)$row->getData(\Weline\Shipping\Model\Street::schema_fields_STREET_NAME),
-                'postal_code' => (string)$row->getData(\Weline\Shipping\Model\Street::schema_fields_POSTAL_CODE),
-                'parent_region_id' => (int)$row->getData(\Weline\Shipping\Model\Street::schema_fields_PARENT_REGION_ID),
-                'country_code' => (string)$row->getData(\Weline\Shipping\Model\Street::schema_fields_COUNTRY_CODE),
+                'street_id' => (int)($row[\Weline\Shipping\Model\Street::schema_fields_ID] ?? 0),
+                'street_code' => (string)($row[\Weline\Shipping\Model\Street::schema_fields_STREET_CODE] ?? ''),
+                'street_name' => (string)($row[\Weline\Shipping\Model\Street::schema_fields_STREET_NAME] ?? ''),
+                'postal_code' => (string)($row[\Weline\Shipping\Model\Street::schema_fields_POSTAL_CODE] ?? ''),
+                'parent_region_id' => (int)($row[\Weline\Shipping\Model\Street::schema_fields_PARENT_REGION_ID] ?? 0),
+                'country_code' => (string)($row[\Weline\Shipping\Model\Street::schema_fields_COUNTRY_CODE] ?? ''),
             ];
         }
 
@@ -636,9 +640,9 @@ class RegionService
             ->order(Region::schema_fields_REGION_NAME, 'ASC')
             ->limit($ensureCountryCode ? 500 : 500)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
-        $regionList = $this->toRegionList($regions->getItems());
+        $regionList = $this->toRegionList($regions);
         if ($countryCatalog === 'global') {
             if ($regionList === [] || !$ensureCountryCode) {
                 // 全球国家目录：Intl +（如有）库内国家行
@@ -809,21 +813,21 @@ class RegionService
             ->order(Region::schema_fields_REGION_NAME, 'ASC')
             ->limit($limit * 4);
 
-        $items = $model->select()->fetch()->getItems();
+        $items = $model->select()->fetchArray();
         $rank = [
             Region::TYPE_DISTRICT => 0,
             Region::TYPE_CITY => 1,
             Region::TYPE_PROVINCE => 2,
         ];
         usort($items, static function ($a, $b) use ($rank, $query): int {
-            $aType = $a instanceof Region ? (string)$a->getData(Region::schema_fields_REGION_TYPE) : '';
-            $bType = $b instanceof Region ? (string)$b->getData(Region::schema_fields_REGION_TYPE) : '';
+            $aType = (string)($a[Region::schema_fields_REGION_TYPE] ?? '');
+            $bType = (string)($b[Region::schema_fields_REGION_TYPE] ?? '');
             $typeCmp = ($rank[$aType] ?? 9) <=> ($rank[$bType] ?? 9);
             if ($typeCmp !== 0) {
                 return $typeCmp;
             }
-            $aName = $a instanceof Region ? (string)$a->getData(Region::schema_fields_REGION_NAME) : '';
-            $bName = $b instanceof Region ? (string)$b->getData(Region::schema_fields_REGION_NAME) : '';
+            $aName = (string)($a[Region::schema_fields_REGION_NAME] ?? '');
+            $bName = (string)($b[Region::schema_fields_REGION_NAME] ?? '');
             $aExact = mb_stripos($aName, $query) === 0 ? 0 : 1;
             $bExact = mb_stripos($bName, $query) === 0 ? 0 : 1;
             if ($aExact !== $bExact) {
@@ -835,17 +839,18 @@ class RegionService
 
         $suggestions = [];
         foreach ($items as $region) {
-            if (!$region instanceof Region || !(int)$region->getId()) {
+            $regionId = (int)($region[Region::schema_fields_ID] ?? 0);
+            if ($regionId <= 0) {
                 continue;
             }
-            $formatted = $this->formatSuggestion((int)$region->getId());
+            $formatted = $this->formatSuggestion($regionId);
             if ($formatted === null) {
                 continue;
             }
             $suggestions[] = [
-                'id' => (string)(int)$region->getId(),
+                'id' => (string)$regionId,
                 'label' => (string)$formatted['label'],
-                'matched_level' => (string)$region->getData(Region::schema_fields_REGION_TYPE),
+                'matched_level' => (string)($region[Region::schema_fields_REGION_TYPE] ?? ''),
                 'formatted_address' => $formatted['formatted_address'],
             ];
             if (count($suggestions) >= $limit) {
@@ -963,12 +968,16 @@ class RegionService
         return $this->countryProfiles->profileFor($countryCode);
     }
 
+    /**
+     * @param array<int, array<string, mixed>> $regions fetchArray() 的地区行
+     */
     private function toRegionList(array $regions): array
     {
         $regionIds = [];
         foreach ($regions as $region) {
-            if ($region instanceof Region && $region->getId()) {
-                $regionIds[] = (int)$region->getId();
+            $regionId = (int)($region[Region::schema_fields_ID] ?? 0);
+            if ($regionId > 0) {
+                $regionIds[] = $regionId;
             }
         }
         // Localized names are requested with a fixed number of IN queries. Calling
@@ -978,15 +987,15 @@ class RegionService
 
         $result = [];
         foreach ($regions as $region) {
-            if (!$region instanceof Region || !$region->getId()) {
+            $regionId = (int)($region[Region::schema_fields_ID] ?? 0);
+            if ($regionId <= 0) {
                 continue;
             }
 
-            $countryCode = (string)$region->getData(Region::schema_fields_COUNTRY_CODE);
-            $regionCode = (string)$region->getData(Region::schema_fields_REGION_CODE);
-            $regionType = (string)$region->getData(Region::schema_fields_REGION_TYPE);
-            $defaultName = (string)$region->getData(Region::schema_fields_REGION_NAME);
-            $regionId = (int)$region->getId();
+            $countryCode = (string)($region[Region::schema_fields_COUNTRY_CODE] ?? '');
+            $regionCode = (string)($region[Region::schema_fields_REGION_CODE] ?? '');
+            $regionType = (string)($region[Region::schema_fields_REGION_TYPE] ?? '');
+            $defaultName = (string)($region[Region::schema_fields_REGION_NAME] ?? '');
             $displayName = trim((string)($localizedNames[$regionId] ?? ''));
             if ($displayName === '') {
                 $displayName = $this->localizedRegionName(
@@ -998,17 +1007,17 @@ class RegionService
             }
             $result[] = [
                 'region_id' => $regionId,
-                'parent_region_id' => (int)$region->getData(Region::schema_fields_PARENT_REGION_ID),
+                'parent_region_id' => (int)($region[Region::schema_fields_PARENT_REGION_ID] ?? 0),
                 'country_code' => $countryCode,
                 'region_code' => $regionCode,
                 'region_name' => $displayName,
                 'region_default_name' => $defaultName,
                 'region_locale' => $this->currentLocale(),
                 'region_type' => $regionType,
-                'postal_code_pattern' => (string)$region->getData(Region::schema_fields_POSTAL_CODE_PATTERN),
-                'postal_code' => (string)$region->getData(Region::schema_fields_POSTAL_CODE),
-                'is_active' => (int)$region->getData(Region::schema_fields_IS_ACTIVE),
-                'sort_order' => (int)$region->getData(Region::schema_fields_SORT_ORDER),
+                'postal_code_pattern' => (string)($region[Region::schema_fields_POSTAL_CODE_PATTERN] ?? ''),
+                'postal_code' => (string)($region[Region::schema_fields_POSTAL_CODE] ?? ''),
+                'is_active' => (int)($region[Region::schema_fields_IS_ACTIVE] ?? 0),
+                'sort_order' => (int)($region[Region::schema_fields_SORT_ORDER] ?? 0),
             ];
         }
 
@@ -1094,18 +1103,17 @@ class RegionService
         $items = $model->reset()
             ->where(Region::schema_fields_ID, $ids, 'IN')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $out = [];
         foreach ($items as $region) {
-            if (!$region instanceof Region || !$region->getId()) {
+            $regionId = (int)($region[Region::schema_fields_ID] ?? 0);
+            if ($regionId <= 0) {
                 continue;
             }
-            $regionId = (int)$region->getId();
-            $countryCode = (string)$region->getData(Region::schema_fields_COUNTRY_CODE);
-            $regionCode = (string)$region->getData(Region::schema_fields_REGION_CODE);
-            $regionType = (string)$region->getData(Region::schema_fields_REGION_TYPE);
-            $defaultName = (string)$region->getData(Region::schema_fields_REGION_NAME);
+            $countryCode = (string)($region[Region::schema_fields_COUNTRY_CODE] ?? '');
+            $regionCode = (string)($region[Region::schema_fields_REGION_CODE] ?? '');
+            $regionType = (string)($region[Region::schema_fields_REGION_TYPE] ?? '');
+            $defaultName = (string)($region[Region::schema_fields_REGION_NAME] ?? '');
             $label = trim((string)($localMap[$regionId] ?? ''));
             if ($label === '') {
                 $label = $this->localizedRegionName($countryCode, $regionCode, $defaultName, $regionType, $regionId);

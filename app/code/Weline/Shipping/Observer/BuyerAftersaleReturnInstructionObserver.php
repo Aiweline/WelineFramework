@@ -104,8 +104,9 @@ class BuyerAftersaleReturnInstructionObserver implements ObserverInterface
             ->limit(1)
             ->select()
             ->fetch()
-            ->getItems();
-        $row = \is_array($items) ? ($items[0] ?? null) : null;
+            // 返回类型是 ?BuyerAftersaleReturnInstruction，取首行模型。
+            ->firstModel();
+        $row = $items;
         if (!$row instanceof BuyerAftersaleReturnInstruction || !(int) $row->getId()) {
             return null;
         }
@@ -170,22 +171,18 @@ class BuyerAftersaleReturnInstructionObserver implements ObserverInterface
         $items = $model->clear()
             ->where(WarehouseShippingOrigin::schema_fields_WAREHOUSE_ID, $warehouseIds, 'IN')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $chosen = [];
-        foreach (\is_array($items) ? $items : [] as $origin) {
-            if (!$origin instanceof WarehouseShippingOrigin) {
-                continue;
-            }
-            $warehouseId = (int) $origin->getData(WarehouseShippingOrigin::schema_fields_WAREHOUSE_ID);
+        foreach ($items as $origin) {
+            $warehouseId = (int) ($origin[WarehouseShippingOrigin::schema_fields_WAREHOUSE_ID] ?? 0);
             if ($warehouseId <= 0) {
                 continue;
             }
-            $active = (int) $origin->getData(WarehouseShippingOrigin::schema_fields_IS_ACTIVE) === 1;
+            $active = (int) ($origin[WarehouseShippingOrigin::schema_fields_IS_ACTIVE] ?? 0) === 1;
             if (isset($chosen[$warehouseId]) && !$active) {
                 continue;
             }
-            $addressId = (int) $origin->getData(WarehouseShippingOrigin::schema_fields_SHIPPING_ADDRESS_ID);
+            $addressId = (int) ($origin[WarehouseShippingOrigin::schema_fields_SHIPPING_ADDRESS_ID] ?? 0);
             if ($addressId <= 0) {
                 continue;
             }

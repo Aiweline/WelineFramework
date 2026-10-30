@@ -76,8 +76,8 @@ class ShippingAddressService
         $model->order(ShippingAddress::schema_fields_IS_DEFAULT, 'DESC')
               ->order(ShippingAddress::schema_fields_CREATED_AT, 'DESC');
         
-        $collection = $model->select()->fetch();
-        return $collection->getItems();
+        // fetch() 对多行查询返回 RowCollection（数组行），列表直接取数组。
+        return $model->select()->fetchArray();
     }
 
     /**
@@ -248,9 +248,8 @@ class ShippingAddressService
 
     private function countAll(): int
     {
-        $collection = $this->getModel()->reset()->select()->fetch();
-
-        return count($collection->getItems());
+        // 只要条数，直接取数组长度。
+        return \count($this->getModel()->reset()->select()->fetchArray());
     }
 
     /**
@@ -258,7 +257,8 @@ class ShippingAddressService
      */
     private function ensureSoleDefault(): void
     {
-        $items = $this->getModel()->reset()->select()->fetch()->getItems();
+        // 需要 setData()->save() 改写记录，必须拿模型对象。
+        $items = $this->getModel()->reset()->select()->fetch()->toModels();
         if (count($items) !== 1) {
             return;
         }

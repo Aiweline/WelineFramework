@@ -89,12 +89,11 @@ class WebsiteLanguage extends Model
             ->order(self::schema_fields_SORT_ORDER, 'ASC')
             ->order(self::schema_fields_ID, 'ASC')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         $codes = [];
         foreach ($languages as $language) {
-            $codes[] = $language->getLanguageCode();
+            $codes[] = (string)($language[self::schema_fields_LANGUAGE_CODE] ?? '');
         }
 
         // Association rows only (sort_order ASC). Routing fallbacks use

@@ -115,7 +115,8 @@ final class Upgrade implements UpgradeInterface
         try {
             /** @var Carrier $carrierModel */
             $carrierModel = ObjectManager::getInstance(Carrier::class, [], false);
-            $items = $carrierModel->reset()->select()->fetch()->getItems();
+            // 需要 setData()->save() 回写承运商，必须拿模型对象。
+            $items = $carrierModel->reset()->select()->fetch()->toModels();
             foreach ($items as $carrier) {
                 if (!$carrier instanceof Carrier) {
                     continue;
@@ -228,7 +229,7 @@ final class Upgrade implements UpgradeInterface
                 ->where(Carrier::schema_fields_IS_ACTIVE, 1)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             foreach ($carriers as $carrier) {
                 if (!$carrier instanceof Carrier) {
                     continue;

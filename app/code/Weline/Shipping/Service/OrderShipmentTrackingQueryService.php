@@ -213,8 +213,9 @@ final class OrderShipmentTrackingQueryService
                 ->order(Carrier::schema_fields_SORT_ORDER, 'ASC')
                 ->select()
                 ->fetch()
-                ->getItems();
-            $first = is_array($items) ? ($items[0] ?? null) : null;
+                // 返回类型是 ?Carrier，必须给模型对象。
+                ->toModels();
+            $first = $items[0] ?? null;
             if ($first instanceof Carrier && (int)$first->getId() > 0) {
                 return $first;
             }

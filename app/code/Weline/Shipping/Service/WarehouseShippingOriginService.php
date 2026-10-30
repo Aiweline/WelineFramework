@@ -68,13 +68,8 @@ final class WarehouseShippingOriginService implements WarehouseShippingOriginInt
                         ->where(WarehouseShippingOrigin::schema_fields_WAREHOUSE_ID, $warehouseId)
                         ->where(WarehouseShippingOrigin::schema_fields_IS_ACTIVE, 1)
                         ->select()
-                        ->fetch()
-                        ->getItems();
-                    $row = \is_array($items) ? ($items[0] ?? null) : null;
-                    if (!$row instanceof WarehouseShippingOrigin || !(int)$row->getId()) {
-                        continue;
-                    }
-                    $found = (int)$row->getData(WarehouseShippingOrigin::schema_fields_SHIPPING_ADDRESS_ID);
+                        ->fetchArray();
+                    $found = (int)($items[0][WarehouseShippingOrigin::schema_fields_SHIPPING_ADDRESS_ID] ?? 0);
                     if ($found > 0) {
                         return $found;
                     }
@@ -120,8 +115,9 @@ final class WarehouseShippingOriginService implements WarehouseShippingOriginInt
             ->where(WarehouseShippingOrigin::schema_fields_WAREHOUSE_ID, $warehouseId)
             ->select()
             ->fetch()
-            ->getItems();
-        $existing = is_array($items) ? ($items[0] ?? null) : null;
+            // 需要 setData()->save() 回写，保留模型对象。
+            ->toModels();
+        $existing = $items[0] ?? null;
         $now = date('Y-m-d H:i:s');
         $payload = [
             WarehouseShippingOrigin::schema_fields_WEBSITE_ID => $websiteId,

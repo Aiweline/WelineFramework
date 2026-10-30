@@ -49,11 +49,12 @@ final class Records extends BackendPageController
             if ($status !== '') {
                 $model->where('status', $status);
             }
-            $model->pagination()->order('created_at', 'DESC')->select()->fetch();
-            foreach ($model->getItems() as $item) {
+            // fetch() 的行在返回的 RowCollection 上，对 $model 调 getItems() 恒空。
+            $fetched = $model->pagination()->order('created_at', 'DESC')->select()->fetchArray();
+            foreach ($fetched as $item) {
                 $row = [];
                 foreach (array_keys($columns) as $field) {
-                    $row[$field] = $item->getData($field);
+                    $row[$field] = $item[$field] ?? null;
                 }
                 $records[] = $row;
             }

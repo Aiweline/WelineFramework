@@ -203,11 +203,10 @@ final class ResolvedLanguageCatalog implements ResolvedLanguageCatalogInterface
                 ->order(ScopeLanguage::schema_fields_SORT_ORDER, 'ASC')
                 ->order(ScopeLanguage::schema_fields_ID, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             $codes = [];
             foreach ($items as $item) {
-                $code = \trim((string)$item->getData(ScopeLanguage::schema_fields_LANGUAGE_CODE));
+                $code = \trim((string)($item[ScopeLanguage::schema_fields_LANGUAGE_CODE] ?? ''));
                 if ($code !== '') {
                     $codes[] = $code;
                 }

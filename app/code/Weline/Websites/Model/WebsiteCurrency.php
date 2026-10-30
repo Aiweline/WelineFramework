@@ -84,12 +84,11 @@ class WebsiteCurrency extends Model
             ->order(self::schema_fields_SORT_ORDER, 'ASC')
             ->order(self::schema_fields_ID, 'ASC')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         $codes = [];
         foreach ($currencies as $currency) {
-            $codes[] = $currency->getCurrencyCode();
+            $codes[] = (string)($currency[self::schema_fields_CURRENCY_CODE] ?? '');
         }
 
         return $codes;

@@ -42,8 +42,9 @@ class WebsitesDomainHttpsSetupTaskProvider extends AbstractSetupTaskProvider
         try {
             /** @var DomainPool $model */
             $model = ObjectManager::getInstance(DomainPool::class);
-            $items = $model->clear()->limit(1)->select()->fetch()->getItems();
-            return is_array($items) && $items !== [];
+            // 只判断是否存在，取数组即可。
+            $items = $model->clear()->limit(1)->select()->fetchArray();
+            return $items !== [];
         } catch (\Throwable) {
             return false;
         }

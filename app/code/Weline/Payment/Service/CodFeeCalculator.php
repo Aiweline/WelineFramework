@@ -99,8 +99,9 @@ final class CodFeeCalculator
                 ->where(PaymentMethod::schema_fields_CODE, $code)
                 ->select()
                 ->fetch()
-                ->getItems();
-            $row = is_array($items) ? ($items[0] ?? null) : null;
+                // 需要 getConfigData()，必须对象化。
+                ->toModels();
+            $row = $items[0] ?? null;
             if ($row instanceof PaymentMethod && (int)$row->getId() > 0) {
                 return $row->getConfigData();
             }

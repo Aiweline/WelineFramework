@@ -125,15 +125,15 @@ class PixelEventVendorManager
     {
         /** @var PixelEventVendor $model */
         $model = $this->newModel();
-        $model->reset()
+
+        /** @var list<PixelEventVendor> $items */
+        $items = $model->reset()
             ->where(PixelEventVendor::schema_fields_WEBSITE_ID, $websiteId)
             ->order(PixelEventVendor::schema_fields_SOURCE, 'ASC')
             ->order(PixelEventVendor::schema_fields_CODE, 'ASC')
             ->select()
-            ->fetch();
-
-        /** @var list<PixelEventVendor> $items */
-        $items = $model->getItems() ?: [];
+            ->fetch()
+            ->toModels();
         \usort($items, static function (PixelEventVendor $a, PixelEventVendor $b): int {
             $ac = (string)$a->getData(PixelEventVendor::schema_fields_CODE);
             $bc = (string)$b->getData(PixelEventVendor::schema_fields_CODE);

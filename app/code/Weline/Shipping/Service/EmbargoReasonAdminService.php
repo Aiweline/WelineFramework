@@ -53,7 +53,8 @@ final class EmbargoReasonAdminService
             ->order(EmbargoReason::schema_fields_ID, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            // 行要交给 rowFromModel()，保留模型对象。
+            ->toModels();
 
         $out = [];
         foreach ($items as $item) {
@@ -221,7 +222,8 @@ final class EmbargoReasonAdminService
             ->where(EmbargoReason::schema_fields_REASON_CODE, $code)
             ->select()
             ->fetch()
-            ->getItems();
+            // 返回类型是 ?EmbargoReason，必须给模型对象。
+            ->toModels();
         foreach ($items as $item) {
             if ($item instanceof EmbargoReason) {
                 return $item;
@@ -290,18 +292,16 @@ final class EmbargoReasonAdminService
         try {
             /** @var EmbargoReasonLocalDescription $local */
             $local = $this->objectManager->getInstance(EmbargoReasonLocalDescription::class);
+            // 只要名称字符串，取数组行。
             $items = $local->reset()
                 ->where(EmbargoReasonLocalDescription::schema_fields_ID, $reasonId)
                 ->where(EmbargoReasonLocalDescription::schema_fields_local_code, $locale)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             foreach ($items as $item) {
-                if ($item instanceof EmbargoReasonLocalDescription) {
-                    $name = trim((string)$item->getData(EmbargoReason::schema_fields_REASON_NAME));
-                    if ($name !== '') {
-                        return $name;
-                    }
+                $name = trim((string)($item[EmbargoReason::schema_fields_REASON_NAME] ?? ''));
+                if ($name !== '') {
+                    return $name;
                 }
             }
         } catch (\Throwable) {

@@ -212,6 +212,7 @@ class Website extends BackendController
                 'pageSize' => $pageSize,
                 'search' => $search,
             ])->select()->fetch();
+            // enrichWebsiteListingItems() 会把行规整为数组，直接取数组行。
             $items = $websites->getItems();
             $this->enrichWebsiteListingItems($items);
             $this->assignListingTableView($items, $websites->getPagination(), $search);

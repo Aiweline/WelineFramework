@@ -40,8 +40,9 @@ final class UnpaidOrderMailLineProjector
             } else {
                 return [];
             }
-            $model->select()->fetch();
-            foreach ($model->getItems() as $row) {
+            // 行在 fetch() 的 RowCollection 上；用 instanceof 过滤，必须对象化。
+            $rows = $model->select()->fetch()->toModels();
+            foreach ($rows as $row) {
                 if ($row instanceof OrderItem) {
                     $persisted[] = $row;
                 }

@@ -51,7 +51,8 @@ final class FreeShippingConditionTypeAdminService
             ->order(FreeShippingConditionType::schema_fields_ID, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            // 行要交给 rowFromModel()，保留模型对象。
+            ->toModels();
 
         $out = [];
         foreach ($items as $item) {
@@ -146,8 +147,9 @@ final class FreeShippingConditionTypeAdminService
             ->where(FreeShippingConditionType::schema_fields_CONDITION_CODE, $code)
             ->select()
             ->fetch()
-            ->getItems();
-        $existing = is_array($items) ? ($items[0] ?? null) : null;
+            // 返回类型是 ?FreeShippingConditionType，必须给模型对象。
+            ->toModels();
+        $existing = $items[0] ?? null;
 
         return $existing instanceof FreeShippingConditionType && (int)$existing->getId() > 0 ? $existing : null;
     }
@@ -190,18 +192,16 @@ final class FreeShippingConditionTypeAdminService
         try {
             /** @var FreeShippingConditionTypeLocalDescription $local */
             $local = $this->objectManager->getInstance(FreeShippingConditionTypeLocalDescription::class);
+            // 只要名称字符串，取数组行。
             $items = $local->reset()
                 ->where(FreeShippingConditionTypeLocalDescription::schema_fields_ID, $typeId)
                 ->where(FreeShippingConditionTypeLocalDescription::schema_fields_local_code, $locale)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             foreach ($items as $item) {
-                if ($item instanceof FreeShippingConditionTypeLocalDescription) {
-                    $name = trim((string)$item->getData(FreeShippingConditionTypeLocalDescription::schema_fields_CONDITION_NAME));
-                    if ($name !== '') {
-                        return $name;
-                    }
+                $name = trim((string)($item[FreeShippingConditionTypeLocalDescription::schema_fields_CONDITION_NAME] ?? ''));
+                if ($name !== '') {
+                    return $name;
                 }
             }
         } catch (\Throwable) {

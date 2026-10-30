@@ -45,25 +45,21 @@ final class EmbargoAdminService
             ->where(EmbargoRegion::schema_fields_IS_ACTIVE, 1)
             ->order(EmbargoRegion::schema_fields_ID, 'ASC')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $out = [];
         foreach ($items as $item) {
-            if (!$item instanceof EmbargoRegion) {
-                continue;
-            }
-            $rid = (int)$item->getData(EmbargoRegion::schema_fields_REGION_ID);
-            $sid = (int)$item->getData(EmbargoRegion::schema_fields_STREET_ID);
-            $type = (string)$item->getData(EmbargoRegion::schema_fields_REGION_TYPE);
-            $country = (string)$item->getData(EmbargoRegion::schema_fields_COUNTRY_CODE);
-            $code = (string)$item->getData(EmbargoRegion::schema_fields_REGION_CODE);
+            $rid = (int)($item[EmbargoRegion::schema_fields_REGION_ID] ?? 0);
+            $sid = (int)($item[EmbargoRegion::schema_fields_STREET_ID] ?? 0);
+            $type = (string)($item[EmbargoRegion::schema_fields_REGION_TYPE] ?? '');
+            $country = (string)($item[EmbargoRegion::schema_fields_COUNTRY_CODE] ?? '');
+            $code = (string)($item[EmbargoRegion::schema_fields_REGION_CODE] ?? '');
             $label = $type === EmbargoRegion::TYPE_COUNTRY
                 ? $this->countryDisplayName($country)
                 : ($code !== '' ? $code : ($rid > 0 ? '#' . $rid : $country));
             $out[] = [
-                'embargo_id' => (int)$item->getId(),
-                'scope_type' => (string)$item->getData(EmbargoRegion::schema_fields_SCOPE_TYPE),
-                'scope_id' => (int)$item->getData(EmbargoRegion::schema_fields_SCOPE_ID),
+                'embargo_id' => (int)($item[EmbargoRegion::schema_fields_ID] ?? 0),
+                'scope_type' => (string)($item[EmbargoRegion::schema_fields_SCOPE_TYPE] ?? ''),
+                'scope_id' => (int)($item[EmbargoRegion::schema_fields_SCOPE_ID] ?? 0),
                 'region_type' => $type,
                 'country_code' => $country,
                 'region_id' => $rid > 0 ? $rid : null,
@@ -117,9 +113,10 @@ final class EmbargoAdminService
             ->where(EmbargoRegion::schema_fields_SCOPE_ID, $scopeId)
             ->select()
             ->fetch()
-            ->getItems();
+            // 需要 delete()，保留模型对象。
+            ->toModels();
         foreach ($existing as $item) {
-            if ($item instanceof EmbargoRegion && $item->getId()) {
+            if ((int)$item->getId() > 0) {
                 $item->delete();
             }
         }

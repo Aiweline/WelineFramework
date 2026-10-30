@@ -478,7 +478,7 @@ final class VisitorAcceptanceFixtureProductionAttributionTest extends TestCore
     /** @return list<Pixel> */
     private function fixtureRows(int $websiteId, string $sessionId): array
     {
-        return Pixel::getPixelsByWebsiteId(
+        return Pixel::getPixelModelsByWebsiteId(
             $websiteId,
             [Pixel::schema_fields_SESSION_ID => $sessionId],
             100,

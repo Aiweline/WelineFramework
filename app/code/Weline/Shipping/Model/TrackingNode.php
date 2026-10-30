@@ -64,20 +64,20 @@ class TrackingNode extends AbstractModel
     }
 
     /**
-/**
      * 根据跟踪记录ID获取所有节点（按时间排序）
-     * 
+     *
      * @param int $trackingId 跟踪记录ID
-     * @return \Weline\Framework\Database\Model\Collection
+     * @return array<int, array<string, mixed>> 节点行数组
      */
-    public function getByTrackingId(int $trackingId): \Weline\Framework\Database\Model\Collection
+    public function getByTrackingId(int $trackingId): array
     {
+        // fetch() 对多行返回 RowCollection；原签名声明 Collection 与实际不符。
         return $this->reset()
             ->where(self::schema_fields_TRACKING_ID, $trackingId)
             ->order(self::schema_fields_NODE_TIME, 'ASC')
             ->order(self::schema_fields_SORT_ORDER, 'ASC')
             ->select()
-            ->fetch();
+            ->fetchArray();
     }
 
     /**

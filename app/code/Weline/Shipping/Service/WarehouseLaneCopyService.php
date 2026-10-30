@@ -39,8 +39,8 @@ final class WarehouseLaneCopyService
             ->order(ShippingService::schema_fields_ID, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
-        if (!is_array($sources) || $sources === []) {
+            ->toModels();
+        if ($sources === []) {
             // fallback: website 0 seed layer
             $sources = $model->reset()
                 ->where(ShippingService::schema_fields_SCOPE_TYPE, ShippingService::SCOPE_WEBSITE)
@@ -49,9 +49,9 @@ final class WarehouseLaneCopyService
                 ->order(ShippingService::schema_fields_ID, 'ASC')
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
         }
-        if (!is_array($sources)) {
+        if ($sources === []) {
             return 0;
         }
 
@@ -82,8 +82,8 @@ final class WarehouseLaneCopyService
                 ->where(ShippingService::schema_fields_SCOPE_ID, $websiteId)
                 ->select()
                 ->fetch()
-                ->getItems();
-            $row = is_array($found) ? ($found[0] ?? null) : null;
+                ->toModels();
+            $row = $found[0] ?? null;
             $payload = [
                 ShippingService::schema_fields_SCOPE_TYPE => ShippingService::SCOPE_WEBSITE,
                 ShippingService::schema_fields_SCOPE_ID => $websiteId,
@@ -131,26 +131,18 @@ final class WarehouseLaneCopyService
             ->where(ServiceRegion::schema_fields_SERVICE_ID, $toServiceId)
             ->select()
             ->fetch()
-            ->getItems();
-        if (is_array($existing)) {
-            foreach ($existing as $row) {
-                if ($row instanceof ServiceRegion && (int)$row->getId() > 0) {
-                    $row->delete();
-                }
+            ->toModels();
+        foreach ($existing as $row) {
+            if ((int)$row->getId() > 0) {
+                $row->delete();
             }
         }
         $sources = $regionModel->reset()
             ->where(ServiceRegion::schema_fields_SERVICE_ID, $fromServiceId)
             ->select()
             ->fetch()
-            ->getItems();
-        if (!is_array($sources)) {
-            return;
-        }
+            ->toModels();
         foreach ($sources as $src) {
-            if (!$src instanceof ServiceRegion) {
-                continue;
-            }
             $data = $src->getData();
             unset($data[ServiceRegion::schema_fields_ID]);
             $data[ServiceRegion::schema_fields_SERVICE_ID] = $toServiceId;

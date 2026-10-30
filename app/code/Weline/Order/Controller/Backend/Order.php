@@ -189,14 +189,13 @@ class Order extends BackendPageController
             $invoiceService = ObjectManager::getInstance(\Weline\Order\Service\InvoiceService::class);
             $invoices = $invoiceService->getInvoiceList($orderId);
             
-            // 获取订单历史
+            // 获取订单历史（模板兼容数组行）
             $historyModel = ObjectManager::getInstance(\Weline\Order\Model\OrderHistory::class);
             $history = $historyModel->reset()
                 ->where(\Weline\Order\Model\OrderHistory::schema_fields_ORDER_ID, $orderId)
                 ->order(\Weline\Order\Model\OrderHistory::schema_fields_CREATED_AT, 'DESC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             
             // 获取可用状态转换
             $currentStatus = $order->getData(OrderModel::schema_fields_STATUS);
@@ -291,8 +290,7 @@ class Order extends BackendPageController
                 ->where(\Weline\Order\Model\OrderHistory::schema_fields_ORDER_ID, $orderId)
                 ->order(\Weline\Order\Model\OrderHistory::schema_fields_CREATED_AT, 'DESC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
 
             $customerPresent = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderListPresenter::class)
                 ->present($order);

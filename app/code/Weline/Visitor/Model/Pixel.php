@@ -134,17 +134,49 @@ class Pixel extends Model
     
     /**
      * 根据站点ID获取像素记录（支持分页和限制）
-     * 
+     *
+     * 返回**数组行**（每行是关联数组）。需要模型对象时用
+     * {@see self::getPixelModelsByWebsiteId()}。
+     *
      * @param int $websiteId 站点ID
      * @param array $conditions 额外的查询条件
      * @param int|null $limit 限制返回数量，null表示不限制（但最大10000）
      * @param int|null $offset 偏移量，用于分页
-     * @return array
+     * @return array<int, array<string, mixed>>
      */
     public static function getPixelsByWebsiteId(int $websiteId, array $conditions = [], ?int $limit = null, ?int $offset = null): array
     {
+        return self::queryPixelsByWebsiteId($websiteId, $conditions, $limit, $offset)->select()->fetchArray();
+    }
+
+    /**
+     * 与 {@see self::getPixelsByWebsiteId()} 同条件，但显式返回模型对象列表。
+     *
+     * 需要逐行调用模型方法（getPixelId() / delete() 等）时用本方法。
+     *
+     * @param int $websiteId 站点ID
+     * @param array $conditions 额外的查询条件
+     * @param int|null $limit 限制返回数量，null表示不限制（但最大10000）
+     * @param int|null $offset 偏移量，用于分页
+     * @return list<Pixel>
+     */
+    public static function getPixelModelsByWebsiteId(int $websiteId, array $conditions = [], ?int $limit = null, ?int $offset = null): array
+    {
+        return self::queryPixelsByWebsiteId($websiteId, $conditions, $limit, $offset)->select()->fetch()->toModels();
+    }
+
+    /**
+     * 像素记录查询构造：数组行与模型对象两种取数方式共用同一条件。
+     *
+     * @param int $websiteId 站点ID
+     * @param array $conditions 额外的查询条件
+     * @param int|null $limit 限制返回数量，null表示不限制（但最大10000）
+     * @param int|null $offset 偏移量，用于分页
+     */
+    private static function queryPixelsByWebsiteId(int $websiteId, array $conditions, ?int $limit, ?int $offset): Pixel
+    {
         $model = w_obj(self::class)->reset()->where(self::schema_fields_WEBSITE_ID, $websiteId);
-        
+
         // 应用额外的查询条件
         foreach ($conditions as $field => $value) {
             if (is_array($value)) {
@@ -156,7 +188,7 @@ class Pixel extends Model
                 $model->where($field, $value);
             }
         }
-        
+
         // 添加限制，避免查询过大导致性能问题
         if ($limit !== null) {
             $limit = min($limit, 10000); // 最大限制10000条
@@ -165,12 +197,11 @@ class Pixel extends Model
             // 如果没有指定限制，默认限制10000条
             $model->limit(10000);
         }
-        
+
         // 使用索引字段排序，提高查询性能
         $model->order(self::schema_fields_CREATED_AT, 'DESC');
-        
-        $model->select()->fetch();
-        return $model->getItems();
+
+        return $model;
     }
     
     /**

@@ -372,12 +372,14 @@ class PaymentRefundService implements PaymentRefundFacadeInterface
         $now = date('Y-m-d H:i:s');
         foreach (PaymentCaptureReaderEnsureService::payableTypeAliases($payableType) as $type) {
             $model = $this->objectManager->getInstance(PaymentIntent::class, [], false);
-            $model->where(PaymentIntent::schema_fields_PAYABLE_TYPE, strtolower(trim($type)))
+            // 行在 fetch()->toModels() 上；对 $model 调 getItems() 恒为空。
+            $intents = $model->where(PaymentIntent::schema_fields_PAYABLE_TYPE, strtolower(trim($type)))
                 ->where(PaymentIntent::schema_fields_PAYABLE_ID, $payableId)
                 ->where(PaymentIntent::schema_fields_STATUS, $openStatuses, 'IN')
                 ->select()
-                ->fetch();
-            foreach ($model->getItems() as $intent) {
+                ->fetch()
+                ->toModels();
+            foreach ($intents as $intent) {
                 if (!$intent instanceof PaymentIntent || !$intent->getId()) {
                     continue;
                 }
@@ -408,7 +410,8 @@ class PaymentRefundService implements PaymentRefundFacadeInterface
     private function listCapturedIntents(string $payableType, string $payableId): array
     {
         $model = $this->objectManager->getInstance(PaymentIntent::class, [], false);
-        $model->where(PaymentIntent::schema_fields_PAYABLE_TYPE, strtolower(trim($payableType)))
+        // 返回 list<PaymentIntent>，必须对象化。
+        $intents = $model->where(PaymentIntent::schema_fields_PAYABLE_TYPE, strtolower(trim($payableType)))
             ->where(PaymentIntent::schema_fields_PAYABLE_ID, $payableId)
             ->where(PaymentIntent::schema_fields_STATUS, [
                 PaymentIntent::STATUS_AUTHORIZED,
@@ -420,9 +423,10 @@ class PaymentRefundService implements PaymentRefundFacadeInterface
             ], 'IN')
             ->order(PaymentIntent::schema_fields_CREATED_AT, 'ASC')
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
         $out = [];
-        foreach ($model->getItems() as $intent) {
+        foreach ($intents as $intent) {
             if ($intent instanceof PaymentIntent && $intent->getId()) {
                 $out[] = $intent;
             }
@@ -1558,7 +1562,10 @@ class PaymentRefundService implements PaymentRefundFacadeInterface
      */
     private function collectionItems(mixed $collection, string $className): array
     {
-        if (\is_object($collection) && method_exists($collection, 'getItems')) {
+        // 契约 @return T[] 且下方 instanceof 过滤，必须对象化。
+        if (\is_object($collection) && method_exists($collection, 'toModels')) {
+            $collection = $collection->toModels();
+        } elseif (\is_object($collection) && method_exists($collection, 'getItems')) {
             $collection = $collection->getItems();
         }
         if (!\is_array($collection)) {

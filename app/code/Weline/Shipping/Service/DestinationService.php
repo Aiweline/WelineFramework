@@ -87,24 +87,20 @@ final class DestinationService
                             ->where(DestinationRegion::schema_fields_SCOPE_ID, (int)$id)
                             ->where(DestinationRegion::schema_fields_IS_ACTIVE, 1)
                             ->select()
-                            ->fetch()
-                            ->getItems();
+                            ->fetchArray();
                     } catch (\Throwable) {
                         return [];
                     }
                     foreach ($items as $item) {
-                        if (!$item instanceof DestinationRegion) {
-                            continue;
-                        }
                         $rows[] = [
-                            'destination_id' => (int)$item->getId(),
-                            'scope_type' => (string)$item->getData(DestinationRegion::schema_fields_SCOPE_TYPE),
-                            'scope_id' => (int)$item->getData(DestinationRegion::schema_fields_SCOPE_ID),
-                            'region_type' => (string)$item->getData(DestinationRegion::schema_fields_REGION_TYPE),
-                            'country_code' => (string)$item->getData(DestinationRegion::schema_fields_COUNTRY_CODE),
-                            'region_id' => (int)$item->getData(DestinationRegion::schema_fields_REGION_ID),
-                            'region_code' => (string)$item->getData(DestinationRegion::schema_fields_REGION_CODE),
-                            'street_id' => (int)$item->getData(DestinationRegion::schema_fields_STREET_ID),
+                            'destination_id' => (int)($item[DestinationRegion::schema_fields_ID] ?? 0),
+                            'scope_type' => (string)($item[DestinationRegion::schema_fields_SCOPE_TYPE] ?? ''),
+                            'scope_id' => (int)($item[DestinationRegion::schema_fields_SCOPE_ID] ?? 0),
+                            'region_type' => (string)($item[DestinationRegion::schema_fields_REGION_TYPE] ?? ''),
+                            'country_code' => (string)($item[DestinationRegion::schema_fields_COUNTRY_CODE] ?? ''),
+                            'region_id' => (int)($item[DestinationRegion::schema_fields_REGION_ID] ?? 0),
+                            'region_code' => (string)($item[DestinationRegion::schema_fields_REGION_CODE] ?? ''),
+                            'street_id' => (int)($item[DestinationRegion::schema_fields_STREET_ID] ?? 0),
                         ];
                     }
                 }

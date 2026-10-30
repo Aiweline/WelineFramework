@@ -242,7 +242,8 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
             ->order(Order::schema_fields_ID, 'ASC')
             ->select()
             ->fetch();
-        foreach ($collection->getItems() as $orderModel) {
+        // hydrateOrder() 需要 Order 模型对象。
+        foreach ($collection->toModels() as $orderModel) {
             if (!$orderModel instanceof Order) {
                 continue;
             }
@@ -400,7 +401,8 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
             ->select()
             ->fetch();
         $units = [];
-        foreach ($rows->getItems() as $row) {
+        // 逐行调用 getData()，保留模型对象。
+        foreach ($rows->toModels() as $row) {
             if (!$row instanceof FulfillmentUnit) {
                 continue;
             }

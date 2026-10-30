@@ -797,11 +797,12 @@ class DnsSwitchService
         $detector = ObjectManager::getInstance(DnsProviderDetector::class);
         $isCdn = $detector->isCdnProvider($targetCode);
 
+        // 逐条 setDnsStatus()/setCdnStatus()/save()，必须对象化。
         $pools = $poolModel->clearQuery()
             ->where(DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($rootDomain))
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         foreach ($pools as $pool) {
             $pool->setDnsStatus(DomainPool::INFRA_STATUS_SWITCHING);
@@ -887,11 +888,12 @@ class DnsSwitchService
     private function updateDomainPoolStatus(string $rootDomain, string $dnsProvider, string $cdnProvider, bool $markInfraReady = true): void
     {
         $poolModel = ObjectManager::getInstance(DomainPool::class);
+        // 逐条 setDnsProvider()/setDnsStatus()/save()，必须对象化。
         $pools = $poolModel->clearQuery()
             ->where(DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($rootDomain))
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         foreach ($pools as $pool) {
             $pool->setDnsProvider($dnsProvider);

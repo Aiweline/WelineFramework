@@ -145,8 +145,8 @@ final class DefaultShippingLaneSeedService
         $find = function (string $class, array $filters) {
             $model = $this->objectManager->getInstance($class, [], false)->reset();
             foreach ($filters as $field=>$value) { $model->where($field, $value); }
-            $items = $model->select()->fetch()->getItems();
-            return $items[0] ?? null;
+            // 只要第一条并调用 getId()，取首行模型。
+            return $model->select()->fetch()->firstModel();
         };
         $carrier = $find(Carrier::class, ['carrier_code'=>self::CARRIER_CODE]);
         $carrierId = $carrier ? (int)$carrier->getId() : $this->ensureStandardCarrier();
@@ -370,8 +370,8 @@ final class DefaultShippingLaneSeedService
             ->where(Carrier::schema_fields_CARRIER_CODE, self::CARRIER_CODE)
             ->select()
             ->fetch()
-            ->getItems();
-        $existing = is_array($items) ? ($items[0] ?? null) : null;
+            ->toModels();
+        $existing = $items[0] ?? null;
         if ($existing instanceof Carrier && (int)$existing->getId() > 0) {
             $template = trim((string)$existing->getData(Carrier::schema_fields_TRACKING_URL_TEMPLATE));
             /** @var TrackingUrlResolver $urlResolver */
@@ -422,11 +422,8 @@ final class DefaultShippingLaneSeedService
                 ->where(EmbargoRegion::schema_fields_IS_ACTIVE, 1)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             foreach ($items as $item) {
-                if (!$item instanceof EmbargoRegion) {
-                    continue;
-                }
                 $scope = (string)$item->getData(EmbargoRegion::schema_fields_SCOPE_TYPE);
                 if ($scope === EmbargoRegion::SCOPE_SYSTEM) {
                     continue;
@@ -666,8 +663,8 @@ final class DefaultShippingLaneSeedService
             ->where(RateTemplate::schema_fields_TEMPLATE_CODE, $code)
             ->select()
             ->fetch()
-            ->getItems();
-        $existing = is_array($items) ? ($items[0] ?? null) : null;
+            ->toModels();
+        $existing = $items[0] ?? null;
         if ($existing instanceof RateTemplate && (int)$existing->getId() > 0) {
             $existing->setData($payload)->save();
 
@@ -704,8 +701,8 @@ final class DefaultShippingLaneSeedService
             ->where(\Weline\Shipping\Model\ShippingProfile::schema_fields_PROFILE_CODE, $code)
             ->select()
             ->fetch()
-            ->getItems();
-        $existing = is_array($items) ? ($items[0] ?? null) : null;
+            ->toModels();
+        $existing = $items[0] ?? null;
         $payload = [
             \Weline\Shipping\Model\ShippingProfile::schema_fields_PROFILE_NAME => $name,
             \Weline\Shipping\Model\ShippingProfile::schema_fields_IS_GENERAL => $isGeneral ? 1 : 0,
@@ -731,12 +728,9 @@ final class DefaultShippingLaneSeedService
             ->where(\Weline\Shipping\Model\ShippingProfileService::schema_fields_PROFILE_ID, $profileId)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         $keep = [];
-        foreach (is_array($existingLinks) ? $existingLinks : [] as $link) {
-            if (!$link instanceof \Weline\Shipping\Model\ShippingProfileService) {
-                continue;
-            }
+        foreach ($existingLinks as $link) {
             $sid = (int)$link->getData(\Weline\Shipping\Model\ShippingProfileService::schema_fields_SERVICE_ID);
             if (!in_array($sid, $serviceIds, true)) {
                 $link->delete();
@@ -799,8 +793,8 @@ final class DefaultShippingLaneSeedService
                 )
                 ->select()
                 ->fetch()
-                ->getItems();
-            $existing = is_array($items) ? ($items[0] ?? null) : null;
+                ->toModels();
+            $existing = $items[0] ?? null;
             $payload = [
                 \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_RULE_NAME => '偏远加价·' . $name,
                 \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_MATCH_TYPE =>
@@ -868,8 +862,8 @@ final class DefaultShippingLaneSeedService
             ->where(\Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_SCOPE_ID, $scope['scope_id'])
             ->select()
             ->fetch()
-            ->getItems();
-        $existing = is_array($items) ? ($items[0] ?? null) : null;
+            ->toModels();
+        $existing = $items[0] ?? null;
         $policyPayload = [
             \Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_POLICY_CODE =>
                 \Weline\Shipping\Model\ShippingPackingPolicy::SEED_CODE,
@@ -925,8 +919,8 @@ final class DefaultShippingLaneSeedService
                 ->where(\Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_ADDON_CODE, $meta['code'])
                 ->select()
                 ->fetch()
-                ->getItems();
-            $row = is_array($rows) ? ($rows[0] ?? null) : null;
+                ->toModels();
+            $row = $rows[0] ?? null;
             $payload = [
                 \Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_ADDON_NAME => $meta['name'],
                 \Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_ADDON_TYPE => $meta['type'],
@@ -984,8 +978,8 @@ final class DefaultShippingLaneSeedService
                 ->where(\Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_RULE_CODE, $meta['code'])
                 ->select()
                 ->fetch()
-                ->getItems();
-            $row = is_array($rows) ? ($rows[0] ?? null) : null;
+                ->toModels();
+            $row = $rows[0] ?? null;
             $payload = [
                 \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_RULE_NAME => $meta['name'],
                 \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_START_DATE => $meta['start'],
@@ -1097,8 +1091,8 @@ final class DefaultShippingLaneSeedService
             ->where(ShippingService::schema_fields_SERVICE_CODE, $code)
             ->select()
             ->fetch()
-            ->getItems();
-        $existing = is_array($items) ? ($items[0] ?? null) : null;
+            ->toModels();
+        $existing = $items[0] ?? null;
         $payload = [
             ShippingService::schema_fields_SCOPE_TYPE => $scope['scope_type'],
             ShippingService::schema_fields_SCOPE_ID => $scope['scope_id'],
@@ -1154,8 +1148,8 @@ final class DefaultShippingLaneSeedService
                 ->order(ShippingAddress::schema_fields_ID, 'ASC')
                 ->select()
                 ->fetch()
-                ->getItems();
-            $row = is_array($items) ? ($items[0] ?? null) : null;
+                ->toModels();
+            $row = $items[0] ?? null;
             if ($row instanceof ShippingAddress && (int)$row->getId() > 0) {
                 $pickedId = (int)$row->getId();
                 // 种子航线要绑当前仓；若尚无默认发货地址，把选用地址提升为默认，供结账 resolveDefaultOriginId。
@@ -1255,25 +1249,21 @@ final class DefaultShippingLaneSeedService
                 ->where(Warehouse::schema_fields_NODE_KIND, Warehouse::NODE_WAREHOUSE)
                 ->order(Warehouse::schema_fields_ID, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             if (!is_array($items)) {
                 return null;
             }
             $fallback = null;
             foreach ($items as $row) {
-                if (!$row instanceof Warehouse) {
-                    continue;
-                }
-                $cc = strtoupper(trim((string)$row->getData(Warehouse::schema_fields_COUNTRY_CODE)));
+                $cc = strtoupper(trim((string)($row[Warehouse::schema_fields_COUNTRY_CODE] ?? '')));
                 if ($cc === '') {
                     continue;
                 }
                 $payload = [
-                    'warehouse_id' => (int)$row->getId(),
+                    'warehouse_id' => (int)($row[Warehouse::schema_fields_ID] ?? 0),
                     'country_code' => $cc,
-                    'name' => trim((string)$row->getData(Warehouse::schema_fields_NAME)),
-                    'region_code' => trim((string)$row->getData(Warehouse::schema_fields_REGION_CODE)),
+                    'name' => trim((string)($row[Warehouse::schema_fields_NAME] ?? '')),
+                    'region_code' => trim((string)($row[Warehouse::schema_fields_REGION_CODE] ?? '')),
                 ];
                 if ($cc === 'CN') {
                     return $payload;

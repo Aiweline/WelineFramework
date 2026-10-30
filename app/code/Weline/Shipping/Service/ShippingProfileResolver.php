@@ -40,8 +40,9 @@ final class ShippingProfileResolver
                     ->where(ShippingProfile::schema_fields_IS_ACTIVE, 1)
                     ->select()
                     ->fetch()
-                    ->getItems();
-                $row = is_array($items) ? ($items[0] ?? null) : null;
+                    // 返回值里的 profile 要交给调用方使用（含模型方法），保留对象。
+                    ->toModels();
+                $row = $items[0] ?? null;
                 if ($row instanceof ShippingProfile && (int)$row->getId() > 0) {
                     return ['profile' => $row, 'source' => self::SOURCE_OFFER];
                 }
@@ -90,8 +91,8 @@ final class ShippingProfileResolver
             ->where(ShippingProfile::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
-            ->getItems();
-        $row = is_array($items) ? ($items[0] ?? null) : null;
+            ->toModels();
+        $row = $items[0] ?? null;
         if ($row instanceof ShippingProfile && (int)$row->getId() > 0) {
             return ['profile' => $row, 'source' => self::SOURCE_GENERAL];
         }
@@ -102,8 +103,8 @@ final class ShippingProfileResolver
             ->where(ShippingProfile::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
-            ->getItems();
-        $row = is_array($items) ? ($items[0] ?? null) : null;
+            ->toModels();
+        $row = $items[0] ?? null;
         if ($row instanceof ShippingProfile && (int)$row->getId() > 0) {
             return ['profile' => $row, 'source' => self::SOURCE_GENERAL];
         }
@@ -121,17 +122,14 @@ final class ShippingProfileResolver
         }
         /** @var ShippingProfileService $link */
         $link = $this->objectManager->getInstance(ShippingProfileService::class, [], false);
+        // 只要 service_id 列表，取数组列即可。
         $items = $link->reset()
             ->where(ShippingProfileService::schema_fields_PROFILE_ID, $profileId)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $ids = [];
-        foreach (is_array($items) ? $items : [] as $row) {
-            if (!$row instanceof ShippingProfileService) {
-                continue;
-            }
-            $sid = (int)$row->getData(ShippingProfileService::schema_fields_SERVICE_ID);
+        foreach ($items as $row) {
+            $sid = (int)($row[ShippingProfileService::schema_fields_SERVICE_ID] ?? 0);
             if ($sid > 0) {
                 $ids[] = $sid;
             }

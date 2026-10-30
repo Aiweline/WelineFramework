@@ -107,31 +107,23 @@ final class CarrierCoverageMatchService
                 $services = $query
                     ->order(ShippingService::schema_fields_SORT_ORDER, 'ASC')
                     ->select()
-                    ->fetch()
-                    ->getItems();
+                    ->fetchArray();
             } catch (\Throwable) {
                 continue;
             }
             foreach ($services as $service) {
-                if (!$service instanceof ShippingService) {
-                    continue;
-                }
                 $result[] = [
-                    'service_id' => $service->getId(),
-                    'service_name' => $service->getData(ShippingService::schema_fields_SERVICE_NAME),
-                    'service_code' => $service->getData(ShippingService::schema_fields_SERVICE_CODE),
+                    'service_id' => $service[ShippingService::schema_fields_ID] ?? null,
+                    'service_name' => $service[ShippingService::schema_fields_SERVICE_NAME] ?? null,
+                    'service_code' => $service[ShippingService::schema_fields_SERVICE_CODE] ?? null,
                     'carrier_id' => $carrierId,
-                    'estimated_days_min' => $service->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MIN),
-                    'estimated_days_max' => $service->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MAX),
-                    'is_free_shipping' => $service->getData(ShippingService::schema_fields_IS_FREE_SHIPPING),
-                    'scope_type' => $service->getData(ShippingService::schema_fields_SCOPE_TYPE),
-                    'scope_id' => $service->getData(ShippingService::schema_fields_SCOPE_ID),
-                    'allowed_point_types' => (string)$service->getData(
-                        ShippingService::schema_fields_ALLOWED_POINT_TYPES,
-                    ),
-                    'accepted_hazard_classes' => (string)$service->getData(
-                        ShippingService::schema_fields_ACCEPTED_HAZARD_CLASSES,
-                    ),
+                    'estimated_days_min' => $service[ShippingService::schema_fields_ESTIMATED_DAYS_MIN] ?? null,
+                    'estimated_days_max' => $service[ShippingService::schema_fields_ESTIMATED_DAYS_MAX] ?? null,
+                    'is_free_shipping' => $service[ShippingService::schema_fields_IS_FREE_SHIPPING] ?? null,
+                    'scope_type' => $service[ShippingService::schema_fields_SCOPE_TYPE] ?? null,
+                    'scope_id' => $service[ShippingService::schema_fields_SCOPE_ID] ?? null,
+                    'allowed_point_types' => (string)($service[ShippingService::schema_fields_ALLOWED_POINT_TYPES] ?? ''),
+                    'accepted_hazard_classes' => (string)($service[ShippingService::schema_fields_ACCEPTED_HAZARD_CLASSES] ?? ''),
                 ];
             }
         }
@@ -184,25 +176,21 @@ final class CarrierCoverageMatchService
                         ->order(Carrier::schema_fields_SORT_ORDER, 'ASC')
                         ->order(Carrier::schema_fields_CARRIER_NAME, 'ASC')
                         ->select()
-                        ->fetch()
-                        ->getItems();
+                        ->fetchArray();
                 } catch (\Throwable) {
                     return [];
                 }
 
                 $rows = [];
                 foreach ($carriers as $carrier) {
-                    if (!$carrier instanceof Carrier) {
-                        continue;
-                    }
-                    $carrierId = (int)$carrier->getId();
+                    $carrierId = (int)($carrier[Carrier::schema_fields_ID] ?? 0);
                     if ($carrierId <= 0) {
                         continue;
                     }
                     $rows[] = [
                         'id' => $carrierId,
-                        'sort_order' => (int)$carrier->getData(Carrier::schema_fields_SORT_ORDER),
-                        'name' => (string)$carrier->getData(Carrier::schema_fields_CARRIER_NAME),
+                        'sort_order' => (int)($carrier[Carrier::schema_fields_SORT_ORDER] ?? 0),
+                        'name' => (string)($carrier[Carrier::schema_fields_CARRIER_NAME] ?? ''),
                     ];
                 }
 
@@ -235,22 +223,18 @@ final class CarrierCoverageMatchService
                         ->where(CarrierRegion::schema_fields_CARRIER_ID, $carrierId)
                         ->where(CarrierRegion::schema_fields_IS_ACTIVE, 1)
                         ->select()
-                        ->fetch()
-                        ->getItems();
+                        ->fetchArray();
                 } catch (\Throwable) {
                     return [];
                 }
                 $rows = [];
                 foreach ($items as $item) {
-                    if (!$item instanceof CarrierRegion) {
-                        continue;
-                    }
                     $rows[] = [
-                        'region_type' => (string)$item->getData(CarrierRegion::schema_fields_REGION_TYPE),
-                        'country_code' => (string)$item->getData(CarrierRegion::schema_fields_COUNTRY_CODE),
-                        'region_id' => (int)$item->getData(CarrierRegion::schema_fields_REGION_ID),
-                        'region_code' => (string)$item->getData(CarrierRegion::schema_fields_REGION_CODE),
-                        'street_id' => (int)$item->getData(CarrierRegion::schema_fields_STREET_ID),
+                        'region_type' => (string)($item[CarrierRegion::schema_fields_REGION_TYPE] ?? ''),
+                        'country_code' => (string)($item[CarrierRegion::schema_fields_COUNTRY_CODE] ?? ''),
+                        'region_id' => (int)($item[CarrierRegion::schema_fields_REGION_ID] ?? 0),
+                        'region_code' => (string)($item[CarrierRegion::schema_fields_REGION_CODE] ?? ''),
+                        'street_id' => (int)($item[CarrierRegion::schema_fields_STREET_ID] ?? 0),
                     ];
                 }
 

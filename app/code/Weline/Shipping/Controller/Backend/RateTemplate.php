@@ -42,7 +42,8 @@ class RateTemplate extends BackendController
             ->order(RateTemplateModel::schema_fields_ID, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            // 模板对每行调用 getData()，保留模型对象。
+            ->toModels();
 
         $editing = null;
         $editId = (int)($this->request->getParam('edit_id') ?? $this->request->getParam('id') ?? 0);

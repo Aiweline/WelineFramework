@@ -206,8 +206,9 @@ final class FreeShippingRuleSeedService
             ->where(FreeShippingRule::schema_fields_RULE_CODE, $code)
             ->select()
             ->fetch()
-            ->getItems();
-        $existing = is_array($items) ? ($items[0] ?? null) : null;
+            // 返回类型是 ?FreeShippingRule，必须给模型对象。
+            ->toModels();
+        $existing = $items[0] ?? null;
 
         return $existing instanceof FreeShippingRule && (int)$existing->getId() > 0 ? $existing : null;
     }

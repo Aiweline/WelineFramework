@@ -65,7 +65,8 @@ class Carrier extends BackendController
             ->limit($limit, $offset)
             ->select()
             ->fetch()
-            ->getItems();
+            // 模板对每行调用 getData()，保留模型对象。
+            ->toModels();
 
         $this->assign('carriers', $carriers);
         $this->assign('total', $total);

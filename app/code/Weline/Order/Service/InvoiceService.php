@@ -194,15 +194,16 @@ class InvoiceService
     /** @return list<OrderInvoice> */
     public function getInvoiceList(int $orderId): array
     {
+        // 用 instanceof 过滤，必须对象化（getItems() 返回的是数组行）。
         $collection = $this->newModel(OrderInvoice::class)
             ->where(OrderInvoice::schema_fields_ORDER_ID, $orderId)
             ->order(OrderInvoice::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetch();
 
-        return \is_object($collection) && method_exists($collection, 'getItems')
+        return \is_object($collection) && method_exists($collection, 'toModels')
             ? array_values(array_filter(
-                $collection->getItems(),
+                $collection->toModels(),
                 static fn (mixed $item): bool => $item instanceof OrderInvoice,
             ))
             : [];

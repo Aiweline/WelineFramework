@@ -75,12 +75,13 @@ final class LanguageCatalogInvalidationService
         try {
             /** @var \Weline\Cdn\Model\Domain $domainModel */
             $domainModel = ObjectManager::getInstance(\Weline\Cdn\Model\Domain::class);
+            // 下方 instanceof Domain + getData()，必须对象化。
             $domains = (clone $domainModel)->reset()
                 ->where(\Weline\Cdn\Model\Domain::schema_fields_SITE_ID, $websiteId)
                 ->where(\Weline\Cdn\Model\Domain::schema_fields_ENABLED, 1)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             if ($domains === []) {
                 return;
             }

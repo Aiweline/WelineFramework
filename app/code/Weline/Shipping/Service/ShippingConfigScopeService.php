@@ -196,10 +196,9 @@ final class ShippingConfigScopeService
                 ->where(ShippingService::schema_fields_SCOPE_ID, $scopeId)
                 ->where(ShippingService::schema_fields_IS_ACTIVE, 1)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
 
-            return is_array($items) ? count($items) : 0;
+            return \count($items);
         } catch (\Throwable) {
             return 0;
         }
@@ -231,15 +230,15 @@ final class ShippingConfigScopeService
         try {
             /** @var Store $probe */
             $probe = $this->objectManager->getInstance(Store::class, [], false);
+            // 只需主键，取数组首行。
             $items = $probe->reset()
                 ->where(Store::schema_fields_WEBSITE_ID, $websiteId)
                 ->where(Store::schema_fields_CODE, $code)
                 ->select()
-                ->fetch()
-                ->getItems();
-            $first = is_array($items) ? ($items[0] ?? null) : null;
-            if ($first instanceof Store) {
-                return (int)$first->getId();
+                ->fetchArray();
+            $storeId = (int)($items[0][Store::schema_fields_ID] ?? 0);
+            if ($storeId > 0) {
+                return $storeId;
             }
         } catch (\Throwable) {
         }
@@ -263,11 +262,10 @@ final class ShippingConfigScopeService
                 ->where(SalesChannel::schema_fields_STORE_ID, $storeId)
                 ->where(SalesChannel::schema_fields_CODE, $code)
                 ->select()
-                ->fetch()
-                ->getItems();
-            $first = is_array($items) ? ($items[0] ?? null) : null;
-            if ($first instanceof SalesChannel) {
-                return (int)$first->getId();
+                ->fetchArray();
+            $channelId = (int)($items[0][SalesChannel::schema_fields_ID] ?? 0);
+            if ($channelId > 0) {
+                return $channelId;
             }
         } catch (\Throwable) {
         }

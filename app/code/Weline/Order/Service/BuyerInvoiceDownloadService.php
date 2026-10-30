@@ -257,11 +257,12 @@ final class BuyerInvoiceDownloadService
     {
         /** @var OrderItem $model */
         $model = $this->objects()->getInstance(OrderItem::class);
+        // 契约 list<OrderItem> 且用 instanceof 过滤，必须对象化。
         $rows = $model->clear()
             ->where(OrderItem::schema_fields_ORDER_ID, $orderId)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         $items = array_values(array_filter($rows, static fn (mixed $row): bool => $row instanceof OrderItem));
         if ($items !== [] || $orderUuid === '') {
             return $items;
@@ -270,7 +271,7 @@ final class BuyerInvoiceDownloadService
             ->where(OrderItem::schema_fields_ORDER_UUID, $orderUuid)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         return array_values(array_filter($rows, static fn (mixed $row): bool => $row instanceof OrderItem));
     }

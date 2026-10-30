@@ -37,6 +37,30 @@ use Weline\Websites\Service\WebsiteCacheInvalidationService;
 #[Index(name: 'idx_health', columns: ['health_status'])]
 class WebsiteDomain extends Model
 {
+    /**
+     * 全部 active 域名的纯数组快照（进程内驻留，只查一次）。
+     *
+     * 站点域名是只读配置：常驻 Worker 里按请求克隆模型再逐行水合对象，既占内存
+     * 又会把 clone 出来的模型状态带进匹配逻辑；这里一次 fetchArray 取数组，
+     * 调用方（DetectWebsite）再叠加 request/process/文件三层缓存。
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function fetchCatalogRows(): array
+    {
+        try {
+            $model = w_obj(self::class);
+            $rows = $model->clearData()->clearQuery()
+                ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+                ->select()
+                ->fetchArray();
+
+            return \is_array($rows) ? \array_values($rows) : [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
     public const schema_table = 'weline_websites_website_domain';
     public const schema_primary_key = 'domain_id';
 

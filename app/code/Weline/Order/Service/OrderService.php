@@ -434,8 +434,8 @@ class OrderService
             $model->page($filters['page'], $filters['page_size']);
         }
         
-        $collection = $model->select()->fetch();
-        return $collection->getItems();
+        // 列表查询：fetchArray() 直接返回行数组（getItems() 也是数组行，语义显式化）。
+        return $model->select()->fetchArray();
     }
     
     /**
@@ -564,12 +564,12 @@ class OrderService
      */
     public function getOrderItems(int $orderId): array
     {
-        $collection = $this->getOrderItemModel()->reset()
+        // 下游 calculateTotals() / present() 均按数组消费。
+        $items = $this->getOrderItemModel()->reset()
             ->where(OrderItem::schema_fields_ORDER_ID, $orderId)
             ->select()
-            ->fetch();
-        
-        $items = $collection->getItems();
+            ->fetchArray();
+
         if ($items !== []) {
             return $items;
         }
@@ -588,8 +588,7 @@ class OrderService
         return $this->getOrderItemModel()->reset()
             ->where(OrderItem::schema_fields_ORDER_UUID, $orderUuid)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
     }
     
     /**

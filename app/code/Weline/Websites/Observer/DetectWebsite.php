@@ -1089,12 +1089,19 @@ class DetectWebsite implements
                 ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
                 ->select()
                 ->fetch();
-            $domainItems = [];
-            foreach ($domainQuery->getItems() ?: [] as $item) {
-                if ($item instanceof WebsiteDomain) {
-                    $domainItems[] = $item;
-                }
-            }
+            // fetch() 对多行查询返回数组行（RowCollection）。原写法用
+            // `$item instanceof WebsiteDomain` 过滤，数组行会被全部滤掉 →
+            // matchedSite=null → 全站 404。这里显式对象化，保持后续模型方法可用。
+            $fetched = $domainQuery->fetch();
+            $domainItems = $fetched instanceof \Weline\Framework\Database\Query\RowCollection
+                ? \array_values(\array_filter(
+                    $fetched->toModels(),
+                    static fn($item): bool => $item instanceof WebsiteDomain
+                ))
+                : \array_values(\array_filter(
+                    \is_array($fetched) ? $fetched : [],
+                    static fn($item): bool => $item instanceof WebsiteDomain
+                ));
             if ($domainItems === []) {
                 continue;
             }
@@ -1314,20 +1321,10 @@ class DetectWebsite implements
             self::CACHE_KEY_WEBSITE_ROWS,
             function () use ($websiteModel): array {
                 try {
-                    $rows = [];
-                    /** @var Website $query */
-                    $query = clone $websiteModel;
-                    $query->clearData()->clearQuery()->select()->fetch();
-                    foreach ($query->getItems() as $row) {
-                        if (\is_object($row) && \method_exists($row, 'getData')) {
-                            $row = $row->getData();
-                        }
-                        if (\is_array($row)) {
-                            $rows[] = $row;
-                        }
-                    }
+                    // 同 getWebsiteDomainRows：纯数组快照，不构造模型对象。
+                    $rows = Website::fetchCatalogRows();
 
-                    return $rows;
+                    return \is_array($rows) ? $rows : [];
                 } catch (\PDOException $e) {
                     $code = $e->getCode();
                     $message = $e->getMessage();
@@ -1350,25 +1347,14 @@ class DetectWebsite implements
             self::CACHE_KEY_WEBSITE_DOMAINS,
             function (): array {
                 try {
-                    /** @var WebsiteDomain $domainModel */
-                    $domainModel = w_obj(WebsiteDomain::class);
-                    $rows = [];
-                    /** @var WebsiteDomain $query */
-                    $query = clone $domainModel;
-                    $query->clearData()->clearQuery()
-                        ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
-                        ->select()
-                        ->fetch();
-                    foreach ($query->getItems() as $row) {
-                        if (\is_object($row) && \method_exists($row, 'getData')) {
-                            $row = $row->getData();
-                        }
-                        if (\is_array($row)) {
-                            $rows[] = $row;
-                        }
-                    }
+                    // 常驻 Worker 内存态：直接 fetchArray 取纯数组并整表驻留。
+                    // 不克隆模型、不构造模型对象——站点域名是只读快照，逐行
+                    // ObjectManager::make() 既占内存又会在 clone 后触发意料之外的
+                    // 模型状态；数组快照才是这里需要的形态。整表只查一次，
+                    // 之后命中 rememberArray 的 request/process/cache 三层。
+                    $rows = WebsiteDomain::fetchCatalogRows();
 
-                    return $rows;
+                    return \is_array($rows) ? $rows : [];
                 } catch (\Throwable $e) {
                     return [];
                 }

@@ -58,9 +58,11 @@ class FreeShippingService
             ->where(FreeShippingRule::schema_fields_IS_ACTIVE, 1)
             ->order(FreeShippingRule::schema_fields_PRIORITY, 'DESC')
             ->select()
-            ->fetch();
-        
-        foreach ($rules->getItems() as $rule) {
+            ->fetch()
+            // 返回模型对象，且 matchRule() 需要模型，保留对象。
+            ->toModels();
+
+        foreach ($rules as $rule) {
             if ($this->matchRule($rule, $orderAmount, $memberLevelId, $regionId, $couponCode)) {
                 return $rule;
             }

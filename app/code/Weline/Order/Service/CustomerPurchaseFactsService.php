@@ -24,21 +24,20 @@ final class CustomerPurchaseFactsService
         try {
             /** @var Order $model */
             $model = ObjectManager::getInstance(Order::class);
-            $model->clear()
+            // 行在 fetchArray() 的返回值上；对 $model 调 getItems() 恒为空。
+            $items = $model->clear()
                 ->where(Order::schema_fields_CUSTOMER_ID, $customerId)
                 ->where(Order::schema_fields_PAYMENT_STATUS, Order::PAYMENT_STATUS_PAID)
                 ->order('created_at', 'DESC')
                 ->select()
-                ->fetch();
-            $items = $model->getItems();
-            $count = \is_array($items) ? \count($items) : 0;
+                ->fetchArray();
+            $count = \count($items);
             $lastPaid = '';
-            if ($count > 0 && isset($items[0]) && \is_object($items[0]) && \method_exists($items[0], 'getData')) {
-                $lastPaid = \trim((string)($items[0]->getData('created_at')
-                    ?? $items[0]->getData('create_time')
+            if ($count > 0 && \is_array($items[0] ?? null)) {
+                $lastPaid = \trim((string)($items[0]['created_at']
+                    ?? $items[0]['create_time']
                     ?? ''));
             }
-
             return [
                 'order_count' => $count,
                 'last_paid_at' => $lastPaid,

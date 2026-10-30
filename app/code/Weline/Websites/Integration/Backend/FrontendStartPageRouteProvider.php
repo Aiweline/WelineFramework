@@ -33,9 +33,14 @@ final class FrontendStartPageRouteProvider implements FrontendStartPageRouteProv
         if ($websiteCode === '') {
             $websiteCode = \trim((string)($_SERVER['WELINE_WEBSITE_CODE'] ?? ''));
         }
-        $scope = $websiteCode !== ''
-            ? $this->configReader->normalizeScope($websiteCode)
-            : $this->configReader->globalScope();
+        // 站点未识别时不得回落到 global scope：该键按站点存放，全局作用域里若
+        // 残留某个站点的值（实测 amayum.default.default），会把「别的站点首页
+        // 路由」当成当前站点根路径改写目标 → 其余站点根路径整体 404。
+        if ($websiteCode === '') {
+            return '';
+        }
+
+        $scope = $this->configReader->normalizeScope($websiteCode);
         $result = $this->configReader->get(
             'frontend_start_page_path',
             'Weline_Websites',
@@ -43,6 +48,7 @@ final class FrontendStartPageRouteProvider implements FrontendStartPageRouteProv
             '',
             $scope,
         );
+
         return \is_scalar($result) ? \trim((string)$result) : '';
     }
 

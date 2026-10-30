@@ -178,14 +178,7 @@ class PixelChannelRuleSeedService
         try {
             /** @var PixelSource $model */
             $model = ObjectManager::getInstance(PixelSource::class);
-            $model->reset()->select()->fetch();
-            $items = $model->getItems() ?: [];
-            $rows = [];
-            foreach ($items as $item) {
-                $rows[] = \is_object($item) && \method_exists($item, 'getData')
-                    ? (array)$item->getData()
-                    : (array)$item;
-            }
+            $rows = $model->reset()->select()->fetchArray();
 
             return ['rows' => $rows, 'error' => ''];
         } catch (\Throwable $e) {

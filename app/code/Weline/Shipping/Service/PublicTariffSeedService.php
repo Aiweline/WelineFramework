@@ -161,8 +161,9 @@ final class PublicTariffSeedService
             if ((bool)$legacy->getData('is_active')) {
                 $legacy->setData('is_active', 0)->save();
             }
+            // 需要 delete()，保留模型对象。
             $links = $this->objectManager->getInstance(ShippingProfileService::class, [], false)
-                ->reset()->where('profile_id', $profileId)->where('service_id', (int)$legacy->getId())->select()->fetch()->getItems();
+                ->reset()->where('profile_id', $profileId)->where('service_id', (int)$legacy->getId())->select()->fetch()->toModels();
             foreach ($links as $link) {
                 $link->delete();
             }
@@ -181,7 +182,7 @@ final class PublicTariffSeedService
             }
         }
         $links = $this->objectManager->getInstance(ShippingProfileService::class, [], false)
-            ->reset()->where('profile_id', $profileId)->select()->fetch()->getItems();
+            ->reset()->where('profile_id', $profileId)->select()->fetch()->toModels();
         $kept = [];
         foreach ($links as $link) {
             $serviceId = (int)$link->getData('service_id');
@@ -242,7 +243,7 @@ final class PublicTariffSeedService
         foreach ($filters as $field => $value) {
             $model->where($field, $value);
         }
-        $items = $model->select()->fetch()->getItems();
-        return $items[0] ?? null;
+        // 返回类型是 ?AbstractModel，取首行模型。
+        return $model->select()->fetch()->firstModel();
     }
 }

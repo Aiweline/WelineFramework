@@ -639,24 +639,22 @@ class ShippingServiceManager
             ShippingService::schema_fields_SCOPE_TYPE,
             ShippingService::schema_fields_SCOPE_ID,
         );
-        $services = $query->select()->fetch()->getItems();
+        // 仅提取字段构造成 fact 数组，不需要模型对象。
+        $services = $query->select()->fetchArray();
         $facts = [];
         $serviceIds = [];
         $templateIds = [];
         $ruleIds = [];
         foreach ($services as $service) {
-            if (!$service instanceof ShippingService) {
-                continue;
-            }
-            $serviceId = (int)$service->getId();
+            $serviceId = (int)($service[ShippingService::schema_fields_ID] ?? 0);
             if ($serviceId > 0) {
                 $serviceIds[$serviceId] = true;
             }
-            $templateId = (int)$service->getData(ShippingService::schema_fields_RATE_TEMPLATE_ID);
+            $templateId = (int)($service[ShippingService::schema_fields_RATE_TEMPLATE_ID] ?? 0);
             if ($templateId > 0) {
                 $templateIds[$templateId] = $templateId;
             }
-            $ruleId = (int)$service->getData(ShippingService::schema_fields_FREE_SHIPPING_RULE_ID);
+            $ruleId = (int)($service[ShippingService::schema_fields_FREE_SHIPPING_RULE_ID] ?? 0);
             if ($ruleId > 0) {
                 $ruleIds[$ruleId] = $ruleId;
             }
@@ -665,15 +663,12 @@ class ShippingServiceManager
         $rulesById = $this->loadFreeShippingRulesById(\array_values($ruleIds));
 
         foreach ($services as $service) {
-            if (!$service instanceof ShippingService) {
-                continue;
-            }
-            $templateId = (int)$service->getData(ShippingService::schema_fields_RATE_TEMPLATE_ID);
-            $ruleId = (int)$service->getData(ShippingService::schema_fields_FREE_SHIPPING_RULE_ID);
+            $templateId = (int)($service[ShippingService::schema_fields_RATE_TEMPLATE_ID] ?? 0);
+            $ruleId = (int)($service[ShippingService::schema_fields_FREE_SHIPPING_RULE_ID] ?? 0);
             $template = $templateId > 0 ? ($templatesById[$templateId] ?? null) : null;
             $rule = $ruleId > 0 ? ($rulesById[$ruleId] ?? null) : null;
             $facts[] = [
-                'service' => $this->pickFactFields((array)$service->getData(), [
+                'service' => $this->pickFactFields($service, [
                     ShippingService::schema_fields_ID,
                     ShippingService::schema_fields_SCOPE_TYPE,
                     ShippingService::schema_fields_SCOPE_ID,
@@ -836,13 +831,9 @@ class ShippingServiceManager
                 ->where(\Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_IS_ACTIVE, 1)
                 ->order(\Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_ID, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             foreach (is_array($items) ? $items : [] as $item) {
-                if (!$item instanceof \Weline\Shipping\Model\ShippingSurchargeRule) {
-                    continue;
-                }
-                $facts[] = $this->pickFactFields((array)$item->getData(), [
+                $facts[] = $this->pickFactFields($item, [
                     \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_ID,
                     \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_SCOPE_TYPE,
                     \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_SCOPE_ID,
@@ -888,13 +879,9 @@ class ShippingServiceManager
                 ->where(\Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_IS_ACTIVE, 1)
                 ->order(\Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_ID, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             foreach (is_array($items) ? $items : [] as $item) {
-                if (!$item instanceof \Weline\Shipping\Model\ShippingPackingPolicy) {
-                    continue;
-                }
-                $facts[] = $this->pickFactFields((array)$item->getData(), [
+                $facts[] = $this->pickFactFields($item, [
                     \Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_ID,
                     \Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_POLICY_CODE,
                     \Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_MAX_WEIGHT_KG,
@@ -933,13 +920,9 @@ class ShippingServiceManager
                 )
                 ->order(\Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_ID, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             foreach (is_array($items) ? $items : [] as $item) {
-                if (!$item instanceof \Weline\Shipping\Model\ShippingSeasonalRule) {
-                    continue;
-                }
-                $facts[] = $this->pickFactFields((array)$item->getData(), [
+                $facts[] = $this->pickFactFields($item, [
                     \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_ID,
                     \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_RULE_CODE,
                     \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_START_DATE,
@@ -980,13 +963,9 @@ class ShippingServiceManager
                 )
                 ->order(\Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_ID, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             foreach (is_array($items) ? $items : [] as $item) {
-                if (!$item instanceof \Weline\Shipping\Model\ShippingCheckoutAddon) {
-                    continue;
-                }
-                $facts[] = $this->pickFactFields((array)$item->getData(), [
+                $facts[] = $this->pickFactFields($item, [
                     \Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_ID,
                     \Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_ADDON_CODE,
                     \Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_ADDON_TYPE,
@@ -1023,17 +1002,13 @@ class ShippingServiceManager
                 ->where(ShippingService::schema_fields_SCOPE_ID, (int)$layer['scope_id'])
                 ->where(ShippingService::schema_fields_IS_ACTIVE, 1)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             foreach (is_array($items) ? $items : [] as $item) {
-                if (!$item instanceof ShippingService) {
-                    continue;
-                }
-                $code = trim((string)$item->getData(ShippingService::schema_fields_SERVICE_CODE));
+                $code = trim((string)($item[ShippingService::schema_fields_SERVICE_CODE] ?? ''));
                 if ($code === '') {
                     continue;
                 }
-                $incoterms[$code] = (string)$item->getData(ShippingService::schema_fields_INCOTERM);
+                $incoterms[$code] = (string)($item[ShippingService::schema_fields_INCOTERM] ?? '');
             }
 
             return [
@@ -1082,13 +1057,9 @@ class ShippingServiceManager
                     ->where(EmbargoRegion::schema_fields_IS_ACTIVE, 1)
                     ->order(EmbargoRegion::schema_fields_ID, 'ASC')
                     ->select()
-                    ->fetch()
-                    ->getItems();
+                    ->fetchArray();
                 foreach ($items as $item) {
-                    if (!$item instanceof EmbargoRegion) {
-                        continue;
-                    }
-                    $facts['embargo'][] = $this->pickFactFields((array)$item->getData(), [
+                    $facts['embargo'][] = $this->pickFactFields($item, [
                         EmbargoRegion::schema_fields_ID,
                         EmbargoRegion::schema_fields_SCOPE_TYPE,
                         EmbargoRegion::schema_fields_SCOPE_ID,
@@ -1116,13 +1087,9 @@ class ShippingServiceManager
                     ->where(DestinationRegion::schema_fields_IS_ACTIVE, 1)
                     ->order(DestinationRegion::schema_fields_ID, 'ASC')
                     ->select()
-                    ->fetch()
-                    ->getItems();
+                    ->fetchArray();
                 foreach ($items as $item) {
-                    if (!$item instanceof DestinationRegion) {
-                        continue;
-                    }
-                    $facts['destination'][] = $this->pickFactFields((array)$item->getData(), [
+                    $facts['destination'][] = $this->pickFactFields($item, [
                         DestinationRegion::schema_fields_ID,
                         DestinationRegion::schema_fields_SCOPE_TYPE,
                         DestinationRegion::schema_fields_SCOPE_ID,
@@ -1145,13 +1112,9 @@ class ShippingServiceManager
                 ->where(CarrierRegion::schema_fields_IS_ACTIVE, 1)
                 ->order(CarrierRegion::schema_fields_ID, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             foreach ($items as $item) {
-                if (!$item instanceof CarrierRegion) {
-                    continue;
-                }
-                $facts['carrier_coverage'][] = $this->pickFactFields((array)$item->getData(), [
+                $facts['carrier_coverage'][] = $this->pickFactFields($item, [
                     CarrierRegion::schema_fields_ID,
                     CarrierRegion::schema_fields_CARRIER_ID,
                     CarrierRegion::schema_fields_REGION_TYPE,
@@ -1180,17 +1143,13 @@ class ShippingServiceManager
                     ->where(ServiceRegion::schema_fields_IS_ACTIVE, 1)
                     ->order(ServiceRegion::schema_fields_ID, 'ASC')
                     ->select()
-                    ->fetch()
-                    ->getItems();
+                    ->fetchArray();
                 foreach ($items as $item) {
-                    if (!$item instanceof ServiceRegion) {
-                        continue;
-                    }
-                    $sid = (int)$item->getData(ServiceRegion::schema_fields_SERVICE_ID);
+                    $sid = (int)($item[ServiceRegion::schema_fields_SERVICE_ID] ?? 0);
                     if (!isset($wanted[$sid])) {
                         continue;
                     }
-                    $facts['service_lanes'][] = $this->pickFactFields((array)$item->getData(), [
+                    $facts['service_lanes'][] = $this->pickFactFields($item, [
                         ServiceRegion::schema_fields_ID,
                         ServiceRegion::schema_fields_SERVICE_ID,
                         ServiceRegion::schema_fields_REGION_TYPE,

@@ -53,10 +53,11 @@ class Status extends BackendPageController
         }
         /** @var OrderStatus $statusModel */
         $statusModel = ObjectManager::getInstance(OrderStatus::class);
+        // 模板对每行调用 getData()，保留模型对象。
         $statuses = $statusModel->order(OrderStatus::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         
         $this->assign('statuses', $statuses);
         $updateGrant = $this->objectAuthorizationGuard()->check(ObjectAction::UPDATE, ScopeIdentity::global());

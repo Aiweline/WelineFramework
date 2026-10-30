@@ -42,23 +42,19 @@ final class ShippingCheckoutAddonService
             ->order(ShippingCheckoutAddon::schema_fields_PRIORITY, 'DESC')
             ->order(ShippingCheckoutAddon::schema_fields_ID, 'ASC')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         $hits = [];
-        foreach (is_array($items) ? $items : [] as $addon) {
-            if (!$addon instanceof ShippingCheckoutAddon) {
-                continue;
-            }
-            $type = (string)$addon->getData(ShippingCheckoutAddon::schema_fields_ADDON_TYPE);
+        foreach ($items as $addon) {
+            $type = (string)($addon[ShippingCheckoutAddon::schema_fields_ADDON_TYPE] ?? '');
             if ($type === ShippingCheckoutAddon::TYPE_SIGNATURE && !$wantSignature) {
                 continue;
             }
             if ($type === ShippingCheckoutAddon::TYPE_INSURANCE && $insuranceValue <= 0) {
                 continue;
             }
-            $amountType = (string)$addon->getData(ShippingCheckoutAddon::schema_fields_AMOUNT_TYPE);
-            $amountValue = (float)$addon->getData(ShippingCheckoutAddon::schema_fields_AMOUNT_VALUE);
+            $amountType = (string)($addon[ShippingCheckoutAddon::schema_fields_AMOUNT_TYPE] ?? '');
+            $amountValue = (float)($addon[ShippingCheckoutAddon::schema_fields_AMOUNT_VALUE] ?? 0);
             $basis = $type === ShippingCheckoutAddon::TYPE_INSURANCE
                 ? $insuranceValue
                 : $baseAmountMinor;
@@ -72,8 +68,8 @@ final class ShippingCheckoutAddonService
                 continue;
             }
             $hits[] = [
-                'addon_code' => (string)$addon->getData(ShippingCheckoutAddon::schema_fields_ADDON_CODE),
-                'addon_name' => (string)$addon->getData(ShippingCheckoutAddon::schema_fields_ADDON_NAME),
+                'addon_code' => (string)($addon[ShippingCheckoutAddon::schema_fields_ADDON_CODE] ?? ''),
+                'addon_name' => (string)($addon[ShippingCheckoutAddon::schema_fields_ADDON_NAME] ?? ''),
                 'addon_type' => $type,
                 'amount_minor' => $extra,
             ];

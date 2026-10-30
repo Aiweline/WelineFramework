@@ -283,13 +283,12 @@ class FulfillmentService
      */
     public function getShipments(int $orderId): array
     {
-        $collection = $this->getShipmentModel()->reset()
+        // 列表查询：直接返回行数组。
+        return $this->getShipmentModel()->reset()
             ->where(OrderShipment::schema_fields_ORDER_ID, $orderId)
             ->order(OrderShipment::schema_fields_CREATED_AT, 'DESC')
             ->select()
-            ->fetch();
-        
-        return $collection->getItems();
+            ->fetchArray();
     }
 
     private function loadOrderForUpdate(string $orderUuid): Order

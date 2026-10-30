@@ -324,7 +324,10 @@ class PaymentLockService
      */
     private function normalizeModelList(mixed $records): array
     {
-        if (\is_object($records) && method_exists($records, 'getItems')) {
+        // 返回 PaymentLock[]，下方 instanceof 过滤，必须对象化。
+        if (\is_object($records) && method_exists($records, 'toModels')) {
+            $records = $records->toModels();
+        } elseif (\is_object($records) && method_exists($records, 'getItems')) {
             $records = $records->getItems();
         }
         if (!\is_array($records)) {

@@ -66,13 +66,15 @@ final class UnpaidOrderSignalService
         }
         // Phase 1: retail only — exclude tob / hang wholesale & hang types.
         $model->where(Order::schema_fields_ORDER_TYPE, ['tob', 'hang'], 'not in');
-        $model->order(Order::schema_fields_CREATED_AT, 'ASC')
+        // 行在 fetch() 的 RowCollection 上；对 $model 调 getItems() 恒为空。
+        $rows = $model->order(Order::schema_fields_CREATED_AT, 'ASC')
             ->limit($limit)
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
         $items = [];
-        foreach ($model->getItems() as $row) {
+        foreach ($rows as $row) {
             if (!$row instanceof Order) {
                 continue;
             }

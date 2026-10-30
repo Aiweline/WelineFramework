@@ -985,16 +985,16 @@ class Domain extends BackendController
             $orderModel = ObjectManager::getInstance(
                 \Weline\Websites\Model\DomainPurchaseOrder::class
             );
-            $orders = $orderModel->clearQuery()
+            $ordersQuery = $orderModel->clearQuery()
                 ->order('created_at', 'DESC')
                 ->pagination()
-                ->select()
-                ->fetch();
+                ->select();
+            $ordersData = $ordersQuery->fetchArray();
 
             return $this->fetchJson([
                 'code' => 200,
-                'data' => $orders->getItems(),
-                'pagination' => $orders->getPagination(),
+                'data' => $ordersData,
+                'pagination' => $ordersQuery->getPagination(),
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -1318,25 +1318,25 @@ class Domain extends BackendController
                     $usedBySites = $websiteDomainModel->clearQuery()
                         ->where(WebsiteDomain::schema_fields_ROOT_DOMAIN, $rootDomainLower)
                         ->select()
-                        ->fetch()
-                        ->getItems();
+                        ->fetchArray();
                     if (\count($usedBySites) > 0) {
                         $errors[] = __('ID %{1}（%{2}）：该根域名正在被网站使用，不能删除。请先删除相关网站或解除域名绑定后再删除该域名。', [$domainId, $domainName]);
                         continue;
                     }
 
                     // 1. 删除该根域下所有域名池记录（子域名：按 parent_domain_id 与 root_domain 双条件，避免遗漏）
+                    // 需要逐条 delete()->fetch()，必须对象化。
                     $poolModel = ObjectManager::getInstance(DomainPool::class);
                     $byParent = $poolModel->clearQuery()
                         ->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $domainId)
                         ->select()
                         ->fetch()
-                        ->getItems();
+                        ->toModels();
                     $byRoot = $poolModel->clearQuery()
                         ->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
                         ->select()
                         ->fetch()
-                        ->getItems();
+                        ->toModels();
                     $seen = [];
                     foreach (\array_merge($byParent, $byRoot) as $poolRecord) {
                         $pid = $poolRecord->getData(DomainPool::schema_fields_ID);
@@ -1349,12 +1349,13 @@ class Domain extends BackendController
                     }
 
                     // 2. 删除该域名的 DNS 解析记录
+                    // 需要逐条 delete()->fetch()，必须对象化。
                     $dnsModel = ObjectManager::getInstance(DomainDnsRecord::class, [], false);
                     $dnsRecords = $dnsModel->clearQuery()
                         ->where(DomainDnsRecord::schema_fields_DOMAIN_ID, $domainId)
                         ->select()
                         ->fetch()
-                        ->getItems();
+                        ->toModels();
                     foreach ($dnsRecords as $dnsRecord) {
                         $dnsRecord->delete()->fetch();
                         $dnsDeleted++;
@@ -3031,8 +3032,8 @@ class Domain extends BackendController
         try {
             $dnsDetector = ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class);
 
-            // 获取所有域名（fetch() 返回模型，需 getItems() 取记录列表）
-            $domains = $this->domainModel->clearQuery()->select()->fetch()->getItems();
+            // 获取所有域名（后续调用模型方法，需对象化）
+            $domains = $this->domainModel->clearQuery()->select()->fetch()->toModels();
 
             $total = 0;
             $updated = 0;
@@ -3629,12 +3630,12 @@ class Domain extends BackendController
     {
         $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
 
-        // 查找域名池中所有 root_domain 匹配的记录（fetch 返回 Model，需 getItems() 取记录列表）
+        // 查找域名池中所有 root_domain 匹配的记录（后续调用 setDnsProvider()/setData()，需对象化）
         $poolDomains = $poolModel->clearQuery()
             ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($rootDomain))
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $updated = 0;
         foreach ($poolDomains as $poolDomain) {
@@ -3715,25 +3716,25 @@ class Domain extends BackendController
                     $usedBySites = $websiteDomainModel->clearQuery()
                         ->where(WebsiteDomain::schema_fields_ROOT_DOMAIN, $rootDomainLower)
                         ->select()
-                        ->fetch()
-                        ->getItems();
+                        ->fetchArray();
                     if (\count($usedBySites) > 0) {
                         $errors[] = __('ID %{1}（%{2}）：该根域名正在被网站使用，不能删除。请先删除相关网站或解除域名绑定后再删除该域名。', [$domainId, $domainName]);
                         continue;
                     }
 
                     // 1. 删除关联的域名池记录（子域：按 parent_domain_id 与 root_domain 双条件，避免遗漏）
+                    // 需要逐条 delete()->fetch()，必须对象化。
                     $poolModel = ObjectManager::getInstance(DomainPool::class);
                     $byParent = $poolModel->clearQuery()
                         ->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $domainId)
                         ->select()
                         ->fetch()
-                        ->getItems();
+                        ->toModels();
                     $byRoot = $poolModel->clearQuery()
                         ->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
                         ->select()
                         ->fetch()
-                        ->getItems();
+                        ->toModels();
                     $seen = [];
                     foreach (\array_merge($byParent, $byRoot) as $poolRecord) {
                         $pid = $poolRecord->getData(DomainPool::schema_fields_ID);
@@ -3746,12 +3747,13 @@ class Domain extends BackendController
                     }
 
                     // 2. 删除关联的 DNS 解析记录（本地记录）
+                    // 需要逐条 delete()->fetch()，必须对象化。
                     $dnsModel = ObjectManager::getInstance(DomainDnsRecord::class, [], false);
                     $dnsRecords = $dnsModel->clearQuery()
                         ->where(DomainDnsRecord::schema_fields_DOMAIN_ID, $domainId)
                         ->select()
                         ->fetch()
-                        ->getItems();
+                        ->toModels();
 
                     foreach ($dnsRecords as $dnsRecord) {
                         $dnsRecord->delete()->fetch();
@@ -3815,12 +3817,12 @@ class Domain extends BackendController
                 ]);
             }
 
-            // 获取该账户下的所有域名（fetch() 返回模型，需 getItems() 取记录列表）
+            // 获取该账户下的所有域名（后续调用 getDomainId()/delete()，需对象化）
             $domains = $this->domainModel->clearQuery()
                 ->where(DomainModel::schema_fields_ACCOUNT_ID, $accountId)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
 
             if (empty($domains)) {
                 return $this->fetchJson([
@@ -3849,25 +3851,25 @@ class Domain extends BackendController
                 $usedBySites = $websiteDomainModel->clearQuery()
                     ->where(WebsiteDomain::schema_fields_ROOT_DOMAIN, $rootDomainLower)
                     ->select()
-                    ->fetch()
-                    ->getItems();
+                    ->fetchArray();
                 if (\count($usedBySites) > 0) {
                     $skipped++;
                     continue;
                 }
 
                 // 1. 删除关联的域名池记录（子域：按 parent_domain_id 与 root_domain 双条件）
+                // 需要逐条 delete()->fetch()，必须对象化。
                 $poolModel = ObjectManager::getInstance(DomainPool::class);
                 $byParent = $poolModel->clearQuery()
                     ->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $domainId)
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
                 $byRoot = $poolModel->clearQuery()
                     ->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
                 $seen = [];
                 foreach (\array_merge($byParent, $byRoot) as $poolRecord) {
                     $pid = $poolRecord->getData(DomainPool::schema_fields_ID);
@@ -3880,12 +3882,13 @@ class Domain extends BackendController
                 }
 
                 // 2. 删除关联的 DNS 解析记录
+                // 需要逐条 delete()->fetch()，必须对象化。
                 $dnsModel = ObjectManager::getInstance(DomainDnsRecord::class, [], false);
                 $dnsRecords = $dnsModel->clearQuery()
                     ->where(DomainDnsRecord::schema_fields_DOMAIN_ID, $domainId)
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
 
                 foreach ($dnsRecords as $dnsRecord) {
                     $dnsRecord->delete()->fetch();
@@ -4318,11 +4321,11 @@ class Domain extends BackendController
         try {
             $resolverService = ObjectManager::getInstance(DomainRegistrarResolverService::class);
 
-            // 获取所有账户（须 getItems()，不可对 fetch() 返回的模型直接 foreach）
+            // 获取所有账户（后续调用 getRegistrarCode()，需对象化）
             $accounts = $this->registrarAccount->clearQuery()
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
 
             $totalDeleted = 0;
             $totalPoolDeleted = 0;
@@ -4348,12 +4351,12 @@ class Domain extends BackendController
                 $accountId = $account->getAccountId();
                 $accountName = $account->getAccountName();
 
-                // 获取该账户下的所有域名（fetch() 返回模型，需 getItems() 取记录列表）
+                // 获取该账户下的所有域名（后续调用 getDomainId()/delete()，需对象化）
                 $domains = $this->domainModel->clearQuery()
                     ->where(DomainModel::schema_fields_ACCOUNT_ID, $accountId)
                     ->select()
                     ->fetch()
-                    ->getItems();
+                    ->toModels();
 
                 if (empty($domains)) {
                     continue;
@@ -4374,25 +4377,25 @@ class Domain extends BackendController
                     $usedBySites = $websiteDomainModel->clearQuery()
                         ->where(WebsiteDomain::schema_fields_ROOT_DOMAIN, $rootDomainLower)
                         ->select()
-                        ->fetch()
-                        ->getItems();
+                        ->fetchArray();
                     if (\count($usedBySites) > 0) {
                         $skipped++;
                         continue;
                     }
 
                     // 删除关联的域名池记录（子域：按 parent_domain_id 与 root_domain 双条件）
+                    // 需要逐条 delete()->fetch()，必须对象化。
                     $poolModel = ObjectManager::getInstance(DomainPool::class);
                     $byParent = $poolModel->clearQuery()
                         ->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $domainId)
                         ->select()
                         ->fetch()
-                        ->getItems();
+                        ->toModels();
                     $byRoot = $poolModel->clearQuery()
                         ->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
                         ->select()
                         ->fetch()
-                        ->getItems();
+                        ->toModels();
                     $seen = [];
                     foreach (\array_merge($byParent, $byRoot) as $poolRecord) {
                         $pid = $poolRecord->getData(DomainPool::schema_fields_ID);
@@ -4405,12 +4408,13 @@ class Domain extends BackendController
                     }
 
                     // 删除关联的 DNS 解析记录
+                    // 需要逐条 delete()->fetch()，必须对象化。
                     $dnsModel = ObjectManager::getInstance(DomainDnsRecord::class, [], false);
                     $dnsRecords = $dnsModel->clearQuery()
                         ->where(DomainDnsRecord::schema_fields_DOMAIN_ID, $domainId)
                         ->select()
                         ->fetch()
-                        ->getItems();
+                        ->toModels();
 
                     foreach ($dnsRecords as $dnsRecord) {
                         $dnsRecord->delete()->fetch();

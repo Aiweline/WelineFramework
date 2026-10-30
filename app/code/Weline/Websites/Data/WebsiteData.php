@@ -465,11 +465,12 @@ class WebsiteData
         try {
             /** @var WebsiteLocalDescription $local */
             $local = ObjectManager::getInstance(WebsiteLocalDescription::class);
+            // 下方 instanceof WebsiteLocalDescription + getData()，必须对象化。
             $items = $local->reset()
                 ->where(WebsiteLocalDescription::schema_fields_ID, $websiteId)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             $rows = [];
             foreach ($items as $item) {
                 if (!$item instanceof WebsiteLocalDescription) {

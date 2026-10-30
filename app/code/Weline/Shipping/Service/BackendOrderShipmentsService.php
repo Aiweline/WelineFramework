@@ -126,13 +126,13 @@ final class BackendOrderShipmentsService
         try {
             /** @var Order $model */
             $model = $this->objectManager->getInstance(Order::class);
+            // 只需条数，取数组长度。
             $rows = $model->clear()->reset()
                 ->where(Order::schema_fields_PAYMENT_STATUS, 'paid')
                 ->where(Order::schema_fields_FULFILLMENT_STATUS, 'pending')
                 ->select()
-                ->fetch()
-                ->getItems();
-            $paidAwaiting = \is_array($rows) ? \count($rows) : 0;
+                ->fetchArray();
+            $paidAwaiting = \count($rows);
         } catch (\Throwable) {
             $paidAwaiting = 0;
         }

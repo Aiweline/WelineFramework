@@ -30,13 +30,11 @@ final class ShippingPackingPolicyService
                 ->where(ShippingPackingPolicy::schema_fields_IS_ACTIVE, 1)
                 ->order(ShippingPackingPolicy::schema_fields_ID, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
-            $row = is_array($items) ? ($items[0] ?? null) : null;
-            if ($row instanceof ShippingPackingPolicy && (int)$row->getId() > 0) {
+                ->fetchArray();
+            if ($items !== []) {
                 return [
-                    'max_weight_kg' => max(0.001, (float)$row->getData(ShippingPackingPolicy::schema_fields_MAX_WEIGHT_KG)),
-                    'max_volume_cm3' => max(1.0, (float)$row->getData(ShippingPackingPolicy::schema_fields_MAX_VOLUME_CM3)),
+                    'max_weight_kg' => max(0.001, (float)($items[0][ShippingPackingPolicy::schema_fields_MAX_WEIGHT_KG] ?? 0)),
+                    'max_volume_cm3' => max(1.0, (float)($items[0][ShippingPackingPolicy::schema_fields_MAX_VOLUME_CM3] ?? 0)),
                 ];
             }
         } catch (\Throwable) {

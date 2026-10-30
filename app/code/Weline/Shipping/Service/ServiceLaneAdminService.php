@@ -40,23 +40,19 @@ final class ServiceLaneAdminService
                 ->where(ServiceRegion::schema_fields_IS_ACTIVE, 1)
                 ->order(ServiceRegion::schema_fields_ID, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
         } catch (\Throwable) {
             return [];
         }
         $out = [];
         foreach ($items as $item) {
-            if (!$item instanceof ServiceRegion) {
-                continue;
-            }
             $out[] = [
-                'service_region_id' => (int)$item->getId(),
-                'service_id' => (int)$item->getData(ServiceRegion::schema_fields_SERVICE_ID),
-                'region_type' => (string)$item->getData(ServiceRegion::schema_fields_REGION_TYPE),
-                'country_code' => (string)$item->getData(ServiceRegion::schema_fields_COUNTRY_CODE),
-                'region_id' => (int)$item->getData(ServiceRegion::schema_fields_REGION_ID),
-                'region_code' => (string)$item->getData(ServiceRegion::schema_fields_REGION_CODE),
+                'service_region_id' => (int)($item[ServiceRegion::schema_fields_ID] ?? 0),
+                'service_id' => (int)($item[ServiceRegion::schema_fields_SERVICE_ID] ?? 0),
+                'region_type' => (string)($item[ServiceRegion::schema_fields_REGION_TYPE] ?? ''),
+                'country_code' => (string)($item[ServiceRegion::schema_fields_COUNTRY_CODE] ?? ''),
+                'region_id' => (int)($item[ServiceRegion::schema_fields_REGION_ID] ?? 0),
+                'region_code' => (string)($item[ServiceRegion::schema_fields_REGION_CODE] ?? ''),
             ];
         }
 
@@ -109,12 +105,13 @@ final class ServiceLaneAdminService
                 ->where(ServiceRegion::schema_fields_SERVICE_ID, $serviceId)
                 ->select()
                 ->fetch()
-                ->getItems();
+                // 需要 delete()，保留模型对象。
+                ->toModels();
         } catch (\Throwable) {
             $existing = [];
         }
         foreach ($existing as $item) {
-            if ($item instanceof ServiceRegion && $item->getId()) {
+            if ((int)$item->getId() > 0) {
                 $item->delete();
             }
         }

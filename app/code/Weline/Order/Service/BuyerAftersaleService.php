@@ -459,13 +459,14 @@ final class BuyerAftersaleService
         try {
             /** @var OrderItem $model */
             $model = ObjectManager::getInstance(OrderItem::class);
-            $items = $model->clear()->where(OrderItem::schema_fields_ORDER_UUID, $orderUuid)->select()->fetch()->getItems();
+            // 只需要 product_id 列，数组行即可。
+            $items = $model->clear()->where(OrderItem::schema_fields_ORDER_UUID, $orderUuid)->select()->fetchArray();
         } catch (\Throwable) {
             return [];
         }
         $ids = [];
-        foreach (\is_array($items) ? $items : [] as $item) {
-            $id = (int)(is_object($item) ? $item->getData(OrderItem::schema_fields_PRODUCT_ID) : 0);
+        foreach ($items as $item) {
+            $id = (int)($item[OrderItem::schema_fields_PRODUCT_ID] ?? 0);
             if ($id > 0) {
                 $ids[$id] = $id;
             }
@@ -485,23 +486,23 @@ final class BuyerAftersaleService
         try {
             /** @var FulfillmentUnit $model */
             $model = ObjectManager::getInstance(FulfillmentUnit::class);
+            // 只需要 status/warehouse_id 列，数组行即可。
             $items = $model->clear()
                 ->where(FulfillmentUnit::schema_fields_ORDER_UUID, $orderUuid)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
         } catch (\Throwable) {
             return [];
         }
         $ids = [];
-        foreach (\is_array($items) ? $items : [] as $item) {
-            if (!is_object($item)) {
+        foreach ($items as $item) {
+            if (!is_array($item)) {
                 continue;
             }
-            if ((string)$item->getData(FulfillmentUnit::schema_fields_STATUS) === FulfillmentUnit::STATUS_CANCELLED) {
+            if ((string)($item[FulfillmentUnit::schema_fields_STATUS] ?? '') === FulfillmentUnit::STATUS_CANCELLED) {
                 continue;
             }
-            $id = (int)$item->getData(FulfillmentUnit::schema_fields_WAREHOUSE_ID);
+            $id = (int)($item[FulfillmentUnit::schema_fields_WAREHOUSE_ID] ?? 0);
             if ($id > 0) {
                 $ids[$id] = $id;
             }

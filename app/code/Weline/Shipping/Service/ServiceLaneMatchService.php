@@ -67,11 +67,10 @@ final class ServiceLaneMatchService
                 ->order(ShippingAddress::schema_fields_IS_DEFAULT, 'DESC')
                 ->order(ShippingAddress::schema_fields_ID, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
-            $row = is_array($items) ? ($items[0] ?? null) : null;
-            if ($row instanceof ShippingAddress && (int)$row->getId() > 0) {
-                return (int)$row->getId();
+                ->fetchArray();
+            $addressId = (int)($items[0][ShippingAddress::schema_fields_ID] ?? 0);
+            if ($addressId > 0) {
+                return $addressId;
             }
         } catch (\Throwable) {
             // no address
@@ -149,21 +148,17 @@ final class ServiceLaneMatchService
                 ->where(ServiceRegion::schema_fields_SERVICE_ID, $serviceId)
                 ->where(ServiceRegion::schema_fields_IS_ACTIVE, 1)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
         } catch (\Throwable) {
             return [];
         }
         $rules = [];
         foreach ($items as $item) {
-            if (!$item instanceof ServiceRegion) {
-                continue;
-            }
             $rules[] = [
-                'country_code' => (string)$item->getData(ServiceRegion::schema_fields_COUNTRY_CODE),
-                'region_type' => (string)$item->getData(ServiceRegion::schema_fields_REGION_TYPE),
-                'region_id' => (int)$item->getData(ServiceRegion::schema_fields_REGION_ID),
-                'region_code' => (string)$item->getData(ServiceRegion::schema_fields_REGION_CODE),
+                'country_code' => (string)($item[ServiceRegion::schema_fields_COUNTRY_CODE] ?? ''),
+                'region_type' => (string)($item[ServiceRegion::schema_fields_REGION_TYPE] ?? ''),
+                'region_id' => (int)($item[ServiceRegion::schema_fields_REGION_ID] ?? 0),
+                'region_code' => (string)($item[ServiceRegion::schema_fields_REGION_CODE] ?? ''),
             ];
         }
 

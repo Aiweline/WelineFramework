@@ -94,7 +94,8 @@ final class WarehouseFulfillmentService
                     ->select()
                     ->fetch();
                 $result = [];
-                foreach ($rows->getItems() as $row) {
+                // 逐行 getData()，保留模型对象。
+                foreach ($rows->toModels() as $row) {
                     if (!$row instanceof FulfillmentUnit) {
                         continue;
                     }

@@ -73,9 +73,9 @@ class Region extends AbstractModel
      * 获取子地区列表
      *
      * @param int|null $parentRegionId 父级地区ID，null表示获取顶级地区
-     * @return self 含 getItems() 的模型实例
+     * @return array<int, array<string, mixed>> 地区行数组
      */
-    public function getChildren(?int $parentRegionId = null): self
+    public function getChildren(?int $parentRegionId = null): array
     {
         $model = $this->reset();
         if ($parentRegionId === null) {
@@ -86,16 +86,18 @@ class Region extends AbstractModel
         $model->where(self::schema_fields_IS_ACTIVE, 1)
               ->order(self::schema_fields_SORT_ORDER, 'ASC')
               ->order(self::schema_fields_REGION_NAME, 'ASC');
-        return $model->select()->fetch();
+        // fetch() 对多行查询返回 RowCollection（数组行）；原签名声明 self 与实际
+        // 返回值不符，会抛 TypeError。列表查询直接返回数组。
+        return $model->select()->fetchArray();
     }
     /**
      * 根据国家代码获取地区列表
      *
      * @param string $countryCode ISO国家代码
      * @param string|null $regionType 地区类型筛选
-     * @return self 含 getItems() 的模型实例
+     * @return array<int, array<string, mixed>> 地区行数组
      */
-    public function getByCountryCode(string $countryCode, ?string $regionType = null): self
+    public function getByCountryCode(string $countryCode, ?string $regionType = null): array
     {
         $model = $this->reset()
             ->where(self::schema_fields_COUNTRY_CODE, $countryCode);
@@ -108,7 +110,9 @@ class Region extends AbstractModel
               ->order(self::schema_fields_SORT_ORDER, 'ASC')
               ->order(self::schema_fields_REGION_NAME, 'ASC');
         
-        return $model->select()->fetch();
+        // fetch() 对多行查询返回 RowCollection（数组行）；原签名声明 self 与实际
+        // 返回值不符，会抛 TypeError。列表查询直接返回数组。
+        return $model->select()->fetchArray();
     }
     /**
      * 获取父级地区

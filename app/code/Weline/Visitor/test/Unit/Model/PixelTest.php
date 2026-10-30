@@ -70,9 +70,9 @@ class PixelTest extends TestCore
 
         $found = false;
         foreach ($pixels as $item) {
-            if ((int)$item->getId() === (int)$pixel->getId()) {
+            if ((int)($item[Pixel::schema_fields_ID] ?? 0) === (int)$pixel->getId()) {
                 $found = true;
-                $this->assertSame($websiteId, $item->getWebsiteId());
+                $this->assertSame($websiteId, (int)($item[Pixel::schema_fields_WEBSITE_ID] ?? 0));
                 break;
             }
         }

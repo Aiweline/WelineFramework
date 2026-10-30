@@ -152,13 +152,12 @@ class RefundService
      */
     public function getRefundHistory(int $orderId): array
     {
-        $collection = $this->getRefundModel()->reset()
+        // 列表查询：直接返回行数组。
+        return $this->getRefundModel()->reset()
             ->where(OrderRefund::schema_fields_ORDER_ID, $orderId)
             ->order(OrderRefund::schema_fields_CREATED_AT, 'DESC')
             ->select()
-            ->fetch();
-        
-        return $collection->getItems();
+            ->fetchArray();
     }
     
     /**
@@ -169,16 +168,16 @@ class RefundService
      */
     private function getRefundedAmount(int $orderId): float
     {
+        // 只取 amount 求和，数组行即可。
         $refunds = $this->getRefundModel()->reset()
             ->where(OrderRefund::schema_fields_ORDER_ID, $orderId)
             ->where(OrderRefund::schema_fields_STATUS, OrderRefund::STATUS_REFUNDED)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         
         $total = 0;
         foreach ($refunds as $refund) {
-            $total += (float)$refund->getData(OrderRefund::schema_fields_AMOUNT);
+            $total += (float)($refund[OrderRefund::schema_fields_AMOUNT] ?? 0);
         }
         
         return $total;

@@ -39,7 +39,8 @@ class Tracking extends BackendPageController
             ->order(TrackingModel::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetch()
-            ->getItems();
+            // 模板对每行调用 getData()，保留模型对象。
+            ->toModels();
 
         $this->assign('records', $records);
         $this->assignShippingEmbedLayout();

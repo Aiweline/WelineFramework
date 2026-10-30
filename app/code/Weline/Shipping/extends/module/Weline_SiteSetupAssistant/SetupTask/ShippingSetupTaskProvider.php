@@ -42,7 +42,8 @@ class ShippingSetupTaskProvider extends AbstractSetupTaskProvider
         try {
             /** @var ShippingAddress $model */
             $model = ObjectManager::getInstance(ShippingAddress::class);
-            $items = $model->clear()->limit(1)->select()->fetch()->getItems();
+            // 只判断是否存在，取数组即可。
+            $items = $model->clear()->limit(1)->select()->fetchArray();
             return is_array($items) && $items !== [];
         } catch (\Throwable) {
             return false;

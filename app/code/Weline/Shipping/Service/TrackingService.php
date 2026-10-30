@@ -185,15 +185,17 @@ class TrackingService
     private function formatTrackingResponse(Tracking $tracking, Carrier $carrier): array
     {
         $nodes = $this->getTrackingNodeModel()->getByTrackingId($tracking->getId());
+        // 节点列表只需数组字段；getTypeLabel() 支持显式传入类型，无需模型对象。
         $nodeList = [];
-        foreach ($nodes->getItems() as $node) {
+        foreach ($nodes as $node) {
+            $nodeType = (string)($node[TrackingNode::schema_fields_NODE_TYPE] ?? '');
             $nodeList[] = [
-                'time' => $node->getData(TrackingNode::schema_fields_NODE_TIME),
-                'location' => $node->getData(TrackingNode::schema_fields_NODE_LOCATION),
-                'status' => $node->getData(TrackingNode::schema_fields_NODE_STATUS),
-                'description' => $node->getData(TrackingNode::schema_fields_NODE_DESCRIPTION),
-                'type' => $node->getData(TrackingNode::schema_fields_NODE_TYPE),
-                'type_label' => $node->getTypeLabel(), // 添加翻译后的类型标签
+                'time' => $node[TrackingNode::schema_fields_NODE_TIME] ?? null,
+                'location' => $node[TrackingNode::schema_fields_NODE_LOCATION] ?? null,
+                'status' => $node[TrackingNode::schema_fields_NODE_STATUS] ?? null,
+                'description' => $node[TrackingNode::schema_fields_NODE_DESCRIPTION] ?? null,
+                'type' => $nodeType,
+                'type_label' => $this->getTrackingNodeModel()->getTypeLabel($nodeType), // 添加翻译后的类型标签
             ];
         }
         

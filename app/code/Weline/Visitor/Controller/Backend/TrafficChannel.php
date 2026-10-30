@@ -44,12 +44,12 @@ class TrafficChannel extends BackendController
             if ($kindFilter !== 'all') {
                 $model->where(PixelChannel::schema_fields_KIND, $kindFilter);
             }
-            $model->order(PixelChannel::schema_fields_WEBSITE_ID, 'ASC')
+            // 模板兼容数组行，对 $model 调 getItems() 恒为空。
+            $channels = $model->order(PixelChannel::schema_fields_WEBSITE_ID, 'ASC')
                 ->order(PixelChannel::schema_fields_CODE, 'ASC')
                 ->limit(200)
                 ->select()
-                ->fetch();
-            $channels = $model->getItems() ?: [];
+                ->fetchArray();
         } catch (\Throwable $e) {
             $loadError = $e->getMessage();
             MessageManager::warning((string)__('加载流量渠道列表失败：%{1}', [$loadError]));

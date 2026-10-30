@@ -116,7 +116,8 @@ class Order extends BackendRestController
                 ->order(\Weline\Order\Model\OrderHistory::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetch()
-                ->getItems();
+                // 下方 array_map 里逐行 getData()，必须对象化。
+                ->toModels();
             
             // 获取可用状态转换
             $currentStatus = $order->getData(\Weline\Order\Model\Order::schema_fields_STATUS);

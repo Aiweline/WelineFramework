@@ -401,7 +401,7 @@ class PixelMarkerAuditService
             ->order(\GuoLaiRen\PageBuilder\Model\Page::schema_fields_ID, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $base = \rtrim($this->websiteBaseUrl($websiteId), '/');
         if ($base !== '') {

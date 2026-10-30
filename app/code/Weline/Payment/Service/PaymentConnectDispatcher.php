@@ -110,13 +110,8 @@ final class PaymentConnectDispatcher
     {
         /** @var PaymentMethod $probe */
         $probe = $this->objectManager->getInstance(PaymentMethod::class, [], false);
-        $rows = $probe->select()->fetch();
-        if (\is_object($rows) && method_exists($rows, 'getItems')) {
-            $rows = $rows->getItems();
-        }
-        if (!\is_array($rows)) {
-            $rows = [];
-        }
+        // 下方 instanceof PaymentMethod + getProviderInstance()，必须对象化。
+        $rows = $probe->select()->fetch()->toModels();
 
         $out = [];
         foreach ($rows as $method) {

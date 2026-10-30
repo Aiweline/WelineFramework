@@ -86,8 +86,8 @@ class DeliveryAddressService
         $model->order(DeliveryAddress::schema_fields_IS_DEFAULT, 'DESC')
               ->order(DeliveryAddress::schema_fields_CREATED_AT, 'DESC');
         
-        $collection = $model->select()->fetch();
-        return $collection->getItems();
+        // fetch() 对多行查询返回 RowCollection（数组行），列表直接取数组。
+        return $model->select()->fetchArray();
     }
 
     /**
@@ -123,8 +123,8 @@ class DeliveryAddressService
         
         $model->order(DeliveryAddress::schema_fields_CREATED_AT, 'DESC');
         
-        $collection = $model->select()->fetch();
-        return $collection->getItems();
+        // 同 getListByUser：列表直接取数组。
+        return $model->select()->fetchArray();
     }
 
     /**
@@ -337,12 +337,13 @@ class DeliveryAddressService
             return 0;
         }
 
-        $collection = $this->getModel()->reset()
+        // 只要条数，直接取数组长度。
+        $rows = $this->getModel()->reset()
             ->where(DeliveryAddress::schema_fields_CUSTOMER_ID, $customerId)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
-        return count($collection->getItems());
+        return \count($rows);
     }
 
     /**
@@ -354,11 +355,12 @@ class DeliveryAddressService
             return;
         }
 
+        // 需要 setData()->save() 改写记录，必须拿模型对象。
         $items = $this->getModel()->reset()
             ->where(DeliveryAddress::schema_fields_CUSTOMER_ID, $customerId)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         if (count($items) !== 1) {
             return;

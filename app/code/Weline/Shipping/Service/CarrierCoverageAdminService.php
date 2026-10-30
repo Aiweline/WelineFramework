@@ -42,12 +42,10 @@ final class CarrierCoverageAdminService
             ->order(CarrierRegion::schema_fields_ID, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            // 行要交给 rowFromModel()，保留模型对象。
+            ->toModels();
         $out = [];
         foreach ($items as $item) {
-            if (!$item instanceof CarrierRegion) {
-                continue;
-            }
             $out[] = $this->rowFromModel($item);
         }
 
@@ -75,9 +73,10 @@ final class CarrierCoverageAdminService
             ->where(CarrierRegion::schema_fields_CARRIER_ID, $carrierId)
             ->select()
             ->fetch()
-            ->getItems();
+            // 需要 delete()，保留模型对象。
+            ->toModels();
         foreach ($existing as $item) {
-            if ($item instanceof CarrierRegion && $item->getId()) {
+            if ((int)$item->getId() > 0) {
                 $item->delete();
             }
         }

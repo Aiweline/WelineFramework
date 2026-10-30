@@ -19,6 +19,28 @@ use Weline\Websites\Service\WebsiteCacheInvalidationService;
 #[Index(name: 'idx_scope', columns: ['scope'])]
 class Website extends Model
 {
+    /**
+     * 全部站点的纯数组快照（进程内驻留，只查一次）。
+     *
+     * 见 {@see WebsiteDomain::fetchCatalogRows()}：站点目录是只读配置，匹配逻辑
+     * 只需要数组字段，不需要模型对象，也不需要按请求 clone。
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function fetchCatalogRows(): array
+    {
+        try {
+            $model = w_obj(self::class);
+            $rows = $model->clearData()->clearQuery()
+                ->select()
+                ->fetchArray();
+
+            return \is_array($rows) ? \array_values($rows) : [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
     /** 默认网站 ID，保留给安装兜底站点，不分配给普通业务站点 */
     public const ID_DEFAULT = 0;
     /** 默认网站代码，底层禁止删除 */

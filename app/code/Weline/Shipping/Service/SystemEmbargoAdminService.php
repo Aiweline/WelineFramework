@@ -51,7 +51,8 @@ final class SystemEmbargoAdminService
             ->order(EmbargoRegion::schema_fields_ID, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            // 行要交给 rowFromModel()，保留模型对象。
+            ->toModels();
 
         $regionIds = [];
         foreach ($items as $item) {
@@ -318,7 +319,8 @@ final class SystemEmbargoAdminService
             ->where(EmbargoRegion::schema_fields_ORIGIN, EmbargoRegion::ORIGIN_SEED)
             ->select()
             ->fetch()
-            ->getItems();
+            // 需要 delete() 与 getConnection()，保留模型对象。
+            ->toModels();
 
         $removed = 0;
         foreach ($items as $item) {
@@ -411,7 +413,8 @@ final class SystemEmbargoAdminService
             ->where(EmbargoRegion::schema_fields_STREET_ID, $streetId)
             ->select()
             ->fetch()
-            ->getItems();
+            // 返回给调用方的就是模型对象。
+            ->toModels();
         foreach ($items as $item) {
             if ($item instanceof EmbargoRegion) {
                 return $item;

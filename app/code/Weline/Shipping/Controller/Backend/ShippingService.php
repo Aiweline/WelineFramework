@@ -44,7 +44,8 @@ class ShippingService extends BackendController
             ->where(ShippingServiceModel::schema_fields_SCOPE_TYPE, $target['scope_type'])
             ->where(ShippingServiceModel::schema_fields_SCOPE_ID, $target['scope_id'])
             ->order(ShippingServiceModel::schema_fields_SORT_ORDER, 'ASC');
-        $services = $query->select()->fetch()->getItems();
+        // 模板逐行调用 $service->getData()/getId()，必须保留模型对象。
+        $services = $query->select()->fetch()->toModels();
 
         /** @var ServiceLaneAdminService $laneAdmin */
         $laneAdmin = $this->objectManager->getInstance(ServiceLaneAdminService::class);
@@ -59,6 +60,7 @@ class ShippingService extends BackendController
 
         $this->assign('services', $services);
         $this->assign('lane_labels_by_service', $laneLabels);
+        // 模板对三项都做 instanceof + getData()，必须保留模型对象。
         $this->assign(
             'carriers',
             $this->objectManager->getInstance(Carrier::class, [], false)
@@ -66,7 +68,7 @@ class ShippingService extends BackendController
                 ->order(Carrier::schema_fields_CARRIER_NAME, 'ASC')
                 ->select()
                 ->fetch()
-                ->getItems(),
+                ->toModels(),
         );
         $this->assign(
             'templates',
@@ -77,7 +79,7 @@ class ShippingService extends BackendController
                 ->order(RateTemplate::schema_fields_TEMPLATE_NAME, 'ASC')
                 ->select()
                 ->fetch()
-                ->getItems(),
+                ->toModels(),
         );
         $this->assign(
             'free_rules',
@@ -88,7 +90,7 @@ class ShippingService extends BackendController
                 ->order(FreeShippingRule::schema_fields_PRIORITY, 'ASC')
                 ->select()
                 ->fetch()
-                ->getItems(),
+                ->toModels(),
         );
         $this->assign(
             'origins',
@@ -98,7 +100,7 @@ class ShippingService extends BackendController
                 ->order(ShippingAddress::schema_fields_IS_DEFAULT, 'DESC')
                 ->select()
                 ->fetch()
-                ->getItems(),
+                ->toModels(),
         );
         $this->assignShippingEmbedLayout();
 

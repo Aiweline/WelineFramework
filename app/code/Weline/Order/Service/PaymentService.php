@@ -176,9 +176,9 @@ class PaymentService
             ->where(OrderPayment::schema_fields_ORDER_ID, $orderId)
             ->order(OrderPayment::schema_fields_CREATED_AT, 'DESC')
             ->select()
-            ->fetch();
+            ->fetchArray();
         
-        return $collection->getItems();
+        return $collection;
     }
     
     /**
@@ -189,16 +189,16 @@ class PaymentService
      */
     private function getPaidAmount(int $orderId): float
     {
+        // 只取 amount 求和，数组行即可。
         $payments = $this->getPaymentModel()->reset()
             ->where(OrderPayment::schema_fields_ORDER_ID, $orderId)
             ->where(OrderPayment::schema_fields_STATUS, OrderPayment::STATUS_PAID)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         
         $total = 0;
         foreach ($payments as $payment) {
-            $total += (float)$payment->getData(OrderPayment::schema_fields_AMOUNT);
+            $total += (float)($payment[OrderPayment::schema_fields_AMOUNT] ?? 0);
         }
         
         return $total;

@@ -54,8 +54,8 @@ class Transaction extends BackendController
             $query->where(PaymentTransaction::schema_fields_METHOD_CODE, $methodCode);
         }
         
-        $query->order(PaymentTransaction::schema_fields_CREATED_AT, 'DESC')->fetch();
-        $candidates = $transaction->getItems();
+        // 行在 fetch()->toModels() 上；对 $transaction 调 getItems() 恒为空。
+        $candidates = $query->order(PaymentTransaction::schema_fields_CREATED_AT, 'DESC')->fetch()->toModels();
         $transactions = [];
         $replayGrantVersions = [];
         $scopeService = ObjectManager::getInstance(PaymentObjectScopeService::class);
