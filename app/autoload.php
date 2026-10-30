@@ -163,7 +163,11 @@ if (\is_file($autoloader)) {
                     && \preg_match('/^[a-f0-9]{64}$/D', (string)($welineRelease['runtime_artifacts']['classmap.php'] ?? '')) === 1;
             }
             if ($welineTrustClassMap) {
-                \define('WELINE_CLASSMAP_TRUSTED', true);
+                // 与本文件顶部常量同范式：autoload.php 可能被多个入口各自 require
+                // （bin/w 先加载预检脚本，再由 bootstrap.php 加载），先判再 define。
+                if (!\defined('WELINE_CLASSMAP_TRUSTED')) {
+                    \define('WELINE_CLASSMAP_TRUSTED', true);
+                }
             } else {
                 $localClassMap = \weline_filter_local_classmap($localClassMap, BP);
             }

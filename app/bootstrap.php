@@ -34,7 +34,12 @@ $releaseStampFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'framework' . DIREC
 $releaseStamp = \is_file($releaseStampFile) ? require $releaseStampFile : null;
 if (\Weline\Framework\Compilation\ReleaseStamp::isValid($releaseStamp)) {
     \Weline\Framework\Compilation\ReleaseStamp::set($releaseStamp);
-    \define('WELINE_BUILD_ID', (string)$releaseStamp['build_id']);
+    // 与 autoload.php 顶部常量同范式：先判 defined 再 define。
+    // bin/w 会先 require PhpCliRuntimePreflight（内部已加载 autoload.php 并定义该常量）
+    // 再 require 本文件，无条件 define 会抛 "Constant WELINE_BUILD_ID already defined"。
+    if (!\defined('WELINE_BUILD_ID')) {
+        \define('WELINE_BUILD_ID', (string)$releaseStamp['build_id']);
+    }
 }
 
 // 生产 Web 请求不接受「没有编译产物」：与 04-performance-budget 的 fail-fast 约束一致。
