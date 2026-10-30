@@ -41,6 +41,10 @@
             description: "html data-theme / colorScheme before interactive chrome"
         },
         welineUi: {
+            // 2026-10-30 回退（marker: ui-min-bundle-v1 已回退）：改指 weline-ui.min.js 后实测
+            // min 文件不会随主题发布复制进 pub/static（find pub/static -name weline-ui.min.js = 0，
+            // /static/Weline/Theme/ui/weline-ui.min.js 返回 404 → UI kit 完全不加载）。
+            // 要启用压缩必须先让静态发布覆盖该新文件；在此之前保持原路径，避免 404。
             origin_paths: ["app/code/Weline/Theme/view/statics/ui/weline-ui.js"],
             paths: ["Weline_Theme::ui/weline-ui.js"],
             globalVar: null,

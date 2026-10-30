@@ -759,7 +759,9 @@ HTML;
         // 2026-10-30 载荷优化（marker: ui-min-bundle-v1）：存在预压缩产物时优先引用它。
         // weline-ui.js 原始 181,456B（gzip 约 46KB），esbuild --minify 后 77,716B（−57%），
         // 语义不变；缺失时完全回退原文件，行为与旧版一致。
-        $uiMinBundle = \defined('BP') ? BP . 'app/code/Weline/Theme/view/ui/js/weline-ui.min.js' : '';
+        // 2026-10-30 回退（marker: ui-min-bundle-v1 已回退）：压缩产物不会随静态发布复制进
+        // pub/static（实测 0 份、URL 404），引用它会让 UI kit 完全不加载。此处直接停用压缩分支。
+        $uiMinBundle = '';
         if ($uiMinBundle !== '' && \is_file($uiMinBundle) && $uiScriptUrl !== '') {
             $minUrl = \preg_replace('/\.js$/i', '.min.js', $uiScriptUrl);
             if (\is_string($minUrl) && $minUrl !== '') {
