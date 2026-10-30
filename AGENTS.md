@@ -49,12 +49,23 @@ ensure 会写出 MCP 生成的 Cursor alwaysApply 门禁：`.cursor/rules/weline
 
 ## Git 策略
 
-**脏改不可丢弃（严重，`preserve_dirty_workspace`）**：宿主 Agent Shell **禁止**为对齐 HEAD 或「清场」而 `git checkout --`、`git restore`、`git clean`、`git stash` 擦未提交修改。编辑须 **dirty-load** 当前磁盘脏改再改；**禁止**用对话/其它会话的旧版本写回（会话间相互覆盖）。权威：`app/code/Weline/Ai/doc/AI硬规则索引.md`。
+**脏改不可丢弃（P0 最高级，`preserve_dirty_workspace`）**：本章最高级，优先于本文件其余条款与交付速度、期限。宿主 Agent Shell **禁止**为对齐 HEAD 或「清场」而 `git checkout --`、`git restore`、`git clean`、`git stash` 擦未提交修改。编辑须 **dirty-load** 当前磁盘脏改再改；**禁止**用对话/其它会话的旧版本写回（会话间相互覆盖）。改前改后各取一次 `shasum -a 256` 进收尾汇报；违规立即停手、留现场、当回合报告并记台账，同会话再犯即停止全部文件写入。权威：`app/code/Weline/Ai/doc/AI硬规则索引.md`。
 
 **智能编辑器协议只提交本文件 `AGENTS.md`。** 不要提交各编辑器私有协议或 MCP 注册文件（如 `.cursor/`、`.cursorrules`、`.cursorignore`、`CLAUDE.md`、`.mcp.json`、`.codex/`、`.vscode/mcp.json`、`.github/copilot-instructions.md` 等）。MCP 挂载与 `.cursor/rules` 冷启动门禁由 Agent 在本机按 ensure 指引生成。
 
 **宿主编辑器规则（强制，MCP `host_editor_rules_mcp_generated_only`）**：工程规则只维护在 MCP `hard-constraints.v1` 与仓库文档；Cursor/Codex 等规则文件**禁止 Agent 手写**，仅可由 MCP 生成器产出（换项目否则找不到）。权威：`app/code/Weline/Ai/doc/AI硬规则索引.md`。
 
+
+## 禁止脚本批量替换（HARD · 2026-10-28 用户指定，2026-10-30 加仓内常驻镜）
+
+**改文件必须亲力亲为：一个文件、一次定点编辑。禁止任何「脚本 / 命令批量替换、批量改写」，不论规模多大。**
+
+1. **禁止清单**（源文件、配置、文档、模板一律适用）：`sed -i`、`awk` 就地改写、`perl -pi`、`xargs` + 编辑命令、`find … -exec` 改写、`grep -rl … | xargs sed`、`php -r` / `python -c` / `python3 - <<PY` 遍历重写、一次性生成再批量落盘的迁移脚本、replace-all 宏、编辑器全局查找替换代跑批量改动。
+2. **正确做法**：逐个文件 `Read` → 宿主定点编辑工具（Edit / Write / ApplyPatch）→ 改完立即重读复核。批量任务 = 循环执行该流程 N 次，每次只碰一个文件；文件多时分批推进并逐批汇报。
+3. **为什么**：正则匹配面不可控，一个错误模式会同时损坏大量文件（误删方法、破坏编码与换行、夹带他会话在飞改动），且当场看不出、事后才暴雷。**实测教训（2026-10-30）**：用 `re.sub` 批量清理调试注释，把 `FullPageCacheCoordinator.php` 的三个方法（`hasCompleteFrozenStorefrontScope`、`legacyPreRouterFpcAllowed`、`namespaceKeyDecorator`）一并吞掉，`php -l` 初查未暴露，靠运行期 `Call to undefined method` 才发现，最终只能从 `git show HEAD:` 整文件恢复。
+4. **例外（缺一不可）**：用户原话明确点名允许脚本批量操作；此时先备份全部目标文件到 `dev/backup/<相对路径>.<时间戳>`，先在 1 个文件试运行并贴 diff 给用户过目，确认后才扩量，结束后逐文件抽查复核并列出受影响文件清单。
+5. **违规定性**：用脚本批量替换改了文件——即使结果碰巧正确——也算违规。立即停手、保留现场、在收尾汇报单列「批量替换违规记录」（受影响文件 + 是否已备份 + 处置），不得用 git 回滚掩盖。
+6. **本条为何写两份**：权威在 Weline MCP（`HardConstraintsCatalog::no_script_batch_replace`）+ 宿主全局镜 `~/.dsh/AGENTS.md`「禁止脚本批量替换」。全局文件体积达 59KB，超过宿主 64KB 注入预算时会被整体省略（`omitted ~/.dsh/AGENTS.md`），规则随即失效且无任何提示——这是 2026-10-30 违规的机制性原因。本仓 `AGENTS.md` 必然注入，故在此加常驻镜兜底；两处口径冲突以 MCP `hard_constraints` 为准。
 
 ## 前端版心 / 页面画布（硬规则）
 

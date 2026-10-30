@@ -232,7 +232,9 @@
 | 把他会话在飞脏改一起提交（`git add -A`）/ 把在飞文件当基线编辑 / 归属不明自行裁决 | [规则/00](./规则/00-MCP调用与会话.md) §7b |
 | 工程跳过 `cognition query` 却假装已有可靠认知 | MCP `weline_cognition` |
 
-## 工作区不可丢弃规则（`preserve_dirty_workspace`，严重）
+## 工作区不可丢弃规则（`preserve_dirty_workspace`，**P0 最高级** · 2026-10-30 升级）
+
+**级别：P0，本索引最高级**——多会话共用工作区，丢弃他人修改 = 不可挽回的代码丢失；冲突时本条优先于其余全部规则，也优先于速度与期限。每个改动须给出改前/改后 `shasum -a 256` 证据；违规立即停手、留现场、当回合报告并记台账，同会话再犯即停止全部文件写入。
 
 MCP 的自愈、宿主重载、插件代次刷新、验证回滚和崩溃恢复，以及普通宿主编辑，都必须保留任务开始前已经存在的 tracked、staged、untracked 与 ignored 脏改。
 
@@ -242,7 +244,7 @@ MCP 的自愈、宿主重载、插件代次刷新、验证回滚和崩溃恢复�
 
 MCP 子进程只允许只读 Git 检查，禁止上述全部 Git 写操作及 force/discard 变体。分支切换只能由工作区所有者显式执行。完整条款见 [规则/00-MCP调用与会话.md](./规则/00-MCP调用与会话.md) 与 [AI开发治理.md](./AI开发治理.md)。
 
-### 共享脏树的提交范围（`concurrent_session_commit_hygiene`，严重）
+### 共享脏树的提交范围（`concurrent_session_commit_hygiene`，**P0 最高级** · 2026-10-30 升级）
 
 `preserve_dirty_workspace` 管「不许擦」，本条管「**提交时不许夹带**」。多会话共用一棵脏树时：
 
