@@ -102,4 +102,55 @@ final class RequiredDefaultInjectionSlotFamilyTest extends TestCase
             'A sibling slot must remain fillable; aliasing must not become page-wide.',
         );
     }
+
+    /**
+     * Regression guard for locale bleed in cached injected-widget markup.
+     *
+     * The safety net caches chrome widgets across requests; if the cache-key memo
+     * ignores language or currency, a long-lived worker serves one locale's markup to
+     * another (observed in production: the English page rendering the Chinese footer).
+     *
+     * The guard asserts the memo index is locale-aware, accepting either the framework
+     * environment fingerprint or an explicit lang/currency read, so the check tracks the
+     * invariant rather than one implementation.
+     */
+    public function testRuntimeSafetyNetWidgetKeyMemoIsLocaleAware(): void
+    {
+        $src = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionRuntimeSafetyNet.php',
+        );
+        self::assertNotSame('', $src, 'Safety net source must be readable.');
+
+        $localeAware = \str_contains($src, 'KeyBuilder::environmentHash')
+            || \str_contains($src, 'getWelineUserLang')
+            || \str_contains($src, 'requestScopeContext');
+
+        self::assertTrue(
+            $localeAware,
+            'Injected-widget cache-key memo must be locale-aware (environment hash or explicit lang/currency).',
+        );
+    }
+
+    /**
+     * The float-edge re-adoption pass parses + re-serialises the whole document with
+     * DOMDocument (measured 5-13ms CPU on a 478KB PDP). It can only change the document
+     * when the safety net injected something, so it must stay behind the injection flag —
+     * an unconditional call cost a full extra parse per request and always produced an
+     * identical document.
+     */
+    public function testFloatEdgeReadoptRunsOnlyAfterAnInjection(): void
+    {
+        $src = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionRuntimeSafetyNet.php',
+        );
+
+        self::assertStringContainsString('$injectedAnything = false;', $src);
+        self::assertStringContainsString('$injectedAnything = true;', $src);
+        self::assertStringContainsString('if ($injectedAnything) {', $src);
+        self::assertSame(
+            1,
+            \substr_count($src, 'ensureFloatEdgeShellsInHtml'),
+            'The float-edge pass must be guarded (single guarded call site), never unconditional.',
+        );
+    }
 }

@@ -93,8 +93,31 @@ final class PromotionStorefrontActiveDealResolver
         );
         $eligible = [];
 
-        foreach ($cache->rememberForRequest(
-            'promotion.active_themes',
+        // Active themes and their product selections are scope-level data (not per product),
+        // yet every PDP re-queried them: listActiveThemes() runs one SQL and each theme's
+        // selection re-scans the published catalogue (~7ms per theme). Cache both across
+        // requests; the dependency names drop them when promotions publish.
+        $themePolicy = new \Weline\Framework\Cache\CachePolicy(
+            resource: 'promotion.active_themes',
+            pool: 'promotion',
+            scope: 'website',
+            dependencies: ['promotion'],
+            freshTtlSeconds: 300,
+            staleTtlSeconds: 1800,
+            allowEmptyResult: true,
+        );
+        $selectionPolicy = new \Weline\Framework\Cache\CachePolicy(
+            resource: 'promotion.theme_selection',
+            pool: 'promotion',
+            scope: 'website',
+            dependencies: ['promotion', 'catalog'],
+            freshTtlSeconds: 300,
+            staleTtlSeconds: 1800,
+            allowEmptyResult: true,
+        );
+
+        foreach ($cache->rememberPolicy(
+            $themePolicy,
             serialize($scope),
             fn(): array => $this->activeThemes($scope),
         ) as $theme) {
@@ -112,9 +135,9 @@ final class PromotionStorefrontActiveDealResolver
 
             $themeId = (int)($theme['id'] ?? 0);
             $productIds = $themeId > 0
-                ? $cache->rememberForRequest(
-                    'promotion.theme_selection',
-                    serialize([$theme, $scope]),
+                ? $cache->rememberPolicy(
+                    $selectionPolicy,
+                    serialize([$themeId, $scope]),
                     fn(): array => $this->themeProductService->resolveStorefrontProductIds($theme, $scope),
                 )
                 : [];

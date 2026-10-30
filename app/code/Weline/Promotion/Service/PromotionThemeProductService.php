@@ -554,6 +554,31 @@ final class PromotionThemeProductService
     /** @param array{website_id:int,store_code:string,channel_code:string} $scope @param array<string,mixed> $filters @return list<int> */
     private function searchIds(array $scope, array $filters, int $limit): array
     {
+        // Several active deal themes usually share one storefront scope, and each used
+        // to re-run the full published-product scan (measured ~7ms per call, 334 rows).
+        // The result depends only on scope+filters+limit, so memoize per request.
+        $memoKey = 'promotion.search_ids.' . md5(serialize([$scope, $filters, $limit]));
+        if (\Weline\Framework\Runtime\RequestContext::isInitialized()
+            && \Weline\Framework\Runtime\RequestContext::has($memoKey)
+        ) {
+            $memo = \Weline\Framework\Runtime\RequestContext::get($memoKey);
+
+            return \is_array($memo) ? $memo : [];
+        }
+
+        $result = $this->searchIdsUncached($scope, $filters, $limit);
+        if (\Weline\Framework\Runtime\RequestContext::isInitialized()) {
+            \Weline\Framework\Runtime\RequestContext::set($memoKey, $result);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function searchIdsUncached(array $scope, array $filters, int $limit): array
+    {
         // Selection is a base-product read. Re-entering the priced storefront
         // catalog here recurses back through active-deal resolution.
         $reader = \Weline\Framework\Runtime\TraceGate::measurePhase(

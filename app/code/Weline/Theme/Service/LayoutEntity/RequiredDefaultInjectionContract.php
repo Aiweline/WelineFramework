@@ -121,10 +121,18 @@ final class RequiredDefaultInjectionContract
         string $slotId,
         string $module,
         string $code,
+        ?array $wrapperIndex = null,
     ): bool {
         $slotId = trim($slotId);
         if ($slotId === '' || $pageHtml === '') {
             return false;
+        }
+        // Indexed fast path: the wrapper index already covers the "widget stamped inside
+        // the slot host" case, because the host tag itself carries data-slot-id and any
+        // widget wrapper nested in it is still a tag in the document. Skipping the
+        // per-question inner-HTML extraction keeps N questions at O(1) each.
+        if ($wrapperIndex !== null) {
+            return self::slotClaimedByWidgetWrapper($pageHtml, $slotId, $module, $code, $wrapperIndex);
         }
         $inner = self::extractSlotInnerHtml($pageHtml, $slotId);
         if ($inner !== null && self::slotInnerHasWidgetCode($inner, $module, $code)) {
@@ -143,6 +151,7 @@ final class RequiredDefaultInjectionContract
         string $slotId,
         string $module,
         string $code,
+        ?array $wrapperIndex = null,
     ): bool {
         unset($module);
         $slotId = strtolower(trim($slotId));
@@ -150,7 +159,10 @@ final class RequiredDefaultInjectionContract
         if ($slotId === '' || $code === '' || $pageHtml === '') {
             return false;
         }
-        $plain = strtolower(self::stripIgnoredPresenceRegions($pageHtml));
+        if ($wrapperIndex !== null) {
+            return isset($wrapperIndex[$slotId . "\0" . $code]);
+        }
+        $plain = self::normalizedPlainHtml($pageHtml);
         $slotQ = preg_quote($slotId, '/');
         $codeQ = preg_quote($code, '/');
 
@@ -159,6 +171,69 @@ final class RequiredDefaultInjectionContract
             . '|<[^>]*\bdata-widget-code\s*=\s*(["\'])' . $codeQ . '\3[^>]*\bdata-slot-id\s*=\s*(["\'])' . $slotQ . '\4[^>]*>/',
             $plain,
         );
+    }
+
+    /**
+     * Normalized (lowercased, ignore-region-stripped) document, memoized per page string.
+     *
+     * Presence checks run once per required-injection target × slot alias — dozens of
+     * times on one 500KB storefront page. Rebuilding the lowercased copy each time made
+     * the safety net cost O(targets × page size). One memo entry per page string keeps
+     * this at O(page size) total, while results stay byte-identical.
+     */
+    private static function normalizedPlainHtml(string $pageHtml): string
+    {
+        static $memo = [];
+        $key = md5($pageHtml); // cheap fingerprint; full compare guards collisions
+        if (isset($memo[$key]) && $memo[$key][0] === $pageHtml) {
+            return $memo[$key][1];
+        }
+        $plain = strtolower(self::stripIgnoredPresenceRegions($pageHtml));
+        if (count($memo) >= 4) {
+            $memo = []; // bound memory: at most a few in-flight page strings
+        }
+        $memo[$key] = [$pageHtml, $plain];
+
+        return $plain;
+    }
+
+    /**
+     * Build a one-pass index of `data-slot-id` × `data-widget-code` pairs present in the
+     * document, so the runtime safety net can answer N presence questions in O(1) each
+     * instead of rescanning the whole page N times.
+     *
+     * @return array<string,true> keys are "<slot>\0<code>" (both lowercased)
+     */
+    public static function buildWidgetWrapperIndex(string $pageHtml): array
+    {
+        $index = [];
+        if ($pageHtml === '') {
+            return $index;
+        }
+        $plain = self::normalizedPlainHtml($pageHtml);
+        if (preg_match_all('/<[^>]*>/', $plain, $m) !== false) {
+            foreach ($m[0] as $tag) {
+                if (!str_contains($tag, 'data-widget-code')) {
+                    continue;
+                }
+                $slot = self::tagAttr($tag, 'data-slot-id');
+                $code = self::tagAttr($tag, 'data-widget-code');
+                if ($slot !== null && $code !== null) {
+                    $index[$slot . "\0" . $code] = true;
+                }
+            }
+        }
+
+        return $index;
+    }
+
+    private static function tagAttr(string $tag, string $attr): ?string
+    {
+        if (!preg_match('/\b' . preg_quote($attr, '/') . '\s*=\s*(["\'])(.*?)\1/s', $tag, $mm)) {
+            return null;
+        }
+
+        return strtolower(trim($mm[2]));
     }
 
     /**
@@ -201,9 +276,10 @@ final class RequiredDefaultInjectionContract
         string $slotId,
         string $module,
         string $code,
+        ?array $wrapperIndex = null,
     ): bool {
         foreach (self::slotIdAliases($slotId) as $candidate) {
-            if (self::slotHasWidgetPresent($pageHtml, $candidate, $module, $code)) {
+            if (self::slotHasWidgetPresent($pageHtml, $candidate, $module, $code, $wrapperIndex)) {
                 return true;
             }
         }
@@ -317,6 +393,17 @@ final class RequiredDefaultInjectionContract
     {
         if ($html === '') {
             return '';
+        }
+        // Fast path: the markers below are rare failure/QA artefacts. These two
+        // backreference regexes each scan the whole document (~6ms on a 500KB
+        // storefront page), and presence checks invoke this method dozens of times
+        // per page (once per required-injection target × slot alias). When neither
+        // marker is present the replacements are no-ops, so skip them entirely.
+        // stripos (not str_contains) keeps parity with the /i regexes below.
+        if (stripos($html, 'data-purchase-failsafe') === false
+            && stripos($html, 'data-required-injection-ignore') === false
+        ) {
+            return $html;
         }
         $html = preg_replace(
             '/<([a-z0-9]+)([^>]*\bdata-purchase-failsafe\b[^>]*)>.*?<\/\1>/is',

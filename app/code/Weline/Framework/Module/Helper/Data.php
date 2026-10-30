@@ -1018,25 +1018,28 @@ class Data extends AbstractHelper implements \Weline\Framework\Runtime\ProcessSh
                             $rule_method = '';
                         }
                         # 获取方法路由
-                        // 规范保留三种写法：index / getIndex / get-index（大小写与连字符都要能命中）。
-                        // 历史实现会把末尾的 `index` 段剥掉，导致 index/index 被注册成空键 ''，
-                        // 请求侧却按 'index/index' 查找 → 首页 404。这里改为只去掉「控制器段与方法段
-                        // 完全重复」的冗余，绝不把整条路由压成空串。
+                        // 必须剥掉末尾的 `index` 段：控制器动作 index 的公开路径是
+                        // `<router>/<controller>`（如 weline_product/frontend/catalog），
+                        // 而不是 `<router>/<controller>/index`。少了这一步，路由键变成
+                        // `.../catalog/index`，数据库 UrlRewrite 指向的 `.../catalog` 就
+                        // 匹配不到任何路由 → 商品列表 / 详情页全站 404。
+                        //
+                        // 保护：整条路由被剥空时（首页 index/index）必须回落到控制器段，
+                        // 绝不注册空串键，否则请求侧按 index/index 查找同样 404。
                         $rule_router = strtolower($baseRouter . '/' . $rule_method);
                         $rule_router = trim(preg_replace('#/+#', '/', str_replace('\\', '/', $rule_router)), '/');
+                        $rule_rule_arr = explode('/', trim($rule_router, '/'));
+                        $last_rule_value = empty($rule_rule_arr) ? '' : ($rule_rule_arr[array_key_last($rule_rule_arr)] ?? '');
+                        while ('index' === array_pop($rule_rule_arr)) {
+                            $last_rule_value = empty($rule_rule_arr) ? '' : ($rule_rule_arr[array_key_last($rule_rule_arr)] ?? '');
+                            continue;
+                        }
+                        $rule_router = implode('/', $rule_rule_arr) . (('index' !== $last_rule_value) ? '/' . $last_rule_value : '');
+                        $rule_router = trim($rule_router, '/');
                         if ($rule_router === '') {
                             // 控制器无方法段（或方法段与路由同名）时，回落到控制器路由本身，
                             // 避免出现空键；空路径由请求侧的默认路由处理。
                             $rule_router = strtolower(trim((string)$baseRouter, '/'));
-                        }
-                        // 首页这类「控制器段与方法段同名」的路由必须保留完整键
-                        // （index/index），否则会被上面的合并压成 'index' 或空串。
-                        $controller_segment = strtolower(trim((string)$baseRouter, '/'));
-                        if ($rule_method !== '' && $controller_segment !== ''
-                            && \str_ends_with($controller_segment, '/' . $rule_method) === false
-                            && $rule_router === $controller_segment
-                        ) {
-                            $rule_router = $controller_segment . '/' . $rule_method;
                         }
 
                         # 获取路由
