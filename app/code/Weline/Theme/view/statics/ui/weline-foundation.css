@@ -485,7 +485,7 @@
         max-width: 100%;
         min-width: 0;
         margin-inline: auto;
-        padding-inline: var(--weline-layout-content-padding-inline);
+        padding-inline: var(--weline-layout-content-padding-inline, clamp(1rem, 0.9rem + 1.5vw, 2.5rem));
     }
     .w-theme-content-width {
         box-sizing: border-box;
@@ -493,7 +493,7 @@
         max-width: 100%;
         min-width: 0;
         margin-inline: auto;
-        padding-inline: var(--weline-layout-content-padding-inline);
+        padding-inline: var(--weline-layout-content-padding-inline, clamp(1rem, 0.9rem + 1.5vw, 2.5rem));
     }
     /*
      * terms/policy/contact/about 底部扩展槽（contact-info 等）：布局拥有版心，

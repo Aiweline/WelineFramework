@@ -149,3 +149,44 @@
         .w-frontend-nav__actions-desktop { display: none; }
     }
 }
+
+/* 反色面必须成对（HARD）：base 层把 [data-surface="body"] 下的标题/正文钉成纸墨，
+ * 深色版面自带的 data-surface="inverse" 语义位于 weline-theme（最低层）会被 base 压掉。
+ * 实测 /terms：深底 #1f2124 上 h1 #1c1c1c = 1.06:1、lead #4a4a48 = 1.82:1（等同糊底）。
+ * 这里在 components 层补回反色墨：只调墨色，不新增色相、不写裸色（消费盘叶子），
+ * 组件仍可用更高优先级或自己的语义色覆盖。 */
+@layer components {
+    [data-surface="inverse"] h1,
+    [data-surface="inverse"] h2,
+    [data-surface="inverse"] h3,
+    [data-surface="inverse"] h4,
+    [data-surface="inverse"] h5,
+    [data-surface="inverse"] h6,
+    [data-surface="inverse"] strong,
+    [data-surface="inverse"] b,
+    .w-surface-inverse h1,
+    .w-surface-inverse h2,
+    .w-surface-inverse h3,
+    .w-surface-inverse h4,
+    .w-surface-inverse h5,
+    .w-surface-inverse h6,
+    .w-surface-inverse strong,
+    .w-surface-inverse b {
+        color: var(--color-text-on-dark);
+    }
+
+    [data-surface="inverse"] p,
+    [data-surface="inverse"] li,
+    [data-surface="inverse"] dd,
+    [data-surface="inverse"] dt,
+    [data-surface="inverse"] figcaption,
+    [data-surface="inverse"] small,
+    .w-surface-inverse p,
+    .w-surface-inverse li,
+    .w-surface-inverse dd,
+    .w-surface-inverse dt,
+    .w-surface-inverse figcaption,
+    .w-surface-inverse small {
+        color: var(--color-text-on-dark-muted);
+    }
+}

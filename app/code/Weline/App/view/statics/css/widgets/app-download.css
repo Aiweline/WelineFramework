@@ -84,6 +84,11 @@
 /* ===== 悬浮形态（storefront-float-start 槽）===== */
 [data-slot-id="storefront-float-start"] .weline-app-download {
   width: 100%;
+  /* CLS: reserve before deferred widget CSS paints (print/onload).
+   * Marker: float-start-app-download-reserve-v2 — mobile measured final 172×60. */
+  min-inline-size: 172px;
+  min-block-size: 60px;
+  box-sizing: border-box;
   padding: var(--weline-space-3);
 }
 

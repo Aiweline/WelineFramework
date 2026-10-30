@@ -152,10 +152,10 @@ textarea::-webkit-scrollbar-thumb:hover,
 
 .header-site-notice-inner,
 .weline-header .header-site-notice-inner {
-    width: min(100%, var(--weline-layout-content-max-width));
+    width: min(100%, var(--weline-layout-content-max-width, 1440px));
     max-width: 100%;
     margin-inline: auto;
-    padding: var(--spacing-0_4) var(--weline-layout-content-padding-inline);
+    padding: var(--spacing-0_4) var(--weline-layout-content-padding-inline, clamp(1rem, 0.9rem + 1.5vw, 2.5rem));
     box-sizing: border-box;
     display: flex;
     align-items: center;
@@ -300,10 +300,10 @@ textarea::-webkit-scrollbar-thumb:hover,
 
 /* 版心：与 .header-site-notice-inner / .header-main-nav-inner 同构 */
 .header-belt-inner {
-    width: min(100%, var(--weline-layout-content-max-width));
+    width: min(100%, var(--weline-layout-content-max-width, 1440px));
     max-width: 100%;
     margin-inline: auto;
-    padding-inline: var(--weline-layout-content-padding-inline);
+    padding-inline: var(--weline-layout-content-padding-inline, clamp(1rem, 0.9rem + 1.5vw, 2.5rem));
     box-sizing: border-box;
 }
 
@@ -1667,10 +1667,10 @@ textarea::-webkit-scrollbar-thumb:hover,
     /* 业界：宽屏单行 nowrap，靠「更多」收项；禁止 flex 自然换行后再挤回一行 */
     flex-wrap: nowrap;
     align-items: center;
-    width: min(100%, var(--weline-layout-content-max-width));
+    width: min(100%, var(--weline-layout-content-max-width, 1440px));
     max-width: 100%;
     margin-inline: auto;
-    padding: 0 var(--weline-layout-content-padding-inline);
+    padding: 0 var(--weline-layout-content-padding-inline, clamp(1rem, 0.9rem + 1.5vw, 2.5rem));
     box-sizing: border-box;
     background: transparent;
     color: inherit;
