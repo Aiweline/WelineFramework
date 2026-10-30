@@ -94,9 +94,16 @@ final class ThemeRuntimeCacheCleaner
      * theme:upgrade -f only invalidate (and promote the staged seed). Storefront FPC
      * warm is left to the cron warmer, which reacts to the generation/build change.
      *
+     * 预热职责归属：FPC 预热与 CDN 预热入队**不属于缓存失效**。
+     * 构建号（namespace generation）变化后，cron warmer 会自己发现并预热。
+     * 因此系统更新（setup:upgrade / core:update / deploy）路径必须传
+     * $allowWarmup=false，禁止在升级窗口内跑预热：预热要回源抓页面、
+     * 要扫全量 URL 入队，会把升级耗时拖到分钟级，且维护模式下回源本身不可用。
+     *
+     * @param bool $allowWarmup false = 只做失效，不做任何预热（升级路径专用）
      * @return array{reason:string,theme_id:int|null,steps:array<string,bool>,failures:array<string,string>}
      */
-    public function clearAllThemeRelatedCaches(?int $themeId = null, string $reason = 'theme_changed'): array
+    public function clearAllThemeRelatedCaches(?int $themeId = null, string $reason = 'theme_changed', bool $allowWarmup = true): array
     {
         $result = [
             'reason' => $reason,
@@ -120,6 +127,17 @@ final class ThemeRuntimeCacheCleaner
         $this->runStep($result, 'theme_namespace_generations_all', function (): void {
             $this->bumpAllThemeNamespaces();
         });
+
+        // 预热（CDN 入队 / FPC staging warm）不是失效动作，只在显式允许时执行。
+        // 系统更新路径传 $allowWarmup=false：预热由 cron warmer 在构建号变化后自己做。
+        if (!$allowWarmup) {
+            $result['steps']['cdn_publish_refresh_enqueue'] = false;
+            $result['steps']['fpc_staging_warm_promote'] = false;
+            $result['warmup_skipped'] = true;
+
+            return $result;
+        }
+
         $this->runStep($result, 'cdn_publish_refresh_enqueue', function (): void {
             $this->purgeCdnFullPageCaches();
         });

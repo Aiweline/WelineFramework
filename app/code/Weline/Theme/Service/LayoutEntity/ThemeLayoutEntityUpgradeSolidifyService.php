@@ -238,7 +238,14 @@ final class ThemeLayoutEntityUpgradeSolidifyService
         // full clear (cache_invalidation defaults to all).
         $invalidation = \strtolower(\trim((string)($options['cache_invalidation'] ?? 'all')));
         if ($invalidation === 'all') {
-            $result = $this->cacheCleaner->clearAllThemeRelatedCaches($theme?->getId(), trim($reason) ?: 'theme_layout_phtml_rebuilt');
+            // allowWarmup=false：升级窗口只做缓存失效，不做任何预热。
+            // 预热（回源抓首页 / 全量 URL 入队）由 cron warmer 在构建号变化后自己完成；
+            // 在维护窗内回源本身也不可用，且会把升级拖到分钟级。
+            $result = $this->cacheCleaner->clearAllThemeRelatedCaches(
+                $theme?->getId(),
+                trim($reason) ?: 'theme_layout_phtml_rebuilt',
+                false,
+            );
             $cacheFailures = [];
             foreach ((array)($result['failures'] ?? []) as $step => $message) {
                 if (str_starts_with((string)$step, 'cdn_') || str_contains((string)$message, 'cdn_')) {
