@@ -1630,7 +1630,7 @@ private function assert_HomepageLayoutHtmlBag_testLogicalKeyCarriesHomepageOptio
     /** @var StorefrontHomepageLayoutHtmlBag $bag */
     $bag = $ref->newInstanceWithoutConstructor();
     $key = $bag->logicalKey('Weline_Theme::theme/frontend/layouts/homepage/default.phtml');
-    self::assertStringContainsString('theme.homepage_layout.html.v23.', $key);
+    self::assertStringContainsString('theme.homepage_layout.html.v25.', $key);
     self::assertStringContainsString('.homepage.default', $key);
 }
 
