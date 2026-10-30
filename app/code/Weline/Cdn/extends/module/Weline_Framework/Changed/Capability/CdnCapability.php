@@ -68,12 +68,13 @@ final class CdnCapability implements ChangedCapabilityInterface
         $domainModel = ObjectManager::getInstance(Domain::class);
         // Product cross-site identity may attach absolute URLs for every member website; load CDN
         // domains for impact.website_ids ∪ change.websiteId (not mutation site alone).
+        // 下游规划器需要 Domain 模型对象。
         $domains = (clone $domainModel)->reset()
             ->where(Domain::schema_fields_SITE_ID, $siteIds, 'in')
             ->where(Domain::schema_fields_ENABLED, 1)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         if ($domains === []) {
             return;
         }

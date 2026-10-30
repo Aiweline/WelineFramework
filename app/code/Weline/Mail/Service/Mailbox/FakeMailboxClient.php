@@ -27,12 +27,13 @@ final class FakeMailboxClient implements MailboxClientInterface
         if ($unreadOnly) {
             $query->where(MailMessage::schema_fields_IS_READ, 0);
         }
+        // normalizeRow() 形参声明为 MailMessage，必须对象化。
         $items = $query
             ->order(MailMessage::schema_fields_ID, 'DESC')
             ->limit($limit)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         $out = [];
         foreach ($items as $item) {
             $out[] = $this->normalizeRow($item, false);
@@ -45,15 +46,15 @@ final class FakeMailboxClient implements MailboxClientInterface
         $account = $this->loadAccountByMailbox($mailbox);
         /** @var MailMessage $model */
         $model = ObjectManager::getInstance(MailMessage::class);
+        // 只计数，取数组即可。
         $items = $model->clear()
             ->where(MailMessage::schema_fields_ACCOUNT_ID, (int)$account->getId())
             ->where(MailMessage::schema_fields_FOLDER, MailboxFolder::INBOX)
             ->where(MailMessage::schema_fields_IS_READ, 0)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
-        return is_array($items) ? count($items) : 0;
+        return \count($items);
     }
 
     public function searchMessages(string $mailbox, string $folder, string $query, int $limit = 50): array

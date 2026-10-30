@@ -254,17 +254,18 @@ class ModelCollector
     {
         $allModels = $this->aiModel->reset()
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $protectedModels = [];
 
-        foreach ($allModels->getItems() as $model) {
-            $modelCode = $model->getData('model_code');
+        // 只读字段，数组行即可；对 model 调 getItems() 恒为空。
+        foreach ($allModels as $model) {
+            $modelCode = $model[AiModel::schema_fields_MODEL_CODE] ?? null;
             if ($this->defaultModelManager->isProtectedModel($modelCode)) {
                 $protectedModels[] = [
                     'model_code' => $modelCode,
-                    'model_name' => $model->getName(),
-                    'vendor' => $model->getVendor(),
+                    'model_name' => (string)($model[AiModel::schema_fields_NAME] ?? ''),
+                    'vendor' => (string)($model[AiModel::schema_fields_SUPPLIER] ?? ''),
                     'reason' => $this->defaultModelManager->getProtectionReason($modelCode),
                     'usage' => $this->defaultModelManager->getModelUsageAsDefault($modelCode)
                 ];
@@ -331,11 +332,16 @@ class ModelCollector
             ->select()
             ->fetch();
 
+        $items = [];
         if ($maybeCollection) {
             if (is_array($maybeCollection)) {
                 $items = $maybeCollection;
-            } elseif (method_exists($maybeCollection, 'getItems')) {
-                $items = $maybeCollection->getItems();
+            } elseif ($maybeCollection instanceof \Weline\Framework\Database\Query\RowCollection) {
+                // 需要 delete() 去重与 updateExistingModel() 改写，必须对象化。
+                $items = $maybeCollection->toModels();
+            } elseif (is_object($maybeCollection) && method_exists($maybeCollection, 'toModels')) {
+                // 需要 delete() 去重与 updateExistingModel() 改写，必须对象化。
+                $items = $maybeCollection->toModels();
             } else {
                 // 单条或未知类型，统一转数组
                 $items = [$maybeCollection];

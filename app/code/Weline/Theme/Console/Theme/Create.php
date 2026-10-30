@@ -2393,7 +2393,7 @@ USAGE;
         $this->printing->printing("\n");
         
         // 1. 获取数据库中的主题
-        $dbThemes = $this->welineTheme->clearData()->select()->fetch()->getItems();
+        $dbThemes = $this->welineTheme->clearData()->select()->fetchArray();
         
         // 2. 获取目录中的主题
         $dirThemes = $this->scanThemeDirectories();
@@ -2702,7 +2702,7 @@ USAGE;
     private function selectThemeForCheck(): ?string
     {
         // 获取数据库中的主题
-        $dbThemes = $this->welineTheme->clearData()->select()->fetch()->getItems();
+        $dbThemes = $this->welineTheme->clearData()->select()->fetchArray();
         
         // 获取目录中的主题
         $dirThemes = $this->scanThemeDirectories();

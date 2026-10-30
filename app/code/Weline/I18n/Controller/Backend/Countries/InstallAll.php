@@ -41,12 +41,11 @@ class InstallAll extends BaseController
             // 检查已存在的国家
             $existingCountries = $countries->clearQuery()
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             
             $existingCodes = [];
             foreach ($existingCountries as $country) {
-                $existingCodes[] = $country->getData(Countries::schema_fields_CODE);
+                $existingCodes[] = $country[Countries::schema_fields_CODE] ?? null;
             }
             
             $insert_countries = [];

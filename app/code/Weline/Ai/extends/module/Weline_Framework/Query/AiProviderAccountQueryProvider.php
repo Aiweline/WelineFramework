@@ -150,11 +150,11 @@ final class AiProviderAccountQueryProvider implements QueryProviderInterface
                 $accountModel->where(Account::schema_fields_PROVIDER_CODE, $providerCode);
             }
 
+            // 行在 fetchArray() 返回值上；对 model 调 getItems() 恒为空。
             $accounts = $accountModel->order(Account::schema_fields_CREATED_AT, 'DESC')
                 ->pagination($page, $limit)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
 
             $formatted = [];
             foreach ($accounts as $account) {

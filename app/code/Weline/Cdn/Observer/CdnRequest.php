@@ -135,10 +135,11 @@ class CdnRequest implements ObserverInterface
         if ($siteId === null) {
             return [];
         }
+        // 方法契约声明 list<Domain>，且 matchDomainByHost() 需要对象。
         return (clone $this->domainModel)->reset()
             ->where(Domain::schema_fields_SITE_ID, $siteId)
             ->where(Domain::schema_fields_ENABLED, 1)
-            ->select()->fetch()->getItems();
+            ->select()->fetch()->toModels();
     }
 
     private function handleScopedPurgeUrls(?int $siteId, ?string $explicitDomain, array $data, bool $scope = false): array

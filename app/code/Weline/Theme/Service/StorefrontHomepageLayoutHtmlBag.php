@@ -35,7 +35,8 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
     private const REQUEST_MEMO_PREFIX = 'theme.homepage_layout_html.req.v1.';
     /** v2: payload is post hard-cut finalize (safety_net complete). */
     /** v4: unsupported language uses the switcher dialog, not a header list. */
-    private const LOGICAL_KEY_PREFIX = 'theme.homepage_layout.html.v8.';
+    /** v12: hero-discover-grid-stack-v1 (grid overlay) + float reserve-v2. */
+    private const LOGICAL_KEY_PREFIX = 'theme.homepage_layout.html.v12.';
     /** Gzip envelope marker (ASCII — avoids null-byte FileAdapter edge cases). */
     private const PACK_PREFIX = 'HPLH1:';
 

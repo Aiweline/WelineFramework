@@ -138,11 +138,12 @@ final class MailMenuSignalPublisher
         $ops = ObjectManager::getInstance(MailboxOpsService::class);
         /** @var MailAccount $accountModel */
         $accountModel = ObjectManager::getInstance(MailAccount::class);
+        // 下方 instanceof MailAccount + getData()，必须对象化。
         $accounts = $accountModel->clear()
             ->order(MailAccount::schema_fields_ID, 'DESC')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $live = [];
         $remaining = BackendMenuSignalAggregator::MAX_ITEMS_PER_CODE;

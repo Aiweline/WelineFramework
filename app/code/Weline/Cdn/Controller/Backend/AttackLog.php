@@ -77,7 +77,8 @@ class AttackLog extends BackendController
 
         // 分页查询
         $result = $query->pagination($page, $pageSize)->fetch();
-        $logs = $result->getItems();
+        // 模板对每行调用 getData()，保留模型对象。
+        $logs = $result->toModels();
         
         $pagination = $query->getPaginationData();
         $total = $pagination['totalSize'] ?? 0;

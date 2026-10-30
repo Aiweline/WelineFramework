@@ -35,7 +35,8 @@ final class MailComposerService
             ->limit($limit)
             ->select()
             ->fetch()
-            ->getItems();
+            // 下方 getId()/getData() 需要模型对象。
+            ->toModels();
 
         $out = [];
         foreach ($items as $item) {

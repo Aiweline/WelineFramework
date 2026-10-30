@@ -372,18 +372,17 @@ final class ThemeScopedWorkspaceRequestService
                 ->where(ThemeScopeWorkspace::schema_fields_TARGET_TYPE, $context->targetType)
                 ->where(ThemeScopeWorkspace::schema_fields_TARGET_ID, $context->targetId)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
         } catch (\Throwable) {
             return [];
         }
 
         $locales = [];
-        foreach (\is_array($rows) ? $rows : [] as $row) {
-            if (!\is_object($row) || !\method_exists($row, 'getData')) {
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
                 continue;
             }
-            $locale = \trim((string)$row->getData(ThemeScopeWorkspace::schema_fields_LOCALE));
+            $locale = \trim((string)($row[ThemeScopeWorkspace::schema_fields_LOCALE] ?? ''));
             if ($locale === '' || \strcasecmp($locale, 'default') === 0) {
                 continue;
             }
@@ -547,11 +546,10 @@ final class ThemeScopedWorkspaceRequestService
             $rows = (clone $this->workspaceRows)->clearData()->clearQuery()
                 ->where(ThemeScopeWorkspace::schema_fields_BINDING_IDENTITY_KEY, $context->identityHash())
                 ->select()
-                ->fetch()
-                ->getItems();
-            $row = \is_array($rows) ? ($rows[0] ?? null) : null;
-            if (\is_object($row) && \method_exists($row, 'getData')) {
-                $persistedVersionId = (int)$row->getData(ThemeScopeWorkspace::schema_fields_THEME_VERSION_ID);
+                ->fetchArray();
+            $row = $rows[0] ?? null;
+            if (is_array($row)) {
+                $persistedVersionId = (int)($row[ThemeScopeWorkspace::schema_fields_THEME_VERSION_ID] ?? 0);
             }
         } catch (\Throwable) {
             $persistedVersionId = ThemeScopeWorkspace::THEME_VERSION_EXTERNAL;

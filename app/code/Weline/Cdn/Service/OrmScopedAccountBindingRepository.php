@@ -67,13 +67,14 @@ final class OrmScopedAccountBindingRepository implements ScopedAccountBindingRep
     public function listForMode(string $storeMode): array
     {
         $query = clone $this->model;
+        // project(ScopedAccountBinding $model) 需要模型对象。
         $rows = $query->clear()
             ->where(ScopedAccountBinding::schema_fields_STORE_MODE, $storeMode)
             ->order(ScopedAccountBinding::schema_fields_STORAGE_SCOPE, 'ASC')
             ->order(ScopedAccountBinding::schema_fields_ADAPTER, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $out = [];
         foreach ($rows as $row) {

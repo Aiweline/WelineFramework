@@ -356,28 +356,20 @@ class AgentScanner
      */
     public function getAgentsForScenario(string $scenarioCode): array
     {
+        // 逐行按数组取字段，直接要数组行。
         $records = $this->agentModel->reset()
             ->where(AiAgent::schema_fields_IS_ACTIVE, 1)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $agents = [];
 
-        if (!$records) {
-            return $agents;
-        }
-
-        // Model::fetch() 返回 Model 对象，用 getItems() 获取记录数组
-        $items = is_object($records) && method_exists($records, 'getItems')
-            ? $records->getItems()
-            : (is_array($records) ? $records : []);
-
-        foreach ($items as $record) {
-            if (!is_object($record)) {
+        foreach ($records as $record) {
+            if (!is_array($record)) {
                 continue;
             }
 
-            $scenarios = $record->getData(AiAgent::schema_fields_SCENARIOS);
+            $scenarios = $record[AiAgent::schema_fields_SCENARIOS] ?? null;
             if (is_string($scenarios)) {
                 $scenarioList = json_decode($scenarios, true) ?: [];
             } else {
@@ -385,8 +377,8 @@ class AgentScanner
             }
 
             if (in_array($scenarioCode, $scenarioList, true)) {
-                $code = $record->getData(AiAgent::schema_fields_CODE);
-                $agent = $this->getAgent($code);
+                $code = $record[AiAgent::schema_fields_CODE] ?? null;
+                $agent = $this->getAgent((string)$code);
                 if ($agent) {
                     $agents[$code] = $agent;
                 }
@@ -404,25 +396,16 @@ class AgentScanner
         $records = $this->agentModel->reset()
             ->where(AiAgent::schema_fields_IS_ACTIVE, 1)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $agents = [];
 
-        if (!$records) {
-            return $agents;
-        }
-
-        // Model::fetch() 返回 Model 对象，用 getItems() 获取记录数组
-        $items = is_object($records) && method_exists($records, 'getItems')
-            ? $records->getItems()
-            : (is_array($records) ? $records : []);
-
-        foreach ($items as $record) {
-            if (!is_object($record)) {
+        foreach ($records as $record) {
+            if (!is_array($record)) {
                 continue;
             }
-            $code = $record->getData(AiAgent::schema_fields_CODE);
-            $agent = $this->getAgent($code);
+            $code = $record[AiAgent::schema_fields_CODE] ?? null;
+            $agent = $this->getAgent((string)$code);
             if ($agent) {
                 $agents[$code] = $agent;
             }

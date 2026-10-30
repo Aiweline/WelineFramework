@@ -104,6 +104,21 @@ final class WorkerFullPageCacheFastPath
         if (TransactionContext::activeTransactionConnectionCount() > 0) {
             return null;
         }
+
+        // 时机前置条件：本快路径跑在请求分发最早期（ScopeIdentity 尚未安装）。
+        // 它依赖「已冻结的完整 Channel Scope」来合成 FPC 命名空间指纹；此时若
+        // RequestContext 里还没有 channel 身份，buildUnifiedFpcCacheKey() 会拿着
+        // 探针上下文里的 global 身份去合成，直接
+        // `Storefront 缓存版本缺少完整 Channel Scope` → 全站 500。
+        // 未安装身份 = 不是可验证的 FPC 命中场景，交回框架（applyParsedUrl 会
+        // 安装身份，再由 Router 内的 FPC 正常读写）。
+        $currentIdentity = \Weline\Framework\Runtime\RequestContext::scopeIdentity();
+        if (!$currentIdentity instanceof \Weline\Framework\Runtime\ScopeIdentity
+            || $currentIdentity->scopeKind !== \Weline\Framework\Runtime\ScopeIdentity::KIND_CHANNEL
+        ) {
+            return null;
+        }
+
         // Keep cache lookup and its response decorators in one isolated
         // request Context. Scope comes only from the verified cache receipt.
         $previousContext = Context::getCurrent();

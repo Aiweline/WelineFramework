@@ -257,14 +257,14 @@ class CdnAdminQueryService
                 $fqcn = $meta['fqcn'];
                 $q = $model->reset()->where(WarmupUrl::schema_fields_PROVIDER, $fqcn);
                 $this->applyWarmupScopeFilter($q, $filter);
-                $items = $q->select()->fetch()->getItems();
+                $items = $q->select()->fetchArray();
                 $total = 0;
                 $pending = 0;
                 $success = 0;
                 $fail = 0;
                 foreach ($items as $row) {
                     $total++;
-                    $status = (string)$row->getData(WarmupUrl::schema_fields_STATUS);
+                    $status = (string)($row[WarmupUrl::schema_fields_STATUS] ?? '');
                     if ($status === WarmupUrl::STATUS_PENDING) {
                         $pending++;
                     } elseif ($status === WarmupUrl::STATUS_SUCCESS) {
@@ -321,25 +321,24 @@ class CdnAdminQueryService
                 ->order(WarmupUrl::schema_fields_WARMUP_URL_ID, 'DESC')
                 ->limit($pageSize, ($page - 1) * $pageSize)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             $rows = [];
             foreach ($items as $item) {
                 $rows[] = [
-                    'warmup_url_id' => (int)$item->getData(WarmupUrl::schema_fields_WARMUP_URL_ID),
-                    'url' => (string)$item->getData(WarmupUrl::schema_fields_URL),
-                    'status' => (string)$item->getData(WarmupUrl::schema_fields_STATUS),
-                    'enabled' => (int)$item->getData(WarmupUrl::schema_fields_ENABLED),
-                    'processed_count' => (int)$item->getData(WarmupUrl::schema_fields_PROCESSED_COUNT),
-                    'target_count' => (int)$item->getData(WarmupUrl::schema_fields_TARGET_COUNT),
-                    'success_count' => (int)$item->getData(WarmupUrl::schema_fields_SUCCESS_COUNT),
-                    'fail_count' => (int)$item->getData(WarmupUrl::schema_fields_FAIL_COUNT),
-                    'retries' => (int)$item->getData(WarmupUrl::schema_fields_RETRIES),
-                    'last_warmed_at' => (int)$item->getData(WarmupUrl::schema_fields_LAST_WARMED_AT),
-                    'domain_id' => (int)$item->getData(WarmupUrl::schema_fields_DOMAIN_ID),
-                    'site_id' => (int)$item->getData(WarmupUrl::schema_fields_SITE_ID),
-                    'module' => (string)$item->getData(WarmupUrl::schema_fields_MODULE),
-                    'provider' => (string)$item->getData(WarmupUrl::schema_fields_PROVIDER),
+                    'warmup_url_id' => (int)($item[WarmupUrl::schema_fields_WARMUP_URL_ID] ?? 0),
+                    'url' => (string)($item[WarmupUrl::schema_fields_URL] ?? ''),
+                    'status' => (string)($item[WarmupUrl::schema_fields_STATUS] ?? ''),
+                    'enabled' => (int)($item[WarmupUrl::schema_fields_ENABLED] ?? 0),
+                    'processed_count' => (int)($item[WarmupUrl::schema_fields_PROCESSED_COUNT] ?? 0),
+                    'target_count' => (int)($item[WarmupUrl::schema_fields_TARGET_COUNT] ?? 0),
+                    'success_count' => (int)($item[WarmupUrl::schema_fields_SUCCESS_COUNT] ?? 0),
+                    'fail_count' => (int)($item[WarmupUrl::schema_fields_FAIL_COUNT] ?? 0),
+                    'retries' => (int)($item[WarmupUrl::schema_fields_RETRIES] ?? 0),
+                    'last_warmed_at' => (int)($item[WarmupUrl::schema_fields_LAST_WARMED_AT] ?? 0),
+                    'domain_id' => (int)($item[WarmupUrl::schema_fields_DOMAIN_ID] ?? 0),
+                    'site_id' => (int)($item[WarmupUrl::schema_fields_SITE_ID] ?? 0),
+                    'module' => (string)($item[WarmupUrl::schema_fields_MODULE] ?? ''),
+                    'provider' => (string)($item[WarmupUrl::schema_fields_PROVIDER] ?? ''),
                 ];
             }
             return [
@@ -388,14 +387,14 @@ class CdnAdminQueryService
         $model = ObjectManager::getInstance(WarmupUrl::class);
         $q = $model->reset();
         $this->applyWarmupScopeFilter($q, $filter);
-        $items = $q->select()->fetch()->getItems();
+        $items = $q->select()->fetchArray();
         $total = 0;
         $pending = 0;
         $success = 0;
         $fail = 0;
         foreach ($items as $row) {
             $total++;
-            $status = (string)$row->getData(WarmupUrl::schema_fields_STATUS);
+            $status = (string)($row[WarmupUrl::schema_fields_STATUS] ?? '');
             if ($status === WarmupUrl::STATUS_PENDING) {
                 $pending++;
             } elseif ($status === WarmupUrl::STATUS_SUCCESS) {
@@ -567,7 +566,8 @@ class CdnAdminQueryService
             } else {
                 $cutoff = date('Y-m-d H:i:s', time() - max(1, $days) * 86400);
                 $count = 0;
-                $rows = $model->reset()->where('created_at', $cutoff, '<')->select()->fetch()->getItems();
+                // 逐条 delete()，必须对象化。
+                $rows = $model->reset()->where('created_at', $cutoff, '<')->select()->fetch()->toModels();
                 foreach ($rows as $row) {
                     $row->delete();
                     $count++;
@@ -832,13 +832,9 @@ class CdnAdminQueryService
             $items = $domain->reset()
                 ->where(DomainModel::schema_fields_ENABLED, 1)
                 ->select()
-                ->fetch()
-                ->getItems();
-            $list = [];
-            foreach ($items as $item) {
-                $list[] = $item->getData();
-            }
-            return ['success' => true, 'data' => ['domains' => $list]];
+                ->fetchArray();
+            // fetchArray() 已是行数组，无需再 getData()。
+            return ['success' => true, 'data' => ['domains' => $items]];
         } catch (\Throwable $e) {
             return $this->failure('listEnabledDomains', $e, '域名读取失败，请稍后重试');
         }

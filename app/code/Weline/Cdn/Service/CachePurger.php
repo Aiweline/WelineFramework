@@ -196,12 +196,13 @@ class CachePurger
         }
         /** @var Domain $domainModel */
         $domainModel = clone $this->objectManager->getInstance(Domain::class);
+        // purgeDomainPublicScope(Domain $domain) 需要模型对象。
         $domains = $domainModel->reset()
             ->where(Domain::schema_fields_SITE_ID, $websiteId)
             ->where(Domain::schema_fields_ENABLED, 1)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         $normalized = [];
         foreach ($urls as $url) {
             $url = trim((string)$url);

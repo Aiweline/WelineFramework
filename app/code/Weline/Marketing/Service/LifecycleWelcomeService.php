@@ -150,13 +150,16 @@ final class LifecycleWelcomeService
     {
         /** @var LifecycleCampaign $model */
         $model = ObjectManager::getInstance(LifecycleCampaign::class);
-        $model->clear()
+        // 行在 fetch()->toModels() 上；对 $model 调 getItems() 恒为空。
+        $campaigns = $model->clear()
             ->where(LifecycleCampaign::schema_fields_STATUS, LifecycleCampaign::STATUS_ENABLED)
             ->where(LifecycleCampaign::schema_fields_TYPE, LifecycleCampaign::TYPE_WELCOME_CUSTOMER)
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
+
         $out = [];
-        foreach ($model->getItems() as $row) {
+        foreach ($campaigns as $row) {
             if ($row instanceof LifecycleCampaign) {
                 $out[] = $row->getData();
             }

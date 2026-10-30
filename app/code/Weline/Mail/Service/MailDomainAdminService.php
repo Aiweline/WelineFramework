@@ -99,12 +99,13 @@ final class MailDomainAdminService
         $isFake = ObjectManager::getInstance(MailCustomerAccountService::class)->isFakeDomain($domain);
 
         /** @var list<MailAccount> $accounts */
+        // 下方 instanceof MailAccount + getId()/delete()，必须对象化。
         $accounts = ObjectManager::getInstance(MailAccount::class)
             ->clear()
             ->where(MailAccount::schema_fields_DOMAIN_ID, $domainId)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $deletedAccounts = 0;
         try {

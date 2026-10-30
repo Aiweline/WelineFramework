@@ -46,9 +46,10 @@ class Words extends \Weline\Framework\App\Controller\BackendController
         $localsModel = ObjectManager::getInstance(Locals::class);
         $localsModel->insert($need_locals, Locals::schema_fields_ID)->fetch();
         $localsModel->clearData();
-        $locals = $localsModel->where(Locals::schema_fields_TARGET_CODE, WelineEnv::getLangLocal())->pagination()->select()->fetch();
-        $this->assign('locals', $locals->getItems());
-        $this->assign('pagination', $locals->getPagination());
+        // 模板按数组键取值；分页状态挂在 model 上（RowCollection 不提供 getPagination）。
+        $locals = $localsModel->where(Locals::schema_fields_TARGET_CODE, WelineEnv::getLangLocal())->pagination()->select()->fetchArray();
+        $this->assign('locals', $locals);
+        $this->assign('pagination', $localsModel->getPagination());
         $target_local = $localsModel->where(Locals::schema_fields_CODE, WelineEnv::getLangLocal())->find()->fetch();
         $this->assign('target_local', $target_local);
         return $this->fetch();

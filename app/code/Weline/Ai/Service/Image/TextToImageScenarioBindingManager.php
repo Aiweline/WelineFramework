@@ -55,17 +55,17 @@ final class TextToImageScenarioBindingManager implements TextToImageScenarioBind
             $candidates[] = $markedDefault->getModelCode();
         }
 
+        // 下方 instanceof AiModel + getModelCode()，必须对象化。
         $fallbackItems = $this->aiModel->reset()
             ->where(AiModel::schema_fields_IS_ACTIVE, 1)
             ->where(AiModel::schema_fields_PRIMARY_MODALITY, AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE)
             ->order(AiModel::schema_fields_ID, 'ASC')
             ->select()
-            ->fetch();
-        if ($fallbackItems && method_exists($fallbackItems, 'getItems')) {
-            foreach ($fallbackItems->getItems() as $fallbackModel) {
-                if ($fallbackModel instanceof AiModel) {
-                    $candidates[] = $fallbackModel->getModelCode();
-                }
+            ->fetch()
+            ->toModels();
+        foreach ($fallbackItems as $fallbackModel) {
+            if ($fallbackModel instanceof AiModel) {
+                $candidates[] = $fallbackModel->getModelCode();
             }
         }
 

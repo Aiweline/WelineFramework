@@ -138,8 +138,7 @@ class Provider extends BackendPageController
             $accounts = $accountModel->order(Account::schema_fields_CREATED_AT, 'DESC')
                 ->pagination($page, $limit)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             // 格式化数据
             $formattedAccounts = [];
             foreach ($accounts as $account) {
@@ -217,8 +216,7 @@ class Provider extends BackendPageController
             ->order(Account::schema_fields_CREATED_AT, 'DESC')
             ->limit($limit)
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         $providers = $this->accountService->getSupportedProviders();
         $providerName = $providers[$providerCode]['name'] ?? $providerCode;

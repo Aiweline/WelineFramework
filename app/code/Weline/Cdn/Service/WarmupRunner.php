@@ -65,12 +65,13 @@ class WarmupRunner
             'AND "' . WarmupUrl::schema_fields_PROCESSED_COUNT . '" < "'
             . WarmupUrl::schema_fields_TARGET_COUNT . '"'
         );
+        // 后续 warmupUrl() 需要模型对象，保留对象化。
         $candidates = $query
             ->order(WarmupUrl::schema_fields_WARMUP_URL_ID, 'ASC')
             ->limit(max($limit * 5, $limit))
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $urls = [];
         foreach ($candidates as $candidate) {
@@ -218,13 +219,12 @@ class WarmupRunner
                 $domain = $this->objectManager->getInstance(Domain::class)->reset()
                     ->where(Domain::schema_fields_DOMAIN_NAME, $host)
                     ->select()
-                    ->fetch()
-                    ->getItems();
-                $first = reset($domain);
-                if (!$first instanceof Domain) {
+                    ->fetchArray();
+                $first = $domain[0] ?? null;
+                if (!is_array($first)) {
                     return;
                 }
-                $target = (int)$first->getData(Domain::schema_fields_DOMAIN_ID);
+                $target = (int)($first[Domain::schema_fields_DOMAIN_ID] ?? 0);
             }
             if (!$target) {
                 return;

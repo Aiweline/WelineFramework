@@ -373,10 +373,11 @@ class CountryLocaleLifecycleService
             $localeModel->where(Locale::schema_fields_IS_INSTALL, 1);
         }
 
-        $items = $localeModel->select(Locale::schema_fields_CODE)->fetch()->getItems();
+        // 只取 code 列，数组行即可。
+        $items = $localeModel->select(Locale::schema_fields_CODE)->fetchArray();
         $codes = [];
         foreach ($items as $item) {
-            $code = (string)$item->getData(Locale::schema_fields_CODE);
+            $code = (string)($item[Locale::schema_fields_CODE] ?? '');
             if ($code !== '') {
                 $codes[] = $code;
             }
@@ -847,16 +848,16 @@ class CountryLocaleLifecycleService
 
     private function findActiveInstalledLocaleCode(string $countryCode): ?string
     {
+        // 只取 code 列，数组行即可。
         $items = $this->makeLocaleModel()->reset()
             ->where(Locale::schema_fields_COUNTRY_CODE, $this->normalizeCountryCode($countryCode))
             ->where(Locale::schema_fields_IS_INSTALL, 1)
             ->where(Locale::schema_fields_IS_ACTIVE, 1)
             ->select(Locale::schema_fields_CODE)
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
 
         foreach ($items as $item) {
-            $code = (string)$item->getData(Locale::schema_fields_CODE);
+            $code = (string)($item[Locale::schema_fields_CODE] ?? '');
             if ($code !== '') {
                 return $code;
             }

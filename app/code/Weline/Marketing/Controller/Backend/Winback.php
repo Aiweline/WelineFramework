@@ -32,8 +32,9 @@ final class Winback extends BackendController
                     'IN'
                 );
             }
-            $model->order(WinbackCampaign::schema_fields_ID, 'DESC')->pagination()->select()->fetch();
-            $this->assign('campaigns', $model->getItems());
+            // 行在 fetchArray() 返回值上；对 $model 调 getItems() 恒为空。
+            $campaigns = $model->order(WinbackCampaign::schema_fields_ID, 'DESC')->pagination()->select()->fetchArray();
+            $this->assign('campaigns', $campaigns);
             $this->assign('pagination', $model->getPagination());
             $this->assign('load_error', '');
         } catch (\Throwable $e) {

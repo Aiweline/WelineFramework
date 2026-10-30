@@ -132,17 +132,12 @@ class DefaultModelManager
     public function getAllDefaultModels(): array
     {
         $collection = clone $this->defaultModel;
-        $items = $collection->where(AiDefaultModel::schema_fields_IS_DEFAULT, 1)
+        // 返回 array；对 model 调 getItems() 恒为空。
+        return $collection->where(AiDefaultModel::schema_fields_IS_DEFAULT, 1)
             ->order(AiDefaultModel::schema_fields_SERVICE_TYPE, 'ASC')
             ->order(AiDefaultModel::schema_fields_PRIORITY, 'DESC')
             ->select()
-            ->fetch();
-
-        if ($items && method_exists($items, 'getItems')) {
-            return $items->getItems();
-        }
-
-        return is_array($items) ? $items : [];
+            ->fetchArray();
     }
 
     /**
@@ -300,13 +295,11 @@ class DefaultModelManager
         $configs = $model->where(AiDefaultModel::schema_fields_MODEL_CODE, $modelCode)
             ->where(AiDefaultModel::schema_fields_IS_DEFAULT, 1)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $serviceTypes = [];
-        if ($configs && method_exists($configs, 'getItems')) {
-            foreach ($configs->getItems() as $config) {
-                $serviceTypes[] = $config->getData(AiDefaultModel::schema_fields_SERVICE_TYPE);
-            }
+        foreach ($configs as $config) {
+            $serviceTypes[] = $config[AiDefaultModel::schema_fields_SERVICE_TYPE] ?? null;
         }
 
         if (empty($serviceTypes)) {
@@ -328,16 +321,14 @@ class DefaultModelManager
         $configs = $model->where(AiDefaultModel::schema_fields_MODEL_CODE, $modelCode)
             ->where(AiDefaultModel::schema_fields_IS_DEFAULT, 1)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $usage = [];
-        if ($configs && method_exists($configs, 'getItems')) {
-            foreach ($configs->getItems() as $config) {
-                $usage[] = [
-                    'service_type' => $config->getData(AiDefaultModel::schema_fields_SERVICE_TYPE),
-                    'priority' => $config->getData(AiDefaultModel::schema_fields_PRIORITY),
-                ];
-            }
+        foreach ($configs as $config) {
+            $usage[] = [
+                'service_type' => $config[AiDefaultModel::schema_fields_SERVICE_TYPE] ?? null,
+                'priority' => $config[AiDefaultModel::schema_fields_PRIORITY] ?? null,
+            ];
         }
 
         return $usage;

@@ -1395,7 +1395,8 @@ class ThemeLayoutService
         if (in_array($dbType, ['mysql', 'mariadb', 'pgsql', 'postgres', 'postgresql'], true)) {
             $query->additional('FOR UPDATE');
         }
-        $items = array_values($query->select()->fetch()->getItems());
+        // 需要 ThemeLayout 对象调用 getLayoutId()，保留模型对象。
+        $items = array_values($query->select()->fetch()->toModels());
         $layout = $items[0] ?? null;
         if (!$layout instanceof ThemeLayout || $layout->getLayoutId() !== $layoutId) {
             throw new \InvalidArgumentException((string)__('Theme 布局节点不存在。'));

@@ -1381,8 +1381,9 @@ class AiService
         if (is_array($items)) {
             return $items;
         }
-        if (is_object($items) && method_exists($items, 'getItems')) {
-            $resolved = $items->getItems();
+        // RowCollection 必须对象化：消费方按 instanceof AiModel 判定，数组行会被静默跳过。
+        if (is_object($items) && method_exists($items, 'toModels')) {
+            $resolved = $items->toModels();
             return is_array($resolved) ? $resolved : [];
         }
 

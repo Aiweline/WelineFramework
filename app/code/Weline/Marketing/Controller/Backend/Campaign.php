@@ -39,8 +39,9 @@ class Campaign extends BackendController
                 $campaign->where('name', "%{$search}%", 'like');
             }
             
-            $campaign->pagination()->select()->fetch();
-            $this->assign('campaigns', $campaign->getItems());
+            // 行在 fetchArray() 返回值上；对 $campaign 调 getItems() 恒为空。
+            $campaigns = $campaign->pagination()->select()->fetchArray();
+            $this->assign('campaigns', $campaigns);
             $this->assign('pagination', $campaign->getPagination());
             
             return $this->fetch();
@@ -57,8 +58,8 @@ class Campaign extends BackendController
         try {
             /** @var RuleModel $rules */
             $rules = ObjectManager::getInstance(RuleModel::class);
-            $rules->order(RuleModel::schema_fields_ID, 'DESC')->select()->fetch();
-            $this->assign('rules', $rules->getItems());
+            // 行在 fetchArray() 返回值上；对 $rules 调 getItems() 恒为空。
+            $this->assign('rules', $rules->order(RuleModel::schema_fields_ID, 'DESC')->select()->fetchArray());
         } catch (\Throwable $exception) {
             Message::error(__('加载促销活动表单失败：%{1}', $exception->getMessage()));
             $this->assign('rules', []);
@@ -83,8 +84,8 @@ class Campaign extends BackendController
         try {
             /** @var RuleModel $rules */
             $rules = ObjectManager::getInstance(RuleModel::class);
-            $rules->order(RuleModel::schema_fields_ID, 'DESC')->select()->fetch();
-            $this->assign('rules', $rules->getItems());
+            // 同 getAdd()：行在 fetchArray() 返回值上。
+            $this->assign('rules', $rules->order(RuleModel::schema_fields_ID, 'DESC')->select()->fetchArray());
         } catch (\Throwable $exception) {
             Message::error(__('加载促销活动表单失败：%{1}', $exception->getMessage()));
             $this->assign('rules', []);

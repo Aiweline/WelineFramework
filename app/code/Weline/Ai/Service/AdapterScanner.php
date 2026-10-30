@@ -749,7 +749,7 @@ class AdapterScanner
         $adapterRecords = $this->scenarioAdapter->reset()
             ->where(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $adapters = [];
         
@@ -758,18 +758,17 @@ class AdapterScanner
             return $adapters;
         }
         
-        $items = is_object($adapterRecords) && method_exists($adapterRecords, 'getItems') 
-            ? $adapterRecords->getItems() 
-            : $adapterRecords;
-        
-        foreach ($items as $record) {
-            if (!is_object($record)) {
+        foreach ($adapterRecords as $record) {
+            // fetchArray() 返回数组行；兼容旧的对象行。
+            if (is_array($record)) {
+                $code = $record[AiScenarioAdapter::schema_fields_CODE] ?? null;
+            } elseif (is_object($record) && method_exists($record, 'getData')) {
+                $code = $record->getData(AiScenarioAdapter::schema_fields_CODE);
+            } else {
                 continue;
             }
-            
-            $code = $record->getData(AiScenarioAdapter::schema_fields_CODE);
-            $adapter = $this->getAdapter($code);
-            
+            $adapter = $this->getAdapter((string)$code);
+
             if ($adapter) {
                 $adapters[$code] = $adapter;
             }

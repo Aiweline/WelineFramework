@@ -306,18 +306,18 @@ class Adapter extends BackendController
         $pageSize = 20;
 
         // 获取适配器列表
-        $adapters = $this->getScenarioAdapter()->reset()
+        $query = $this->getScenarioAdapter()->reset()
             ->pagination($page, $pageSize)
             ->order(AiScenarioAdapter::schema_fields_CREATED_TIME, 'DESC')
-            ->select()
-            ->fetch();
+            ->select();
 
-        $items = $adapters->getItems();
+        // enrichAdapterList() 与模板都要 getData()/save()，必须对象化。
+        $items = $query->fetch()->toModels();
         // 补充空版本和空状态：从适配器实例读取并回写数据库
         $this->enrichAdapterList($items);
 
         $this->assign('adapters', $items);
-        $this->assign('pagination', $adapters->getPagination());
+        $this->assign('pagination', $query->getPagination());
         $this->assign('modelOptionsByModality', $this->getActiveModelOptionsByModality());
         $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
         $this->assign('activeTab', 'adapter');

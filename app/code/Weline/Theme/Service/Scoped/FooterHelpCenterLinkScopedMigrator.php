@@ -41,13 +41,14 @@ final class FooterHelpCenterLinkScopedMigrator
         $renamedNodes = 0;
         $skipped = [];
 
+        // 需要 getId() 与 migrateWorkspace()，保留模型对象。
         $rows = (clone $this->workspaces)->clearData()->clearQuery()
             ->where(ThemeScopeWorkspace::schema_fields_RESOURCE_TYPE, ThemeEditorContext::RESOURCE_LAYOUT)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
-        foreach (\is_array($rows) ? $rows : [] as $row) {
+        foreach ($rows as $row) {
             if (!$row instanceof ThemeScopeWorkspace || $row->getId() <= 0) {
                 continue;
             }

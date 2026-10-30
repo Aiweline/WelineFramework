@@ -19,7 +19,7 @@ class Listing extends AbstractConsole
     public function execute(array $args = [], array $data = [])
     {
         # 读取主题列表
-        $themes = $this->welineTheme->select()->fetch()->getItems();
+        $themes = $this->welineTheme->select()->fetchArray();
         if (empty($themes)) {
             $this->printing->warning(__('系统未安装任何主题！'));
             return;

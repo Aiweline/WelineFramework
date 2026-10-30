@@ -30,8 +30,8 @@ final class WinbackDashboardAggregator
                 'IN'
             );
         }
-        $campaignModel->order(WinbackCampaign::schema_fields_ID, 'DESC')->select()->fetch();
-        $campaigns = $campaignModel->getItems();
+        // 行在 fetch()->toModels() 上；对 $campaignModel 调 getItems() 恒为空。
+        $campaigns = $campaignModel->order(WinbackCampaign::schema_fields_ID, 'DESC')->select()->fetch()->toModels();
         $out = [];
 
         foreach ($campaigns as $campaign) {
@@ -61,10 +61,12 @@ final class WinbackDashboardAggregator
     {
         /** @var WinbackSendLog $log */
         $log = ObjectManager::getInstance(WinbackSendLog::class);
-        $log->clear()
+        // 行在 fetch()->toModels() 上；对 $log 调 getItems() 恒为空。
+        $logRows = $log->clear()
             ->where(WinbackSendLog::schema_fields_CAMPAIGN_ID, $campaignId)
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
         $sent = 0;
         $skipped = 0;
@@ -73,7 +75,7 @@ final class WinbackDashboardAggregator
         $couponCodes = [];
         $subjectKinds = ['order' => 0, 'qt' => 0, 'cart' => 0, 'other' => 0];
 
-        foreach ($log->getItems() as $row) {
+        foreach ($logRows as $row) {
             if (!$row instanceof WinbackSendLog) {
                 continue;
             }

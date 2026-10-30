@@ -139,16 +139,15 @@ class Warmup extends BackendController
             $stats = $this->getWarmupUrlModel()->reset()
                 ->select(WarmupUrl::schema_fields_MODULE . ', COUNT(*) as total_count, SUM(' . WarmupUrl::schema_fields_PROCESSED_COUNT . ') as total_processed, SUM(' . WarmupUrl::schema_fields_SUCCESS_COUNT . ') as total_success, SUM(' . WarmupUrl::schema_fields_FAIL_COUNT . ') as total_fail')
                 ->group(WarmupUrl::schema_fields_MODULE)
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
 
             $statistics = [];
             foreach ($stats as $stat) {
-                $module = $stat->getData(WarmupUrl::schema_fields_MODULE);
-                $total = (int)$stat->getData('total_count');
-                $processed = (int)$stat->getData('total_processed');
-                $success = (int)$stat->getData('total_success');
-                $fail = (int)$stat->getData('total_fail');
+                $module = $stat[WarmupUrl::schema_fields_MODULE] ?? null;
+                $total = (int)($stat['total_count'] ?? 0);
+                $processed = (int)($stat['total_processed'] ?? 0);
+                $success = (int)($stat['total_success'] ?? 0);
+                $fail = (int)($stat['total_fail'] ?? 0);
 
                 $statistics[] = [
                     'module' => $module,

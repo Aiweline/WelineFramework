@@ -40,8 +40,8 @@ class GetTranslations extends FrontendController
             return $this->fetchJson($this->success('', ['translations' => []]));
         }
         
-        // 获取当前语言的翻译
-        $allWords = Parser::getWords();
+        // 获取当前语言 + 当前区域的翻译（前端控制器固定取 frontend 区袋）
+        $allWords = Parser::getWords(null, 'frontend');
         $translations = [];
         
         foreach ($words as $word) {

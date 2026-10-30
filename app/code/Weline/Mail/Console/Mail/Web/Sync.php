@@ -13,8 +13,8 @@ class Sync extends CommandAbstract
 {
     public function execute(array $args = [], array $data = []): void
     {
-        $model = ObjectManager::getInstance(MailDomain::class)->clear()->select()->fetch();
-        $items = $model->getItems();
+        // 下方 getData() 需要模型对象。
+        $items = ObjectManager::getInstance(MailDomain::class)->clear()->select()->fetch()->toModels();
         $ready = 0;
         $needs = 0;
         $errors = 0;

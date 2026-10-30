@@ -139,13 +139,14 @@ final class MailAccountManagementService
 
         $countQuery = clone $query;
         $total = (int)$countQuery->count();
+        // 下方 instanceof MailAccount + serializeAccount()，必须对象化。
         $rows = $query
             ->order(MailAccount::schema_fields_DOMAIN_ID, 'ASC')
             ->order(MailAccount::schema_fields_EMAIL, 'ASC')
             ->limit($pageSize, ($page - 1) * $pageSize)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $items = [];
         foreach ($rows as $row) {

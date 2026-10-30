@@ -54,7 +54,8 @@ class UrlSiteResolver
         if ($scope !== null && $scope->websiteId !== null) {
             $query->where(Domain::schema_fields_SITE_ID, (int)$scope->websiteId);
         }
-        $domains = $query->select()->fetch()->getItems();
+        // matchDomainByHost() 返回 ?Domain，必须对象化。
+        $domains = $query->select()->fetch()->toModels();
 
         return self::matchDomainByHost($domains, $host);
     }

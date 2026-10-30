@@ -192,12 +192,14 @@ class RulesPushDefaults extends CommandAbstract implements CommandInterface
     }
 
     /**
-     * @return array<int, mixed>
+     * @return array<int, Domain>
      */
     private function extractItems(mixed $rows): array
     {
-        if (\is_object($rows) && \method_exists($rows, 'getItems')) {
-            return $rows->getItems();
+        // 调用方用 `$d instanceof Domain` 过滤并按契约返回 Domain 列表，
+        // 因此这里必须给模型对象（getItems() 返回的是数组行）。
+        if (\is_object($rows) && \method_exists($rows, 'toModels')) {
+            return $rows->toModels();
         }
         if ($rows instanceof \Traversable) {
             return \iterator_to_array($rows, false);

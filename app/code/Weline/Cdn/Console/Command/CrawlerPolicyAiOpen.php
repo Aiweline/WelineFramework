@@ -132,13 +132,14 @@ class CrawlerPolicyAiOpen extends CommandAbstract implements CommandInterface
             if ($websiteId !== null) {
                 $query->where(Domain::schema_fields_SITE_ID, $websiteId);
             }
-            $items = $query->select()->fetch()->getItems();
+            // 需要 Domain 模型对象，保留对象化。
+            $items = $query->select()->fetch()->toModels();
         } catch (\Throwable) {
             return [];
         }
 
         $domains = [];
-        foreach (\is_array($items) ? $items : [] as $item) {
+        foreach ($items as $item) {
             if (!$item instanceof Domain) {
                 continue;
             }

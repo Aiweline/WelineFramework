@@ -196,6 +196,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private float $processL1HydrateNextAt = 0.0;
 
+    /**
+     * Last failure fingerprint already written to logs ('' = none / last cycle healthy).
+     * Same-fingerprint retries stay silent so a benign periodic retry is not read as a
+     * growing incident; a changing fingerprint is always logged.
+     */
+    private string $processL1HydrateLoggedFingerprint = '';
+
     /** Candidate identity only: canonical publish enqueues no HTML/context or RPC. */
     private static array $homepagePublicationProofCandidate = [];
     private int $homepageProofNextAtNs = 0;
@@ -994,7 +1001,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
             /** @var \Weline\Websites\Model\Website $website */
             $website = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-            $rows = $website->clear()->select()->limit(20)->fetch()->getItems();
+            $rows = $website->clear()->select()->limit(20)->fetch()->toModels();
             if (!\is_array($rows) || $rows === []) {
                 return [];
             }
@@ -1644,6 +1651,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         SchedulerSystem::markCurrentFiberBackground();
         StorefrontProcessL1HydrateCoordinator::takePendingRequest();
         $startedAt = \microtime(true);
+        // 预热必须跑在独立 Context 里：bindStorefrontContextForProcessL1Hydrate()
+        // 会写 Website/area/lang/currency 并 installScopeIdentity()+freezeCurrent()。
+        // 之前它直接写在 worker 主循环的 Context 上，真实请求复用同一 Context 时会
+        // 继承预热站点的身份 → 「ScopeIdentity 已冻结，禁止二次改写」→ FPC 指纹合成
+        // 失败 → 全站 500（实测 identityKind=global）。与 FPC 探针同口径：enter +
+        // cleanup + leave，绝不让预热状态泄漏到请求。
+        $__hydratePreviousContext = \Weline\Framework\Context::getCurrent();
+        \Weline\Framework\Context::enter(new \Weline\Framework\Context([
+            'meta' => ['type' => 'process_l1_hydrate', 'mode' => 'wls'],
+        ]));
+        \Weline\Framework\Runtime\RequestContext::setId('pl1-hydrate-' . \getmypid());
         $homepageOk = false;
         $bagsPeeked = 0;
         $bags = [];
@@ -1669,22 +1687,28 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $this->publishAdoptedHomepageFpcProofToWorkerReadiness($this->readyGateHomepageFpcProof);
             }
 
-            /** @var StorefrontProcessL1HydrateCoordinator $coordinator */
-            $coordinator = ObjectManager::getInstance(StorefrontProcessL1HydrateCoordinator::class);
-            $bagResult = $coordinator->hydrateBags();
-            $bagsPeeked = (int)($bagResult['peeked'] ?? 0);
-            $bags = \array_values(\is_array($bagResult['bags'] ?? null) ? $bagResult['bags'] : []);
-            $bagErrors = \array_values(\is_array($bagResult['errors'] ?? null) ? $bagResult['errors'] : []);
-            if ($bagsPeeked > 0) {
-                $this->processL1BagsPeekedOnce = true;
-            }
+            // Storefront hot-cache bag 预取已停用：实测长期 bags_peeked=0 且每次
+            // 报 key_unmatched（providers 一个都拉不到），属纯无效功；更关键的是
+            // provider 内部会经 StorefrontChromeCacheKeyIdentityInstaller 安装
+            // ScopeIdentity，而共享内存里没有对应 bag，只留下身份污染风险。
+            // homepage FPC 预热（runHomepageFpcWarmupTransaction）不受影响，保留。
+            $bagsPeeked = 0;
+            $bags = [];
+            $bagErrors = [];
             if (!$homepageOk && $bagsPeeked === 0) {
                 StorefrontProcessL1HydrateCoordinator::deferRetry(8.0);
                 $this->processL1HydrateNextAt = \microtime(true) + 8.0;
             } elseif ($homepageOk && $bagsPeeked === 0) {
                 // Homepage adopted; keep idle retry until Layer A fills chrome Shared.
-                $this->processL1HydrateNextAt = \microtime(true) + 30.0;
+                // 同因持续失败（bag_errors 指纹不变）时指数退避，避免无限期每 30s 重算重读；
+                // 指纹一变（Layer A 补齐/错误种类变化）立刻回到 30s，非 owner Worker 不迟滞。
+                $failureFingerprint = $bagErrors === []
+                    ? ''
+                    : \hash('sha256', $reason . "\0" . \implode("\0", $bagErrors));
+                $retrySeconds = StorefrontProcessL1HydrateCoordinator::observeFailure($failureFingerprint, 30.0);
+                $this->processL1HydrateNextAt = \microtime(true) + $retrySeconds;
             } else {
+                StorefrontProcessL1HydrateCoordinator::resetFailureBackoff();
                 $this->processL1HydrateNextAt = \microtime(true) + 60.0;
             }
         } catch (\Throwable $e) {
@@ -1695,26 +1719,49 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         } finally {
             $this->processL1HydrateCompletedOnce = true;
             $this->processL1HydrateRunning = false;
+            // 退出预热专用 Context：清理其 Website/area/lang/currency/ScopeIdentity，
+            // 再回到外层 Context，保证预热状态不进入任何真实请求。
+            try {
+                \Weline\Framework\Runtime\RequestContext::cleanup();
+            } finally {
+                \Weline\Framework\Context::leave();
+                if ($__hydratePreviousContext !== null) {
+                    \Weline\Framework\Context::enter($__hydratePreviousContext);
+                }
+            }
         }
 
         $elapsed = \round((\microtime(true) - $startedAt) * 1000, 2);
         $ok = $homepageOk || $bagsPeeked > 0;
-        $message = '[WlsRuntime] process-l1-hydrate ' . ($ok ? 'done' : 'deferred')
+        // 日志语义修正：homepage 命中但 chrome bags 仍全部失手时，整条记录不得称 done。
+        // $ok 仍保留原语义（下游 ready-gate / deferRetry 依赖它），这里只影响日志文案与级别。
+        $logState = $ok ? ($bagErrors === [] ? 'done' : 'partial') : 'deferred';
+        $logLevel = $logState === 'done' ? 'info' : 'warning';
+        $message = '[WlsRuntime] process-l1-hydrate ' . $logState
             . ' worker=' . $this->currentWorkerId()
             . ' homepage_ok=' . (int)$homepageOk
             . ' bags_peeked=' . $bagsPeeked
             . ' bags=' . \implode(',', $bags)
             . ' bag_errors=' . \implode(';', \array_slice($bagErrors, 0, 4))
             . ' reason=' . $reason
-            . ' elapsed_ms=' . $elapsed;
-        @\error_log($message);
-        if (\function_exists($ok ? 'w_log_info' : 'w_log_warning')) {
-            $ok ? \w_log_info($message) : \w_log_warning($message);
-        }
-        if (\class_exists(\Weline\Server\Log\WlsLogger::class)) {
-            $ok
-                ? \Weline\Server\Log\WlsLogger::info_($message)
-                : \Weline\Server\Log\WlsLogger::warning_($message);
+            . ' elapsed_ms=' . $elapsed
+            . ' retry_in_s=' . \round(\max(0.0, $this->processL1HydrateNextAt - \microtime(true)), 1);
+        // 同一失败原因只记一次（框架既有先例：ShadowHook::logOnce / XmlReader::$loggedErrors）：
+        // 指纹不变时不再每条刷 error_log，避免把周期性重试误读成持续增长的问题。
+        $currentFingerprint = $bagErrors === []
+            ? ''
+            : \hash('sha256', $reason . "\0" . \implode("\0", $bagErrors));
+        if ($logState === 'done' || $currentFingerprint !== $this->processL1HydrateLoggedFingerprint) {
+            $this->processL1HydrateLoggedFingerprint = $currentFingerprint;
+            @\error_log($message);
+            if (\function_exists($logLevel === 'info' ? 'w_log_info' : 'w_log_warning')) {
+                $logLevel === 'info' ? \w_log_info($message) : \w_log_warning($message);
+            }
+            if (\class_exists(\Weline\Server\Log\WlsLogger::class)) {
+                $logLevel === 'info'
+                    ? \Weline\Server\Log\WlsLogger::info_($message)
+                    : \Weline\Server\Log\WlsLogger::warning_($message);
+            }
         }
 
         return [
@@ -8432,9 +8479,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             // Preserve the historical aggregate metric while the shared
             // pipeline also exposes each fixed stage independently.
             $timing['router_start_ms'] = \round(
-                (float)$timing['session_start_ms']
-                + (float)$timing['router_init_ms']
-                + (float)$timing['router_start_call_ms'],
+                (float)($timing['session_start_ms'] ?? 0)
+                + (float)($timing['router_init_ms'] ?? 0)
+                + (float)($timing['router_start_call_ms'] ?? 0),
                 2
             );
             $queryBinTiming = RequestContext::get('query_bin.timing');

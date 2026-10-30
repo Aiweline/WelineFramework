@@ -244,7 +244,7 @@ class Layout extends BackendController
         // 获取所有主题列表
         /** @var WelineTheme $themeModel */
         $themeModel = ObjectManager::getInstance(WelineTheme::class);
-        $themes = $themeModel->select()->fetch()->getItems();
+        $themes = $themeModel->select()->fetchArray();
 
         // 尝试获取当前激活主题
         $activeTheme = null;

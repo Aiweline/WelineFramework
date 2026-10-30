@@ -73,10 +73,11 @@ class ApiRules extends BackendController
                 $query->where(ApiRule::schema_fields_TRIGGER, $trigger);
             }
             
+            // 逐行调用 getData()，保留模型对象。
             $rules = $query->order(ApiRule::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             
             // 按模块分组
             $groupedRules = [];

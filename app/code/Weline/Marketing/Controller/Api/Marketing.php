@@ -66,7 +66,8 @@ class Marketing extends AbstractRestController
                 ->where(Rule::schema_fields_STATUS, Rule::STATUS_ACTIVE)
                 ->order(Rule::schema_fields_PRIORITY, 'DESC');
 
-            $rules = $rule->select()->fetch()->getItems();
+            // applyRule() 与 getData() 需要 Rule 模型对象。
+            $rules = $rule->select()->fetch()->toModels();
             
             /** @var RuleEngine $ruleEngine */
             $ruleEngine = ObjectManager::getInstance(RuleEngine::class);

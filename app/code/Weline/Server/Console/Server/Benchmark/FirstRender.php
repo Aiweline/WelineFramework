@@ -45,6 +45,15 @@ final class FirstRender extends CommandAbstract
         $ssl = (bool)($serverConfig['ssl'] ?? false) || isset($args['ssl']) || isset($args['s']);
         $scheme = $ssl ? 'https' : 'http';
         $failFast = isset($args['fail-fast']) || isset($args['fail_fast']);
+        // 与 server:benchmark 同范式：`$host` 是 TCP 连接地址，HTTP Host/SNI 另用 authority。
+        // 不区分时 Host 头会发成 127.0.0.1，WLS 按 Host 解析站点会落到默认站 → 404，
+        // 使首渲染基准在多站点环境恒为 FAIL 且数字失真。
+        $authorityHost = (string)($serverConfig['authority_host'] ?? '') !== ''
+            ? (string)$serverConfig['authority_host']
+            : (string)($args['authority-host'] ?? $args['authority_host'] ?? $host);
+        if ($authorityHost === '') {
+            $authorityHost = $host;
+        }
 
         $this->printer->note('WLS dynamic first-render benchmark');
         $this->printer->note('Target: max(total_ms) < ' . $targetMs . 'ms, FPC must not be HIT');
@@ -53,7 +62,8 @@ final class FirstRender extends CommandAbstract
         $failed = false;
         foreach ($paths as $path) {
             $url = $scheme . '://' . $host . ':' . $port . $path;
-            $probe = $this->probeDynamicFirstRender($url, $host);
+            // TCP 连 $host，HTTP Host/SNI 用 $authorityHost（多站点按 Host 路由）。
+            $probe = $this->probeDynamicFirstRender($url, $authorityHost);
             $probe['path'] = $path;
             $probe['pass'] = $probe['ok']
                 && $probe['total_ms'] < $targetMs
@@ -107,6 +117,7 @@ final class FirstRender extends CommandAbstract
                 '--fail-fast' => 'Stop on the first failed path.',
                 '-p, --port=<port>' => 'Target an explicit WLS port.',
                 '--ssl' => 'Use HTTPS when the server config was not auto-detected as SSL.',
+                '--authority-host <name>' => 'TLS SNI/HTTP Host while TCP still connects to the detected address (multi-site WLS routes by Host).',
             ],
             [],
             [

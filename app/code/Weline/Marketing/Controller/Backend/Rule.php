@@ -83,10 +83,11 @@ class Rule extends BackendController
                 if ($withLocal) {
                     $rule->loadLocalDescription('', LocalDescription::class);
                 }
-                $rule->pagination()->select()->fetch();
+                // 行在 fetchArray() 返回值上；对 $rule 调 getItems() 恒为空。
+                $rows = $rule->pagination()->select()->fetchArray();
                 $this->lastRuleListPagination = $rule->getPagination();
 
-                return $rule->getItems() ?: [];
+                return $rows ?: [];
             } catch (\Throwable $e) {
                 $lastError = $e;
                 if ($withLocal) {

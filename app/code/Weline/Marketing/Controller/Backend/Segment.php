@@ -32,8 +32,9 @@ final class Segment extends BackendController
                     'IN'
                 );
             }
-            $model->order(AudienceSegment::schema_fields_ID, 'DESC')->pagination()->select()->fetch();
-            $this->assign('segments', $model->getItems());
+            // 行在 fetchArray() 返回值上；对 $model 调 getItems() 恒为空。
+            $segments = $model->order(AudienceSegment::schema_fields_ID, 'DESC')->pagination()->select()->fetchArray();
+            $this->assign('segments', $segments);
             $this->assign('pagination', $model->getPagination());
             $this->assign('load_error', '');
         } catch (\Throwable $e) {

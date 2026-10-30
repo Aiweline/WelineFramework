@@ -57,15 +57,16 @@ final class MarketingAdminQueryProvider implements QueryProviderInterface
         $pageSize = min(50, max(1, (int)($params['page_size'] ?? 20)));
         $rule = \Weline\Framework\Manager\ObjectManager::getInstance(Rule::class);
         $rule->order(Rule::schema_fields_PRIORITY, 'DESC');
-        $collection = $rule->pagination($page, $pageSize)->select()->fetch();
+        // 行取数组；getTotal() 仍在 $rule 上取（RowCollection 无此方法）。
+        $rows = $rule->pagination($page, $pageSize)->select()->fetchArray();
         $items = [];
-        foreach ($collection->getItems() as $item) {
+        foreach ($rows as $item) {
             $items[] = [
-                'id' => (int)$item->getId(),
-                'name' => (string)$item->getData(Rule::schema_fields_NAME),
-                'rule_type' => (string)$item->getData(Rule::schema_fields_RULE_TYPE),
-                'status' => (string)$item->getData(Rule::schema_fields_STATUS),
-                'priority' => (int)$item->getData(Rule::schema_fields_PRIORITY),
+                'id' => (int)($item[Rule::schema_fields_ID] ?? 0),
+                'name' => (string)($item[Rule::schema_fields_NAME] ?? ''),
+                'rule_type' => (string)($item[Rule::schema_fields_RULE_TYPE] ?? ''),
+                'status' => (string)($item[Rule::schema_fields_STATUS] ?? ''),
+                'priority' => (int)($item[Rule::schema_fields_PRIORITY] ?? 0),
             ];
         }
 
@@ -75,7 +76,7 @@ final class MarketingAdminQueryProvider implements QueryProviderInterface
             'pagination' => [
                 'page' => $page,
                 'page_size' => $pageSize,
-                'total' => (int)$collection->getTotal(),
+                'total' => (int)$rule->getTotal(),
             ],
         ];
     }

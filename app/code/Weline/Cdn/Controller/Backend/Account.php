@@ -94,7 +94,8 @@ class Account extends BackendController
 
             // 分页查询（Model会自动计算总数）
             $result = $query->pagination($page, $pageSize)->fetch();
-            $accounts = $result->getItems();
+            // 模板对每行调用 getData()，保留模型对象。
+            $accounts = $result->toModels();
             
             // 从分页信息中获取总数和总页数
             $pagination = $query->getPaginationData();

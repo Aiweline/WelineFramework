@@ -299,6 +299,57 @@ final class LongRunningPhpRuntimeTest extends TestCase
     }
 
     /**
+     * Script hash table + observable effective runtime.
+     *
+     * 2026-10-30 事故：Master 保留旧代 88MB argv，Worker 全部继承；OPcache 段永满
+     * （free=0、只缓存 721 个脚本），71% 脚本加载 miss。因此 argv 必须覆盖实测脚本
+     * 规模，且 Worker 必须能自述实际生效的 OPcache 运行时（启动日志 + health detail）。
+     */
+    public function testStartupCliArgumentsSizeScriptHashTableAndExposeEffectiveRuntime(): void
+    {
+        $runtime = LongRunningPhpRuntime::effectiveOpcacheRuntime();
+
+        self::assertGreaterThan(0, $runtime['expected_memory_mb']);
+        self::assertArrayHasKey('max_accelerated_files', $runtime);
+        self::assertArrayHasKey('drift', $runtime);
+        self::assertStringContainsString('drift=', LongRunningPhpRuntime::opcacheRuntimeSummary());
+
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::assertNotContains(
+                'opcache.max_accelerated_files=65536',
+                LongRunningPhpRuntime::startupCliArguments(),
+            );
+            self::assertFalse($runtime['drift'], 'Windows keeps the installed OPcache policy');
+
+            return;
+        }
+
+        if (!\extension_loaded('Zend OPcache') && !\function_exists('opcache_get_status')) {
+            self::markTestSkipped('Zend OPcache is not loaded');
+        }
+
+        self::assertSame(
+            '65536',
+            $this->argumentValue(
+                LongRunningPhpRuntime::startupCliArguments(),
+                'opcache.max_accelerated_files',
+            ),
+        );
+
+        // WLS_OPCACHE_JIT=0：显式用「JIT off + file_cache」让 Worker 自己回填盘缓存
+        // （JIT=on 抑制 .bin 写入；生产 .bin=0 说明 CLI 预热前提不成立）。
+        \putenv('WLS_OPCACHE_JIT=0');
+        try {
+            $jitOffArgs = LongRunningPhpRuntime::startupCliArguments();
+            self::assertSame('off', $this->argumentValue($jitOffArgs, 'opcache.jit'));
+            self::assertSame('0', $this->argumentValue($jitOffArgs, 'opcache.jit_buffer_size'));
+            self::assertNotNull($this->argumentValue($jitOffArgs, 'opcache.file_cache'));
+        } finally {
+            \putenv('WLS_OPCACHE_JIT');
+        }
+    }
+
+    /**
      * @param list<string> $args
      */
     private function argumentValue(array $args, string $name): ?string

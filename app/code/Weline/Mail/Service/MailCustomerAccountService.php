@@ -39,11 +39,12 @@ class MailCustomerAccountService
         /** @var MailDomain $domainModel */
         $domainModel = ObjectManager::getInstance(MailDomain::class);
 
+        // 契约 @return MailDomain[]，必须对象化。
         return $domainModel->clear()
             ->where(MailDomain::schema_fields_STATUS, 'active')
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
     }
 
     /**
@@ -58,11 +59,12 @@ class MailCustomerAccountService
         /** @var MailAccount $accountModel */
         $accountModel = ObjectManager::getInstance(MailAccount::class);
 
+        // 契约 @return MailAccount[]，必须对象化。
         return $accountModel->clear()
             ->where(MailAccount::schema_fields_CUSTOMER_ID, $customerId)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
     }
 
     public function apply(int $customerId, int $domainId, string $localPart, string $displayName = '', bool $fakeMode = false): array
@@ -238,7 +240,8 @@ class MailCustomerAccountService
             ->order(\Weline\Mail\Model\MailAccount::schema_fields_EMAIL, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            // 下方 getData() 需要模型对象。
+            ->toModels();
 
         return array_values(array_filter(
             $accounts,

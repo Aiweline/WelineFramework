@@ -135,7 +135,8 @@ final class DiscountQuoteService implements DiscountQuoteServiceInterface
             ->where(Rule::schema_fields_STATUS, Rule::STATUS_ACTIVE)
             ->order(Rule::schema_fields_PRIORITY, 'DESC');
 
-        return $model->select()->fetch()->getItems();
+        // 下游调用 getId()/getData()/getActions()，必须对象化。
+        return $model->select()->fetch()->toModels();
     }
 
     /** @return list<array<string, mixed>> */

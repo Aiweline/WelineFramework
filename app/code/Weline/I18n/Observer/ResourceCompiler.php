@@ -408,10 +408,10 @@ class ResourceCompiler implements ObserverInterface
     private function getTranslations(array $words, string $locale): array
     {
         $translations = [];
-        
+
         try {
-            // 使用 Parser 获取翻译词库
-            $allWords = \Weline\Framework\Phrase\Parser::getWords();
+            // 使用 Parser 获取翻译词库：按传入的 $locale + 当前区域取（不再忽略 $locale）
+            $allWords = \Weline\Framework\Phrase\Parser::getWords($locale);
             
             foreach ($words as $word => $original) {
                 // 从i18n词库中获取翻译，如果没有则使用原文

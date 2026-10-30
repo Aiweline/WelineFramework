@@ -723,7 +723,7 @@ final class HardConstraintsSymbolDsl
             ],
             'preserve_dirty_workspace' => [
                 'formula' => '¬(GitWipe∨ShellWrite)',
-                'gloss_zh' => '禁git擦脏与shell写绕过；须dirty-load再改',
+                'gloss_zh' => 'P0最高·禁git擦脏/shell写绕过；须dirty-load+改前后留hash',
                 'cluster' => '§P',
             ],
             'no_script_batch_replace' => [
@@ -798,7 +798,7 @@ final class HardConstraintsSymbolDsl
             ],
             'concurrent_session_commit_hygiene' => [
                 'formula' => '¬SayShip→□SelectiveStage|(SayCommit→□CommitAll)|(SayPublish→□CommitByFn)',
-                'gloss_zh' => '非提交且非发布只暂存声明路径；发布按功能提交',
+                'gloss_zh' => 'P0最高·非提交非发布只暂存声明路径；发布按功能提交',
                 'cluster' => '§P',
             ],
             'host_editor_rules_mcp_generated_only' => [

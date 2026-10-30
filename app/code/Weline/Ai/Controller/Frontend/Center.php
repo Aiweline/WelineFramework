@@ -94,10 +94,10 @@ class Center extends FrontendController
             ->where('user_id', $userId)
             ->order('created_time', 'DESC')
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $this->assign('page_title', __('API密钥管理'));
-        $this->assign('api_keys', $apiKeys->getItems());
+        $this->assign('api_keys', $apiKeys);
 
         return $this->fetch();
     }

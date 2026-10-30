@@ -56,14 +56,15 @@ class CrawlerPolicyStatus extends CommandAbstract implements CommandInterface
             if (!$all) {
                 $query->where(CrawlerPolicyState::schema_fields_WEBSITE_ID, (int)$websiteId);
             }
-            $items = $query->select()->fetch()->getItems();
+            // 逐行调用 getData()，保留模型对象。
+            $items = $query->select()->fetch()->toModels();
         } catch (\Throwable $throwable) {
             $this->printer->error(__('读取状态失败：%{1}', [$throwable->getMessage()]));
             return;
         }
 
         $rows = [];
-        foreach (\is_array($items) ? $items : [] as $item) {
+        foreach ($items as $item) {
             if (!$item instanceof CrawlerPolicyState) {
                 continue;
             }

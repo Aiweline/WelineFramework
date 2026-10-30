@@ -38,7 +38,8 @@ class VariableMetaRegister implements ObserverInterface
             // 获取所有主题
             /** @var WelineTheme $themeModel */
             $themeModel = ObjectManager::getInstance(WelineTheme::class);
-            $themes = $themeModel->select()->fetch()->getItems();
+            // 需要 WelineTheme 对象传给 scanVariables()，保留模型对象。
+            $themes = $themeModel->select()->fetch()->toModels();
             
             $totalScanned = 0;
             
@@ -105,7 +106,8 @@ class VariableMetaRegister implements ObserverInterface
             // 扫描所有主题
             /** @var WelineTheme $themeModel */
             $themeModel = ObjectManager::getInstance(WelineTheme::class);
-            $themes = $themeModel->select()->fetch()->getItems();
+            // 同 loadVariablesForAllThemes：需要模型对象。
+            $themes = $themeModel->select()->fetch()->toModels();
             
             foreach ($themes as $theme) {
                 if (!$theme instanceof WelineTheme || !$theme->getId()) {

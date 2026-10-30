@@ -41,8 +41,7 @@ class Index extends BackendController
         $themes = $themeModel
             ->order(WelineTheme::schema_fields_ID, 'DESC')
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         
         // 为每个主题获取父主题信息
         foreach ($themes as &$theme) {
@@ -350,7 +349,7 @@ class Index extends BackendController
         try {
             /** @var WelineTheme $themeModel */
             $themeModel = ObjectManager::getInstance(WelineTheme::class);
-            $themes = $themeModel->select()->fetch()->getItems();
+            $themes = $themeModel->select()->fetchArray();
 
             // 构建任务列表
             $tasks = [];
@@ -455,7 +454,7 @@ class Index extends BackendController
         try {
             /** @var WelineTheme $themeModel */
             $themeModel = ObjectManager::getInstance(WelineTheme::class);
-            $themes = $themeModel->select()->fetch()->getItems();
+            $themes = $themeModel->select()->fetchArray();
 
             $total = count($themes);
             $success = 0;
@@ -539,7 +538,7 @@ class Index extends BackendController
 
         try {
             $themeModel = ObjectManager::getInstance(WelineTheme::class);
-            $themes = $themeModel->select()->fetch()->getItems();
+            $themes = $themeModel->select()->fetchArray();
 
             // 构建任务列表
             $tasks = [];

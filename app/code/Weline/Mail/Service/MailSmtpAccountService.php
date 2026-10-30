@@ -16,13 +16,14 @@ class MailSmtpAccountService
     {
         /** @var MailAccount $accountModel */
         $accountModel = ObjectManager::getInstance(MailAccount::class);
+        // buildAccountConfig() 形参声明为 MailAccount，必须对象化。
         $accountQuery = $accountModel->clear()
             ->where(MailAccount::schema_fields_STATUS, 'active')
             ->order(MailAccount::schema_fields_ID, 'DESC')
             ->limit(max(1, min(200, $limit)))
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
 
         $query = strtolower(trim($query));
         $items = [];

@@ -453,7 +453,8 @@ class MailSetupTaskProvider extends AbstractSetupTaskProvider
         try {
             /** @var MailDomain $model */
             $model = ObjectManager::getInstance(MailDomain::class);
-            $items = $model->clear()->select()->fetch()->getItems();
+            // 下方 getData() 需要模型对象。
+            $items = $model->clear()->select()->fetch()->toModels();
             /** @var MailCustomerAccountService $customer */
             $customer = ObjectManager::getInstance(MailCustomerAccountService::class);
             $out = [];
@@ -493,11 +494,12 @@ class MailSetupTaskProvider extends AbstractSetupTaskProvider
         try {
             /** @var MailAccount $model */
             $model = ObjectManager::getInstance(MailAccount::class);
+            // 下方 getId()/getData() 需要模型对象。
             $items = $model->clear()
                 ->where(MailAccount::schema_fields_STATUS, 'active')
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             $out = [];
             foreach ($items as $item) {
                 if (!is_object($item) || !method_exists($item, 'getData')) {

@@ -154,18 +154,16 @@ final class UsageAuditLegacyBackfill
         do {
             /** @var UsageRecord $model */
             $model = ObjectManager::getInstance(UsageRecord::class, [], false);
-            $collection = $model->clear()
+            $items = $model->clear()
                 ->limit(self::PAGE_SIZE, ($page - 1) * self::PAGE_SIZE)
                 ->order(UsageRecord::schema_fields_REQUEST_ID, 'ASC')
                 ->order(UsageRecord::schema_fields_ID, 'ASC')
                 ->select()
-                ->fetch();
-            $items = $collection->getItems();
-            foreach ($items as $record) {
-                if (!$record instanceof UsageRecord) {
+                ->fetchArray();
+            foreach ($items as $row) {
+                if (!is_array($row)) {
                     continue;
                 }
-                $row = $record->getData();
                 $requestId = trim((string)($row[UsageRecord::schema_fields_REQUEST_ID] ?? ''));
                 if ($requestId === '') {
                     if ($pendingGroup !== []) {

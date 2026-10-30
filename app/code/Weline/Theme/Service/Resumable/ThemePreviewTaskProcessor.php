@@ -41,7 +41,7 @@ class ThemePreviewTaskProcessor
             return $this->targetsForTheme($theme, $areas, $force, $captureBaseUrl, $websiteId);
         }
 
-        $items = (clone $this->themeModel)->clearData()->clearQuery()->select()->fetch()->getItems();
+        $items = (clone $this->themeModel)->clearData()->clearQuery()->select()->fetchArray();
         $targets = [];
         foreach ($items as $item) {
             $id = is_object($item) && method_exists($item, 'getId')

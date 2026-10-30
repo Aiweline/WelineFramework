@@ -113,11 +113,11 @@ class Locales extends BaseController
             ->order('main_table.' . Locale::schema_fields_CODE, 'ASC')
             ->pagination()
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         // 空列表不回落读种子包、不 Message 刷屏；缺库存由安装动作走 w_msg（dedupe）报运营。
-        $this->assign('locales', $locales_result->getItems());
-        $this->assign('pagination', $locales_result->getPagination());
+        $this->assign('locales', $locales_result);
+        $this->assign('pagination', $this->locale->getPagination());
 
         // 国家列表「区域」弹窗：返回 HTML 片段 JSON，不跳整页。
         if ($this->wantsLocalesPanel()) {

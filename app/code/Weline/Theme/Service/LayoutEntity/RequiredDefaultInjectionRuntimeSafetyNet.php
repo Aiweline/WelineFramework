@@ -120,6 +120,10 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
             $html = $this->injectIntoSlot($html, $slotId, $widgetHtml);
         }
 
+        // Float-edge SSR may have run before XOR injects; re-adopt orphans into edge body.
+        // Marker: storefront-float-edge-ssr-body-v3
+        $html = StorefrontFloatLayerHost::ensureFloatEdgeShellsInHtml($html);
+
         return $this->finishFiltersXor($html);
     }
 

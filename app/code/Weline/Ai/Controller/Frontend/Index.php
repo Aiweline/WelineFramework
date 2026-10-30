@@ -69,15 +69,15 @@ class Index extends FrontendController
             ->order(AiModel::schema_fields_CREATED_AT, 'DESC')
             ->limit(10)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         // 获取可用的场景适配器
         $adapters = $this->adapterScanner->getAllActiveAdapters();
 
         $this->assign('page_title', __('AI助手工具'));
-        $this->assign('models', $models->getItems());
+        $this->assign('models', $models);
         $this->assign('adapters', $adapters);
-        $this->assign('models_count', $models->count());
+        $this->assign('models_count', \count($models));
         $this->assign('adapters_count', count($adapters));
 
         return $this->fetch();
@@ -202,15 +202,15 @@ stream.addEventListener("completed", () => stream.close());
         $models = $this->aiModel->reset()
             ->where(AiModel::schema_fields_IS_ACTIVE, 1)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $pricingData = [];
-        foreach ($models->getItems() as $model) {
+        foreach ($models as $model) {
             $pricingData[] = [
-                'name' => $model->getData(AiModel::schema_fields_NAME),
-                'vendor' => $model->getData(AiModel::schema_fields_SUPPLIER),
-                'input_price' => $model->getData(AiModel::schema_fields_TOKEN_PRICE_INPUT),
-                'output_price' => $model->getData(AiModel::schema_fields_TOKEN_PRICE_OUTPUT),
+                'name' => $model[AiModel::schema_fields_NAME] ?? null,
+                'vendor' => $model[AiModel::schema_fields_SUPPLIER] ?? null,
+                'input_price' => $model[AiModel::schema_fields_TOKEN_PRICE_INPUT] ?? null,
+                'output_price' => $model[AiModel::schema_fields_TOKEN_PRICE_OUTPUT] ?? null,
             ];
         }
 

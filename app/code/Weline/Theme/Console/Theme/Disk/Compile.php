@@ -31,7 +31,8 @@ class Compile extends CommandAbstract
                 $themes[] = $theme;
             }
         } else {
-            $themes = $themeModel->clear()->select()->fetch()->getItems();
+            // 需要 WelineTheme 对象（与上方 load() 分支同类型），保留模型对象。
+            $themes = $themeModel->clear()->select()->fetch()->toModels();
         }
 
         $areas = $areaArg !== ''

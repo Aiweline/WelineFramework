@@ -107,7 +107,7 @@ class Install extends AbstractConsole
 
         // 获取已安装的主题
         $installedThemes = [];
-        $dbThemes = $this->welineTheme->clearData()->select()->fetch()->getItems();
+        $dbThemes = $this->welineTheme->clearData()->select()->fetchArray();
         foreach ($dbThemes as $theme) {
             $installedThemes[$theme['name']] = true;
         }

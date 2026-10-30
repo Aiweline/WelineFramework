@@ -96,13 +96,13 @@ class Dictionary extends BaseController
         // 使用框架分页功能
         $query->pagination($page, $pageSize);
         
-        // 执行查询获取词典数据
-        $dictionaryResult = $query->select()->fetch();
-        
+        // 执行查询获取词典数据（数组行；分页信息仍从 query model 取）
+        $dictionaryRows = $query->select()->fetchArray();
+
         // 获取所有词汇
         $words = [];
-        foreach ($dictionaryResult->getItems() as $item) {
-            $words[] = $item->getData($this->dictionary::schema_fields_WORD);
+        foreach ($dictionaryRows as $item) {
+            $words[] = $item[$this->dictionary::schema_fields_WORD] ?? null;
         }
         
         // 查询对应的翻译数据（md5 PK 批查，禁止 locale.word IN）
@@ -123,14 +123,13 @@ class Dictionary extends BaseController
         }
         
         // 组合数据
-        $allTranslations = $dictionaryResult;
         $combinedItems = [];
-        foreach ($dictionaryResult->getItems() as $item) {
-            $word = $item->getData($this->dictionary::schema_fields_WORD);
+        foreach ($dictionaryRows as $item) {
+            $word = $item[$this->dictionary::schema_fields_WORD] ?? null;
             $t = $translations[$word] ?? null;
             $combinedItems[] = [
                 'word' => $word,
-                'module' => (string)$item->getData($this->dictionary::schema_fields_MODULE),
+                'module' => (string)($item[$this->dictionary::schema_fields_MODULE] ?? ''),
                 'translate' => $t[$this->localeDictionary::schema_fields_TRANSLATE] ?? $word,
                 'locale_code' => $t[$this->localeDictionary::schema_fields_LOCALE_CODE] ?? $localeCode,
                 'md5' => $t[$this->localeDictionary::schema_fields_MD5] ?? null,
@@ -138,8 +137,8 @@ class Dictionary extends BaseController
             ];
         }
         
-        // 获取分页信息
-        $pagination = $allTranslations->getPagination();
+        // 获取分页信息（分页状态挂在 query model 上，RowCollection 不提供 getPagination）
+        $pagination = $query->getPagination();
         
         // 计算翻译进度
         $progressStats = $this->getTranslationProgress($localeCode, $moduleFilter);
@@ -240,8 +239,7 @@ class Dictionary extends BaseController
                 ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode)
                 ->where($this->localeDictionary::schema_fields_TRANSLATE, '', '!=') // 只导出已翻译的
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             
             if (empty($translations)) {
                 Message::warning(__('没有找到可导出的翻译数据'));
@@ -252,8 +250,8 @@ class Dictionary extends BaseController
             // 构建翻译数组
             $translationArray = [];
             foreach ($translations as $translation) {
-                $word = $translation->getData($this->localeDictionary::schema_fields_WORD);
-                $translate = $translation->getData($this->localeDictionary::schema_fields_TRANSLATE);
+                $word = $translation[$this->localeDictionary::schema_fields_WORD] ?? null;
+                $translate = $translation[$this->localeDictionary::schema_fields_TRANSLATE] ?? '';
                 $translationArray[$word] = $translate;
             }
             
@@ -385,8 +383,7 @@ class Dictionary extends BaseController
             $locales = $this->locale->reset()
                 ->where($this->locale::schema_fields_IS_INSTALL, 1)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             
             $availableLocales = [];
             foreach ($locales as $locale) {
@@ -699,9 +696,9 @@ class Dictionary extends BaseController
             // 获取该语言的所有翻译数据
             $query = $this->localeDictionary->reset();
             $query->where($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode);
-            $translations = $query->select()->fetch();
+            $translations = $query->select()->fetchArray();
             
-            if (empty($translations->getItems())) {
+            if (empty($translations)) {
                 return $this->fetchJson([
                     'success' => false,
                     'message' => __('该语言没有翻译数据')
@@ -716,7 +713,7 @@ class Dictionary extends BaseController
             echo "\xEF\xBB\xBF"; // UTF-8 BOM
             echo "word,translate,locale_code,update_time\n";
             
-            foreach ($translations->getItems() as $item) {
+            foreach ($translations as $item) {
                 $word = str_replace('"', '""', $item['word'] ?? '');
                 $translate = str_replace('"', '""', $item['translate'] ?? '');
                 $localeCode = $item['locale_code'] ?? '';
@@ -804,16 +801,17 @@ class Dictionary extends BaseController
                     continue;
                 }
                 
-                // 检查是否已存在
+                // 检查是否已存在（需要 setData()->save()，取首行模型）
                 $existing = $this->localeDictionary->reset()
                     ->where($this->localeDictionary::schema_fields_WORD, $item['word'])
                     ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode)
                     ->select()
-                    ->fetch();
+                    ->fetch()
+                    ->firstModel();
                 
-                if ($existing->getItems()) {
+                if ($existing !== null) {
                     // 更新现有记录
-                    $existing->getItems()[0]->setData($this->localeDictionary::schema_fields_TRANSLATE, $item['translate'])
+                    $existing->setData($this->localeDictionary::schema_fields_TRANSLATE, $item['translate'])
                         ->setData($this->localeDictionary::schema_fields_UPDATE_TIME, $item['update_time'])
                         ->save();
                     $updateCount++;
@@ -924,14 +922,16 @@ class Dictionary extends BaseController
                 continue;
             }
 
+            // 需要 setData()->save()，取首行模型。
             $existing = $this->localeDictionary->reset()
                 ->where($this->localeDictionary::schema_fields_WORD, $item['word'])
                 ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode)
                 ->select()
-                ->fetch();
+                ->fetch()
+                ->firstModel();
 
-            if ($existing->getItems()) {
-                $existing->getItems()[0]
+            if ($existing !== null) {
+                $existing
                     ->setData($this->localeDictionary::schema_fields_TRANSLATE, $item['translate'])
                     ->setData($this->localeDictionary::schema_fields_UPDATE_TIME, $item['update_time'])
                     ->save();

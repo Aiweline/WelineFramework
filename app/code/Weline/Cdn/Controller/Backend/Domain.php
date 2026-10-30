@@ -117,7 +117,8 @@ class Domain extends BackendController
 
             // 使用 Model 的 pagination 方法进行分页查询
             $domainsResult = $query->pagination($page, $pageSize)->fetch();
-            $domains = $domainsResult->getItems();
+            // 模板对每行调用 getData()/getId()，保留模型对象。
+            $domains = $domainsResult->toModels();
             
             // 从查询对象中获取分页信息
             $pagination = $query->getPaginationData();

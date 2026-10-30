@@ -37,7 +37,8 @@ class SetupUpgradeAfterThemeDiskCompile implements ObserverInterface
             $this->printing->note((string)__('主题整盘合编开始…'));
             /** @var WelineTheme $themeModel */
             $themeModel = ObjectManager::getInstance(WelineTheme::class);
-            $themes = $themeModel->clear()->select()->fetch()->getItems();
+            // 需要 WelineTheme 对象传给 ThemeData::setCurrentTheme()，保留模型对象。
+            $themes = $themeModel->clear()->select()->fetch()->toModels();
             $ok = 0;
             $fail = 0;
             $skip = 0;

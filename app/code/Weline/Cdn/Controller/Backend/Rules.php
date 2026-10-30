@@ -52,11 +52,12 @@ class Rules extends BackendController
     public function index(): string
     {
         try {
+            // getMergedRules()/planRulesForEdgePush() 需要 Domain 模型对象。
             $domains = $this->getDomainModel()->reset()
                 ->where(DomainModel::schema_fields_ENABLED, 1)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
 
             $rulesList = [];
             $ruleManager = $this->getRuleManager();
@@ -371,11 +372,12 @@ class Rules extends BackendController
     public function getDomains(): string
     {
         try {
+            // 逐行调用 getData()/getId()，保留模型对象。
             $domains = $this->getDomainModel()->reset()
                 ->where(DomainModel::schema_fields_ENABLED, 1)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
 
             $domainList = [];
             foreach ($domains as $domain) {
@@ -483,11 +485,12 @@ class Rules extends BackendController
     {
         try {
             // 获取所有启用的域名
+            // pushRules() 需要 Domain 模型对象。
             $domains = $this->getDomainModel()->reset()
                 ->where(DomainModel::schema_fields_ENABLED, 1)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
 
             if (empty($domains)) {
                 return $this->jsonResponse([

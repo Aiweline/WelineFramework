@@ -34,12 +34,13 @@ class Debug implements CommandInterface
         
         /** @var Account $accountModel */
         $accountModel = ObjectManager::getInstance(Account::class);
-        $accounts = $accountModel->reset()->select()->fetch();
-        
-        if ($accounts->count() === 0) {
+        // 循环里用模型方法，需对象化（fetch() 多行返回数组行）。
+        $accounts = $accountModel->reset()->select()->fetch()->toModels();
+
+        if (\count($accounts) === 0) {
             $this->printing->error('  ❌ 没有找到任何供应商账户！请先添加供应商账户。');
         } else {
-            foreach ($accounts->getItems() as $acc) {
+            foreach ($accounts as $acc) {
                 $apiKey = $acc->getData(Account::schema_fields_API_KEY);
                 $apiKeyPreview = $apiKey ? '...' . substr($apiKey, -4) : '(空)';
                 $status = $acc->getData(Account::schema_fields_CONNECTION_STATUS);
@@ -100,12 +101,14 @@ class Debug implements CommandInterface
             ->where(AiModel::schema_fields_IS_ACTIVE, 1)
             ->order(AiModel::schema_fields_IS_DEFAULT, 'DESC')
             ->select()
-            ->fetch();
-        
-        if ($models->count() === 0) {
+            ->fetch()
+            // 循环里用 getProviderConfig()/getConfig()/getName()，需对象化。
+            ->toModels();
+
+        if (\count($models) === 0) {
             $this->printing->error('  ❌ 没有找到已激活的模型！');
         } else {
-            foreach ($models->getItems() as $mdl) {
+            foreach ($models as $mdl) {
                 $providerConfig = $mdl->getProviderConfig();
                 $config = $mdl->getConfig();
                 $hasProviderKey = !empty($providerConfig['api_key'] ?? '');

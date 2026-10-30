@@ -170,18 +170,11 @@ class RuleManager
                 $query->where(ApiRule::schema_fields_TRIGGER, $triggerType);
             }
 
+            // toCloudflareRule()/getData() 需要 ApiRule 模型对象。
             $apiRules = $query->select()->fetch();
-            $ruleItems = [];
-
-            if (is_object($apiRules) && method_exists($apiRules, 'getItems')) {
-                $ruleItems = $apiRules->getItems();
-            } elseif ($apiRules instanceof \Traversable) {
-                $ruleItems = iterator_to_array($apiRules, false);
-            } elseif (is_array($apiRules)) {
-                $ruleItems = $apiRules;
-            } elseif (is_object($apiRules)) {
-                $ruleItems = [$apiRules];
-            }
+            $ruleItems = is_object($apiRules) && method_exists($apiRules, 'toModels')
+                ? $apiRules->toModels()
+                : (is_array($apiRules) ? $apiRules : []);
 
             $rules = [];
             foreach ($ruleItems as $apiRule) {
@@ -453,18 +446,11 @@ class RuleManager
                 $query->where(ApiRule::schema_fields_TRIGGER, $triggerType);
             }
 
+            // 返回 ApiRule 模型列表，必须对象化。
             $apiRules = $query->select()->fetch();
-            $ruleItems = [];
-
-            if (\is_object($apiRules) && \method_exists($apiRules, 'getItems')) {
-                $ruleItems = $apiRules->getItems();
-            } elseif ($apiRules instanceof \Traversable) {
-                $ruleItems = \iterator_to_array($apiRules, false);
-            } elseif (\is_array($apiRules)) {
-                $ruleItems = $apiRules;
-            } elseif (\is_object($apiRules)) {
-                $ruleItems = [$apiRules];
-            }
+            $ruleItems = \is_object($apiRules) && \method_exists($apiRules, 'toModels')
+                ? $apiRules->toModels()
+                : (\is_array($apiRules) ? $apiRules : []);
 
             $models = [];
             foreach ($ruleItems as $item) {

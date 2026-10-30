@@ -101,7 +101,7 @@ class UsageStatisticsService
         );
         $model->group(AiUsageLog::schema_fields_MODEL_CODE);
         $model->order('total_tokens', 'DESC');
-        $items = $this->normalizeRows($model->select()->fetch());
+        $items = $this->normalizeRows($model->select()->fetchArray());
         $list = [];
         foreach ($items as $row) {
             $cost = (float)($row['total_cost'] ?? 0);
@@ -150,10 +150,12 @@ class UsageStatisticsService
         if (is_array($rows)) {
             return $rows;
         }
-        if (is_object($rows) && method_exists($rows, 'getItems')) {
-            $items = $rows->getItems();
-            return is_array($items) ? $items : [];
+        // RowCollection：数组行（与 fetchArray() 同构）。
+        if (is_object($rows) && method_exists($rows, 'toArray')) {
+            $data = $rows->toArray();
+            return is_array($data) ? $data : [];
         }
+        // 模型/其它对象走 getData() 兜底。
         if (is_object($rows) && method_exists($rows, 'getData')) {
             $data = $rows->getData();
             return is_array($data) ? [$data] : [];

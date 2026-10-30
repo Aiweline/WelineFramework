@@ -327,7 +327,9 @@ class I18nQueryProvider implements QueryProviderInterface
             $words = [];
         }
 
-        $allWords = Parser::getWords();
+        // `getTranslations` is a frontend-only query op, so the region is explicit
+        // instead of being inferred from whichever area the worker happens to be in.
+        $allWords = Parser::getWords(null, 'frontend');
         $translations = [];
         foreach ($words as $word) {
             if (!\is_string($word) || $word === '') {

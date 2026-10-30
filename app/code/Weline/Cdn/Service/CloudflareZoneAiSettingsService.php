@@ -129,18 +129,19 @@ class CloudflareZoneAiSettingsService
         try {
             /** @var Domain $model */
             $model = ObjectManager::getInstance(Domain::class, [], false);
+            // 需要 Domain 对象读取多个字段，保留对象化。
             $items = $model->reset()
                 ->where(Domain::schema_fields_SITE_ID, $websiteId)
                 ->where(Domain::schema_fields_ENABLED, 1)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
         } catch (\Throwable) {
             return [];
         }
 
         $domains = [];
-        foreach (\is_array($items) ? $items : [] as $item) {
+        foreach ($items as $item) {
             if (!$item instanceof Domain) {
                 continue;
             }

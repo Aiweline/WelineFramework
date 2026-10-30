@@ -73,8 +73,8 @@ class Chat extends FrontendController
             ->order(AiModel::schema_fields_IS_DEFAULT, 'DESC')
             ->order(AiModel::schema_fields_ID, 'ASC')
             ->select()
-            ->fetch();
-        $modelItems = $models->getItems();
+            ->fetchArray();
+        $modelItems = $models;
         $fallbackModelCode = '';
         if ($modelItems !== []) {
             $firstModel = $modelItems[0];

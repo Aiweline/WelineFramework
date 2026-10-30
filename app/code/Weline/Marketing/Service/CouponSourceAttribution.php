@@ -83,13 +83,14 @@ final class CouponSourceAttribution
         try {
             /** @var Coupon $couponModel */
             $couponModel = ObjectManager::getInstance(Coupon::class, [], false);
-            $couponModel
+            // 行在 fetchArray() 返回值上；对 $couponModel 调 getItems() 恒为空。
+            $rows = $couponModel
                 ->clear()
                 ->fields(Coupon::schema_fields_SOURCE_TYPE)
                 ->group(Coupon::schema_fields_SOURCE_TYPE)
                 ->select()
-                ->fetch();
-            foreach ($couponModel->getItems() ?: [] as $row) {
+                ->fetchArray();
+            foreach ($rows as $row) {
                 $type = trim((string)($row[Coupon::schema_fields_SOURCE_TYPE] ?? $row['source_type'] ?? ''));
                 if ($type === '' || in_array($type, $known, true)) {
                     continue;
@@ -201,8 +202,8 @@ final class CouponSourceAttribution
     {
         /** @var Coupon $couponModel */
         $couponModel = ObjectManager::getInstance(Coupon::class, [], false);
-        $couponModel->clear()->order(Coupon::schema_fields_ID, 'DESC')->limit(max(1, $limit))->select()->fetch();
-        $items = $couponModel->getItems() ?: [];
+        // 行在 fetchArray() 返回值上；对 $couponModel 调 getItems() 恒为空。
+        $items = $couponModel->clear()->order(Coupon::schema_fields_ID, 'DESC')->limit(max(1, $limit))->select()->fetchArray();
 
         $updated = 0;
         foreach ($items as $row) {

@@ -70,13 +70,12 @@ class Coupon extends BackendController
                 'pageSize' => (string)$pageSize,
             ], static fn($v) => $v !== null && $v !== '');
 
-            $coupon
+            // 行在 fetchArray() 返回值上；对 $coupon 调 getItems() 恒为空。
+            $items = $coupon
                 ->order(CouponModel::schema_fields_ID, 'DESC')
                 ->pagination($page, $pageSize, $filterParams)
                 ->select()
-                ->fetch();
-
-            $items = $coupon->getItems() ?: [];
+                ->fetchArray();
             $enriched = [];
             foreach ($items as $row) {
                 if ($row instanceof CouponModel) {
@@ -143,8 +142,8 @@ class Coupon extends BackendController
         try {
             /** @var RuleModel $rules */
             $rules = ObjectManager::getInstance(RuleModel::class);
-            $rules->order(RuleModel::schema_fields_ID, 'DESC')->select()->fetch();
-            $this->assign('rules', $rules->getItems());
+            // 行在 fetchArray() 返回值上；对 $rules 调 getItems() 恒为空。
+            $this->assign('rules', $rules->order(RuleModel::schema_fields_ID, 'DESC')->select()->fetchArray());
         } catch (\Throwable $exception) {
             Message::error(__('加载优惠券表单失败：%{1}', $exception->getMessage()));
             $this->assign('rules', []);

@@ -383,19 +383,12 @@ final class WinbackCartAbandonRunner
     {
         /** @var WinbackCampaign $model */
         $model = ObjectManager::getInstance(WinbackCampaign::class);
-        $model->clear()
+        // fetchArray() 直接给出 list<array>；对 $model 调 getItems() 恒为空。
+        return $model->clear()
             ->where(WinbackCampaign::schema_fields_STATUS, WinbackCampaign::STATUS_ENABLED)
             ->where(WinbackCampaign::schema_fields_TYPE, WinbackCampaign::TYPE_CART_ABANDON_REMINDER)
             ->select()
-            ->fetch();
-        $out = [];
-        foreach ($model->getItems() as $row) {
-            if ($row instanceof WinbackCampaign) {
-                $out[] = $row->getData();
-            }
-        }
-
-        return $out;
+            ->fetchArray();
     }
 
     private function defaultHasStepLog(int $campaignId, string $orderUuid, int $step): bool

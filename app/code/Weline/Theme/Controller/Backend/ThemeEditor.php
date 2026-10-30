@@ -406,7 +406,7 @@ class ThemeEditor extends BackendController
         $context['layout_option'] = $layoutOption;
         $context = $previewContextService->persistContext($context);
 
-        $themesCollection = $this->welineTheme->reset()->select()->fetch()->getItems();
+        $themesCollection = $this->welineTheme->reset()->select()->fetchArray();
         $themesById = [];
         foreach ($themesCollection as $themeItem) {
             $data = is_object($themeItem) ? $themeItem->getData() : (is_array($themeItem) ? $themeItem : []);
@@ -11015,8 +11015,7 @@ HTML;
                 ->where(\Weline\Websites\Model\WebsiteDomain::schema_fields_WEBSITE_ID, $websiteId)
                 ->where(\Weline\Websites\Model\WebsiteDomain::schema_fields_DOMAIN, $host)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             $best = '';
             foreach ($rows as $row) {
                 $data = \is_object($row) ? $row->getData() : (\is_array($row) ? $row : []);

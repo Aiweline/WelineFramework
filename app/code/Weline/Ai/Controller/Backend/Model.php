@@ -2370,11 +2370,11 @@ class Model extends BackendController
     public function clearAll(): string
     {
         try {
-            // 获取所有模型
+            // 逐条 delete()，必须对象化（fetch() 多行返回数组行）。
             $models = $this->getAiModel()->reset()
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
             
             $count = 0;
             foreach ($models as $model) {

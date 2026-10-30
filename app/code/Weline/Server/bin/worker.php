@@ -788,6 +788,22 @@ try {
     );
     WlsLogger::info_("框架运行时初始化成功");
 
+    // OPcache argv 漂移守卫：Master 用启动时捕获的 argv 派生 Worker。若 LongRunningPhpRuntime
+    // 已改而 Master 未完整重启，Worker 会静默继承旧段大小（2026-10-30：88MB 段撑满、
+    // 71% 脚本 miss、单请求 6–12 CPU 秒）。启动时把实际值写进日志，漂移即告警。
+    $wlsOpcacheRuntime = \Weline\Server\Service\LongRunningPhpRuntime::effectiveOpcacheRuntime();
+    if ($wlsOpcacheRuntime['drift']) {
+        WlsLogger::warning_(
+            '[opcache] worker runtime drift — full master restart required: '
+            . \Weline\Server\Service\LongRunningPhpRuntime::opcacheRuntimeSummary()
+        );
+    } else {
+        WlsLogger::info_(
+            '[opcache] worker runtime '
+            . \Weline\Server\Service\LongRunningPhpRuntime::opcacheRuntimeSummary()
+        );
+    }
+
     // 启动期预热主库连接：把首请求冷建连成本前移，连接建立后立刻归还空闲队列。
     if (\class_exists(\Weline\Framework\Database\Connection\Pool\ConnectionPool::class)) {
         try {
@@ -6641,6 +6657,9 @@ function handleRequest(
                 'php_version' => PHP_VERSION,
                 'timestamp' => \time(),
                 'fiber_count' => \count($fiberSnapshot),
+                // OPcache 实况（ini + 与当前代码期望值的漂移）：2026-10-30 事故里
+                // 88MB 段撑满、71% 脚本 miss，面板/巡检却看不到，只能从 CPU 反推。
+                'opcache' => \Weline\Server\Service\LongRunningPhpRuntime::effectiveOpcacheRuntime(),
                 // 连接池观测面（仅 detail=1）：created_total 在 total_requests=0 时已 ≥1
                 // 即证明启动期建连；acquire_total-created_total 即复用次数。
                 'db_pool' => \class_exists(\Weline\Framework\Database\Connection\Pool\ConnectionPool::class)

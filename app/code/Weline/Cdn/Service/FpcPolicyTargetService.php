@@ -16,7 +16,8 @@ final class FpcPolicyTargetService
     {
         $query=clone $this->domains; $query->clear();
         if ($enabledOnly) { $query->where('enabled',1); }
-        return $query->select()->fetch()->getItems();
+        // 调用方都用 $domain->getId()/getData()，必须对象化。
+        return $query->select()->fetch()->toModels();
     }
 
     /** 同站点官方公共 base 优先；绑定 host 的别名只继承该 base 的路径，不扩大域名范围。

@@ -230,10 +230,10 @@ class Localization extends BaseController
     {
         try {
             $localeModel = clone $this->locale;
-            $existingLocales = $localeModel->reset()->select()->fetch()->getItems();
+            $existingLocales = $localeModel->reset()->select()->fetchArray();
             $existingCodes = [];
             foreach ($existingLocales as $locale) {
-                $existingCodes[] = $locale->getData($this->locale::schema_fields_CODE);
+                $existingCodes[] = $locale[$this->locale::schema_fields_CODE] ?? null;
             }
 
             $localeNameModel = clone $this->localeNames;
@@ -309,10 +309,10 @@ class Localization extends BaseController
         try {
             // 获取现有的区域代码
             $localeModel = clone $this->locale;
-            $existingLocales = $localeModel->reset()->select()->fetch()->getItems();
+            $existingLocales = $localeModel->reset()->select()->fetchArray();
             $existingCodes = [];
             foreach ($existingLocales as $locale) {
-                $existingCodes[] = $locale->getData($this->locale::schema_fields_CODE);
+                $existingCodes[] = $locale[$this->locale::schema_fields_CODE] ?? null;
             }
             
             $insertData = [];
@@ -411,12 +411,11 @@ class Localization extends BaseController
             $installedCountries = $countriesModel->reset()
                 ->where($countriesModel::schema_fields_IS_INSTALL, 1)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             
             $countryCodes = [];
             foreach ($installedCountries as $country) {
-                $countryCodes[] = $country->getData($countriesModel::schema_fields_CODE);
+                $countryCodes[] = $country[$countriesModel::schema_fields_CODE] ?? null;
             }
             
             return $countryCodes;
@@ -457,10 +456,10 @@ class Localization extends BaseController
         try {
             // 获取现有的区域代码
             $localeModel = clone $this->locale;
-            $existingLocales = $localeModel->reset()->select()->fetch()->getItems();
+            $existingLocales = $localeModel->reset()->select()->fetchArray();
             $existingCodes = [];
             foreach ($existingLocales as $locale) {
-                $existingCodes[] = $locale->getData($this->locale::schema_fields_CODE);
+                $existingCodes[] = $locale[$this->locale::schema_fields_CODE] ?? null;
             }
             
             $insertData = [];
@@ -639,8 +638,7 @@ class Localization extends BaseController
             $locales = $localeModel->reset()
                 ->where($this->locale::schema_fields_COUNTRY_CODE, $installedCountries, 'in')
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             
             if (empty($locales)) {
                 Message::warning(__('没有找到任何区域数据'));
@@ -652,12 +650,11 @@ class Localization extends BaseController
             $existingNames = $localeNameModel->reset()
                 ->where($localeNameModel::schema_fields_DISPLAY_LOCALE_CODE, $displayLocaleCode)
                 ->select()
-                ->fetch()
-                ->getItems();
+                ->fetchArray();
             
             $existingCodes = [];
             foreach ($existingNames as $name) {
-                $existingCodes[] = $name->getData($localeNameModel::schema_fields_LOCALE_CODE);
+                $existingCodes[] = $name[$localeNameModel::schema_fields_LOCALE_CODE] ?? null;
             }
             
             // 准备批量插入数据
@@ -667,7 +664,7 @@ class Localization extends BaseController
             Message::notes(__('找到 %{1} 个区域数据，开始处理', [count($locales)]));
             
             foreach ($locales as $locale) {
-                $localeCode = $locale->getData($this->locale::schema_fields_CODE);
+                $localeCode = $locale[$this->locale::schema_fields_CODE] ?? null;
                 
                 if (empty($localeCode) || in_array($localeCode, $existingCodes)) {
                     continue;
@@ -781,7 +778,7 @@ class Localization extends BaseController
         $countriesModel->joinModel($countryNameJoin, 'cn', 'main_table.code=cn.country_code', 'left');
         $countriesModel->where('cn.display_locale_code', $this->getSafeCurrentLocaleCode());
         
-        $countries = $countriesModel->select('main_table.code, cn.display_name')->fetch()->getItems();
+        $countries = $countriesModel->select('main_table.code, cn.display_name')->fetchArray();
         
         $result = [];
         foreach ($countries as $country) {
@@ -815,8 +812,7 @@ class Localization extends BaseController
         $countriesModel->where('cn.' . \Weline\I18n\Model\Countries\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, $this->getSafeCurrentLocaleCode());
         
         $installedCountries = $countriesModel->select('main_table.code, main_table.is_install, main_table.is_active, cn.display_name')
-                                           ->fetch()
-                                           ->getItems();
+                                           ->fetchArray();
         
         $unactivatedCountries = [];
         
@@ -1400,20 +1396,20 @@ class Localization extends BaseController
     {
         try {
             $localeModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
-            $all = $localeModel->reset()->select()->fetch()->getItems();
+            $all = $localeModel->reset()->select()->fetchArray();
             if (empty($all)) {
                 return;
             }
 
             $updatedCount = 0;
             foreach ($all as $locale) {
-                $localeCode = $locale->getData($this->locale::schema_fields_CODE);
+                $localeCode = $locale[$this->locale::schema_fields_CODE] ?? null;
                 if (empty($localeCode)) {
                     continue;
                 }
-                $shortCode = $locale->getData($this->locale::schema_fields_SHORT_CODE);
-                $iso2 = $locale->getData($this->locale::schema_fields_ISO2);
-                $iso3 = $locale->getData($this->locale::schema_fields_ISO3);
+                $shortCode = $locale[$this->locale::schema_fields_SHORT_CODE] ?? null;
+                $iso2 = $locale[$this->locale::schema_fields_ISO2] ?? null;
+                $iso3 = $locale[$this->locale::schema_fields_ISO3] ?? null;
                 // 任一为空或 null 即需要更新（trim 后空字符串视为空）
                 if ($shortCode !== null && $shortCode !== '' && trim((string)$shortCode) !== ''
                     && $iso2 !== null && $iso2 !== '' && trim((string)$iso2) !== ''

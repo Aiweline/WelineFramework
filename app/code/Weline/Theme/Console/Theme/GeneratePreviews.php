@@ -54,7 +54,7 @@ class GeneratePreviews extends AbstractConsole
         $this->printing->printing("\n");
         $this->printing->note(__('并发数量: %{1}', [$concurrency]));
 
-        $themes = $this->welineTheme->select()->fetch()->getItems();
+        $themes = $this->welineTheme->select()->fetchArray();
 
         if (empty($themes)) {
             $this->printing->warning(__('系统中没有已安装的主题'));

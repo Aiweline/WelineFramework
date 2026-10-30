@@ -229,11 +229,10 @@ class AccountManager
      */
     public function getAccountDomains(int $accountId): array
     {
-        $domains = $this->getDomainModel()->reset()
+        // 调用方只判空（账户删除前置校验），取数组即可。
+        return $this->getDomainModel()->reset()
             ->where(Domain::schema_fields_ACCOUNT_ID, $accountId)
             ->select()
-            ->fetch();
-        
-        return $domains->getItems();
+            ->fetchArray();
     }
 }

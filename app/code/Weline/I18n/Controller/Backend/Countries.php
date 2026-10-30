@@ -132,7 +132,8 @@ class Countries extends BaseController
             ->pagination()
             ->select()
             ->fetch();
-        $countries = $result->getItems();
+        // hydrateCountry() 与模板都要 getData()，保留模型对象。
+        $countries = $result->toModels();
 
         foreach ($countries as $country) {
             $this->hydrateCountry($country);

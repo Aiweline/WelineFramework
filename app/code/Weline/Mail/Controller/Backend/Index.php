@@ -52,7 +52,8 @@ class Index extends BackendController
             ->order(MailDomain::schema_fields_DOMAIN_NAME, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            // buildDomainLookup() 逐条调用 getId()/getData()，必须对象化。
+            ->toModels();
 
         /** @var MailAccount $accountModel */
         $accountModel = ObjectManager::getInstance(MailAccount::class);
@@ -61,7 +62,8 @@ class Index extends BackendController
             ->order(MailAccount::schema_fields_EMAIL, 'ASC')
             ->select()
             ->fetch()
-            ->getItems();
+            // buildDomainAccountCounts() 与下方 getData() 需要模型对象。
+            ->toModels();
 
         $accountFilterQ = trim((string)$this->request->getParam('q', ''));
         $accountFilterStatus = strtolower(trim((string)$this->request->getParam('status', '')));

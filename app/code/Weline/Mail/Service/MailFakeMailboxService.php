@@ -46,6 +46,7 @@ class MailFakeMailboxService
         /** @var MailMessage $messageModel */
         $messageModel = ObjectManager::getInstance(MailMessage::class);
 
+        // 契约 @return MailMessage[]，必须对象化。
         return $messageModel->clear()
             ->where(MailMessage::schema_fields_ACCOUNT_ID, $accountId)
             ->where(MailMessage::schema_fields_FOLDER, $folder)
@@ -53,7 +54,7 @@ class MailFakeMailboxService
             ->limit(20)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
     }
 
     public function send(int $customerId, int $accountId, string $toEmail, string $subject, string $body): array

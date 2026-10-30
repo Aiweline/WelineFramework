@@ -29,6 +29,22 @@ class LongRunningPhpRuntime
     private const OPCACHE_MEMORY_CEILING_MB = 256;
 
     /**
+     * Baseline CLI OPcache segment, in MB. See the sizing note at the argument
+     * injection site: 88MB only holds ≈2473 scripts while the measured working
+     * set is ≥13852 (12k app PHP + per-locale compiled templates).
+     */
+    private const OPCACHE_BASE_MB = 192;
+
+    /**
+     * Script hash-table slots. OPcache's own default is 10000, below this repo's
+     * working set (12,078 app PHP + 37,900 generated templates on the
+     * 2026-10-30 changanhanfu host) — only 721 were cacheable on the incident
+     * box because the 88MB segment filled up first. 65536 is the next power of
+     * two above the observed script population.
+     */
+    private const OPCACHE_MAX_ACCELERATED_FILES = 65536;
+
+    /**
      * opcache.interned_strings_buffer sizing, in MB (user directive 2026-10-30).
      * The host php.ini default is 8MB and this key was absent from the startup
      * args, so Workers ran with a permanently saturated interned buffer; once
@@ -69,7 +85,7 @@ class LongRunningPhpRuntime
                 // set is ≥13852 (12063 app PHP + 1789 templates written in 1h).
                 // 192MB holds ≈5395 scripts; the disk bytecode cache below backfills
                 // the evicted remainder across process generations.
-                $opcacheMb = 192;
+                $opcacheMb = self::OPCACHE_BASE_MB;
                 $configured = \ini_get('opcache.memory_consumption');
                 if (\is_string($configured) && \ctype_digit($configured)) {
                     $configuredMb = (int)$configured;
@@ -109,6 +125,13 @@ class LongRunningPhpRuntime
                 $arguments[] = 'opcache.interned_strings_buffer='
                     . self::OPCACHE_INTERNED_STRINGS_BUFFER_MB;
 
+                // The script hash table must cover the measured population before
+                // the segment size becomes the binding limit. PHP's default of
+                // 10000 is below 12,078 app PHP + 37,900 generated templates.
+                $arguments[] = '-d';
+                $arguments[] = 'opcache.max_accelerated_files='
+                    . self::OPCACHE_MAX_ACCELERATED_FILES;
+
                 // Shared on-disk bytecode cache: survives process exits, so a
                 // recycled Worker reloads opcode instead of re-parsing ~13k
                 // scripts.
@@ -143,10 +166,26 @@ class LongRunningPhpRuntime
                 // with jit.on=1. Keeping file_cache alongside JIT is therefore
                 // still a net win for warm starts; the cache is filled by CLI
                 // commands (compile/warm) which do not enable JIT.
-                $arguments[] = '-d';
-                $arguments[] = 'opcache.jit=tracing';
-                $arguments[] = '-d';
-                $arguments[] = 'opcache.jit_buffer_size=64M';
+                //
+                // 2026-10-30 实测补充：宿主 CLI 默认 opcache.enable_cli=Off，
+                // `framework:compile` 并不会填充盘缓存（生产 .bin=0），所以「靠 CLI
+                // 预热」这个前提在生产并不成立。盘缓存若要真正兜底，只能由 Worker
+                // 自己写，而 JIT=on 会抑制写。WLS_OPCACHE_JIT=0 提供显式开关：
+                // 关 JIT 换取 file_cache 生效（本机 A/B：同 URI 全部 200、
+                // .bin=1450、SSR 单请求 0.10–0.62 CPU 秒，而 88MB+JIT 第 2 个页面
+                // 即 segfault）。默认保持 user directive 的 JIT=on 不变。
+                $jitOverride = \strtolower(\trim((string)\getenv('WLS_OPCACHE_JIT')));
+                if (\in_array($jitOverride, ['0', 'off', 'false', 'no'], true)) {
+                    $arguments[] = '-d';
+                    $arguments[] = 'opcache.jit=off';
+                    $arguments[] = '-d';
+                    $arguments[] = 'opcache.jit_buffer_size=0';
+                } else {
+                    $arguments[] = '-d';
+                    $arguments[] = 'opcache.jit=tracing';
+                    $arguments[] = '-d';
+                    $arguments[] = 'opcache.jit_buffer_size=64M';
+                }
 
                 return $arguments;
             }
@@ -160,6 +199,83 @@ class LongRunningPhpRuntime
             '-d',
             'opcache.jit_buffer_size=0',
         ];
+    }
+
+    /**
+     * What the current process actually got, versus what this code base would
+     * hand a fresh process.
+     *
+     * Masters spawn Workers with the argv captured when the Master started.
+     * After LongRunningPhpRuntime changes, a Worker-only reload keeps the old
+     * Master argv, so every child silently inherits the stale segment size —
+     * the 2026-10-30 incident (88MB segment, free=0, 721 cached scripts,
+     * 71% script misses, 60–90% CPU per Worker). Workers log this at boot and
+     * expose it on /_wls/health?detail=1 so drift is visible instead of only
+     * showing up as CPU.
+     *
+     * @return array{
+     *   memory_mb:int, expected_memory_mb:int, interned_mb:int,
+     *   max_accelerated_files:int, jit:string, file_cache:string, drift:bool
+     * }
+     */
+    public static function effectiveOpcacheRuntime(): array
+    {
+        $memoryMb = (int)\ini_get('opcache.memory_consumption');
+        $internedMb = (int)\ini_get('opcache.interned_strings_buffer');
+        $fileCache = (string)\ini_get('opcache.file_cache');
+        $expectedMb = self::expectedOpcacheMemoryMb();
+
+        $drift = false;
+        if (\PHP_OS_FAMILY !== 'Windows'
+            && (\extension_loaded('Zend OPcache') || \function_exists('opcache_get_status'))
+        ) {
+            $drift = $memoryMb < $expectedMb
+                || $internedMb < self::OPCACHE_INTERNED_STRINGS_BUFFER_MB
+                || $fileCache === '';
+        }
+
+        return [
+            'memory_mb' => $memoryMb,
+            'expected_memory_mb' => $expectedMb,
+            'interned_mb' => $internedMb,
+            'max_accelerated_files' => (int)\ini_get('opcache.max_accelerated_files'),
+            'jit' => (string)\ini_get('opcache.jit'),
+            'file_cache' => $fileCache,
+            'drift' => $drift,
+        ];
+    }
+
+    /**
+     * Segment size a fresh process should receive (host may ask for more).
+     */
+    private static function expectedOpcacheMemoryMb(): int
+    {
+        $expectedMb = self::OPCACHE_BASE_MB;
+        $configured = \ini_get('opcache.memory_consumption');
+        if (\is_string($configured) && \ctype_digit($configured) && (int)$configured > $expectedMb) {
+            $expectedMb = \min((int)$configured, self::OPCACHE_MEMORY_CEILING_MB);
+        }
+
+        return $expectedMb;
+    }
+
+    /**
+     * One-line human readable OPcache runtime summary for Worker boot logs.
+     */
+    public static function opcacheRuntimeSummary(): string
+    {
+        $runtime = self::effectiveOpcacheRuntime();
+
+        return \sprintf(
+            'memory_mb=%d expected_mb=%d interned_mb=%d max_accelerated_files=%d jit=%s file_cache=%s drift=%d',
+            $runtime['memory_mb'],
+            $runtime['expected_memory_mb'],
+            $runtime['interned_mb'],
+            $runtime['max_accelerated_files'],
+            $runtime['jit'],
+            $runtime['file_cache'] === '' ? '(none)' : $runtime['file_cache'],
+            $runtime['drift'] ? 1 : 0,
+        );
     }
 
     /**

@@ -353,18 +353,19 @@ final class CloudflareCrawlerPolicyPublisher implements CrawlerPolicyEdgePublish
         /** @var Domain $model */
         $model = ObjectManager::getInstance(Domain::class, [], false);
         try {
+            // 需要 Domain 对象读取多个字段，保留对象化。
             $items = $model->reset()
                 ->where(Domain::schema_fields_SITE_ID, $websiteId)
                 ->where(Domain::schema_fields_ENABLED, 1)
                 ->select()
                 ->fetch()
-                ->getItems();
+                ->toModels();
         } catch (\Throwable) {
             return [];
         }
 
         $rows = [];
-        foreach (\is_array($items) ? $items : [] as $item) {
+        foreach ($items as $item) {
             if (!$item instanceof Domain) {
                 continue;
             }
@@ -391,8 +392,9 @@ final class CloudflareCrawlerPolicyPublisher implements CrawlerPolicyEdgePublish
                 ->where(Domain::schema_fields_DOMAIN_ID, $domainId)
                 ->select()
                 ->fetch()
-                ->getItems();
-            $row = \is_array($items) ? ($items[0] ?? null) : null;
+                // 返回 ?Domain，必须对象化。
+                ->toModels();
+            $row = $items[0] ?? null;
 
             return $row instanceof Domain ? $row : null;
         } catch (\Throwable) {
@@ -447,8 +449,9 @@ final class CloudflareCrawlerPolicyPublisher implements CrawlerPolicyEdgePublish
                 ->where(CrawlerPolicyState::schema_fields_ADAPTER, self::ADAPTER)
                 ->select()
                 ->fetch()
-                ->getItems();
-            $row = \is_array($items) ? ($items[0] ?? null) : null;
+                // 需要 setData()->save()，必须对象化。
+                ->toModels();
+            $row = $items[0] ?? null;
             if (!$row instanceof CrawlerPolicyState) {
                 $row = ObjectManager::getInstance(CrawlerPolicyState::class, [], false);
                 $row->setData(CrawlerPolicyState::schema_fields_CREATED_AT, \date('Y-m-d H:i:s'));
