@@ -403,12 +403,15 @@ class Core
             $eventManager = ObjectManager::getInstance(EventsManager::class);
         }
         $eventData = ['router' => $this];
-        $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
-        if (TraceGate::isArmed()) {
+        // 成对计时：起点捕获武装态，终点复用同一布尔值。若只在终点判 isArmed()，
+        // 「起点未武装(0.0) → 中途被模板 perf 覆盖层武装」会算出 epoch 级时长（约 56 年）。
+        $traceArmed = TraceGate::isArmed();
+        $t0 = $traceArmed ? microtime(true) : 0.0;
+        if ($traceArmed) {
             TraceGate::pushCurrentParent('controller_chain::router_before_start');
         }
         $eventManager->dispatch('Weline_Framework_Router::before_start', $eventData);
-        if (TraceGate::isArmed()) {
+        if ($traceArmed) {
             TraceGate::popCurrentParent();
             TraceGate::recordSpan('controller_chain::router_before_start', (microtime(true) - $t0) * 1000, 'controller');
         }
@@ -418,6 +421,8 @@ class Core
 
         $hasPreviewTheme = \w_env_get('preview_theme') !== null && (int)\w_env_get('preview_theme') > 0;
         $isFrontendRootRequest = $this->isFrontendRootRequest();
+        // 首页永不使用路由缓存：首页路由是最常被 setup:upgrade 重写的条目，
+        // 一旦缓存了旧规则（含「未命中」的空结果）就会长期 404，直到缓存过期。
         $canUseRouteCache = !$this->is_backend && !$hasPreviewTheme && !$isFrontendRootRequest;
         
         
@@ -1177,7 +1182,19 @@ class Core
         $hasCachedRouters = $persistentRuntime && $cachedRouters !== [];
 
         if ($persistentRuntime && $hasCachedRouters) {
-            return $cachedRouters;
+            // 常驻 Worker 也必须跟随路由文件更新：setup:upgrade 重写
+            // generated/routers/*.php 后，旧实现在此直接返回进程缓存，
+            // 导致整实例继续提供上一版路由（实测首页键缺失 → 全站 404，
+            // 必须整实例重启才恢复）。stat 一次即可，代价可忽略。
+            \clearstatcache(true, $routerFilepath);
+            $persistentMtime = (int)(@\filemtime($routerFilepath) ?: 0);
+            if ($persistentMtime > 0
+                && $persistentMtime !== (self::$generatedRouterFileMtimes[$routerFilepath] ?? -1)
+            ) {
+                self::$generatedRouterFileFrozen[$routerFilepath] = false;
+            } else {
+                return $cachedRouters;
+            }
         }
 
         if (!empty(self::$generatedRouterFileFrozen[$routerFilepath]) && $hasCachedRouters) {
@@ -1412,6 +1429,18 @@ class Core
             }
 
             $index[$path][$method] = $router;
+
+            // 首页/控制器默认动作的等价键：注册侧允许把末尾 index 折叠成空串或
+            // 单段（'' / 'index'），请求侧也可能按 'index/index' 处理。三者在
+            // 语义上是同一条路由，索引必须全部可命中，否则首页 404。
+            if ($path === '' || $path === 'index') {
+                foreach (['' => true, 'index' => true, 'index/index' => true] as $alias => $_) {
+                    if ($alias === $path) {
+                        continue;
+                    }
+                    $index[$alias][$method] = $router;
+                }
+            }
         }
 
         return self::$generatedRouterLookupCache[$routerFilepath] = $index;
@@ -2051,22 +2080,24 @@ class Core
         $eventManager = ObjectManager::getInstance(EventsManager::class);
         $eventData = ['route' => $this];
 
-        $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
-        if (TraceGate::isArmed()) {
+        $traceArmed = TraceGate::isArmed();
+        $t0 = $traceArmed ? microtime(true) : 0.0;
+        if ($traceArmed) {
             TraceGate::pushCurrentParent('controller_chain::route_before');
         }
         $eventManager->dispatch('Weline_Framework_Router::route_before', $eventData);
         $routeProfileMark('route_before');
-        if (TraceGate::isArmed()) {
+        if ($traceArmed) {
             TraceGate::popCurrentParent();
             TraceGate::recordSpan('controller_chain::route_before', (microtime(true) - $t0) * 1000, 'controller');
         }
 
-        $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
+        $traceArmed = TraceGate::isArmed();
+        $t0 = $traceArmed ? microtime(true) : 0.0;
         $dispatch = ObjectManager::getInstance((string)$dispatch);
         $dispatch->__setModuleInfo($this->router);
         $routeProfileMark('controller_init');
-        if (TraceGate::isArmed()) {
+        if ($traceArmed) {
             TraceGate::recordSpan('controller_chain::controller_init', (microtime(true) - $t0) * 1000, 'controller');
         }
         # 检测控制器方法
@@ -2077,8 +2108,9 @@ class Core
         FiberOutputBuffer::beginCapture();
 
         // 将 action_execute 设为当前父节点，控制器内通过 TraceGate::recordSpan() 打的子 span 会挂到本节点下，便于拆分 1.x s 耗时
-        $actionSpanStart = TraceGate::isArmed() ? microtime(true) : 0.0;
-        if (TraceGate::isArmed()) {
+        $actionTraceArmed = TraceGate::isArmed();
+        $actionSpanStart = $actionTraceArmed ? microtime(true) : 0.0;
+        if ($actionTraceArmed) {
             TraceGate::pushCurrentParent('controller_chain::action_execute');
         }
         try {
@@ -2106,15 +2138,16 @@ class Core
             }
             
             # ----------事件：route_after（控制器链路二层）------------
-            $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
-            if (TraceGate::isArmed()) {
+            $traceArmed = TraceGate::isArmed();
+            $t0 = $traceArmed ? microtime(true) : 0.0;
+            if ($traceArmed) {
                 TraceGate::pushCurrentParent('controller_chain::route_after');
             }
             $resultData = new DataObject(['result' => $result, 'route' => $this]);
             $eventData = ['data' => $resultData];
             $eventManager->dispatch('Weline_Framework_Router::route_after', $eventData);
             $routeProfileMark('route_after');
-            if (TraceGate::isArmed()) {
+            if ($traceArmed) {
                 TraceGate::popCurrentParent();
                 TraceGate::recordSpan('controller_chain::route_after', (microtime(true) - $t0) * 1000, 'controller');
             }
@@ -2148,7 +2181,10 @@ class Core
             $routeProfilePublish('throwable');
             throw $e;
         } finally {
-            if (TraceGate::isArmed()) {
+            // 用起点捕获的武装态配对：起点未武装时 $actionSpanStart=0.0，若此处改用
+            // 当前 isArmed()（模板 perf 覆盖层可能在控制器内把 trace 武装），
+            // 会记录 (microtime(true)-0.0)*1000 = epoch 级毫秒 ≈ 1.79e12 ms（56 年）。
+            if ($actionTraceArmed) {
                 TraceGate::popCurrentParent();
                 TraceGate::recordSpan('controller_chain::action_execute', (microtime(true) - $actionSpanStart) * 1000, 'controller');
             }

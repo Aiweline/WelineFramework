@@ -73,6 +73,11 @@ class Handle implements RegisterInterface
         // 如果最后一个元素是空字符串（类名以Controller结尾），取倒数第二个元素
         $controller = empty(end($controller)) && count($controller) > 1 ? $controller[count($controller) - 2] : array_pop($controller);
         $controller = ltrim(str_replace('\\', '/', $controller), '/');
+        // 必须取「当前」全局单例：Handle 由 ObjectManager 缓存，而 Router\Helper\Data 的实例
+        // 可能被 process-shared 重置替换；缓存旧实例会让注册写进已被丢弃的批量缓冲
+        // （实测：API 分支 type=api 时 updateApiRouters 收到 batchMode=false 的旧实例，
+        // 返回空数组且四张路由表长度不变 → 整模块路由静默丢失）。
+        $helper = ObjectManager::getInstance(Data::class);
         switch ($param['type']) {
             case DataInterface::type_API:
                 $path = '';
@@ -83,7 +88,10 @@ class Handle implements RegisterInterface
                     $path = self::path_fronted_API;
                     $param['area'] = DataInterfaceAlias::type_api_REST_FRONTEND;
                 } else {
-                    $param['area'] = self::path_fronted_API;
+                    // 前端 API（非 REST）落到前台 PC 路由表：原实现只改 area 不赋 $path，
+                    // 导致 if ($path) 不成立 → 直接 break 返回 []，静默丢弃整模块路由。
+                    $path = self::path_frontend_PC;
+                    $param['area'] = DataInterfaceAlias::type_pc_FRONTEND;
                 }
                 if ($path) {
                     $router = [
@@ -101,7 +109,7 @@ class Handle implements RegisterInterface
                     // 如果模块已安装
                     $api = ['router' => $param['router'], 'rule' => $router];
                     // 更新api路由
-                    $this->helper->updateApiRouters($path, $api);
+                    $helper->updateApiRouters($path, $api);
 
                     return $api;
                 }
@@ -126,10 +134,10 @@ class Handle implements RegisterInterface
                 $routers = [];
                 if ($path) {
                     // 批量模式下，从属性读取；否则从文件读取
-                    if ($this->helper->isBatchMode()) {
-                        $routers = $this->helper->getBatchRouters($path);
+                    if ($helper->isBatchMode()) {
+                        $routers = $helper->getBatchRouters($path);
                     } elseif (is_file($path)) {
-                        $routers = $this->helper->readRoutersFile($path);
+                        $routers = $helper->readRoutersFile($path);
                     }
                     
                     $router = [
@@ -146,7 +154,7 @@ class Handle implements RegisterInterface
                     ];
                     $routers[$param['router']] = $router;
                     // 写入路由文件（批量模式下会缓存，否则立即写入）
-                    $this->helper->updatePcRouters($path, $routers);
+                    $helper->updatePcRouters($path, $routers);
                 }
                 return $routers;
             default:
