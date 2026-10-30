@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>商品 AI 优化中心 · 可点击原型</title>
+<style>
+  :root{
+    --accent:#5346f5;--accent-2:#8a7bff;--accent-soft:#eeecff;--accent-line:#d9d4ff;
+    --ink:#191927;--ink-2:#4b4b5e;--muted:#82829a;--line:#e7e7f1;--line-soft:#f1f1f8;
+    --bg:#f4f5fa;--card:#fff;
+    --ok:#0f8f66;--ok-soft:#e7f7f0;--ok-line:#bfe9d7;
+    --warn:#a86700;--warn-soft:#fff6e6;--warn-line:#f4dcae;
+    --danger:#c93636;--danger-soft:#fdeeee;--danger-line:#f3c9c9;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(20,20,50,.04),0 10px 30px rgba(20,20,50,.05);
+    --font:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 var(--font);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  button{font:inherit;cursor:pointer}
+  a{color:var(--accent);text-decoration:none}
+  svg{display:block}
+
+  /* ---------- prototype strip ---------- */
+  .proto-strip{display:flex;align-items:center;gap:10px;padding:7px 16px;background:#fff8e8;border-bottom:1px solid #f0e0b8;color:#7a5a13;font-size:12.5px}
+  .proto-strip b{font-weight:600}
+  .proto-strip .spacer{flex:1}
+  .proto-strip button{border:1px solid #e6d5a4;background:#fff;color:#7a5a13;border-radius:7px;padding:2px 10px;font-size:12px}
+  .proto-strip button:hover{background:#fffaf0}
+
+  /* ---------- app bar ---------- */
+  .appbar{height:56px;display:flex;align-items:center;gap:14px;padding:0 20px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
+  .logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px;letter-spacing:.2px}
+  .logo-mark{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,var(--accent),#9b7bff);box-shadow:0 3px 8px rgba(83,70,245,.3)}
+  .crumbs{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12.5px}
+  .crumbs span{color:var(--line)}
+  .crumbs b{color:var(--ink-2);font-weight:500}
+  .appbar .spacer{flex:1}
+  .site-pill{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:9px;color:var(--ink-2);font-size:12.5px;background:#fbfbfe}
+  .site-pill .dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+  .site-pill .tag{background:var(--accent-soft);color:var(--accent);border-radius:5px;padding:0 5px;font-size:11px}
+  .avatar{width:30px;height:30px;border-radius:50%;background:#e9e6ff;color:var(--accent);display:grid;place-items:center;font-weight:600;font-size:12px}
+
+  /* ---------- shell ---------- */
+  .proto-strip,.appbar{flex:0 0 auto}
+  .shell{display:flex;flex:1;min-height:0;overflow:hidden}
+  .sidebar{width:206px;flex:0 0 206px;background:#fff;border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+  .side-label{font-size:11px;color:var(--muted);letter-spacing:.06em;padding:6px 10px 4px}
+  .side-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;color:var(--ink-2);font-size:13px}
+  .side-item svg{width:15px;height:15px;color:#8d8da6}
+  .side-item:hover{background:#f7f7fc}
+  .side-item.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .side-item.active svg{color:var(--accent)}
+  .side-note{margin-top:auto;padding:10px;border-radius:10px;background:#fafaff;border:1px dashed var(--accent-line);font-size:11.5px;color:var(--muted);line-height:1.5}
+
+  main{flex:1;min-width:0;min-height:0;padding:20px 24px 24px;display:flex;flex-direction:column;gap:14px;overflow:hidden}
+  .page-head{display:flex;align-items:flex-start;gap:16px}
+  .page-head h1{margin:0;font-size:22px;letter-spacing:.2px}
+  .page-head p{margin:4px 0 0;color:var(--muted);font-size:12.5px}
+  .page-head .spacer{flex:1}
+  .head-actions{display:flex;gap:8px;align-items:center}
+
+  .btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--ink-2);font-size:13px;transition:.15s}
+  .btn:hover{border-color:#cfcbe8;background:#fbfaff}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 4px 12px rgba(83,70,245,.24)}
+  .btn.primary:hover{background:#463ad6}
+  .btn.primary:disabled{background:#c3c9d8;border-color:#c3c9d8;box-shadow:none;cursor:not-allowed;color:#fff}
+  .btn.ghost{background:transparent}
+  .btn.small{height:28px;padding:0 10px;font-size:12px;border-radius:7px}
+  .btn.danger{color:var(--danger);border-color:var(--danger-line);background:#fff}
+  .btn.danger:hover{background:var(--danger-soft)}
+
+  /* ---------- stats ---------- */
+  .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:2px}
+  .stat span{font-size:12px;color:var(--muted)}
+  .stat strong{font-size:26px;letter-spacing:.3px;line-height:1.25}
+  .stat em{font-style:normal;font-size:11.5px;color:var(--ok)}
+  .stat em.warn{color:var(--warn)}
+
+  /* ---------- toolbar ---------- */
+  .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .segmented{display:inline-flex;background:#fff;border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+  .segmented button{height:28px;padding:0 11px;border:0;border-radius:7px;background:transparent;color:var(--ink-2);font-size:12.5px;display:inline-flex;align-items:center;gap:6px}
+  .segmented button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .segmented .count{font-size:11px;background:#f0f0f8;color:var(--muted);border-radius:20px;padding:0 6px}
+  .segmented button[aria-selected="true"] .count{background:#fff;color:var(--accent)}
+  .toolbar .spacer{flex:1}
+  .search{display:flex;align-items:center;gap:7px;height:34px;background:#fff;border:1px solid var(--line);border-radius:9px;padding:0 10px;color:var(--muted);width:220px}
+  .search input{border:0;outline:0;background:transparent;font:inherit;font-size:12.5px;width:100%;color:var(--ink)}
+  .model-filter{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+  .model-filter select{height:34px;border:1px solid var(--line);border-radius:9px;background:#fff;font:inherit;font-size:12.5px;color:var(--ink-2);padding:0 8px}
+
+  /* ---------- workspace ---------- */
+  .workspace{display:grid;grid-template-columns:378px minmax(0,1fr);gap:14px;flex:1;min-height:0}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .panel-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line-soft);flex:0 0 auto}
+  .panel-head h2{margin:0;font-size:13.5px;font-weight:600}
+  .panel-head .hint{font-size:11.5px;color:var(--muted)}
+  .panel-head .spacer{flex:1}
+
+  /* queue */
+  .queue{overflow:auto;padding:6px}
+  .queue-item{display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;padding:10px;border-radius:10px;border:1px solid transparent;cursor:pointer;position:relative}
+  .queue-item + .queue-item{margin-top:2px}
+  .queue-item:hover{background:#fafaff}
+  .queue-item[aria-current="true"]{background:var(--accent-soft);border-color:var(--accent-line)}
+  .queue-item.applied{opacity:.62}
+  .q-title{font-size:12.8px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
+  .q-meta{display:flex;align-items:center;gap:6px;margin-top:5px;flex-wrap:wrap;color:var(--muted);font-size:11px}
+  .q-meta .dot{width:3px;height:3px;border-radius:50%;background:#c9c9d8}
+  .badge{display:inline-flex;align-items:center;gap:4px;height:19px;padding:0 6px;border-radius:20px;font-size:10.5px;font-weight:500;border:1px solid transparent;white-space:nowrap}
+  .badge.copy{background:#eef4ff;color:#2f62c4;border-color:#d6e4ff}
+  .badge.image{background:#f6ecff;color:#7a3fc0;border-color:#ead6ff}
+  .badge.translate{background:#eafaf3;color:#0d7a58;border-color:#c9eedd}
+  .badge.warn{background:var(--warn-soft);color:var(--warn);border-color:var(--warn-line)}
+  .badge.ok{background:var(--ok-soft);color:var(--ok);border-color:var(--ok-line)}
+  .badge.neutral{background:#f3f3fa;color:#5c5c74;border-color:#e5e5f0}
+  .q-state{position:absolute;right:10px;top:10px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  .queue-item.applied .q-state{background:var(--ok)}
+  #reviewBody{display:flex;flex-direction:column;flex:1;min-height:0}
+
+  .thumb{width:44px;height:44px;border-radius:9px;display:grid;place-items:center;overflow:hidden;border:1px solid rgba(20,20,50,.05)}
+  .thumb svg{width:26px;height:26px;color:rgba(255,255,255,.92)}
+
+  /* review */
+  .review{min-width:0}
+  .review-head{display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line-soft);align-items:flex-start;flex:0 0 auto}
+  .review-head .thumb{width:58px;height:58px;border-radius:11px}
+  .review-head .thumb svg{width:34px;height:34px}
+  .review-title{min-width:0}
+  .review-title h2{margin:0;font-size:15px;line-height:1.35;font-weight:600}
+  .review-title .meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;color:var(--muted);font-size:11.5px}
+  .review-head .spacer{flex:1}
+  .review-head .btn{flex:0 0 auto;white-space:nowrap}
+  .review-scroll{overflow:auto;padding:14px 16px 8px;display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}
+  .review-scroll > *{flex:0 0 auto}
+  .section-title{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);letter-spacing:.03em}
+  .section-title .line{flex:1;height:1px;background:var(--line-soft)}
+
+  .banner{display:flex;gap:10px;padding:11px 12px;border-radius:11px;border:1px solid;font-size:12.5px;line-height:1.5}
+  .banner svg{width:16px;height:16px;flex:0 0 16px;margin-top:1px}
+  .banner.warn{background:var(--warn-soft);border-color:var(--warn-line);color:#7c4e00}
+  .banner.info{background:#f3f1ff;border-color:var(--accent-line);color:#453a9e}
+  .banner b{font-weight:600}
+  .banner .actions{margin-left:auto;display:flex;gap:6px;flex:0 0 auto}
+
+  .field-card{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+  .field-card.accepted{border-color:var(--ok-line);box-shadow:0 0 0 3px rgba(15,143,102,.06)}
+  .field-card.rejected{opacity:.66}
+  .field-head{display:flex;align-items:center;gap:8px;padding:9px 12px;background:#fbfbfe;border-bottom:1px solid var(--line-soft)}
+  .field-head h3{margin:0;font-size:12.8px;font-weight:600}
+  .field-head .limit{font-size:11px;color:var(--muted)}
+  .field-head .spacer{flex:1}
+  .switch{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);user-select:none;cursor:pointer}
+  .switch input{appearance:none;width:32px;height:18px;border-radius:20px;background:#dcdce8;position:relative;transition:.15s;outline:none;cursor:pointer;margin:0}
+  .switch input::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:.15s}
+  .switch input:checked{background:var(--ok)}
+  .switch input:checked::after{left:16px}
+  .switch input:focus-visible{box-shadow:0 0 0 3px rgba(83,70,245,.18)}
+
+  .diff{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .diff-col{padding:11px 12px;min-width:0}
+  .diff-col + .diff-col{border-left:1px dashed var(--line)}
+  .diff-label{font-size:10.5px;letter-spacing:.05em;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+  .diff-label .pill{font-size:10px;border-radius:20px;padding:0 6px;background:#f1f1f8;color:#6f6f88}
+  .diff-col.after .diff-label .pill{background:var(--accent-soft);color:var(--accent)}
+  .diff-text{font-size:12.8px;line-height:1.65;color:var(--ink-2);word-break:break-word}
+  .diff-text p{margin:0 0 8px}
+  .diff-text p:last-child{margin-bottom:0}
+  del{background:var(--danger-soft);color:#8f2b2b;text-decoration:line-through;text-decoration-color:rgba(143,43,43,.5);border-radius:3px;padding:0 2px}
+  ins{background:#dcf5e9;color:#0a6247;text-decoration:none;border-radius:3px;padding:0 2px;box-shadow:inset 0 -1px 0 rgba(15,143,102,.28)}
+  .field-foot{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--line-soft);background:#fcfcff;font-size:11.5px;color:var(--muted)}
+  .field-foot .spacer{flex:1}
+
+  /* media */
+  .media-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .candidate{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;position:relative;cursor:pointer}
+  .candidate[aria-checked="true"]{border-color:var(--accent);box-shadow:0 0 0 3px rgba(83,70,245,.12)}
+  .candidate .frame{aspect-ratio:4/5;display:grid;place-items:center;position:relative;overflow:hidden}
+  .candidate .frame svg{width:46%;height:46%;color:rgba(255,255,255,.92);filter:drop-shadow(0 10px 18px rgba(40,20,60,.18))}
+  .candidate .frame::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 0%,rgba(255,255,255,.36),transparent 55%)}
+  .candidate .cap{padding:7px 9px;display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-2);border-top:1px solid var(--line-soft);min-height:34px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .candidate .cap b{font-weight:600}
+  .candidate .check{position:absolute;top:7px;right:7px;width:20px;height:20px;border-radius:50%;background:#fff;border:1px solid var(--line);display:grid;place-items:center;color:#fff;z-index:1}
+  .candidate[aria-checked="true"] .check{background:var(--accent);border-color:var(--accent)}
+  .candidate .check svg{width:12px;height:12px}
+  .orig .cap{color:var(--muted)}
+  .orig .frame{background:#f3f3f9}
+  .orig .frame svg{color:#c9c9dd;filter:none}
+  .orig-badge{position:absolute;top:7px;left:7px;font-size:10px;background:rgba(255,255,255,.92);border:1px solid var(--line);color:var(--ink-2);border-radius:20px;padding:1px 7px;z-index:1}
+
+  .media-note{font-size:11.5px;color:var(--muted);display:flex;gap:6px;align-items:flex-start}
+  .media-note svg{width:14px;height:14px;flex:0 0 14px;margin-top:2px}
+  .qa-card{border:1px dashed var(--line);border-radius:11px;padding:10px 12px;background:#fcfcff}
+  .qa-title{font-size:11.5px;font-weight:600;color:var(--ink-2);margin-bottom:3px}
+  .qa-list{margin:0;padding-left:16px;color:var(--muted);font-size:11.5px;line-height:1.75}
+
+  /* footer bar */
+  .apply-bar{display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid var(--line);background:#fff;flex:0 0 auto}
+  .apply-bar .summary{font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;gap:8px}
+  .apply-bar .summary b{font-size:15px;color:var(--accent)}
+  .apply-bar .spacer{flex:1}
+  .apply-bar .note{font-size:11px;color:var(--muted);max-width:280px;line-height:1.4;text-align:right}
+
+  /* empty */
+  .empty{flex:1;display:grid;place-items:center;padding:40px;text-align:center;color:var(--muted);font-size:12.5px}
+  .empty .art{width:64px;height:64px;border-radius:18px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;margin:0 auto 12px}
+  .empty .art svg{width:28px;height:28px}
+
+  /* modal */
+  .backdrop{position:fixed;inset:0;background:rgba(20,20,40,.36);backdrop-filter:blur(2px);display:none;place-items:center;z-index:60;padding:24px}
+  .backdrop.open{display:grid}
+  .modal{width:520px;max-width:100%;background:#fff;border-radius:16px;box-shadow:0 30px 80px rgba(20,20,50,.28);overflow:hidden;animation:pop .16s ease-out}
+  @keyframes pop{from{transform:translateY(6px) scale(.99);opacity:.6}to{transform:none;opacity:1}}
+  .modal-head{display:flex;align-items:flex-start;gap:10px;padding:16px 18px 12px;border-bottom:1px solid var(--line-soft)}
+  .modal-head h2{margin:0;font-size:15px}
+  .modal-head p{margin:3px 0 0;font-size:11.5px;color:var(--muted)}
+  .modal-head .spacer{flex:1}
+  .icon-btn{width:28px;height:28px;border-radius:8px;border:1px solid transparent;background:transparent;display:grid;place-items:center;color:var(--muted)}
+  .icon-btn:hover{background:#f4f4fa;color:var(--ink)}
+  .modal-body{padding:14px 18px;display:flex;flex-direction:column;gap:13px;max-height:60vh;overflow:auto}
+  .form-row{display:flex;flex-direction:column;gap:6px}
+  .form-row > label,.form-row > .label{font-size:12px;color:var(--ink-2);font-weight:500}
+  .task-row{display:grid;grid-template-columns:1fr 220px;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+  .task-row .t{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 8px;align-items:start;font-size:12.5px}
+  .task-row .t .badge{margin-top:1px}
+  .task-row .t .desc{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+  .task-row select{height:32px;border:1px solid var(--line);border-radius:8px;background:#fff;font:inherit;font-size:12px;padding:0 8px;color:var(--ink-2)}
+  .radio-row{display:flex;gap:14px;flex-wrap:wrap}
+  .radio{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2);cursor:pointer}
+  .radio input{accent-color:var(--accent);margin:0}
+  .estimate{background:#fafaff;border:1px dashed var(--accent-line);border-radius:10px;padding:9px 11px;font-size:11.5px;color:var(--muted);line-height:1.6}
+  .estimate b{color:var(--ink-2);font-weight:600}
+  .modal-foot{display:flex;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid var(--line-soft);background:#fcfcff}
+  .modal-foot .spacer{flex:1}
+
+  /* toast */
+  .toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,16px);background:#1e1e2e;color:#fff;border-radius:11px;padding:10px 14px;font-size:12.5px;box-shadow:0 16px 40px rgba(20,20,40,.3);opacity:0;pointer-events:none;transition:.2s;z-index:80;display:flex;align-items:center;gap:8px;max-width:calc(100vw - 40px)}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast svg{width:15px;height:15px;color:#6ee7b7;flex:0 0 15px}
+
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+  @media (max-width:1180px){
+    body{display:block;height:auto;overflow:auto}
+    .shell{height:auto;overflow:visible}
+    main{overflow:visible}
+    .workspace{grid-template-columns:330px minmax(0,1fr)}
+    .queue{max-height:420px}
+    .review{min-height:620px}
+    .media-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .sidebar{display:none}
+  }
+  @media (max-width:860px){
+    .workspace{grid-template-columns:1fr}
+    .queue{max-height:340px}
+    .diff{grid-template-columns:1fr}
+    .diff-col + .diff-col{border-left:0;border-top:1px dashed var(--line)}
+    .stats{grid-template-columns:1fr}
+  }
+  @media print{
+    .proto-strip,.sidebar,.appbar,.head-actions,.apply-bar,.toolbar{display:none}
+    body{background:#fff}
+  }
+</style>
+</head>
+<body>
+
+<div class="proto-strip">
+  <b>原型 · 可点击演示</b>
+  <span>数据为演示值，未接后端；交互：切换队列 / 逐字段采纳 / 应用 / 批量弹窗</span>
+  <span class="spacer"></span>
+  <button type="button" id="resetBtn">重置演示</button>
+</div>
+
+<header class="appbar">
+  <div class="logo"><span class="logo-mark"></span>Weline</div>
+  <div class="crumbs">商品与目录<span>/</span>商品运营<span>/</span><b>商品优化中心</b></div>
+  <div class="spacer"></div>
+  <div class="site-pill"><span class="dot"></span>长安汉服 <span class="tag">#0</span> default</div>
+  <div class="avatar" title="admin">ad</div>
+</header>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="side-label">商品运营</div>
+    <div class="side-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7l8-4 8 4v10l-8 4-8-4z"/><path d="M4 7l8 4 8-4M12 21V11"/></svg>
+      商品
+    </div>
+    <div class="side-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1.2-3.6 3.8-5.4 7-5.4s5.8 1.8 7 5.4"/></svg>
+      品牌
+    </div>
+    <div class="side-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M3.5 15l4.5-4 4 3.4 3-2.5 5.5 4.6"/><circle cx="9" cy="9.4" r="1.4"/></svg>
+      商品媒体
+    </div>
+    <div class="side-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l1.8 4.9L19 9.6l-4.2 3.1L16 18l-4-2.7L8 18l1.2-5.3L5 9.6l5.2-1.7z"/></svg>
+      商品优化中心
+    </div>
+    <div class="side-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      站点文案
+    </div>
+    <div class="side-label">配置</div>
+    <div class="side-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1l2-1.6-2-3.4-2.4 1a7 7 0 00-1.7-1L14.4 3h-4.8l-.4 3a7 7 0 00-1.7 1l-2.4-1-2 3.4L5 11a7 7 0 000 2l-2 1.6 2 3.4 2.4-1a7 7 0 001.7 1l.4 3h4.8l.4-3a7 7 0 001.7-1l2.4 1 2-3.4-2-1.6a7 7 0 00.1-1z"/></svg>
+      模型与场景
+    </div>
+    <div class="side-note">模型标签由 <b>AI 场景适配器</b>绑定：文案 → deepseek-flash；图片 → seedream-4。缺绑定时任务创建即失败，不会静默换模型。</div>
+  </aside>
+
+  <main>
+    <div class="page-head">
+      <div>
+        <h1>商品优化中心</h1>
+        <p>AI 生成建议 → 人工逐字段确认 → 一次写入商品；发布状态不变</p>
+      </div>
+      <div class="spacer"></div>
+      <div class="head-actions">
+        <button class="btn ghost" type="button" id="settingsBtn">模型设置</button>
+        <button class="btn primary" type="button" id="batchBtn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.8 4.9L19 9.6l-4.2 3.1L16 18l-4-2.7L8 18l1.2-5.3L5 9.6l5.2-1.7z"/></svg>
+          批量一键优化
+        </button>
+      </div>
+    </div>
+
+    <section class="stats" aria-label="概览">
+      <div class="stat"><span>待审核建议</span><strong id="statPending">18</strong><em>其中 1 条存在版本冲突</em></div>
+      <div class="stat"><span>本周已应用</span><strong>64</strong><em>平均每单节省 11 分钟</em></div>
+      <div class="stat"><span>AI 调用成本（本周）</span><strong>¥ 12.40</strong><em class="warn">图片任务占 78%</em></div>
+    </section>
+
+    <div class="toolbar">
+      <div class="segmented" role="tablist" aria-label="按任务类型筛选">
+        <button type="button" role="tab" aria-selected="true" data-filter="all">全部 <span class="count">5</span></button>
+        <button type="button" role="tab" aria-selected="false" data-filter="copy">文案 <span class="count">3</span></button>
+        <button type="button" role="tab" aria-selected="false" data-filter="image">图片 <span class="count">1</span></button>
+        <button type="button" role="tab" aria-selected="false" data-filter="translate">翻译 <span class="count">1</span></button>
+      </div>
+      <div class="spacer"></div>
+      <label class="model-filter">模型标签
+        <select id="modelFilter" aria-label="按模型标签筛选">
+          <option value="all">全部模型</option>
+          <option value="deepseek-flash">deepseek-flash（文案）</option>
+          <option value="seedream-4">seedream-4（图片）</option>
+          <option value="qwen-mt">qwen-mt（翻译）</option>
+        </select>
+      </label>
+      <div class="search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <input id="q" type="search" placeholder="搜索商品名 / SKU" aria-label="搜索商品">
+      </div>
+    </div>
+
+    <div class="workspace">
+      <section class="panel" aria-label="待审核队列">
+        <div class="panel-head">
+          <h2>待审核</h2>
+          <span class="hint" id="queueCount">5 条</span>
+          <span class="spacer"></span>
+          <button class="btn small ghost" type="button" id="refreshBtn">刷新</button>
+        </div>
+        <div class="queue" id="queueList"></div>
+      </section>
+
+      <section class="panel review" aria-label="审核详情">
+        <div id="reviewBody"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="backdrop" id="batchModal" role="dialog" aria-modal="true" aria-labelledby="batchTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2 id="batchTitle">批量一键优化</h2>
+        <p>已选 <b>12</b> 个商品 · 每个商品独立生成草稿，进入待审核队列</p>
+      </div>
+      <span class="spacer"></span>
+      <button class="icon-btn" type="button" data-close aria-label="关闭">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <span class="label">优化任务</span>
+        <div class="task-row">
+          <div class="t">
+            <span class="badge copy">文案</span>
+            <span>标题 / 卖点 / 详情 / SEO<small class="desc">只改你勾选的字段，未勾选字段不进 diff</small></span>
+          </div>
+          <select aria-label="文案模型"><option>deepseek-flash</option><option>qwen-max</option><option>gpt-4.1-mini</option></select>
+        </div>
+        <div class="task-row">
+          <div class="t">
+            <span class="badge image">图片</span>
+            <span>主图 3 候选<small class="desc">原图保留，选用后替换主图并写入图库</small></span>
+          </div>
+          <select aria-label="图片模型"><option>seedream-4</option><option>flux-1.1-pro</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <span class="label">覆盖范围</span>
+        <div class="radio-row">
+          <label class="radio"><input type="radio" name="scope" checked> 仅缺失 / 过短字段</label>
+          <label class="radio"><input type="radio" name="scope"> 全部字段重写</label>
+        </div>
+      </div>
+      <div class="estimate">
+        预估：文案 12 次调用 ≈ <b>¥0.36</b>；图片 36 张 ≈ <b>¥5.40</b>；队列按商品串行，预计 <b>8–14 分钟</b>完成。
+        超过单次 50 个商品请分批提交。
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span class="spacer"></span>
+      <button class="btn" type="button" data-close>取消</button>
+      <button class="btn primary" type="button" id="batchSubmit">创建 12 个优化任务</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 12.5l5 5 10-11"/></svg>
+  <span id="toastText"></span>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const DRESS = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.4 2.6h5.2l.8 3.4 3.8 2.6-1.2 2-2.4-1.3 1.4 3.9 1.4 7.8H6.6l1.4-7.8 1.4-3.9-2.4 1.3-1.2-2 3.8-2.6z"/></svg>';
+  const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
+  const WARN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 4l9 16H3z"/><path d="M12 10v4.5M12 17.4v.1"/></svg>';
+  const INFO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 7.6v.1"/></svg>';
+
+  const TONES = {
+    a: ['#f6c8d8', '#c9a7f2'],
+    b: ['#c8dcf6', '#a7c4f2'],
+    c: ['#f0d3b6', '#e2b4d8'],
+    d: ['#c9e7d8', '#a7d9c4'],
+    e: ['#ded6f7', '#b9a7f2']
+  };
+  function thumb(tone) {
+    const t = TONES[tone] || TONES.a;
+    return '<span class="thumb" style="background:linear-gradient(140deg,' + t[0] + ',' + t[1] + ')">' + DRESS + '</span>';
+  }
+  function mediaFrame(tone, inner) {
+    const t = TONES[tone] || TONES.a;
+    return '<div class="frame" style="background:linear-gradient(150deg,' + t[0] + ',' + t[1] + ')">' + inner + '</div>';
+  }
+
+  const JOBS = [
+    {
+      id: 'j1', type: 'copy', typeLabel: '文案', model: 'deepseek-flash', time: '12 分钟前',
+      product: '花朝记原创汉服女【满天花雨】唐制齐胸襦裙大袖衫清新日常春夏款',
+      sku: 'SPU-3A30365514', site: '长安汉服 · zh_Hans_CN', tone: 'a', conflict: false, applied: false,
+      fields: 4
+    },
+    {
+      id: 'j2', type: 'image', typeLabel: '图片', model: 'seedream-4', time: '26 分钟前',
+      product: '原创【长乐公主】唐制裙子复原齐腰八破裙日常显瘦夏季汉服女',
+      sku: 'SPU-8EDDCCE3A1', site: '长安汉服 · zh_Hans_CN', tone: 'b', conflict: false, applied: false,
+      fields: 1
+    },
+    {
+      id: 'j3', type: 'copy', typeLabel: '文案', model: 'deepseek-flash', time: '41 分钟前',
+      product: '宋制褙子三件套 天丝麻混纺 通勤可穿 原创汉服女装',
+      sku: 'SPU-51C0A9D7B2', site: '长安汉服 · zh_Hans_CN', tone: 'c', conflict: true, applied: false,
+      fields: 3
+    },
+    {
+      id: 'j4', type: 'translate', typeLabel: '翻译', model: 'qwen-mt', time: '1 小时前',
+      product: '花朝记原创汉服女【满天花雨】唐制齐胸襦裙大袖衫清新日常春夏款',
+      sku: 'SPU-3A30365514', site: '长安汉服 · en_US', tone: 'a', conflict: false, applied: false,
+      fields: 2
+    },
+    {
+      id: 'j5', type: 'copy', typeLabel: '文案', model: 'deepseek-flash', time: '2 小时前',
+      product: '明制马面裙 织金妆花 高腰显瘦 日常通勤汉服半身裙',
+      sku: 'SPU-B7D1E4A9C0', site: '长安汉服 · zh_Hans_CN', tone: 'd', conflict: false, applied: true,
+      fields: 2
+    }
+  ];
+
+  const DETAILS = {
+    j1: {
+      fields: [
+        {
+          key: 'name', label: '商品名称', limit: '≤ 60 字',
+          before: '花朝记原创汉服女【满天花雨】唐制齐胸襦裙大袖衫清新日常春夏款',
+          afterHtml: '<p>花朝记【满天花雨】<ins>唐制齐胸襦裙 大袖衫两件套</ins> 春夏日常原创汉服女</p>',
+          note: '前置品牌 + 品类，去掉重复的「原创汉服女」；长度 <del>30</del> <ins>28</ins> 字'
+        },
+        {
+          key: 'short', label: '短描述', limit: '≤ 120 字',
+          before: '原创汉服，齐胸襦裙，适合日常穿着。',
+          afterHtml: '<p>原创<ins>唐制</ins>齐胸襦裙<ins>两件套</ins>，<ins>雪纺面料垂坠不透，裙头刺绣满天星纹样；附可拆大袖衫</ins>，通勤、出游、拍照均可穿。</p>',
+          note: '补面料、纹样、搭配场景，便于列表页与搜索摘要'
+        },
+        {
+          key: 'desc', label: '详情描述', limit: '富文本',
+          beforeHtml: '<p>本款为原创汉服，采用唐制齐胸版型，裙长适中，日常可穿。</p><p>面料舒适，适合春夏。</p>',
+          afterHtml: '<p>本款为原创唐制齐胸襦裙，裙头以满天星纹样刺绣收边，配色取自暮春海棠。</p><p><ins>面料为加厚雪纺，垂坠不透；内衬亲肤，春夏单穿不闷。</ins></p><p><ins>附可拆大袖衫，通勤时可拆下，出游拍照可叠穿。裙长 118cm（M 码），小个子可改短。</ins></p>',
+          note: '新增 2 段：面料参数、场景与尺码建议'
+        },
+        {
+          key: 'seo', label: 'SEO 标题 / 描述', limit: '60 / 160 字',
+          before: '满天花雨 齐胸襦裙',
+          afterHtml: '<p>花朝记<ins>满天花雨</ins>唐制齐胸襦裙｜原创汉服女<ins>春夏两件套</ins></p><p style="color:#82829a">花朝记原创唐制齐胸襦裙，雪纺面料、裙头刺绣，附大袖衫。S–XL 现货，48 小时内发出。</p>',
+          note: '补品牌与品类词；描述同步改写'
+        }
+      ]
+    },
+    j2: {
+      media: {
+        prompt: '白底主图 · 45° 侧光 · 保留裙头刺绣细节 · 4:5',
+        candidates: [
+          { tone: 'b', label: '候选 A', note: '正面全身 · 留白稳' },
+          { tone: 'e', label: '候选 B', note: '3/4 侧身 · 刺绣清楚' },
+          { tone: 'c', label: '候选 C', note: '微场景 · 氛围强' }
+        ],
+        original: 'd'
+      }
+    },
+    j3: {
+      fields: [
+        {
+          key: 'name', label: '商品名称', limit: '≤ 60 字',
+          before: '宋制褙子三件套 天丝麻混纺 通勤可穿 原创汉服女装',
+          afterHtml: '<p>宋制褙子三件套｜天丝麻混纺 <ins>通勤汉服女 春秋外搭</ins></p>',
+          note: '只调整词序与卖点顺序，未改变事实'
+        },
+        {
+          key: 'short', label: '短描述', limit: '≤ 120 字', conflict: true,
+          before: '宋制褙子三件套，天丝麻混纺，垂顺透气，适合通勤。',
+          afterHtml: '<p>宋制褙子三件套，天丝麻混纺，垂顺透气<ins>；内搭吊带 + 半裙，通勤与日常都能穿</ins>。</p>',
+          note: '该字段在生成后被人工改过（local_version 12 → 13），应用前需重新确认'
+        },
+        {
+          key: 'desc', label: '详情描述', limit: '富文本',
+          beforeHtml: '<p>三件套包含褙子、吊带、半裙。天丝麻混纺面料。</p>',
+          afterHtml: '<p>三件套包含褙子、吊带与半裙，可整套穿也可拆开搭配。</p><p><ins>天丝麻混纺：垂顺、透气，春夏秋三季可穿；洗涤建议冷水手洗、阴干。</ins></p>',
+          note: '补充洗涤与搭配说明'
+        }
+      ]
+    },
+    j4: {
+      fields: [
+        {
+          key: 'name_en', label: '英文名称（en_US）', limit: '≤ 70 字符',
+          before: 'Huachaoji Hanfu Women\'s Tang Dynasty Chest-High Ruqun',
+          afterHtml: '<p>Huachaoji <ins>"Sky Full of Flowers" Tang Ruqun &amp; Big-Sleeve Set</ins> for Women</p>',
+          note: '补系列名与套装信息；保留品牌音译'
+        },
+        {
+          key: 'short_en', label: '英文短描述（en_US）', limit: '≤ 160 字符',
+          before: 'Original hanfu, chest-high ruqun, suitable for daily wear.',
+          afterHtml: '<p>Original Tang-style chest-high ruqun set<ins> in sheer chiffon, with embroidered waistband and a detachable big-sleeve jacket. S–XL in stock</ins>.</p>',
+          note: '补面料、刺绣与尺码信息'
+        }
+      ]
+    },
+    j5: {
+      applied: true,
+      fields: [
+        { key: 'name', label: '商品名称', limit: '≤ 60 字', before: '明制马面裙 织金妆花 高腰显瘦', after: '明制马面裙｜织金妆花 高腰显瘦 通勤汉服半身裙', note: '已应用于 10-30 09:41，审计已记录' },
+        { key: 'short', label: '短描述', limit: '≤ 120 字', before: '马面裙，织金工艺。', after: '明制马面裙，织金妆花工艺，高腰版型显腿长；配衬衫或针织都能穿。', note: '已应用' }
+      ]
+    }
+  };
+
+  const state = {
+    jobId: 'j1',
+    filter: 'all',
+    modelFilter: 'all',
+    query: '',
+    accepted: {},
+    images: {},
+    detailTab: 'content'
+  };
+
+  const $ = (sel, root) => (root || document).querySelector(sel);
+  const $$ = (sel, root) => Array.prototype.slice.call((root || document).querySelectorAll(sel));
+
+  function jobById(id) { return JOBS.filter(function (j) { return j.id === id; })[0]; }
+  function detailById(id) { return DETAILS[id] || {}; }
+
+  function visibleJobs() {
+    return JOBS.filter(function (j) {
+      if (state.filter !== 'all' && j.type !== state.filter) return false;
+      if (state.modelFilter !== 'all' && j.model !== state.modelFilter) return false;
+      if (state.query) {
+        const q = state.query.toLowerCase();
+        if ((j.product + ' ' + j.sku).toLowerCase().indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderQueue() {
+    const list = $('#queueList');
+    const jobs = visibleJobs();
+    $('#queueCount').textContent = jobs.length + ' 条 / 共 18';
+    if (!jobs.length) {
+      list.innerHTML = '<div class="empty"><div><div class="art">' + INFO_ICON + '</div>没有符合条件的建议</div></div>';
+      return;
+    }
+    list.innerHTML = jobs.map(function (j) {
+      const accepted = Object.keys(state.accepted[j.id] || {}).filter(function (k) { return state.accepted[j.id][k] === true; }).length;
+      const badgeClass = j.type === 'copy' ? 'copy' : j.type === 'image' ? 'image' : 'translate';
+      let status = '';
+      if (j.applied) status = '<span class="badge ok">已应用</span>';
+      else if (j.conflict) status = '<span class="badge warn">版本冲突</span>';
+      else if (accepted > 0) status = '<span class="badge neutral">已选 ' + accepted + '</span>';
+      return '<article class="queue-item' + (j.id === state.jobId ? '" aria-current="true' : '') + (j.applied ? ' applied' : '') + '" data-job="' + j.id + '" tabindex="0" role="button">' +
+        thumb(j.tone) +
+        '<div style="min-width:0">' +
+          '<div class="q-title">' + j.product + '</div>' +
+          '<div class="q-meta">' +
+            '<span class="badge ' + badgeClass + '">' + j.typeLabel + '</span>' +
+            status +
+            '<span class="dot"></span><span>' + j.fields + ' 字段</span>' +
+            '<span class="dot"></span><span>' + j.model + '</span>' +
+            '<span class="dot"></span><span>' + j.time + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</article>';
+    }).join('');
+    $$('.queue-item', list).forEach(function (el) {
+      el.addEventListener('click', function () { selectJob(el.getAttribute('data-job')); });
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectJob(el.getAttribute('data-job')); }
+      });
+    });
+  }
+
+  function selectJob(id) {
+    state.jobId = id;
+    state.detailTab = 'content';
+    renderQueue();
+    renderReview();
+  }
+
+  function fieldCard(job, f, idx) {
+    const accepted = !!(state.accepted[job.id] && state.accepted[job.id][f.key]);
+    const rejected = state.accepted[job.id] && state.accepted[job.id][f.key] === false;
+    const before = f.beforeHtml || ('<p>' + (f.before || '') + '</p>');
+    const after = f.afterHtml || ('<p>' + (f.after || '') + '</p>');
+    const conflictBadge = f.conflict ? '<span class="badge warn">冲突</span>' : '';
+    return '<article class="field-card' + (accepted ? ' accepted' : '') + (rejected ? ' rejected' : '') + '" data-field="' + f.key + '">' +
+      '<div class="field-head">' +
+        '<h3>' + f.label + '</h3>' +
+        '<span class="limit">' + f.limit + '</span>' +
+        conflictBadge +
+        '<span class="spacer"></span>' +
+        '<label class="switch"><input type="checkbox" data-accept="' + f.key + '"' + (accepted ? ' checked' : '') + ' aria-label="采纳 ' + f.label + '"><span>采纳</span></label>' +
+      '</div>' +
+      '<div class="diff">' +
+        '<div class="diff-col"><div class="diff-label">当前 <span class="pill">线上</span></div><div class="diff-text">' + before + '</div></div>' +
+        '<div class="diff-col after"><div class="diff-label">AI 建议 <span class="pill">' + job.model + '</span></div><div class="diff-text">' + after + '</div></div>' +
+      '</div>' +
+      '<div class="field-foot"><span>' + f.note + '</span><span class="spacer"></span>' +
+        '<button class="btn small ghost" type="button" data-regen="' + f.key + '">重新生成</button>' +
+      '</div>' +
+    '</article>';
+  }
+
+  function mediaSection(job, d) {
+    const candidates = d.media.candidates.map(function (c, i) {
+      const chosen = state.images[job.id] === i;
+      return '<div class="candidate" data-candidate="' + i + '" role="radio" aria-checked="' + (chosen ? 'true' : 'false') + '" tabindex="0">' +
+        mediaFrame(c.tone, DRESS) +
+        '<span class="check">' + (chosen ? CHECK : '') + '</span>' +
+        '<div class="cap"><b>' + c.label + '</b><span>·</span><span>' + c.note + '</span></div>' +
+      '</div>';
+    }).join('');
+    return '<div class="section-title">图片候选<span class="line"></span><span>原图保留，不覆盖</span></div>' +
+      '<div class="media-grid">' +
+        '<div class="candidate orig" role="radio" aria-checked="false" tabindex="-1">' +
+          '<span class="orig-badge">原图</span>' +
+          mediaFrame(d.media.original, DRESS) +
+          '<div class="cap"><b>当前主图</b><span>·</span><span>原图保留</span></div>' +
+        '</div>' + candidates +
+      '</div>' +
+      '<div class="media-note">' + INFO_ICON + '<span>生成参数：' + d.media.prompt + '。选用后写入 <code>media:main</code>，原图记录保留在商品媒体中（asset UUID 不变）。</span></div>' +
+      '<div class="qa-card"><div class="qa-title">生成依据</div><ul class="qa-list">' +
+        '<li>主图规范：白底、主体占比 ≥ 80%，不添加文字与水印</li>' +
+        '<li>保留裙头刺绣、配色与版型，不改变款式事实</li>' +
+        '<li>4:5 竖图，同时适配列表页与详情页首屏</li>' +
+      '</ul></div>';
+  }
+
+  function renderReview() {
+    const host = $('#reviewBody');
+    const job = jobById(state.jobId);
+    if (!job) { host.innerHTML = ''; return; }
+    const d = detailById(job.id);
+    const badgeClass = job.type === 'copy' ? 'copy' : job.type === 'image' ? 'image' : 'translate';
+    const selectedCount = Object.keys(state.accepted[job.id] || {}).filter(function (k) { return state.accepted[job.id][k] === true; }).length;
+    const imageChosen = state.images[job.id] !== undefined;
+    const total = job.type === 'image' ? 1 : (d.fields ? d.fields.length : 0);
+    const acceptedTotal = selectedCount + (imageChosen ? 1 : 0);
+
+    let body = '';
+    if (job.type === 'image') {
+      body = mediaSection(job, d);
+    } else {
+      body = '<div class="section-title">字段级对比<span class="line"></span><span>' + total + ' 个字段，逐个确认</span></div>' +
+        d.fields.map(function (f, i) { return fieldCard(job, f, i); }).join('');
+    }
+
+    const conflictBanner = job.conflict ? '<div class="banner warn" id="conflictBanner">' + WARN_ICON +
+      '<div><b>审核期间商品已被修改（local_version 12 → 13）。</b>「短描述」在生成后变化，应用前需要重新确认；其余 2 个字段可直接采纳。</div>' +
+      '<div class="actions"><button class="btn small" type="button" id="regenConflict">只重生成冲突字段</button></div></div>' : '';
+
+    const appliedBanner = job.applied ? '<div class="banner info">' + INFO_ICON +
+      '<div><b>已应用。</b>10-30 09:41 写入 2 个字段，审计日志已记录（actor=admin，request_hash 可追溯）。此页仅作回看。</div></div>' : '';
+
+    const footer = job.applied ? '<div class="apply-bar"><div class="summary">已应用 · 审计可追溯</div><span class="spacer"></span>' +
+      '<button class="btn" type="button" data-close-soft>关闭</button></div>' :
+      '<div class="apply-bar">' +
+        '<div class="summary"><b id="acceptedCount">' + acceptedTotal + '</b><span>/ ' + total + ' 项已采纳</span></div>' +
+        '<span class="spacer"></span>' +
+        '<span class="note">应用 = 一次 <code>ACTION_SAVE</code> 写入线上，发布状态不变</span>' +
+        '<button class="btn danger" type="button" id="rejectAll">全部忽略</button>' +
+        '<button class="btn primary" type="button" id="applyBtn"' + (acceptedTotal === 0 ? ' disabled' : '') + '>应用到商品</button>' +
+      '</div>';
+
+    host.innerHTML =
+      '<div class="review-head">' + thumb(job.tone) +
+        '<div class="review-title">' +
+          '<h2>' + job.product + '</h2>' +
+          '<div class="meta"><span class="badge ' + badgeClass + '">AI ' + job.typeLabel + '优化</span>' +
+            '<span class="badge neutral">' + job.model + '</span>' +
+            '<span>' + job.sku + '</span><span>·</span><span>' + job.site + '</span></div>' +
+        '</div>' +
+        '<span class="spacer"></span>' +
+        '<button class="btn small" type="button" id="openProduct">查看商品</button>' +
+      '</div>' +
+      '<div class="review-scroll">' + conflictBanner + appliedBanner + body + '</div>' +
+      footer;
+
+    bindReview(job, total);
+  }
+
+  function bindReview(job, total) {
+    $$('[data-accept]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        if (!state.accepted[job.id]) state.accepted[job.id] = {};
+        state.accepted[job.id][input.getAttribute('data-accept')] = input.checked;
+        const card = input.closest('.field-card');
+        if (card) {
+          card.classList.toggle('accepted', input.checked);
+          card.classList.remove('rejected');
+        }
+        const selected = Object.keys(state.accepted[job.id]).filter(function (k) {
+          return state.accepted[job.id][k] === true;
+        }).length;
+        const chosen = state.images[job.id] !== undefined ? 1 : 0;
+        const countEl = $('#acceptedCount');
+        if (countEl) countEl.textContent = selected + chosen;
+        const btn = $('#applyBtn');
+        if (btn) btn.disabled = (selected + chosen) === 0;
+        renderQueue();
+      });
+    });
+    $$('[data-candidate]').forEach(function (el) {
+      function choose() {
+        const idx = Number(el.getAttribute('data-candidate'));
+        state.images[job.id] = state.images[job.id] === idx ? undefined : idx;
+        renderReview();
+        renderQueue();
+      }
+      el.addEventListener('click', choose);
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); }
+      });
+    });
+    $$('[data-regen]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        toast('已重新排队生成「' + btn.closest('.field-card').querySelector('h3').textContent + '」，完成后替换本页建议');
+      });
+    });
+    const applyBtn = $('#applyBtn');
+    if (applyBtn) {
+      applyBtn.addEventListener('click', function () {
+        applyBtn.disabled = true;
+        applyBtn.textContent = '写入中…';
+        setTimeout(function () {
+          const count = Number($('#acceptedCount').textContent);
+          job.applied = true;
+          job.conflict = false;
+          toast('已写入 ' + count + ' 项 · 审计已记录 · local_version 13 → 14');
+          renderReview();
+          renderQueue();
+        }, 650);
+      });
+    }
+    const rejectAll = $('#rejectAll');
+    if (rejectAll) {
+      rejectAll.addEventListener('click', function () {
+        state.accepted[job.id] = {};
+        state.images[job.id] = undefined;
+        JOBS.splice(JOBS.indexOf(job), 1);
+        delete DETAILS[job.id];
+        state.jobId = (visibleJobs()[0] || {}).id || '';
+        renderQueue();
+        renderReview();
+        toast('已忽略该商品的 AI 建议（草稿标记为 rejected，7 天后清理）');
+      });
+    }
+    const regenConflict = $('#regenConflict');
+    if (regenConflict) {
+      regenConflict.addEventListener('click', function () {
+        toast('已重排 1 个冲突字段；其余字段保持已选状态');
+      });
+    }
+    const openProduct = $('#openProduct');
+    if (openProduct) openProduct.addEventListener('click', function () { toast('原型内不跳转：实际会打开商品编辑页的新标签'); });
+    $$('[data-close-soft]').forEach(function (b) { b.addEventListener('click', function () { toast('已返回队列'); }); });
+  }
+
+  function toast(text) {
+    $('#toastText').textContent = text;
+    const el = $('#toast');
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { el.classList.remove('show'); }, 3200);
+  }
+
+  function bindChrome() {
+    $$('.segmented button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        $$('.segmented button').forEach(function (b) { b.setAttribute('aria-selected', 'false'); });
+        btn.setAttribute('aria-selected', 'true');
+        state.filter = btn.getAttribute('data-filter');
+        renderQueue();
+      });
+    });
+    $('#modelFilter').addEventListener('change', function (e) {
+      state.modelFilter = e.target.value;
+      renderQueue();
+    });
+    $('#q').addEventListener('input', function (e) {
+      state.query = e.target.value.trim();
+      renderQueue();
+    });
+    $('#refreshBtn').addEventListener('click', function () {
+      renderQueue();
+      toast('队列已刷新（原型演示）');
+    });
+    $('#settingsBtn').addEventListener('click', function () {
+      toast('实际打开 AI 场景适配器设置：商品文案 / 商品图片');
+    });
+    const modal = $('#batchModal');
+    $('#batchBtn').addEventListener('click', function () { modal.classList.add('open'); });
+    $$('[data-close]').forEach(function (b) { b.addEventListener('click', function () { modal.classList.remove('open'); }); });
+    modal.addEventListener('click', function (e) { if (e.target === modal) modal.classList.remove('open'); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') modal.classList.remove('open');
+    });
+    $('#batchSubmit').addEventListener('click', function () {
+      modal.classList.remove('open');
+      toast('已创建 12 个优化任务 · 队列按商品串行执行');
+    });
+    $('#resetBtn').addEventListener('click', function () { location.reload(); });
+  }
+
+  bindChrome();
+  renderQueue();
+  renderReview();
+})();
+</script>
+</body>
+</html>

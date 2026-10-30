@@ -94,9 +94,11 @@ final class StorefrontWarmupOrchestrator
 
             $busy = $this->busyGate->sample();
             $capacity = $this->capacityPlanner->plan($state, $busy);
-            if ($source !== 'clear' && !$generationChanged && $capacity['band'] === StorefrontWarmupCapacityPlanner::BAND_YIELD) {
+            // 算力门禁对 clear 同样生效：发布后清缓存那一次预热不得无视主机负载。
+            // 换代（generationChanged）优先——新构建号必须从头开始，即便当下繁忙。
+            if (!$generationChanged && $capacity['band'] === StorefrontWarmupCapacityPlanner::BAND_YIELD) {
                 $state['last_status'] = 'skip';
-                $state['last_reason'] = 'yield_traffic';
+                $state['last_reason'] = 'yield_capacity_before_warm';
                 $state['last_yield_at'] = \microtime(true);
                 $state['backoff_until'] = 0.0;
                 $this->ledger->write($state);
@@ -124,7 +126,12 @@ final class StorefrontWarmupOrchestrator
 
             $shard = (int)$capacity['effective_shard'];
             $wallMs = (int)$capacity['effective_wall_ms'];
+            // 缩容带（主机已偏忙）强制逐条预热：批大小压到 1，
+            // 保证「预热完一条就复查算力」，而不是一次并发 N 条把主机压垮。
             $concurrency = \max(1, (int)$capacity['effective_concurrency']);
+            if ((string)$capacity['band'] === StorefrontWarmupCapacityPlanner::BAND_SCALE) {
+                $concurrency = 1;
+            }
             $warmed = 0;
             $skipped = 0;
             $failed = 0;
@@ -166,11 +173,9 @@ final class StorefrontWarmupOrchestrator
                     break;
                 }
                 $midBusy = $this->busyGate->sample();
-                if ($source !== 'clear'
-                    && $this->busyGate->shouldAbortMidSlice((float)$midBusy['ratio'], (float)$midBusy['abort_threshold'])
-                ) {
+                if ($this->busyGate->shouldAbortMidSlice((float)$midBusy['ratio'], (float)$midBusy['abort_threshold'])) {
                     $state['last_status'] = 'skip';
-                    $state['last_reason'] = 'abort_busy';
+                    $state['last_reason'] = 'yield_capacity_after_warm';
                     $state['last_yield_at'] = \microtime(true);
                     $state['backoff_until'] = 0.0;
                     $this->ledger->write($state);
@@ -220,6 +225,17 @@ final class StorefrontWarmupOrchestrator
                     }
                 }
                 $this->ledger->write($state);
+                // 每暖完一批（≥1 条）立刻复查主机算力：一旦超过中止阈值就停止，
+                // 并把游标/计数落盘（账本已 write），下次 cron 从断点续跑。
+                $postBusy = $this->busyGate->sample();
+                if ($this->busyGate->shouldAbortMidSlice((float)$postBusy['ratio'], (float)$postBusy['abort_threshold'])) {
+                    $state['last_status'] = 'skip';
+                    $state['last_reason'] = 'yield_capacity_after_warm';
+                    $state['last_yield_at'] = \microtime(true);
+                    $state['backoff_until'] = 0.0;
+                    $this->ledger->write($state);
+                    break;
+                }
                 if (($batch['done'] ?? false) === true) {
                     break;
                 }

@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>商品 AI 优化与后台整改 · 产品需求文档</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --ink:#111827;--ink-2:#374151;--ink-3:#6b7280;--line:#e5e7eb;
+    --bg:#f5f6f8;--card:#fff;--brand:#4f46e5;--brand-2:#7c3aed;--brand-soft:#eef2ff;
+    --warn:#d97706;--warn-soft:#fffbeb;--danger:#dc2626;--danger-soft:#fef2f2;
+    --ok:#059669;--ok-soft:#d1fae5;
+  }
+  body{font-family:"PingFang SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--brand);text-decoration:none}
+  code{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;font-size:.86em;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:4px;padding:1px 5px;color:#4338ca;word-break:break-word}
+  pre{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:16px 18px;overflow:auto;margin:14px 0;font-size:13px;line-height:1.6}
+  pre code{background:none;border:none;color:inherit;padding:0;font-size:13px}
+
+  .topbar{position:fixed;inset:0 0 auto 0;height:78px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 26px;background:linear-gradient(120deg,#312e81 0%,#4f46e5 55%,#7c3aed 100%);color:#fff;z-index:1000;
+    box-shadow:0 2px 12px rgba(17,24,39,.16)}
+  .topbar h1{font-size:19px;font-weight:650;letter-spacing:.2px}
+  .topbar .meta{display:flex;gap:18px;margin-top:5px;font-size:12.5px;opacity:.88;flex-wrap:wrap}
+  .topbar .meta b{font-weight:600}
+  .topbar .actions{display:flex;gap:8px}
+  .topbar .actions button{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);color:#fff;
+    font-size:12.5px;padding:7px 12px;border-radius:8px;cursor:pointer}
+  .topbar .actions button:hover{background:rgba(255,255,255,.24)}
+
+  .sidebar{position:fixed;top:78px;left:0;width:248px;height:calc(100vh - 78px);background:#fff;border-right:1px solid var(--line);
+    overflow-y:auto;padding:16px 0 40px;z-index:900}
+  .sidebar .group{padding:14px 20px 6px;font-size:11px;letter-spacing:.12em;color:#9ca3af;text-transform:uppercase;font-weight:700}
+  .sidebar a{display:block;padding:9px 20px 9px 22px;color:var(--ink-2);font-size:13.5px;border-left:3px solid transparent;transition:.15s}
+  .sidebar a:hover{background:#f9fafb;color:var(--brand)}
+  .sidebar a.active{background:var(--brand-soft);color:var(--brand);border-left-color:var(--brand);font-weight:600}
+  .sidebar .note{margin:18px 16px 0;padding:12px;background:#f9fafb;border:1px dashed var(--line);border-radius:10px;font-size:12px;color:var(--ink-3);line-height:1.55}
+
+  main{margin:78px 0 0 248px;padding:28px 34px 80px;max-width:1180px}
+  .section{background:var(--card);border-radius:14px;padding:28px 30px;margin-bottom:24px;box-shadow:0 1px 3px rgba(17,24,39,.06),0 8px 24px -18px rgba(17,24,39,.25)}
+  .section>h2{font-size:22px;font-weight:700;color:#111827;padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:18px;display:flex;align-items:center;gap:10px}
+  .section>h2 .num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:var(--brand-soft);color:var(--brand);font-size:14px;font-weight:700}
+  h3{font-size:16.5px;font-weight:650;color:var(--ink);margin:24px 0 10px}
+  h4{font-size:14px;font-weight:650;color:var(--ink-2);margin:18px 0 8px}
+  p{margin:8px 0;color:var(--ink-2);font-size:14px}
+  ul,ol{margin:8px 0 8px 22px;color:var(--ink-2);font-size:14px}
+  li{margin:5px 0}
+  strong{color:var(--ink)}
+
+  table{width:100%;border-collapse:collapse;margin:14px 0 6px;font-size:13px}
+  th{background:#f9fafb;text-align:left;font-weight:650;color:var(--ink-2);padding:10px 10px;border-bottom:2px solid var(--line);white-space:nowrap}
+  td{padding:10px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
+  tr:hover td{background:#fcfcfd}
+  .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}
+  .table-wrap table{margin:0}
+  .table-wrap th:first-child,.table-wrap td:first-child{padding-left:14px}
+  .table-wrap th:last-child,.table-wrap td:last-child{padding-right:14px}
+
+  .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:650;white-space:nowrap}
+  .b-p0{background:#fee2e2;color:#b91c1c}
+  .b-p1{background:#fef3c7;color:#b45309}
+  .b-p2{background:#dbeafe;color:#1d4ed8}
+  .b-ok{background:var(--ok-soft);color:#047857}
+  .b-gray{background:#f3f4f6;color:#4b5563}
+  .b-high{background:#fee2e2;color:#b91c1c}
+  .b-mid{background:#fef3c7;color:#b45309}
+
+  .callout{border-left:4px solid var(--brand);background:var(--brand-soft);padding:14px 18px;border-radius:8px;margin:14px 0;font-size:13.5px;color:#312e81}
+  .callout.warn{border-left-color:var(--warn);background:var(--warn-soft);color:#78350f}
+  .callout.danger{border-left-color:var(--danger);background:var(--danger-soft);color:#7f1d1d}
+  .callout.ok{border-left-color:var(--ok);background:var(--ok-soft);color:#064e3b}
+  .callout p{color:inherit;margin:4px 0}
+
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .kpi .label{font-size:12px;color:var(--ink-3)}
+  .kpi .value{font-size:22px;font-weight:750;color:var(--brand);margin:2px 0}
+  .kpi .hint{font-size:11.5px;color:var(--ink-3)}
+
+  figure{margin:16px 0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+  figure .frame{max-height:560px;overflow:auto;background:#f8fafc}
+  figure.tall .frame{max-height:640px}
+  figure img{display:block;width:100%;height:auto}
+  figcaption{padding:10px 14px;font-size:12.5px;color:var(--ink-3);border-top:1px solid var(--line);background:#fbfcfd}
+  figcaption b{color:var(--ink-2)}
+
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0}
+  .flow .step{background:#fff;border:1.5px solid #c7d2fe;color:#3730a3;border-radius:9px;padding:9px 13px;font-size:12.8px;font-weight:600}
+  .flow .step.done{border-color:#a7f3d0;color:#065f46;background:#ecfdf5}
+  .flow .step.hot{border-color:#c4b5fd;background:#f5f3ff}
+  .flow .arrow{color:#9ca3af;font-size:16px}
+
+  .wire{border:1px dashed #cbd5e1;border-radius:12px;padding:14px;background:#fcfdff;margin:12px 0}
+  .wire .bar{height:26px;border-radius:6px;background:#eef2ff;border:1px solid #c7d2fe;margin-bottom:8px;display:flex;align-items:center;padding:0 10px;font-size:11.5px;color:#4338ca;font-weight:600}
+  .wire .row{display:grid;gap:8px;margin-bottom:8px}
+  .wire .block{height:56px;border-radius:8px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11.5px}
+  .wire .block.hl{border-color:#a5b4fc;background:#eef2ff;color:#4338ca}
+  .wire .caption{font-size:11.5px;color:var(--ink-3);margin-top:4px}
+
+  .state{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+  .state .s{padding:5px 10px;border-radius:7px;font-size:12px;background:#f3f4f6;border:1px solid var(--line);color:#4b5563}
+  .state .s.on{background:#ecfdf5;border-color:#a7f3d0;color:#047857;font-weight:600}
+  .state .s.bad{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
+  .state .s.wait{background:#fffbeb;border-color:#fde68a;color:#b45309}
+
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+  .filters button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 13px;font-size:12.5px;color:var(--ink-2);cursor:pointer}
+  .filters button.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+
+  .diff{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+  .diff .col{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .diff .col h5{font-size:12px;padding:8px 12px;background:#f9fafb;color:var(--ink-3);font-weight:650;border-bottom:1px solid var(--line)}
+  .diff .body{padding:12px;font-size:13px;color:var(--ink-2);min-height:86px}
+  .diff .body .del{background:#fee2e2;color:#991b1b;text-decoration:line-through;padding:0 2px;border-radius:3px}
+  .diff .body .add{background:#d1fae5;color:#065f46;padding:0 2px;border-radius:3px}
+  .diff-foot{display:flex;justify-content:flex-end;gap:8px;padding:8px 12px;border-top:1px solid var(--line);background:#fbfcfd}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:5px 11px;font-size:12px;cursor:pointer;color:var(--ink-2)}
+  .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .btn.ghost{background:#fff}
+
+  .checklist{list-style:none;margin:8px 0 8px 0;padding:0}
+  .checklist li{position:relative;padding:8px 0 8px 28px;border-bottom:1px dashed var(--line);font-size:13.5px}
+  .checklist li:last-child{border-bottom:none}
+  .checklist li::before{content:"";position:absolute;left:4px;top:13px;width:13px;height:13px;border:1.5px solid #cbd5e1;border-radius:4px}
+
+  .pill-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+  .pill{background:#f3f4f6;border:1px solid var(--line);color:#4b5563;font-size:11.5px;padding:3px 9px;border-radius:999px}
+
+  .toc-note{font-size:12px;color:var(--ink-3)}
+  .footer{color:var(--ink-3);font-size:12px;text-align:center;padding:8px 0 30px}
+
+  @media (max-width:1080px){.grid-4{grid-template-columns:1fr 1fr}.grid-3{grid-template-columns:1fr 1fr}}
+  @media (max-width:820px){
+    .sidebar{display:none}
+    main{margin-left:0;padding:20px 16px 60px}
+    .topbar{height:auto;padding:12px 16px;flex-direction:column;align-items:flex-start;gap:8px;position:static}
+    main{margin-top:0}
+    .grid-2,.grid-3,.grid-4,.diff{grid-template-columns:1fr}
+    table{font-size:12px}
+  }
+  @media print{
+    .topbar,.sidebar,.filters,.topbar .actions{display:none}
+    main{margin:0;padding:0;max-width:none}
+    .section{box-shadow:none;border:1px solid var(--line);page-break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div>
+    <h1>商品 AI 优化与后台整改 · 产品需求文档</h1>
+    <div class="meta">
+      <span>版本 <b>v1.0</b></span>
+      <span>作者 <b>产品（Weline 框架）</b></span>
+      <span>日期 <b>2026-10-30</b></span>
+      <span>状态 <b>草案 · 待评审</b></span>
+      <span>模块 <b>Weline_Product + Weline_Ai</b></span>
+    </div>
+  </div>
+  <div class="actions">
+    <button type="button" onclick="window.print()">打印 / PDF</button>
+  </div>
+</header>
+
+<nav class="sidebar">
+  <div class="group">总览</div>
+  <a href="#summary" class="active">摘要与关键决策</a>
+  <div class="group">需求</div>
+  <a href="#background">1 · 需求背景</a>
+  <a href="#audit">2 · 现状诊断与整改</a>
+  <a href="#strategy">3 · 策略矩阵</a>
+  <div class="group">方案</div>
+  <a href="#solution">4 · 方案设计</a>
+  <a href="#tech">5 · 技术落点</a>
+  <div class="group">交付</div>
+  <a href="#features">6 · 功能清单</a>
+  <a href="#timeline">7 · 排期规划</a>
+  <a href="#collaboration">8 · 协作流程</a>
+  <a href="#risks">9 · 风险与应对</a>
+  <div class="group">参考</div>
+  <a href="#appendix">10 · 附录</a>
+  <div class="note">
+    <b>证据口径</b><br>
+    本文截图均为 2026-10-30 在本机 1440×900 后台自采（非用户提供），原图在仓库 <code>.screenshots/</code>。<br>
+    所有代码行号均于同日核对当前工作区文件。
+  </div>
+</nav>
+
+<main>
+
+<!-- ============ 摘要 ============ -->
+<section class="section" id="summary">
+  <h2><span class="num">§</span>摘要与关键决策</h2>
+
+  <div class="callout">
+    <p><strong>结论一：</strong>后台目前没有任何 AI 入口。商品优化依赖仓库外的 AI 技能 SOP（<code>app/code/Weline/Product/doc/ai/skills/ecommerce-product-optimize/SKILL.md</code>），运营无法在后台完成「生成 → 审核 → 应用」闭环。</p>
+    <p><strong>结论二：</strong>商品列表与编辑页存在 14 项结构性可用性问题（新建面板常驻挤压、12 列表格在 1440 下只露出 6 列、媒体用 UUID 展示、站点文案是裸表单、悬浮助手遮挡操作区等）。在这些问题之上直接叠加 AI 入口，只会放大混乱，所以整改必须先于或同波于 AI 上线。</p>
+    <p><strong>结论三：</strong>V1 采用「AI 生成草稿 → 人工逐字段审核 → 确认后写穿既有 save 通道 → 快照可回滚」。不引入内容版本层，不做无审核自动应用。</p>
+  </div>
+
+  <h3>关键决策</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:22%">决策</th><th style="width:44%">选择</th><th>理由 / 被否方案</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>应用语义</strong></td>
+          <td>应用 = 调用 <code>ProductAdminCommandService::ACTION_SAVE</code> 直接写线上，发布状态不变</td>
+          <td>商品内容没有草稿/版本层：save 直接写 EAV 并镜像 <code>weline_product_local</code>（<code>ProductAdminCommandService.php:2416</code>）。「先存草稿再发布」的两段式会误导运营，否。</td>
+        </tr>
+        <tr>
+          <td><strong>草稿存放</strong></td>
+          <td>独立表 <code>weline_product_ai_draft</code>，应用前不触碰商品表</td>
+          <td>AI 结果必须与线上数据物理隔离；复用商品草稿状态会污染发布诊断与前台投影。否。</td>
+        </tr>
+        <tr>
+          <td><strong>模型选择</strong></td>
+          <td>任务类型 = 模型标签；默认绑定 + 单次覆盖</td>
+          <td>仓库无 <code>ai_model_tag</code> 表，但 <code>ai_scenario_adapter.model_bindings</code> 已能表达「任务类型 → 模型」，不新建标签体系。</td>
+        </tr>
+        <tr>
+          <td><strong>图片优化</strong></td>
+          <td>生成 3 张候选图，人工选 1 张设为主图 / 入图库；原图永不覆盖</td>
+          <td>像素级修图与局部重绘涉及遮罩编辑与版权风险，V1 范围外。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>交付边界（一句话）</h3>
+  <div class="grid-4">
+    <div class="kpi"><div class="label">V1 上线</div><div class="value">14</div><div class="hint">功能点（P0 4 / P1 6 / P2 4）</div></div>
+    <div class="kpi"><div class="label">首发范围</div><div class="value">2</div><div class="hint">文案优化 + 图片候选</div></div>
+    <div class="kpi"><div class="label">强制门禁</div><div class="value">100%</div><div class="hint">应用前必须人工审核</div></div>
+    <div class="kpi"><div class="label">可回滚窗口</div><div class="value">7 天</div><div class="hint">应用后快照回滚</div></div>
+  </div>
+
+  <div class="callout warn">
+    <p><strong>未验证项（先声明，避免当成事实）：</strong></p>
+    <ul>
+      <li>人工优化单个商品的耗时基线<strong>尚未计时</strong>，需在 T0（上线前一周）采样，本文不引用虚构基线。</li>
+      <li>各图片模型供应商的实际可用性与单张成本<strong>未逐一验证</strong>，配额默认值需在联调期按真实报价回填。</li>
+      <li><code>ExtendsData::getExtendedBy()</code> 是否把 <code>optional</code> 依赖计入扩展方<strong>未验证</strong>；若不支持，<code>Weline_Ai</code> 需放入 <code>requires</code>（见 §5.1）。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 1 需求背景 ============ -->
+<section class="section" id="background">
+  <h2><span class="num">1</span>需求背景</h2>
+
+  <h3>1.1 问题描述</h3>
+  <p>商品模块已具备完整的后台编辑能力（12 个页签、单写入口、发布诊断、审计），但「把商品写得好」这件事仍停留在人工阶段，且没有后台入口：</p>
+  <ul>
+    <li><strong>入口割裂：</strong>现有 AI 优化能力以技能文档存在（<code>doc/ai/skills/ecommerce-product-optimize/SKILL.md</code>），执行依赖外部 Agent，运营在后台看不到、也不会用。</li>
+    <li><strong>质量不可控：</strong>没有字段级对比、没有采纳/驳回记录，AI 生成内容一旦写入线上就无法追溯与回退。</li>
+    <li><strong>后台本身难用：</strong>列表页左侧常驻「新建商品草稿」表单占掉约一半宽度；表格 12 列总宽约 1568px（不含勾选与操作列），1440 屏只能看到前 6 列；媒体表用 UUID 当文件名。AI 入口如果直接挂在这样的页面上，等于把新功能塞进一个已经拥挤的壳里。</li>
+  </ul>
+
+  <h3>1.2 目标用户</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>用户群体</th><th style="width:16%">量化特征</th><th>核心痛点</th><th>本需求提供的能力</th></tr></thead>
+      <tbody>
+        <tr><td>单店运营</td><td>1–3 人，SKU &lt; 500</td><td>上新慢，文案与主图全靠手工；英文商品名与中文详情混杂</td><td>列表/编辑页一键优化、批量优化</td></tr>
+        <tr><td>多站运营</td><td>≥ 2 个 Website</td><td>同一商品要按站点改写文案与图片，重复劳动</td><td>按 Website + locale 生成草稿，互不覆盖</td></tr>
+        <tr><td>内容审核 / 店长</td><td>每日审核 ≥ 20 个商品</td><td>没有统一审核台，改动靠口头确认</td><td>待审核列表 + 字段级 diff + 采纳/驳回</td></tr>
+        <tr><td>实施 / 开发者</td><td>负责接模型与站点交付</td><td>换模型要改代码；失败无错误码</td><td>模型绑定可视化、错误码与任务日志</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>1.3 成功指标</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>指标</th><th>现状</th><th>目标值</th><th>数据来源</th><th>达成时间</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>M1</td><td>AI 草稿采纳率（采纳字段数 / 生成字段数）</td><td>未测量（T0 基线）</td><td>≥ 60%</td><td><code>weline_product_ai_draft</code> 状态聚合</td><td>上线后 30 天</td>
+        </tr>
+        <tr>
+          <td>M2</td><td>应用后在 7 天内的回滚率</td><td>无此能力</td><td>≤ 10%</td><td>audit <code>ai_rollback</code> / <code>ai_apply</code> 计数</td><td>上线后 30 天</td>
+        </tr>
+        <tr>
+          <td>M3</td><td>单商品「文案 + 主图」人工操作步数</td><td>T0 采样（未计时）</td><td>相比 T0 下降 ≥ 50%</td><td>操作埋点（页面点击 + 字段编辑次数）</td><td>上线后 30 天</td>
+        </tr>
+        <tr>
+          <td>M4</td><td>任务执行可靠性</td><td>无此能力</td><td>失败率 ≤ 5%；文案 P95 ≤ 90s，图片 P95 ≤ 180s</td><td><code>weline_product_ai_job</code> 时间戳与状态</td><td>上线后 14 天</td>
+        </tr>
+        <tr>
+          <td>M5</td><td>待审核列表可用性</td><td>无此能力</td><td>20 条/页 P95 ≤ 1.5s；从列表进入对比 ≤ 2 次点击</td><td>后端耗时日志 + 前端埋点</td><td>上线当日</td>
+        </tr>
+        <tr>
+          <td>M6</td><td>优化后商品详情页转化率</td><td>需 GA/埋点基线</td><td>相对提升 ≥ 8%（对照未优化商品）</td><td>站点分析（30 天窗口）</td><td>上线后 60 天</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout warn">
+    <p><strong>指标口径说明：</strong>M1/M2 的分母只统计「已生成且已过审核动作」的字段，避免把未查看的草稿算成驳回；M6 需要先有转化埋点基线，若 T0 拿不到基线，M6 降级为观察项，不作为上线门禁。</p>
+  </div>
+
+  <h3>1.4 约束条件</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:14%">类型</th><th>约束</th><th style="width:34%">证据 / 影响</th></tr></thead>
+      <tbody>
+        <tr><td>技术</td><td>商品内容无草稿层，save 即线上生效</td><td><code>ProductAdminCommandService.php:2416</code> 写 <code>weline_product_local</code></td></tr>
+        <tr><td>技术</td><td>所有商品写入必须走单入口 <code>execute(ProductAdminCommand)</code></td><td><code>ProductAdminCommandService.php:76</code>；绕开会丢失校验与搜索投影失效</td></tr>
+        <tr><td>技术</td><td>图片必须先是 MediaManager 资产，商品只存 asset_id</td><td><code>MediaRepository.php:177-196</code> 校验 asset UUID</td></tr>
+        <tr><td>技术</td><td>图片生成不会回退到 text2text 模型</td><td><code>AiService.php:541-543</code></td></tr>
+        <tr><td>资源</td><td>按 1 后端 + 1 前端 + 0.5 测试估算，2 周一个迭代</td><td>人力假设，需评审确认</td></tr>
+        <tr><td>合规</td><td>不得生成品牌 Logo、他人肖像；服装类不得改变版型轮廓</td><td>沿用现有 SOP 的 clothing lock 与禁止项</td></tr>
+        <tr><td>合规</td><td>生成资产必须可识别为 AI 生成并保留原图</td><td>媒体元数据 <code>ai_generated</code>；原图资产不删除</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ 2 现状诊断 ============ -->
+<section class="section" id="audit">
+  <h2><span class="num">2</span>现状诊断与后台整改</h2>
+
+  <p>本节全部结论来自同日后台实拍与当前代码。截图是<strong>我自己抓的</strong>（用户本轮未附图），因此结论只覆盖「截图可见 + 代码可核」的范围。</p>
+
+  <h3>2.1 商品列表：双栏挤压 + 表格溢出</h3>
+  <figure class="tall">
+    <div class="frame"><img src="../../../.screenshots/d2-product-list-full.png" alt="商品列表 1440 全页"></div>
+    <figcaption><b>图 1</b> · 商品列表（1440×900 全页，图内可滚动查看）：左侧「新建商品草稿」常驻占宽，右侧列表只露出 ID / 主图 / 商品 / 来源 / 总货号 / 操作；右下角「建站助手 64」压在操作列上。<b>可核事实：</b>当前筛选结果 336 件、7 种商品类型、2 个活动 Store。</figcaption>
+  </figure>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:7%">编号</th><th style="width:22%">问题</th><th>观察与代码证据</th><th style="width:12%">优先级</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>U1</td><td>新建面板常驻，列表被压到约一半宽</td>
+          <td>截图左侧表单从「基础信息」一直排到「发布」；列表主区被挤到只能显示 6 列。新建应是「主按钮 + 抽屉/向导」，不是常驻表单。</td>
+          <td><span class="badge b-p1">P1</span></td>
+        </tr>
+        <tr>
+          <td>U2</td><td>表格 12 列在设计上就超出 1440</td>
+          <td><code>index.phtml:1002-1013</code> 列宽合计 1568px（72+72+256+144+160+112+112+176+80+128+80+176），再加勾选列与 sticky 操作列。类型/状态/SKU/Offer/价格/Store/更新时间默认不可见。</td>
+          <td><span class="badge b-p1">P1</span></td>
+        </tr>
+        <tr>
+          <td>U3</td><td>没有 AI 入口、AI 状态列与批量 AI</td>
+          <td>批量栏只有「删除」（<code>index.phtml:918</code>）与第三方 hook（<code>:921</code>）；编辑页 12 个页签无 AI（<code>edit.phtml:442-455</code>）。</td>
+          <td><span class="badge b-p0">P0</span></td>
+        </tr>
+        <tr>
+          <td>U4</td><td>悬浮助手遮挡操作区</td>
+          <td>「建站助手 64」固定在右下，与列表操作列、编辑页底部 sticky 保存条重叠。</td>
+          <td><span class="badge b-p1">P1</span></td>
+        </tr>
+        <tr>
+          <td>U12</td><td>筛选器换行错位</td>
+          <td>名称 / SKU / 总货号纵向堆叠，来源 / 类型 / 状态挤成一行，视觉上像三个宽不等的输入框。</td>
+          <td><span class="badge b-p2">P2</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>2.2 商品编辑：概览空白 + 保存语义错误</h3>
+  <figure>
+    <div class="frame"><img src="../../../.screenshots/d2-product-edit-top.png" alt="商品编辑页顶部"></div>
+    <figcaption><b>图 2</b> · 编辑页（已发布商品）：概览只有 4 张 KPI 卡片，下方大面积空白；底部 sticky 按钮写「保存草稿」，但该商品状态是「已发布」；右下角助手压住保存条。</figcaption>
+  </figure>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:7%">编号</th><th style="width:22%">问题</th><th>观察与代码证据</th><th style="width:12%">优先级</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>U5</td><td>概览页信息密度过低</td>
+          <td>4 张卡片（商品健康度 / 销售规格 / 可见 Store / 媒体）直接把一屏占满后留白（<code>edit.phtml:462-484</code>）。没有「最近变更」「媒体缺口」「AI 待审核」等可行动信息。</td>
+          <td><span class="badge b-p2">P2</span></td>
+        </tr>
+        <tr>
+          <td>U6</td><td>12 个页签扁平排列</td>
+          <td><code>edit.phtml:442-455</code>：概览/基础信息/动态属性/规格与价格/分类与媒体/布局/Store/库存与配送/类型配置/发布诊断/跨站治理/审计。缺少分组，查找成本高。</td>
+          <td><span class="badge b-p2">P2</span></td>
+        </tr>
+        <tr>
+          <td>U7</td><td>已发布商品底部写「保存草稿」</td>
+          <td><code>edit.phtml:2340</code> 提交按钮文案固定为「保存草稿」；顶部另有「发布」按钮（<code>:416</code>）。在已发布商品上，文案与事实矛盾，运营会误以为改动未上线。</td>
+          <td><span class="badge b-p1">P1</span></td>
+        </tr>
+        <tr>
+          <td>U8</td><td>概览无 AI 状态与入口</td>
+          <td>概览、顶部动作区均无 AI 按钮；运营必须离开商品才能找 AI 能力（当前根本没有后台入口）。</td>
+          <td><span class="badge b-p0">P0</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>2.3 媒体：UUID 当文件名，无任何图片操作</h3>
+  <figure>
+    <div class="frame"><img src="../../../.screenshots/d2-product-edit-media.png" alt="商品编辑 分类与媒体"></div>
+    <figcaption><b>图 3</b> · 媒体表：「资源」列显示 <code>1f62ef88-a7c4-…</code> 这样的 UUID + <code>image/jpeg · public</code>，缩略图约 32px；角色是下拉；排序是数字输入；「移除」是实心红按钮。没有文件名、尺寸、预览、替换、裁剪或 AI 生成。</figcaption>
+  </figure>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:7%">编号</th><th style="width:22%">问题</th><th>观察与代码证据</th><th style="width:12%">优先级</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>U9</td><td>媒体以 UUID 为主标识，运营不可读</td>
+          <td>商品媒体模型字段包含 <code>asset_id</code> / <code>blob_key</code> / <code>cow_source_media_id</code> 等技术字段（<code>Model/Shard/Media.php:15-24</code>），但 UI 应展示文件名、尺寸、格式与预览。</td>
+          <td><span class="badge b-p1">P1</span></td>
+        </tr>
+        <tr>
+          <td>U10</td><td>没有替换 / 裁剪 / 生成入口</td>
+          <td>目前只能改角色、改排序、移除。想换主图必须去媒体库或重新上传。</td>
+          <td><span class="badge b-p1">P1</span></td>
+        </tr>
+        <tr>
+          <td>U11</td><td>「移除」是危险实心红按钮，无二次确认</td>
+          <td>8 行媒体对应 8 个红按钮，视觉层级压过内容；误点风险高。</td>
+          <td><span class="badge b-p2">P2</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>2.4 站点文案：裸表单，没有标签</h3>
+  <figure>
+    <div class="frame"><img src="../../../.screenshots/d-product-site-content.png" alt="站点文案后台"></div>
+    <figcaption><b>图 4</b> · 「站点文案」页面：5 个无标签输入（<code>0</code>、<code>0</code>、<code>name</code>、<code>zh_Hans_CN</code>、空 textarea）+ 保存按钮 + 「暂无数据」。页面自身提示「高级维护入口；日常运营请从『万能产品』进入」。</figcaption>
+  </figure>
+
+  <div class="callout danger">
+    <p><strong>U13 判定：</strong>这不是「简约」，是未完成的高级表单。<strong>整改二选一：</strong>① 补齐字段标签、locale 选择、当前值回填与列表化；② 如果确定日常不用，直接下线菜单，只在编辑页保留多语言入口。<strong>不允许</strong>保持现状再把 AI 入口挂上去。</p>
+  </div>
+
+  <h3>2.5 商品媒体库：把数据库表直接暴露给运营</h3>
+  <figure>
+    <div class="frame"><img src="../../../.screenshots/d-product-media-library.png" alt="商品媒体库后台"></div>
+    <figcaption><b>图 5</b> · 「商品媒体」页面：输入项是 SKU / 媒体路径 / Blob key / 数字；下方表格列头为 <code>media_id</code>、<code>product_id</code>、<code>path</code>、<code>blob_key</code>、<code>ref_count</code>、<code>cow_source_media_id</code>。</figcaption>
+  </figure>
+  <p><strong>U14 判定：</strong>这是 DBA 视图，不是运营视图。整改：缩略图网格 + 引用数 + 关联商品 + 替换/清理；技术字段折叠进「详情」，默认不展示。</p>
+
+  <h3>2.6 整改清单与排期归属</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:7%">编号</th><th style="width:20%">整改动作</th><th style="width:20%">落到哪个页面</th><th style="width:10%">优先级</th><th style="width:12%">归属迭代</th><th>验收口径</th></tr></thead>
+      <tbody>
+        <tr><td>U1</td><td>新建改为「新建商品」主按钮 + 抽屉向导；列表占满宽度</td><td>商品列表</td><td><span class="badge b-p1">P1</span></td><td>S3</td><td>1440 下列表可用宽度 ≥ 1100px；新建入口 1 次点击可达</td></tr>
+        <tr><td>U2</td><td>默认列收敛为 8 列（ID/主图/商品/状态/SKU/价格/Store/更新时间），其余进「列设置」并持久化</td><td>商品列表</td><td><span class="badge b-p1">P1</span></td><td>S3</td><td>1440 下无横向滚动即可看到状态与更新时间；列设置刷新后保持</td></tr>
+        <tr><td>U3 / U8</td><td>列表批量栏加「AI 优化」；行内加「AI 优化」；编辑页加 AI 页签；列表加 AI 状态列</td><td>列表 + 编辑</td><td><span class="badge b-p0">P0</span></td><td>S1–S2</td><td>见 F01/F02/F06 验收标准</td></tr>
+        <tr><td>U4</td><td>建站助手默认收起，或与 sticky 条错位 64px</td><td>全局</td><td><span class="badge b-p1">P1</span></td><td>S3</td><td>1440×900 下不与操作列、保存条重叠（截图复核）</td></tr>
+        <tr><td>U5</td><td>概览改为「发布检查 + 最近变更 + 媒体缺口 + AI 待审核」四块</td><td>编辑 · 概览</td><td><span class="badge b-p2">P2</span></td><td>S4</td><td>首屏无 >200px 空白；4 块均有真实数据或空态文案</td></tr>
+        <tr><td>U6</td><td>页签分组：内容 / 销售 / 治理 / AI</td><td>编辑</td><td><span class="badge b-p2">P2</span></td><td>S4</td><td>页签仍可全量访问；分组标题可折叠</td></tr>
+        <tr><td>U7</td><td>「保存草稿」→「保存更改」；已发布商品保存后提示「已更新线上内容」</td><td>编辑</td><td><span class="badge b-p1">P1</span></td><td>S3</td><td>草稿商品显示「保存草稿」，已发布显示「保存更改」；提示含缓存刷新结果</td></tr>
+        <tr><td>U9 / U10 / U11</td><td>媒体行显示文件名/尺寸/格式；加预览、替换、AI 生成候选；移除改为次要按钮 + 确认</td><td>编辑 · 分类与媒体</td><td><span class="badge b-p1">P1</span></td><td>S3</td><td>媒体行不再出现 UUID 作为主文本；误删需二次确认</td></tr>
+        <tr><td>U12</td><td>筛选区栅格化（3 列 × 2 行），响应式</td><td>商品列表</td><td><span class="badge b-p2">P2</span></td><td>S4</td><td>1440 与 1024 下均无错位</td></tr>
+        <tr><td>U13</td><td>站点文案：补齐表单或下线菜单</td><td>站点文案</td><td><span class="badge b-p1">P1</span></td><td>S3</td><td>二选一交付；不得保留无标签输入</td></tr>
+        <tr><td>U14</td><td>媒体库改为运营视图，技术字段折叠</td><td>商品媒体</td><td><span class="badge b-p2">P2</span></td><td>S4</td><td>默认视图不出现 <code>blob_key</code> / <code>cow_source_media_id</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>2.7 目标信息架构（整改后）</h3>
+  <div class="grid-3">
+    <div class="wire">
+      <div class="bar">商品列表（全宽）</div>
+      <div class="row" style="grid-template-columns:repeat(3,1fr)">
+        <div class="block">筛选</div><div class="block">筛选</div><div class="block">新建商品</div>
+      </div>
+      <div class="block hl" style="margin-bottom:8px">批量栏：AI 优化 · 删除 · 分类</div>
+      <div class="block" style="height:110px">表格（8 默认列 + AI 状态列 + 列设置）</div>
+      <div class="caption">新建走抽屉；批量栏只在勾选后出现。</div>
+    </div>
+    <div class="wire">
+      <div class="bar">商品编辑</div>
+      <div class="block" style="height:40px;margin-bottom:8px">发布检查条：健康度 / 待审核 / 媒体缺口</div>
+      <div class="row" style="grid-template-columns:repeat(4,1fr)">
+        <div class="block">内容</div><div class="block">销售</div><div class="block">治理</div><div class="block hl">AI</div>
+      </div>
+      <div class="block" style="height:110px">当前分组页签内容</div>
+      <div class="caption">AI 页签：发起优化 + 任务列表 + 草稿状态。</div>
+    </div>
+    <div class="wire">
+      <div class="bar">AI 审核中心</div>
+      <div class="row" style="grid-template-columns:1fr 1.6fr">
+        <div class="block" style="height:150px">待审核队列</div>
+        <div class="block hl" style="height:150px">字段级对比 + 图片候选</div>
+      </div>
+      <div class="caption">左选右审；全屏宽度，不做第三栏。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3 策略矩阵 ============ -->
+<section class="section" id="strategy">
+  <h2><span class="num">3</span>策略矩阵</h2>
+  <p>不同角色对 AI 优化的诉求不同：运营要快，审核要准，实施要可配置。策略按分群拆分，避免把「一键优化」做成所有人都用同一个按钮。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:14%">用户分群</th><th style="width:16%">分群特征（量化）</th><th style="width:26%">策略手段</th><th style="width:22%">预期效果（量化）</th><th style="width:8%">难度</th><th style="width:8%">优先级</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>单店运营</td><td>1–3 人；SKU &lt; 500；日均上新 ≤ 10</td>
+          <td>列表行内一键优化 + 单商品配置抽屉；默认全选文案四项，图片默认 3 候选</td>
+          <td>单商品操作步数相比 T0 下降 ≥ 50%（M3）；任务 P95 ≤ 90s</td>
+          <td>中</td><td><span class="badge b-p0">P0</span></td>
+        </tr>
+        <tr>
+          <td>多站运营</td><td>≥ 2 Website；同款跨站复用</td>
+          <td>任务按 Website + locale 隔离；批量按站点分批；草稿不跨站复用</td>
+          <td>多语言覆盖商品数 +30%（以有目标语言草稿的商品计）</td>
+          <td>中</td><td><span class="badge b-p1">P1</span></td>
+        </tr>
+        <tr>
+          <td>审核 / 店长</td><td>日审核 ≥ 20 个商品</td>
+          <td>审核中心左队列右对比；字段级 diff；驳回原因枚举；批量采纳</td>
+          <td>20 个商品审核 ≤ 30 分钟；采纳率 ≥ 60%（M1）</td>
+          <td>中</td><td><span class="badge b-p0">P0</span></td>
+        </tr>
+        <tr>
+          <td>实施 / 开发者</td><td>负责接模型、换供应商</td>
+          <td>场景适配器 + 模型绑定页；单次覆盖；错误码与任务日志</td>
+          <td>接入新模型 ≤ 0.5 人天（不改业务代码）</td>
+          <td>低</td><td><span class="badge b-p1">P1</span></td>
+        </tr>
+        <tr>
+          <td>品牌 / 店主</td><td>关心成本与质量</td>
+          <td>配额与成本日志；采纳率/回滚率看板</td>
+          <td>月度 AI 成本可解释到「站点 × 任务类型」；超预算前置拦截</td>
+          <td>中</td><td><span class="badge b-p2">P2</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <p><strong>策略红线：</strong>① 任何分群都<strong>不能跳过人工审核</strong>；② 图片策略必须保留原图；③ 不按「是否付费用户」做能力阉割，V1 只做站点级配额。</p>
+  </div>
+</section>
+
+<!-- ============ 4 方案设计 ============ -->
+<section class="section" id="solution">
+  <h2><span class="num">4</span>方案设计</h2>
+
+  <h3>4.1 能力边界</h3>
+  <div class="grid-2">
+    <div class="callout ok">
+      <p><strong>V1 做：</strong></p>
+      <ul>
+        <li>商品文案优化：名称、短描述、详情、SEO 标题/描述/关键词</li>
+        <li>商品图片优化：主图/图库候选生成（3 张），人工选图</li>
+        <li>单商品 / 批量一键优化</li>
+        <li>待审核列表、字段级对比、采纳/驳回、应用、回滚</li>
+        <li>模型绑定与单次覆盖、权限、配额、审计</li>
+      </ul>
+    </div>
+    <div class="callout warn">
+      <p><strong>V1 不做：</strong></p>
+      <ul>
+        <li>像素级修图、局部重绘、抠图去背景</li>
+        <li>内容版本分支、定时发布、草稿箱</li>
+        <li>无人工审核的自动应用</li>
+        <li>改价格、库存、SKU、发布状态</li>
+        <li>回写第三方平台（1688 / Amazon 等）</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>4.2 任务类型 = 模型标签</h3>
+  <p>不新建 <code>ai_model_tag</code> 表。把「任务类型」作为场景适配器的 code，用适配器的 <code>getDefaultModelBindings()</code> 与后台绑定页表达「任务类型 → 模型」。这正是现有 <code>ai_scenario_adapter</code> 的用法（<code>Model/AiScenarioAdapter.php:29,54,56</code>）。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>任务类型（运营看到的标签）</th><th>scenario_code</th><th>modality</th><th>输入</th><th>输出</th><th>默认模型解析</th><th>单次覆盖</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>商品文案优化</td><td><code>product_copy_optimize</code></td><td><code>text2text</code></td>
+          <td>商品快照 + 目标语言 + 风格 + 受众</td>
+          <td>JSON：name / short_description / description / meta_name / meta_description / meta_keywords</td>
+          <td>adapter binding → <code>ai_default_model(chat)</code></td><td>是</td>
+        </tr>
+        <tr>
+          <td>商品图片优化</td><td><code>product_image_optimize</code></td><td><code>text2image</code></td>
+          <td>原图 asset + 品类 + 卖点 + 场景模板</td>
+          <td>3 张候选图（MediaManager asset）</td>
+          <td>adapter binding → <code>ai_default_model(image_generation)</code></td><td>是</td>
+        </tr>
+        <tr>
+          <td>图片可读性诊断</td><td><code>product_image_review</code></td><td>vision / <code>text2text</code></td>
+          <td>图片 URL + 规则清单</td>
+          <td>分数 + 问题项（模糊/水印/主体占比）</td>
+          <td>P2 再定</td><td>是</td>
+        </tr>
+        <tr>
+          <td>多语言翻译优化</td><td><code>product_translate</code></td><td><code>translation</code></td>
+          <td>源文案 + 目标 locale</td>
+          <td>目标语言字段</td>
+          <td>P2 再定</td><td>是</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h4>模型解析顺序（从高到低）</h4>
+  <ol>
+    <li>单次覆盖：任务配置里的 <code>model_code</code>（来自 <code>&lt;w:ai:model:select service_type="text2text" /&gt;</code>）</li>
+    <li>场景绑定：<code>ai_scenario_adapter.default_model</code> / <code>model_bindings</code></li>
+    <li>服务类型默认：<code>ai_default_model</code>（chat / image_generation）</li>
+    <li>都没有 → <strong>创建任务阶段就失败</strong>，返回 <code>product_ai_model_unbound</code>，不入队、不扣配额，并给出「去绑定模型」的跳转</li>
+  </ol>
+  <div class="callout warn">
+    <p><strong>硬约束：</strong>图片任务只接受 <code>text2image</code> 模型。框架已明确图片生成不会回退到 text2text（<code>AiService.php:541-543</code>），后台必须在创建阶段就拦住，不能让用户排队 30 秒后才看到「模型不可用」。</p>
+  </div>
+
+  <h3>4.3 一键优化流程</h3>
+  <h4>单商品</h4>
+  <div class="flow">
+    <div class="step">列表行 / 编辑页点击「AI 优化」</div><div class="arrow">→</div>
+    <div class="step">配置抽屉（范围/语言/风格/模型/预估消耗）</div><div class="arrow">→</div>
+    <div class="step hot">创建 Job（DB）+ 入队</div><div class="arrow">→</div>
+    <div class="step">Worker 读快照 → 调 AI → 校验 → 写草稿</div><div class="arrow">→</div>
+    <div class="step">列表 AI 状态变「待审核 N」</div><div class="arrow">→</div>
+    <div class="step done">审核中心对比 → 采纳 → 应用</div>
+  </div>
+
+  <h4>批量</h4>
+  <div class="flow">
+    <div class="step">勾选 N 个商品</div><div class="arrow">→</div>
+    <div class="step">批量栏「AI 优化」→ 统一配置</div><div class="arrow">→</div>
+    <div class="step">生成 batch_id，按 10 个/批入队</div><div class="arrow">→</div>
+    <div class="step">任务中心查看进度 / 失败重试</div><div class="arrow">→</div>
+    <div class="step done">逐条进入审核中心</div>
+  </div>
+  <p><strong>批量限制：</strong>单批 ≤ 50 个商品；并发 2；失败项独立重试（新建 job 并记录 <code>retry_of</code>）；超过站点日配额时整批拒绝并提示剩余额度，不做「部分入队」。</p>
+
+  <h3>4.4 待审核列表与新旧对比</h3>
+  <div class="grid-2">
+    <div>
+      <h4>左：队列</h4>
+      <ul>
+        <li>筛选：站点、状态（pending / accepted / applied / rejected / expired）、任务类型、时间、操作人</li>
+        <li>列表项：商品缩略图 + 名称 + 变更字段数 + 生成时间 + 模型</li>
+        <li>默认排序：待审核优先，其次生成时间倒序</li>
+        <li>批量入口：全选当前页 → 全部采纳 / 全部驳回</li>
+      </ul>
+    </div>
+    <div>
+      <h4>右：对比</h4>
+      <ul>
+        <li>商品头：状态、更新时间、当前 locale、发布状态</li>
+        <li>字段卡片：仅显示有变化的字段；旧值/新值并排</li>
+        <li>文本 diff：词级高亮（增绿删红）；HTML 按块级归一化后比较</li>
+        <li>图片卡片：原图 vs 3 候选，显示尺寸/格式/大小</li>
+        <li>操作：采纳本字段 / 保留原值 / 全部采纳 / 驳回（原因必填）</li>
+      </ul>
+    </div>
+  </div>
+
+  <h4>对比交互示意（静态演示）</h4>
+  <div class="diff">
+    <div class="col">
+      <h5>旧值（线上）</h5>
+      <div class="body">汉服女装 唐制齐胸襦裙 春夏新款 <span class="del">套装</span></div>
+    </div>
+    <div class="col">
+      <h5>新值（AI 草稿）</h5>
+      <div class="body">唐制齐胸襦裙 汉服女装 春夏 <span class="add">刺绣大袖衫三件套</span></div>
+    </div>
+  </div>
+  <div class="diff-foot" style="border:1px solid var(--line);border-radius:10px;margin-top:-6px">
+    <button class="btn ghost" type="button">保留原值</button>
+    <button class="btn primary" type="button">采纳此字段</button>
+  </div>
+
+  <h4>归一化规则（避免假 diff）</h4>
+  <ul>
+    <li>文本：trim、全角转半角、连续空白折叠后再比较。</li>
+    <li>HTML：解析为节点树，忽略属性顺序与空白文本节点；只比对可见内容与结构。</li>
+    <li>数值/枚举：严格比较；空值 → 有值单独标注「新增内容」。</li>
+    <li>图片：按 asset_id 比较；同图不同尺寸视为不同。</li>
+  </ul>
+
+  <h3>4.5 应用与回滚（关键语义）</h3>
+  <div class="callout danger">
+    <p><strong>必须先对齐的事实：</strong>商品内容没有「草稿层」。<code>save</code> 会直接写 EAV 并镜像 <code>weline_product_local</code>（<code>ProductAdminCommandService.php:2416</code>），前台读取的就是这份数据。因此「应用」= 立即上线，不是「存草稿等发布」。</p>
+  </div>
+
+  <table>
+    <thead><tr><th style="width:18%">环节</th><th>规则</th></tr></thead>
+    <tbody>
+      <tr><td>应用前</td><td>校验草稿状态 ∈ {pending, accepted}、未过期；权限含 <code>ai:apply</code>；对每个字段比较「当前值 hash」与草稿 <code>before_hash</code>，不一致 → <code>product_ai_draft_conflict</code>，禁止应用。</td></tr>
+      <tr><td>应用</td><td>单次调用 <code>ProductAdminCommandService::execute(ACTION_SAVE)</code>，payload 只含被采纳字段 + 完整的 <code>media_assignments</code>（合并而非覆盖）；<code>local_version</code> 必填（<code>:2867</code>）。</td></tr>
+      <tr><td>应用后</td><td>写 <code>weline_product_audit_log</code>（action=<code>ai_apply</code>，含 before/after/request_hash/payload）；draft.status=applied；保存 <code>rollback_json</code>；发布状态不变。</td></tr>
+      <tr><td>缓存</td><td>无需额外处理：save 内部已通过 <code>ProductSearchProjectionMutationCoordinatorInterface</code> 失效搜索投影（<code>:606-615</code>）。前台 HTML/对象缓存按既有链路刷新。</td></tr>
+      <tr><td>回滚</td><td>应用后 7 天内可用。再次走 save，payload 取 <code>rollback_json</code>；同样做冲突检测；写 audit（<code>ai_rollback</code>）。</td></tr>
+      <tr><td>图片应用</td><td>候选图先注册为 MediaManager 资产；应用时把 asset 加入 <code>media_assignments</code>。设为「主图」时，旧主图降为 gallery 第一位（可配置为移除关联，但资产不删除）。</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout ok">
+    <p><strong>为什么不改发布状态：</strong>save 与 publish 是两个独立命令（<code>ProductAdminCommandService.php:81-84</code>）。AI 只改内容，发布/下架仍由运营显式操作；这样也避免「AI 应用把草稿商品意外发布」。</p>
+  </div>
+
+  <h3>4.6 图片优化流程</h3>
+  <ol>
+    <li><strong>选原图：</strong>默认取当前主图；没有主图则要求先上传，不允许凭空生成主图。</li>
+    <li><strong>Prompt 五段式：</strong>主体描述 / 产品锁定（服装类锁定轮廓与版型）/ 场景与光线 / 构图与画幅（1:1、长边 ≤1600px、WebP）/ 禁止项（不得改 Logo、不得加文字水印、不得改变结构）。</li>
+    <li><strong>生成：</strong>一次 3 张候选；失败单张不拖垮整单，返回 <code>partial=true</code> 与失败数。</li>
+    <li><strong>入库：</strong>候选图作为新媒体资产，object key 含内容哈希，<strong>不覆盖原图</strong>（沿用现有 SOP 的 <code>ai-lock-{sha16}</code> 思路）。</li>
+    <li><strong>选择：</strong>审核页并排预览；选 1 张设主图或加入图库；未选候选 7 天后清理（可配置保留）。</li>
+    <li><strong>标记：</strong>资产元数据写 <code>ai_generated=true</code>、<code>source_asset_id</code>、<code>prompt_hash</code>，便于追责与批量清理。</li>
+  </ol>
+
+  <h3>4.7 状态机</h3>
+  <h4>Job</h4>
+  <div class="state">
+    <span class="s on">queued</span><span>→</span>
+    <span class="s wait">running</span><span>→</span>
+    <span class="s on">succeeded</span>
+    <span class="s bad">failed</span>
+    <span class="s">cancelled</span>
+  </div>
+  <p class="toc-note">failed 可重试 ≤ 2 次；重试创建新 job，<code>retry_of</code> 指向原 job。succeeded 后不可再重试。</p>
+
+  <h4>Draft</h4>
+  <div class="state">
+    <span class="s wait">pending</span><span>→</span>
+    <span class="s on">accepted</span><span>→</span>
+    <span class="s on">applied</span><span>→</span>
+    <span class="s">rolled_back</span>
+    <span class="s bad">rejected</span>
+    <span class="s">expired</span>
+    <span class="s">superseded</span>
+  </div>
+  <p class="toc-note">只有 pending / accepted 可应用；applied 不可编辑；expired / superseded 只能重新生成。过期 = 创建后 7 天；superseded = 检测到线上字段已被他人修改。</p>
+
+  <h3>4.8 权限与配额</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>ACL 源</th><th>能力</th><th>默认角色</th></tr></thead>
+      <tbody>
+        <tr><td><code>Weline_Product::ai:optimize</code></td><td>发起单条/批量优化</td><td>运营</td></tr>
+        <tr><td><code>Weline_Product::ai:review</code></td><td>采纳 / 驳回草稿</td><td>运营、店长</td></tr>
+        <tr><td><code>Weline_Product::ai:apply</code></td><td>应用与回滚</td><td>店长</td></tr>
+        <tr><td><code>Weline_Product::ai:config</code></td><td>模型绑定、提示词模板、配额</td><td>管理员 / 实施</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>配额粒度：</strong>站点 × 日；默认「文案 200 次/日、图片 60 张/日、批量 10 批/日」，配置页可改。超限在创建阶段拦截，返回 <code>product_ai_quota_exceeded</code> 与剩余额度，不产生排队记录。</p>
+
+  <h3>4.9 异常与降级</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:24%">场景</th><th>行为</th><th style="width:22%">错误码 / 提示</th></tr></thead>
+      <tbody>
+        <tr><td>未绑定模型 / 密钥失效</td><td>创建阶段失败，不入队；跳转模型设置</td><td><code>product_ai_model_unbound</code></td></tr>
+        <tr><td>Provider 超时</td><td>自动重试 1 次；仍失败则 job=failed，不生成草稿</td><td><code>product_ai_provider_timeout</code></td></tr>
+        <tr><td>模型输出不是合法 JSON</td><td>适配器尝试修复与兜底（参考 <code>ArticleGenerationAdapter::processResponse</code>）；仍失败则 failed</td><td><code>product_ai_invalid_output</code></td></tr>
+        <tr><td>队列积压</td><td>任务中心显示排队位置；超过 30 分钟提示「稍后再试」</td><td>—</td></tr>
+        <tr><td>应用时字段被修改</td><td>阻止应用，draft → superseded</td><td><code>product_ai_draft_conflict</code></td></tr>
+        <tr><td>应用写库失败</td><td>既有事务回滚，draft 保持 accepted</td><td>沿用 save 错误码</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>4.10 后台整改与 AI 的先后关系</h3>
+  <p><strong>原则：AI 入口依附于整改后的信息架构，而不是挂在旧页面上。</strong></p>
+  <ul>
+    <li>S1：先把「入口」做对——列表批量栏 + 行内按钮 + 编辑页 AI 页签骨架；不等待列表整体重构。</li>
+    <li>S2：审核中心独立成页，不做「第三个侧栏」，避免继续挤压编辑页。</li>
+    <li>S3：列表重构（新建抽屉、列收敛、媒体行升级）与批量优化同波上线。</li>
+    <li>S4：概览、页签分组、站点文案、媒体库等「观感类」整改收尾。</li>
+  </ul>
+</section>
+
+<!-- ============ 5 技术落点 ============ -->
+<section class="section" id="tech">
+  <h2><span class="num">5</span>技术落点</h2>
+  <p>本节只写「改哪里、调用什么、不能改什么」。不写实现代码，便于研发按现有规约落地。</p>
+
+  <h3>5.1 模块依赖与适配器</h3>
+  <ul>
+    <li><code>app/code/Weline/Product/etc/module.php</code> 当前 <code>requires</code>/<code>optional</code> 均未声明 <code>Weline_Ai</code>（见 <code>:7-11</code>）。需加入依赖，AdapterScanner 才会扫描本模块的 <code>extends/module/Weline_Ai/Adapter</code>（<code>AdapterScanner.php:104-115,126-156</code>）。</li>
+    <li>新增适配器：<code>ProductCopyOptimizeAdapter</code>、<code>ProductImageOptimizeAdapter</code>；实现 <code>ScenarioAdapterInterface</code> + <code>AdapterModelBindingInterface</code>，通过 <code>getCode()</code> 暴露 scenario code，通过 <code>getDefaultModelBindings()</code> 给默认模型（参考 <code>Ai/Adapter/ArticleGenerationAdapter.php:47-55</code>）。</li>
+    <li><strong>未验证：</strong><code>ExtendsData::getExtendedBy()</code> 是否把 <code>optional</code> 计入扩展方。联调第一步确认；不支持则放 <code>requires</code>，并在 AI 模块未启用时隐藏所有入口。</li>
+  </ul>
+
+  <h3>5.2 数据模型（新增 2 张表）</h3>
+  <div class="grid-2">
+    <div>
+      <h4><code>weline_product_ai_job</code></h4>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>字段</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>job_id</code> char(36) PK</td><td>UUID</td></tr>
+            <tr><td><code>website_id</code></td><td>站点</td></tr>
+            <tr><td><code>global_product_uuid</code></td><td>商品全局身份</td></tr>
+            <tr><td><code>product_id</code></td><td>分片内 ID（仅作辅助）</td></tr>
+            <tr><td><code>batch_id</code></td><td>批量任务分组，可空</td></tr>
+            <tr><td><code>task_type</code></td><td>copy / image / image_review / translate</td></tr>
+            <tr><td><code>scenario_code</code></td><td>适配器 code</td></tr>
+            <tr><td><code>model_code</code></td><td>实际使用模型（解析后落库）</td></tr>
+            <tr><td><code>locale</code></td><td>目标语言</td></tr>
+            <tr><td><code>status</code></td><td>queued / running / succeeded / failed / cancelled</td></tr>
+            <tr><td><code>params_json</code></td><td>范围、风格、受众、提示词版本</td></tr>
+            <tr><td><code>input_hash</code></td><td>生成时商品内容快照 hash</td></tr>
+            <tr><td><code>result_json</code></td><td>模型原始结果（脱敏）</td></tr>
+            <tr><td><code>error_code / error_message</code></td><td>失败原因</td></tr>
+            <tr><td><code>tokens_in / tokens_out / cost_micros</code></td><td>成本观测</td></tr>
+            <tr><td><code>requested_by</code></td><td>后台用户 ID</td></tr>
+            <tr><td><code>created_at / started_at / finished_at</code></td><td>时间线</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="toc-note">索引：<code>(website_id, product_id, created_at)</code>、<code>(status, created_at)</code>、<code>(batch_id)</code>。</p>
+    </div>
+    <div>
+      <h4><code>weline_product_ai_draft</code></h4>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>字段</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>draft_id</code> char(36) PK</td><td>UUID</td></tr>
+            <tr><td><code>job_id</code></td><td>来源任务</td></tr>
+            <tr><td><code>website_id / global_product_uuid / product_id</code></td><td>作用域</td></tr>
+            <tr><td><code>field_key</code></td><td>name / short_description / description / meta_name / meta_description / meta_keywords / media:main / media:gallery</td></tr>
+            <tr><td><code>before_json / after_json</code></td><td>旧值与新值</td></tr>
+            <tr><td><code>before_hash</code></td><td>冲突检测</td></tr>
+            <tr><td><code>diff_json</code></td><td>预计算的 diff（可选）</td></tr>
+            <tr><td><code>status</code></td><td>pending / accepted / rejected / applied / superseded / expired / rolled_back</td></tr>
+            <tr><td><code>review_note / reviewed_by / reviewed_at</code></td><td>审核留痕</td></tr>
+            <tr><td><code>applied_by / applied_at / applied_request_hash</code></td><td>应用留痕</td></tr>
+            <tr><td><code>rollback_json</code></td><td>应用前快照（用于回滚）</td></tr>
+            <tr><td><code>expires_at</code></td><td>默认创建后 7 天</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="toc-note">唯一索引：<code>(job_id, field_key)</code>；查询索引：<code>(website_id, status, created_at)</code>、<code>(global_product_uuid, status)</code>。</p>
+    </div>
+  </div>
+  <p>复用现有 <code>weline_product_audit_log</code>（<code>Model/ProductAuditLog.php:17</code>）记录 <code>ai_apply</code> / <code>ai_rollback</code>。注意：该表目前由治理/身份服务写入（写入方式参考 <code>ProductGovernanceService.php:308-318</code>），<code>ProductAdminCommandService</code> 本身不写审计，所以 AI 应用服务需显式写入。</p>
+
+  <h3>5.3 写路径（应用 / 回滚）</h3>
+  <pre><code>// 应用：单次命令，避免多次 save 造成中间态
+$command = ProductAdminCommand::fromArray([
+    'action'       =&gt; ProductAdminCommand::ACTION_SAVE,
+    'website_id'   =&gt; $websiteId,
+    'actor_id'     =&gt; $adminId,            // 不要用 w_query('product_admin','command')：provider 强制 actor_id=0（ProductAdminQueryProvider.php:277）
+    'payload'      =&gt; [
+        'global_product_uuid' =&gt; $uuid,
+        'local_version'       =&gt; $currentLocalVersion, // 必填（:2867）
+        'locale'              =&gt; $locale,
+        'currency'            =&gt; $currency,
+        'name'                =&gt; $accepted['name'] ?? $current['name'],
+        // ... 仅覆盖被采纳字段
+        'media_assignments'   =&gt; $mergedAssignments,   // 合并，不覆盖
+    ],
+    'request_hash' =&gt; $applyRequestHash,
+]);
+$result = $productCommands-&gt;execute($command);</code></pre>
+  <ul>
+    <li><strong>不要</strong>直接写 <code>weline_product_local</code> 或分片 <code>product_ws_*</code>；否则丢失校验、翻译写入与搜索投影失效。</li>
+    <li><strong>不要</strong>改 <code>status</code> / <code>publish_version</code>；应用后发布状态应保持不变。</li>
+    <li>媒体合并：读出当前完整 <code>media_assignments</code>，按 <code>asset_id</code> 去重后追加候选图；保持原有顺序与角色。</li>
+  </ul>
+
+  <h3>5.4 队列与 Worker</h3>
+  <pre><code>w_query('queue', 'create', [
+    'class'   =&gt; ProductAiOptimizeConsumer::class,
+    'name'    =&gt; __('商品 AI 优化'),
+    'module'  =&gt; 'Weline_Product',
+    'content' =&gt; ['job_id' =&gt; $jobId],
+    'status'  =&gt; QueueStatus::PENDING,
+    'auto'    =&gt; true,
+    'biz_key' =&gt; 'product-ai:' . $jobId,   // 幂等
+    'scope_envelope' =&gt; $scope-&gt;toArray(),
+]);</code></pre>
+  <p class="toc-note">契约见 <code>app/code/Weline/Queue/doc/README.md:63-88</code>。Consumer 需做 <code>job_id</code> + 状态幂等：非 queued 直接跳过；单任务超时 180s；失败重试 ≤ 2 次。</p>
+
+  <h3>5.5 AI 调用</h3>
+  <ul>
+    <li>文案：<code>AiService::generate($prompt, $modelCode, $scenarioCode, $locale, $params)</code>；结果必须是 JSON，服务端做 schema 校验（字段白名单 + 长度上限 + 非空）。</li>
+    <li>图片：<code>AiService::generateImage(...)</code>（<code>:536</code>）；候选落盘走 MediaManager（<code>AiDrawService::save</code> 支持 <code>save_as</code> / <code>overwrite</code>，<code>:201-253</code>），AI 候选<strong>只用 save_as</strong>。</li>
+    <li>禁止项写进 prompt 与后校验：不得输出价格/库存/SKU 字段；不得包含品牌 Logo 描述；服装类必须引用原图轮廓。</li>
+  </ul>
+
+  <h3>5.6 后台入口与路由</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>入口</th><th>实现位置</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>列表批量按钮</td><td><code>view/templates/backend/catalog/index.phtml:915-923</code></td><td>批量栏在「删除」旁增加「AI 优化」；现有第三方 hook 保留</td></tr>
+        <tr><td>列表行内入口 + AI 状态列</td><td><code>index.phtml:1002-1013</code> + 行数据</td><td>行操作加「AI 优化」；AI 状态列值：无草稿 / 待审核 N / 已应用</td></tr>
+        <tr><td>编辑页 AI 页签</td><td><code>edit.phtml:442-455</code></td><td>新增 <code>ai</code> panel；含发起表单、任务列表、草稿状态</td></tr>
+        <tr><td>审核中心</td><td>新控制器 <code>Controller/Backend/CatalogAi.php</code> + 模板</td><td>路由 <code>weline_product/backend/catalog/ai-reviews</code></td></tr>
+        <tr><td>菜单</td><td><code>etc/backend/menu.xml</code></td><td>商品运营下新增「AI 优化审核」，parent 沿用 <code>Weline_Backend::commerce:catalog:product-group</code></td></tr>
+        <tr><td>模型绑定 / 配额</td><td>审核中心内「设置」页或独立 <code>ai-config</code></td><td>仅 <code>ai:config</code> 可见</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="toc-note">ACL 用控制器方法上的 <code>#[Acl(...)]</code> 声明（现有写法见 <code>Controller/Backend/Catalog.php:69,484,490</code>）。新 i18n 词条写入 <code>Product/i18n/zh_Hans_CN.csv</code> 与 <code>en_US.csv</code>。</p>
+
+  <h3>5.7 新建文件清单（建议）</h3>
+  <ul>
+    <li><code>Model/Ai/AiJob.php</code>、<code>Model/Ai/AiDraft.php</code></li>
+    <li><code>Service/Ai/ProductAiJobService.php</code>（创建、入队、取消、重试）</li>
+    <li><code>Service/Ai/ProductAiDraftService.php</code>（diff、采纳、驳回、过期）</li>
+    <li><code>Service/Ai/ProductAiApplyService.php</code>（冲突检测、应用、回滚、审计）</li>
+    <li><code>Service/Ai/ProductAiPromptBuilder.php</code>（文案 / 图片 prompt 模板）</li>
+    <li><code>Consumer/ProductAiOptimizeConsumer.php</code></li>
+    <li><code>extends/module/Weline_Ai/Adapter/ProductCopyOptimizeAdapter.php</code>、<code>ProductImageOptimizeAdapter.php</code></li>
+    <li><code>Controller/Backend/CatalogAi.php</code> + 模板 <code>ai-review.phtml</code> / <code>ai-config.phtml</code></li>
+    <li><code>view/statics/js/backend/product-ai.js</code></li>
+    <li><code>Setup/Upgrade.php</code> 建表（沿用模块现有升级方式）</li>
+  </ul>
+
+  <h3>5.8 明确不改的东西</h3>
+  <div class="pill-row">
+    <span class="pill">价格与币种</span><span class="pill">库存</span><span class="pill">SKU 身份</span>
+    <span class="pill">发布 / 下架状态</span><span class="pill">EAV 属性结构</span><span class="pill">分片表名</span>
+    <span class="pill">搜索投影实现</span><span class="pill">前台渲染契约</span>
+  </div>
+</section>
+
+<!-- ============ 6 功能清单 ============ -->
+<section class="section" id="features">
+  <h2><span class="num">6</span>功能清单</h2>
+
+  <div class="filters">
+    <button type="button" class="on" onclick="filterFeatures('all', this)">全部（14）</button>
+    <button type="button" onclick="filterFeatures('p0', this)">P0（4）</button>
+    <button type="button" onclick="filterFeatures('p1', this)">P1（6）</button>
+    <button type="button" onclick="filterFeatures('p2', this)">P2（4）</button>
+  </div>
+
+  <div class="table-wrap">
+    <table id="featureTable">
+      <thead>
+        <tr>
+          <th style="width:6%">#</th><th style="width:15%">功能名称</th><th style="width:7%">优先级</th>
+          <th style="width:24%">功能描述</th><th style="width:36%">验收标准（可测试 / 可量化）</th>
+          <th style="width:7%">工时</th><th style="width:5%">负责人</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr data-priority="p0">
+          <td>F01</td><td>任务类型与模型绑定</td><td><span class="badge b-p0">P0</span></td>
+          <td>两个场景适配器（文案 / 图片）；任务创建时按「单次覆盖 → 场景绑定 → 服务默认」解析模型；未绑定直接失败。</td>
+          <td>① 未绑定模型时创建返回 <code>product_ai_model_unbound</code>，且 <code>weline_product_ai_job</code> 无新增行；② 文案任务 P95 ≤ 90s，图片 P95 ≤ 180s（样本 ≥ 50）；③ 任务执行前后商品字段 hash 一致（未应用不写库）。</td>
+          <td>8 人天</td><td>后端</td>
+        </tr>
+        <tr data-priority="p0">
+          <td>F02</td><td>单商品一键优化入口</td><td><span class="badge b-p0">P0</span></td>
+          <td>列表行内 + 编辑页 AI 页签发起；配置抽屉选范围/语言/风格/模型；提交后展示进度。</td>
+          <td>① 1 次点击打开抽屉；② 提交后 2s 内显示 queued/running；③ 无 <code>ai:optimize</code> 权限时按钮不渲染且接口返回 403。</td>
+          <td>4 人天</td><td>前端 2 / 后端 2</td>
+        </tr>
+        <tr data-priority="p0">
+          <td>F03</td><td>待审核列表与字段级对比</td><td><span class="badge b-p0">P0</span></td>
+          <td>独立审核页：左队列右对比；只显示变化字段；文本词级 diff；图片并排预览；采纳/驳回。</td>
+          <td>① 20 条/页 P95 ≤ 1.5s；② 未变化字段不出现；③ 驳回必须选择原因（枚举）；④ 从列表进入对比 ≤ 2 次点击。</td>
+          <td>6 人天</td><td>前端 4 / 后端 2</td>
+        </tr>
+        <tr data-priority="p0">
+          <td>F04</td><td>确认应用（写穿 + 快照）</td><td><span class="badge b-p0">P0</span></td>
+          <td>应用单次 save；写 audit；保存 rollback 快照；发布状态不变。</td>
+          <td>① 应用后前台详情页（缓存失效后）curl 断言出现新文案；② audit 新增 <code>ai_apply</code> 1 条且 request_hash 可复算；③ <code>status</code> 与 <code>publish_version</code> 应用前后一致；④ 回滚后字段 hash 与 before 完全相等。</td>
+          <td>5 人天</td><td>后端</td>
+        </tr>
+        <tr data-priority="p1">
+          <td>F05</td><td>批量一键优化</td><td><span class="badge b-p1">P1</span></td>
+          <td>勾选 N 个商品统一配置；按 10 个/批入队；任务中心看进度、失败重试。</td>
+          <td>① 单批上限 50，超出直接拒绝；② 失败项独立可见且可单条重试；③ 超日配额整批拒绝并显示剩余额度。</td>
+          <td>4 人天</td><td>后端 3 / 前端 1</td>
+        </tr>
+        <tr data-priority="p1">
+          <td>F06</td><td>编辑页 AI 页签</td><td><span class="badge b-p1">P1</span></td>
+          <td>商品编辑内展示最近 20 条任务与草稿状态，支持直达对比。</td>
+          <td>① 页签内可见任务状态与错误码；② 失败任务可重试；③ 草稿数 ≥ 1 时页签显示角标。</td>
+          <td>3 人天</td><td>前端 2 / 后端 1</td>
+        </tr>
+        <tr data-priority="p1">
+          <td>F07</td><td>图片候选与选用</td><td><span class="badge b-p1">P1</span></td>
+          <td>生成 3 张候选；可设主图 / 入图库 / 丢弃；原图保留。</td>
+          <td>① 每次固定返回 ≤ 3 张且均为新资产；② 设主图后原主图降为图库第一位（或按配置移除关联），原 asset 仍可读；③ 未选候选 7 天后清理任务可执行且可审计。</td>
+          <td>4 人天</td><td>后端 3 / 前端 1</td>
+        </tr>
+        <tr data-priority="p1">
+          <td>F08</td><td>冲突与过期检测</td><td><span class="badge b-p1">P1</span></td>
+          <td>应用前比对字段 hash 与 <code>updated_at</code>；草稿 7 天过期。</td>
+          <td>① 人工改字段后应用返回 <code>product_ai_draft_conflict</code> 且商品无变化；② 过期草稿不可应用，状态为 expired；③ 冲突后界面提示「重新生成 / 手动对比」。</td>
+          <td>2 人天</td><td>后端</td>
+        </tr>
+        <tr data-priority="p1">
+          <td>F09</td><td>应用后回滚</td><td><span class="badge b-p1">P1</span></td>
+          <td>7 天内一键回滚到应用前快照；同样做冲突检测。</td>
+          <td>① 回滚后字段值与 before_json 完全一致；② audit 新增 <code>ai_rollback</code>；③ 超过 7 天按钮不可用并给出说明。</td>
+          <td>2 人天</td><td>后端</td>
+        </tr>
+        <tr data-priority="p1">
+          <td>F10</td><td>权限与配额</td><td><span class="badge b-p1">P1</span></td>
+          <td>4 个 ACL 源；站点级日配额；配置页可调。</td>
+          <td>① 4 个 ACL 全部生效（无权限 403）；② 配额用尽返回 <code>product_ai_quota_exceeded</code>；③ 配额调整后 60s 内生效。</td>
+          <td>2 人天</td><td>后端</td>
+        </tr>
+        <tr data-priority="p2">
+          <td>F11</td><td>图片可读性诊断</td><td><span class="badge b-p2">P2</span></td>
+          <td>对主图输出 0–100 分与问题项（模糊/水印/主体占比），不自动改图。</td>
+          <td>① 返回分数与至少 1 个问题项或「无明显问题」；② 诊断结果与草稿关联，可追溯。</td>
+          <td>3 人天</td><td>后端</td>
+        </tr>
+        <tr data-priority="p2">
+          <td>F12</td><td>多语言批量优化</td><td><span class="badge b-p2">P2</span></td>
+          <td>按 locale 生成独立草稿；同一商品多语言互不覆盖。</td>
+          <td>① 同一商品 zh/en 两份草稿可并存并按 locale 筛选；② 应用 zh 不影响 en。</td>
+          <td>4 人天</td><td>后端</td>
+        </tr>
+        <tr data-priority="p2">
+          <td>F13</td><td>优化效果看板</td><td><span class="badge b-p2">P2</span></td>
+          <td>采纳率 / 应用率 / 回滚率 / 平均耗时按周聚合。</td>
+          <td>① 4 个指标均可按站点与任务类型筛选；② 数据与 job/draft 表 SQL 复算一致（误差 0）。</td>
+          <td>3 人天</td><td>前端</td>
+        </tr>
+        <tr data-priority="p2">
+          <td>F14</td><td>提示词模板管理</td><td><span class="badge b-p2">P2</span></td>
+          <td>按商品类型覆盖文案/图片模板；保存后新任务生效。</td>
+          <td>① 模板版本写入 job.params；② 回滚模板不影响历史任务复现；③ 非法模板保存被拒绝并提示字段。</td>
+          <td>3 人天</td><td>后端</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <p><strong>P0 占比校验：</strong>4 / 14 = <strong>28.6%</strong>，符合「P0 ≤ 30%」红线。P0 全部落在「能跑通闭环」的最小集：绑模型 → 发起 → 审核 → 应用。</p>
+  </div>
+
+  <h3>6.1 本次不做（Won't have）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:26%">不做项</th><th>原因</th><th style="width:20%">后续版本</th></tr></thead>
+      <tbody>
+        <tr><td>像素级修图 / 局部重绘</td><td>需要遮罩编辑器与更高版权风险，收益不确定</td><td>V2 评估</td></tr>
+        <tr><td>内容版本分支 / 定时发布</td><td>需要改造存储层，与本次目标无关</td><td>V2 单独立项</td></tr>
+        <tr><td>无人工审核自动应用</td><td>品牌与合规风险不可接受</td><td>不计划</td></tr>
+        <tr><td>第三方平台回写</td><td>各平台 API 差异大，先做站内闭环</td><td>按站点需求</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ 7 排期 ============ -->
+<section class="section" id="timeline">
+  <h2><span class="num">7</span>排期规划</h2>
+
+  <h3>7.1 资源与节奏</h3>
+  <ul>
+    <li>人力假设：1 后端 + 1 前端 + 0.5 测试 = <strong>2.5 人</strong>；每迭代 10 个工作日 → 25 人天。</li>
+    <li>计划工作量 ≤ 20 人天/迭代（<strong>80% 上限</strong>，预留 20% 缓冲）。</li>
+    <li>联调与回归单独列，不并入功能工时。</li>
+  </ul>
+
+  <h3>7.2 迭代概览</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>迭代</th><th>周期</th><th>功能点</th><th>优先级</th><th>计划工时</th><th>交付日期</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Sprint 1</td><td>2026-11-03 ~ 11-14</td>
+          <td>F01 模型绑定与执行、F02 单商品入口、F04 应用骨架；联调 2 天</td>
+          <td><span class="badge b-p0">P0</span></td><td>17 人天</td><td>2026-11-14 演示：单商品文案走通</td>
+        </tr>
+        <tr>
+          <td>Sprint 2</td><td>2026-11-17 ~ 11-28</td>
+          <td>F03 审核中心、F04 完成、F08 冲突检测、F10 权限配额；回归 2 天</td>
+          <td><span class="badge b-p0">P0</span></td><td>16 人天</td><td>2026-11-28 闭环：生成→审核→应用</td>
+        </tr>
+        <tr>
+          <td>Sprint 3</td><td>2026-12-01 ~ 12-12</td>
+          <td>F05 批量、F06 AI 页签、F07 图片候选、F09 回滚；后台整改 U1/U2/U4/U7/U9/U10/U13</td>
+          <td><span class="badge b-p1">P1</span></td><td>19 人天</td><td>2026-12-12 功能完整</td>
+        </tr>
+        <tr>
+          <td>Sprint 4</td><td>2026-12-15 ~ 12-19</td>
+          <td>缺陷修复、灰度、T0 基线补测；U5/U6/U12/U14 收尾</td>
+          <td><span class="badge b-p2">P2</span></td><td>≤ 12 人天</td><td>2026-12-19 全量</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>7.3 里程碑</h3>
+  <div class="flow">
+    <div class="step">需求评审<br><small>2026-11-02</small></div><div class="arrow">→</div>
+    <div class="step">S1 单商品演示<br><small>2026-11-14</small></div><div class="arrow">→</div>
+    <div class="step">S2 审核闭环<br><small>2026-11-28</small></div><div class="arrow">→</div>
+    <div class="step">S3 批量 + 整改<br><small>2026-12-12</small></div><div class="arrow">→</div>
+    <div class="step done">灰度<br><small>2026-12-15</small></div><div class="arrow">→</div>
+    <div class="step done">全量<br><small>2026-12-19</small></div>
+  </div>
+
+  <h3>7.4 完成定义（DoD）</h3>
+  <ul class="checklist">
+    <li>功能验收标准逐条执行并留证据（命令 + exit code + 输出原文，或截图 + URL）</li>
+    <li>新增表经 <code>setup:upgrade</code> 建表，重复执行幂等</li>
+    <li>所有写操作只经 <code>ProductAdminCommandService</code>；无直接写 <code>weline_product_local</code> / 分片表</li>
+    <li>i18n 中英双文件齐全；后台语言切换无英文残留（专有名词除外）</li>
+    <li>权限 4 源生效；无权限时按钮不渲染且接口 403</li>
+    <li>失败路径有错误码与用户可读提示</li>
+    <li>回归覆盖：商品列表、编辑保存、发布、媒体、审计</li>
+  </ul>
+
+  <h3>7.5 排期假设与风险缓冲</h3>
+  <div class="callout warn">
+    <p>本排期<strong>假设</strong>：① 模型供应商联调在 S1 第 3 天前可用；② 商品分片表结构与当前工作区一致；③ 无并发大改（同模块其他需求插队需走变更流程）。任一假设不成立，S1 交付顺延并在 24h 内通知。</p>
+  </div>
+</section>
+
+<!-- ============ 8 协作 ============ -->
+<section class="section" id="collaboration">
+  <h2><span class="num">8</span>协作流程</h2>
+
+  <h3>8.1 需求评审</h3>
+  <div class="flow">
+    <div class="step">PRD 提前 2 天发出</div><div class="arrow">→</div>
+    <div class="step">评审会（产品 / 研发 / 测试 / 运营）</div><div class="arrow">→</div>
+    <div class="step">24h 内出纪要</div><div class="arrow">→</div>
+    <div class="step">更新 PRD 并同步排期</div>
+  </div>
+  <p>评审必须确认四件事：应用语义（写线上）、模型来源、图片版权边界、后台整改范围。</p>
+
+  <h3>8.2 需求变更</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>变更类型</th><th>审批人</th><th>通知对象</th><th>方式</th><th>时限</th></tr></thead>
+      <tbody>
+        <tr><td>细节调整（不影响排期）</td><td>产品负责人</td><td>研发、测试</td><td>项目群 @相关人</td><td>4 小时内</td></tr>
+        <tr><td>排期调整</td><td>产品负责人</td><td>研发、测试、运营、<strong>+1 直属上级</strong></td><td>项目群 @all + 邮件</td><td>2 小时内</td></tr>
+        <tr><td>功能范围变更</td><td>产品总监 / 用户</td><td>全体评审人、<strong>+1</strong>、业务方</td><td>项目群 @all + 邮件 + 更新 PRD</td><td>1 小时内</td></tr>
+        <tr><td>线上故障</td><td>—</td><td>研发、测试、<strong>+1</strong></td><td>电话 + 群 @all</td><td>15 分钟内</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>8.3 仓库与授权门禁（本项目特有）</h3>
+  <ul>
+    <li><code>app/code/Weline/**</code> 默认只读：每个迭代开始前，由用户在任务原话中授权本轮可改的目录范围；未授权不得新增/修改/移动文件。</li>
+    <li>PRD 与工作资料放 <code>dev/team/</code>；模块耐久规范在获得授权后再迁入 <code>app/code/Weline/Product/doc/</code>。</li>
+    <li>不做批量脚本替换；逐文件编辑并保留脏改。</li>
+  </ul>
+
+  <h3>8.4 上线前检查</h3>
+  <ul class="checklist">
+    <li>单元/契约测试通过（含应用冲突、回滚、配额）</li>
+    <li>回归：商品列表、编辑保存、发布、媒体、审计五项</li>
+    <li>权限矩阵实测：4 个 ACL 的允许/拒绝各 1 例</li>
+    <li>失败注入：模型超时、非法 JSON、队列停止、冲突应用</li>
+    <li>前台验证：应用后详情页新文案可 curl 断言</li>
+    <li>回滚演练：应用 → 回滚 → 字段 hash 复原</li>
+    <li>配额与成本：单站点日上限生效截图</li>
+    <li>通知：上线时间、灰度范围、回滚开关位置</li>
+  </ul>
+</section>
+
+<!-- ============ 9 风险 ============ -->
+<section class="section" id="risks">
+  <h2><span class="num">9</span>风险与应对</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:5%">#</th><th style="width:22%">风险</th><th style="width:8%">类型</th><th style="width:8%">等级</th><th style="width:16%">影响</th><th style="width:30%">应对 / 应急预案</th><th style="width:8%">负责人</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>R1</td><td>应用覆盖他人并发修改</td><td>技术</td><td><span class="badge b-high">高</span></td>
+          <td>线上文案被旧草稿回写，造成事实错误</td>
+          <td>应用前 <code>before_hash</code> + <code>updated_at</code> 双重校验；冲突即拒并置 superseded。<strong>应急预案：</strong>关闭应用入口开关（配置），草稿保留待人工处理。</td>
+          <td>后端</td>
+        </tr>
+        <tr>
+          <td>R2</td><td>AI 输出质量问题（夸大、错误参数、SEO 堆砌）</td><td>业务</td><td><span class="badge b-high">高</span></td>
+          <td>品牌受损、投诉、平台处罚</td>
+          <td>强制人工审核；prompt 禁止生成价格/库存/绝对化用语；上线首月抽检 10%。<strong>应急预案：</strong>按 audit 批次批量回滚，暂停对应模板。</td>
+          <td>产品</td>
+        </tr>
+        <tr>
+          <td>R3</td><td>图片生成成本失控</td><td>运营</td><td><span class="badge b-mid">中</span></td>
+          <td>月度账单超预算</td>
+          <td>站点日配额 + 单次 ≤ 3 张 + 成本日志；80% 预算告警。<strong>应急预案：</strong>关闭图片任务，仅保留文案。</td>
+          <td>产品 / 后端</td>
+        </tr>
+        <tr>
+          <td>R4</td><td>队列积压或 Worker 超时</td><td>技术</td><td><span class="badge b-mid">中</span></td>
+          <td>任务长时间排队，运营以为失败反复提交</td>
+          <td>并发 2、超时 180s、重试 ≤ 2；任务中心显示排队位置；重复提交按 <code>biz_key</code> 幂等。<strong>应急预案：</strong>暂停批量入口，保留单条。</td>
+          <td>后端</td>
+        </tr>
+        <tr>
+          <td>R5</td><td>生成图版权 / 肖像 / Logo 合规</td><td>合规</td><td><span class="badge b-mid">中</span></td>
+          <td>侵权投诉、平台下架</td>
+          <td>禁止项写入 prompt；服装锁定原图轮廓；保留原图；资产标记 <code>ai_generated</code>；审核清单含「无第三方 Logo」项。<strong>应急预案：</strong>下架生成资产并按记录回滚。</td>
+          <td>产品 / 运营</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <p><strong>风险评审要求：</strong>R1、R2 为高风险，上线前必须各有一次失败注入演练；没有演练记录不得进入灰度。</p>
+  </div>
+</section>
+
+<!-- ============ 10 附录 ============ -->
+<section class="section" id="appendix">
+  <h2><span class="num">10</span>附录</h2>
+
+  <h3>10.1 术语表</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:24%">术语</th><th>定义</th></tr></thead>
+      <tbody>
+        <tr><td>任务类型 / 模型标签</td><td>运营看到的「文案优化 / 图片优化」等标签，底层对应 <code>ai_scenario_adapter</code> 的 scenario code 与模型绑定。</td></tr>
+        <tr><td>AI 草稿（draft）</td><td>AI 生成、尚未应用的字段级结果，存于 <code>weline_product_ai_draft</code>，不影响线上。</td></tr>
+        <tr><td>应用（apply）</td><td>把草稿写入线上商品内容，调用既有 save 命令；不改变发布状态。</td></tr>
+        <tr><td>回滚（rollback）</td><td>用应用前快照把字段恢复；7 天窗口内可用。</td></tr>
+        <tr><td>superseded</td><td>草稿对应的线上字段已被他人修改，草稿失效。</td></tr>
+        <tr><td>COW 媒体</td><td>写时复制媒体行（<code>cow_source_media_id</code>），本次仅沿用，不改造。</td></tr>
+        <tr><td>搜索投影</td><td>商品内容变更后需要失效的搜索/列表投影；由既有协调器处理。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>10.2 证据索引（代码）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:38%">位置</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td><code>Product/Service/ProductAdminCommandService.php:76</code></td><td>商品单写入口 <code>execute()</code></td></tr>
+        <tr><td><code>.../ProductAdminCommandService.php:606-615</code></td><td>save 内触发搜索投影失效</td></tr>
+        <tr><td><code>.../ProductAdminCommandService.php:2416-2421</code></td><td>本地化字段镜像写入 <code>weline_product_local</code></td></tr>
+        <tr><td><code>.../ProductAdminCommandService.php:2867-2873</code></td><td><code>local_version</code> 必填</td></tr>
+        <tr><td><code>Product/Model/Product/LocalDescription.php:30,33</code></td><td>本地化表与字段清单</td></tr>
+        <tr><td><code>Product/Repository/MediaRepository.php:160-243</code></td><td>媒体分配同步与校验（asset UUID、role）</td></tr>
+        <tr><td><code>Product/Model/ProductAuditLog.php:17</code></td><td>审计表</td></tr>
+        <tr><td><code>Product/Service/ProductGovernanceService.php:308-318</code></td><td>审计写入样例</td></tr>
+        <tr><td><code>Product/extends/module/Weline_Framework/Query/ProductAdminQueryProvider.php:268-278</code></td><td><code>product_admin.command</code>（注意 actor_id 被置 0）</td></tr>
+        <tr><td><code>Ai/Service/AiService.php:536-566</code></td><td>图片生成与 text2image 绑定校验</td></tr>
+        <tr><td><code>Ai/Service/AdapterScanner.php:104-156</code></td><td>扫描其他模块的 AI 适配器</td></tr>
+        <tr><td><code>Ai/Adapter/ArticleGenerationAdapter.php:47-55</code></td><td>适配器默认模型绑定样例</td></tr>
+        <tr><td><code>Ai/Taglib/ModelSelect.php:214</code></td><td>模型选择标签用法</td></tr>
+        <tr><td><code>Queue/doc/README.md:63-88</code></td><td>队列创建契约</td></tr>
+        <tr><td><code>MediaManager/Service/AiDrawService.php:201-253</code></td><td>AI 图保存（save_as / overwrite）</td></tr>
+        <tr><td><code>Product/view/templates/backend/catalog/index.phtml:915-923,1002-1013</code></td><td>批量栏与表格列定义</td></tr>
+        <tr><td><code>Product/view/templates/backend/catalog/edit.phtml:442-455,2340</code></td><td>页签与保存按钮文案</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>10.3 截图证据索引</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:44%">文件</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>.screenshots/d2-product-list-full.png</code></td><td>商品列表 1440 全页（图 1）</td></tr>
+        <tr><td><code>.screenshots/d2-product-edit-top.png</code></td><td>编辑页顶部与概览（图 2）</td></tr>
+        <tr><td><code>.screenshots/d2-product-edit-media.png</code></td><td>媒体表（图 3）</td></tr>
+        <tr><td><code>.screenshots/d-product-site-content.png</code></td><td>站点文案（图 4）</td></tr>
+        <tr><td><code>.screenshots/d-product-media-library.png</code></td><td>商品媒体库（图 5）</td></tr>
+        <tr><td><code>.screenshots/d2-product-list-table.png</code></td><td>列表表格局部（列溢出补充证据）</td></tr>
+        <tr><td><code>.screenshots/d-product-edit-basic.png</code></td><td>基础信息页签（表单密度）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>10.4 参考文档</h3>
+  <ul>
+    <li><code>app/code/Weline/Product/doc/ai/skills/ecommerce-product-optimize/SKILL.md</code> — 现有产品优化 SOP（3 个子任务 + 两轮复核）</li>
+    <li><code>dev/ai-command/product/产品优化.md</code> — 现有 Agent 指令</li>
+    <li><code>app/code/Weline/Product/doc/万能产品完善计划.md</code> — 商品后台既有规划</li>
+    <li><code>app/code/Weline/Queue/doc/README.md</code> — 队列契约</li>
+  </ul>
+
+  <h3>10.5 变更记录</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:12%">版本</th><th style="width:16%">日期</th><th>变更内容</th><th style="width:16%">变更人</th></tr></thead>
+      <tbody>
+        <tr><td>v1.0</td><td>2026-10-30</td><td>首版：现状诊断（5 张截图 / 14 项问题）、AI 优化闭环、技术落点、14 项功能与排期</td><td>产品</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>10.6 待决策问题（评审时定）</h3>
+  <ol>
+    <li>应用权限是否默认只给店长，运营只到「采纳」为止？（本文默认：是）</li>
+    <li>图片候选未选中的资产保留 7 天还是立即清理？（默认：7 天）</li>
+    <li>站点文案页是补齐还是下线？（默认：S3 前给结论，倾向下线菜单、编辑页保留多语言入口）</li>
+    <li>批量上限 50 是否足够？（按单店 SKU &lt; 500 估算，默认 50）</li>
+  </ol>
+</section>
+
+<div class="footer">商品 AI 优化与后台整改 · PRD v1.0 · 2026-10-30 · 本文所有代码行号基于当前工作区核对</div>
+</main>
+
+<script>
+(function () {
+  var sections = Array.prototype.slice.call(document.querySelectorAll('.section'));
+  var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar a'));
+
+  function onScroll() {
+    var y = window.scrollY + 120;
+    var current = sections[0] ? sections[0].id : '';
+    sections.forEach(function (s) {
+      if (s.offsetTop <= y) current = s.id;
+    });
+    links.forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  links.forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      var id = a.getAttribute('href').slice(1);
+      var el = document.getElementById(id);
+      if (!el) return;
+      e.preventDefault();
+      window.scrollTo({ top: el.offsetTop - 92, behavior: 'smooth' });
+      history.replaceState(null, '', '#' + id);
+    });
+  });
+})();
+
+function filterFeatures(priority, btn) {
+  document.querySelectorAll('.filters button').forEach(function (b) { b.classList.remove('on'); });
+  if (btn) btn.classList.add('on');
+  document.querySelectorAll('#featureTable tbody tr').forEach(function (row) {
+    row.style.display = (priority === 'all' || row.getAttribute('data-priority') === priority) ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>

@@ -480,7 +480,7 @@
 @layer layout {
     .w-container {
         box-sizing: border-box;
-        width: min(100%, var(--weline-layout-content-max-width));
+        width: min(100%, var(--weline-layout-content-max-width, 1440px));
         max-width: 100%;
         min-width: 0;
         margin-inline: auto;
@@ -488,7 +488,7 @@
     }
     .w-theme-content-width {
         box-sizing: border-box;
-        width: min(100%, var(--weline-layout-content-max-width));
+        width: min(100%, var(--weline-layout-content-max-width, 1440px));
         max-width: 100%;
         min-width: 0;
         margin-inline: auto;
@@ -503,7 +503,7 @@
     .contact-bottom-slot,
     .about-bottom-slot {
         box-sizing: border-box;
-        width: min(100%, var(--weline-layout-content-max-width));
+        width: min(100%, var(--weline-layout-content-max-width, 1440px));
         max-width: 100%;
         min-width: 0;
         margin-inline: auto;

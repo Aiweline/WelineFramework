@@ -3011,10 +3011,32 @@
     }
   }
 
+  /**
+   * 脚本尚未加载完时用户已点了 CTA：widget 内联 onclick 会把元素压进
+   * window.__helppayPendingOpen（见 checkout-summary-help-pay / product-help-pay 模板）。
+   * 绑定完委托后立刻补放这次点击，避免「慢网首点无反应」（2026-10-30 实测：
+   * e2e 在模块就绪前点击 → 弹层永不出现）。
+   */
+  function drainPendingOpens() {
+    var queue = window.__helppayPendingOpen;
+    if (!queue || !queue.length) return;
+    window.__helppayPendingOpen = [];
+    var el = queue[queue.length - 1];
+    if (!el || typeof el.closest !== 'function' || !d.contains(el)) return;
+    var wrap = el.closest('[data-helppay-placement]');
+    var placement = wrap ? wrap.getAttribute('data-helppay-placement') : 'cart';
+    if (placement === 'product' || el.getAttribute('data-helppay-product-help-pay') === '1') {
+      openProductHelpPayFlow(el);
+      return;
+    }
+    openFlow(placement, el);
+  }
+
   function boot() {
     try {
       // Bind clicks before any payer wiring — a throw there used to skip 确认付款.
       bindGlobalHelpPayClicks();
+      drainPendingOpens();
       ensureShareCss();
       mergeShareI18n(null);
       revealCtas();

@@ -6,6 +6,8 @@
 
 总体完善路线与待确认产品决策见：[万能产品完善计划](万能产品完善计划.md)。
 
+商品 AI 优化（一键优化商品信息 → 待审核 → 确认应用，含模型标签选择）设计归档见：[product-ai-optimization](product-ai-optimization/README.md)——PRD、可点击原型与 S1 实施计划，代码尚未开工。
+
 商品搜索引擎 URL 接入见 [商品 Sitemap 与 URL 变更](product-seo-sitemap.md)：
 Product 提供 SitemapUrlProvider，保存/发布/下架复用现有 ResourceChange 并携带当前及旧 URL。
 

@@ -405,8 +405,15 @@ moduleDescribe(test, MODULE, '发布回归 PayPal 结账生命周期', () => {
       await addToCartFromPdp(page, gotoFrontend, fixture.pdp_path);
       await gotoStorefront(page, '/checkout');
       await waitForWelineApi(page);
+      // 结账页面上有社媒登录浮层 / 悬浮工具条 / 订阅弹窗，真实鼠标点击会落在浮层上
+      // （force:true 只跳过可操作性检查，仍按元素中心点做命中测试）。先清浮层，
+      // 再失败时用 DOM click 兜底——弹层可见性断言不变（2026-10-30 全量套件实测）。
       await page.evaluate(() => {
-        document.querySelectorAll('.newsletter-modal, [data-newsletter-popup], .popup-overlay').forEach((el) => el.remove());
+        document
+          .querySelectorAll(
+            '.newsletter-modal, [data-newsletter-popup], .popup-overlay, [data-social-login-popup], .social-login-popup, [data-testid="social-login-popup"], [data-float-chrome], .w-float-chrome',
+          )
+          .forEach((el) => el.remove());
       }).catch(() => {});
       const help = page.locator(
         '[data-testid="checkout-summary-help-pay"] [data-helppay-open], [data-testid="checkout-summary-help-pay"] button, [data-testid="help-pay-open"]',
@@ -415,8 +422,11 @@ moduleDescribe(test, MODULE, '发布回归 PayPal 结账生命周期', () => {
         test.skip(true, 'checkout missing friend-help-pay CTA');
       }
       await expect(help).toBeVisible({ timeout: 30000 });
-      await help.click({ force: true });
+      await help.click({ force: true }).catch(() => {});
       const dialog = page.locator('[data-testid="help-pay-dialog"], .w-helppay-dialog').first();
+      if (!(await dialog.isVisible().catch(() => false))) {
+        await help.evaluate((el) => el.click());
+      }
       await expect(dialog).toBeVisible({ timeout: 20000 });
       await expect(dialog).toContainText(/代付|规则/);
       await dialog.locator('[data-helppay-rules-accepted]').check({ force: true }).catch(() => {});

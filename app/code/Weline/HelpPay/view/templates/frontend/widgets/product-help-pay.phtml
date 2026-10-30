@@ -51,7 +51,8 @@ $i18nJson = \Weline\HelpPay\Service\ShareModalI18n::json();
        data-pixel-event="friend_help_pay"
        data-helppay-open="1"
        data-helppay-product-help-pay="1"
-       data-product-id="<?= (int) $productId ?>">
+       data-product-id="<?= (int) $productId ?>"
+       onclick="if(!(window.WelineModules&&window.WelineModules.helpPayShare)){(window.__helppayPendingOpen=window.__helppayPendingOpen||[]).push(this);return false;}">
         <lang>找朋友代付</lang>
     </a>
 </div>

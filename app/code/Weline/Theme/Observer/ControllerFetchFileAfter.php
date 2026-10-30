@@ -756,6 +756,17 @@ HTML;
         $foundationCssVersion = $this->uiStaticAssetVersion('weline-foundation.css');
         $frontendCssVersion = $this->uiStaticAssetVersion('weline-frontend.css');
         $uiScriptVersion = $this->uiStaticAssetVersion('weline-ui.js');
+        // 2026-10-30 载荷优化（marker: ui-min-bundle-v1）：存在预压缩产物时优先引用它。
+        // weline-ui.js 原始 181,456B（gzip 约 46KB），esbuild --minify 后 77,716B（−57%），
+        // 语义不变；缺失时完全回退原文件，行为与旧版一致。
+        $uiMinBundle = \defined('BP') ? BP . 'app/code/Weline/Theme/view/ui/js/weline-ui.min.js' : '';
+        if ($uiMinBundle !== '' && \is_file($uiMinBundle) && $uiScriptUrl !== '') {
+            $minUrl = \preg_replace('/\.js$/i', '.min.js', $uiScriptUrl);
+            if (\is_string($minUrl) && $minUrl !== '') {
+                $uiScriptUrl = $minUrl;
+                $uiScriptVersion = (string)\filemtime($uiMinBundle);
+            }
+        }
         $foundationCssHref = $this->appendStaticAssetVersion($foundationCssUrl, $foundationCssVersion);
         $frontendCssHref = $this->appendStaticAssetVersion($frontendCssUrl, $frontendCssVersion);
         $uiScriptHref = $this->appendStaticAssetVersion($uiScriptUrl, $uiScriptVersion);
