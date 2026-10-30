@@ -26,7 +26,7 @@ class Chat extends BackendController
             ->where(AgentRole::schema_fields_STATUS, AgentRole::STATUS_ENABLED)
             ->order(AgentRole::schema_fields_IS_DEFAULT, 'DESC')
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $recentSessions = $this->sessionModel->reset()
             ->where(AgentChatSession::schema_fields_STATUS, AgentChatSession::STATUS_ACTIVE)
@@ -34,10 +34,10 @@ class Chat extends BackendController
             ->order(AgentChatSession::schema_fields_UPDATED_AT, 'DESC')
             ->limit(12)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
-        $this->assign('roles', $roles->getItems());
-        $this->assign('recent_sessions', $recentSessions->getItems());
+        $this->assign('roles', $roles);
+        $this->assign('recent_sessions', $recentSessions);
         return $this->fetch();
     }
 }

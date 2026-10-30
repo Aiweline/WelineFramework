@@ -3,10 +3,10 @@ declare(strict_types=1);
 
 namespace Weline\Agent\Extends\Module\Weline_Ai\Agent;
 
-use Weline\Ai\Interface\AgentInterface;
+use Weline\Ai\Api\AgentInterface;
 use Weline\Ai\Interface\ToolInterface;
-use Weline\Ai\Agent\AgentResult;
-use Weline\Ai\Model\AiModel;
+use Weline\Ai\Api\AgentResult;
+use Weline\Ai\Api\AiModel;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Agent\Service\CodingAgent\Tool\ReadFileTool;
 use Weline\Agent\Service\CodingAgent\Tool\SearchReplaceTool;

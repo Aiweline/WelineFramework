@@ -31,7 +31,8 @@ class SkillPackageManager
             ->select()
             ->fetch();
 
-        return $skills->getItems();
+        // 返回给调用方，且下游会调用 getParameters() 等模型方法，保留对象。
+        return $skills->toModels();
     }
 
     public function getSkillsForRole(AgentRole $role): array
@@ -47,7 +48,8 @@ class SkillPackageManager
             ->select()
             ->fetch();
 
-        return $skills->getItems();
+        // getToolsForRole() 会调用 getParameters()，保留对象。
+        return $skills->toModels();
     }
 
     public function getToolsForRole(AgentRole $role): array
@@ -153,6 +155,7 @@ class SkillPackageManager
             ->select()
             ->fetch();
 
-        return $skills->getItems();
+        // 与 getAllSkills() 同口径：返回对象供下游调用模型方法。
+        return $skills->toModels();
     }
 }

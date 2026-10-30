@@ -34,12 +34,13 @@ class Skill extends BackendController
             $skills->where(AgentSkill::schema_fields_CATEGORY, $category);
         }
 
-        $skills->order(AgentSkill::schema_fields_SKILL_ID, 'DESC')
+        // 模板 $get() 兼容数组/对象，取数组行；分页仍在 $skills 上。
+        $rows = $skills->order(AgentSkill::schema_fields_SKILL_ID, 'DESC')
             ->pagination()
             ->select()
-            ->fetch();
+            ->fetchArray();
 
-        $this->assign('skills', $skills->getItems());
+        $this->assign('skills', $rows);
         $this->assign('pagination', $skills->getPagination());
         $this->assign('categories', $this->getCategories());
         $this->assign('current_category', $category);

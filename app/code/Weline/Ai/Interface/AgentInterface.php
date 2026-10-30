@@ -14,13 +14,19 @@ use Weline\Ai\Agent\AgentResult;
 use Weline\Ai\Model\AiModel;
 
 /**
- * 智能体接口
- * 
+ * 智能体接口（历史命名空间，保留仅为向后兼容）
+ *
  * 功能：
  * - 定义智能体的标准接口
  * - 支持 Tool 调用编排循环（plan → act → observe）
  * - 支持流式输出和 SSE 事件推送
  * - 每个智能体自行管理 Tool 调用循环
+ *
+ * @deprecated 请实现 \Weline\Ai\Api\AgentInterface。`extends.php` 的 `Agent` 扩展点
+ *             声明的是 Api 契约，AgentScanner 据它做 instanceof 校验；实现本接口的
+ *             智能体无法被扫描加载。注意本接口的 execute() 用 Model\AiModel /
+ *             Agent\AgentResult，与 Api 契约的 Api\AiModel / Api\AgentResult 不同名，
+ *             因此本接口不能 extends Api\AgentInterface（会触发 PHP 签名不兼容致命错误）。
  */
 interface AgentInterface
 {

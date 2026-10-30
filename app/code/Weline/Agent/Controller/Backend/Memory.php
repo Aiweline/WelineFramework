@@ -33,19 +33,20 @@ class Memory extends BackendController
             $nodes->where(AgentMemoryNode::schema_fields_STATUS, $status);
         }
 
-        $nodes->order(AgentMemoryNode::schema_fields_UPDATED_AT, 'DESC')
+        // 模板 helper 兼容数组/对象，取数组行；分页仍在 $nodes 上。
+        $nodeRows = $nodes->order(AgentMemoryNode::schema_fields_UPDATED_AT, 'DESC')
             ->pagination()
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $recentEdges = $this->memoryEdgeModel->reset()
             ->order(AgentMemoryEdge::schema_fields_EDGE_ID, 'DESC')
             ->limit(30)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
-        $this->assign('memory_nodes', $nodes->getItems());
-        $this->assign('memory_edges', $recentEdges->getItems());
+        $this->assign('memory_nodes', $nodeRows);
+        $this->assign('memory_edges', $recentEdges);
         $this->assign('pagination', $nodes->getPagination());
         $this->assign('current_type', $type);
         $this->assign('current_status', $status);

@@ -50,14 +50,16 @@ class ScheduleRunner implements CronTaskInterface
         $failed = 0;
 
         // 查找到期的任务
+        // 逐条调用 getId()/getContext()，必须对象化。
         $schedules = $this->scheduleModel->reset()
             ->where(AgentSchedule::schema_fields_STATUS, AgentSchedule::STATUS_ENABLED)
             ->where(AgentSchedule::schema_fields_NEXT_RUN_AT, $now, '<=')
             ->limit(10) // 每次最多执行 10 个任务
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
-        foreach ($schedules->getItems() as $schedule) {
+        foreach ($schedules as $schedule) {
             $logId = null;
 
             try {

@@ -216,7 +216,7 @@ your_module/
 
 ### 接口说明
 
-智能体必须实现 `Weline\Ai\Interface\AgentInterface`：
+智能体必须实现 `Weline\Ai\Api\AgentInterface`（与 `extends.php` 中 `Agent` 扩展点声明的 `interface` 一致）：
 
 | 方法 | 说明 |
 |------|------|

@@ -391,14 +391,16 @@ class AgentAdminService
      */
     private function listActiveSkillsForSuggest(): array
     {
+        // 逐行调用 getId()/getData()，必须对象化。
         $skills = $this->skillModel->reset()
             ->where(AgentSkill::schema_fields_IS_ACTIVE, 1)
             ->order(AgentSkill::schema_fields_CATEGORY, 'ASC')
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
         $data = [];
-        foreach ($skills->getItems() as $skill) {
+        foreach ($skills as $skill) {
             $data[] = [
                 'id' => (int)$skill->getId(),
                 'code' => (string)$skill->getData(AgentSkill::schema_fields_CODE),

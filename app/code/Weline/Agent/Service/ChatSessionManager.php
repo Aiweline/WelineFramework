@@ -126,8 +126,8 @@ class ChatSessionManager
             ->select()
             ->fetch();
 
-        // 反转顺序，使最早的消息在前
-        $items = $messages->getItems();
+        // 反转顺序，使最早的消息在前；下游调用 toOpenAIMessage()，保留对象。
+        $items = $messages->toModels();
         return array_reverse($items);
     }
 
@@ -198,7 +198,8 @@ class ChatSessionManager
             ->select()
             ->fetch();
 
-        return $sessions->getItems();
+        // 返回给调用方，保持对象口径与 getMessageHistory() 一致。
+        return $sessions->toModels();
     }
 
     /**

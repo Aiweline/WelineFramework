@@ -86,12 +86,8 @@ class Install implements InstallInterface
      */
     private function createBuiltinSkills(): void
     {
-        // TODO: migrate legacy raw SQL seed to model API
-        return;
-        $tableName = $setup->getTable('weline_agent_skill');
-        $connection = $setup->getConnection();
         $now = time();
-        
+
         $builtinSkills = [
             [
                 'code' => 'filesystem.read',
@@ -248,43 +244,43 @@ class Install implements InstallInterface
             ],
         ];
         
+        try {
+            /** @var \Weline\Agent\Model\AgentSkill $skillModel */
+            $skillModel = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Agent\Model\AgentSkill::class
+            );
+        } catch (\Throwable) {
+            return;
+        }
+
         foreach ($builtinSkills as $skill) {
-            // 检查是否已存在
-            $existing = $connection->query(
-                "SELECT skill_id FROM {$tableName} WHERE code = ?",
-                [$skill['code']]
-            )->fetch();
-            
-            if (!$existing) {
+            try {
+                $existing = $skillModel->clear()
+                    ->where(\Weline\Agent\Model\AgentSkill::schema_fields_CODE, $skill['code'])
+                    ->find()
+                    ->fetch();
+                if ($existing->getId()) {
+                    continue;
+                }
+
                 $skill['created_at'] = $now;
                 $skill['updated_at'] = $now;
-                $connection->insert($tableName, $skill);
+                $skillModel->clear()->setData($skill)->save();
+            } catch (\Throwable) {
+                // 单个技能失败不影响其它
+                continue;
             }
         }
     }
 
     /**
      * 注册 智能体场景适配器
+     *
+     * 原实现是 raw SQL + `return;` 短路，导致三个适配器从未入库，
+     * AgentEngine 传 scenario_adapter_code='agent' 时抛「场景适配器不存在」。
      */
     private function registerAgentAdapters(): void
     {
-        // TODO: migrate legacy raw SQL seed to model API
-        return;
-        $tableName = $setup->getTable('ai_scenario_adapter');
-        $connection = $setup->getConnection();
-        $now = time();
-
-        // 检查表是否存在
-        try {
-            $tables = $connection->query("SHOW TABLES LIKE '{$tableName}'")->fetch();
-            if (!$tables) {
-                // 表不存在，跳过注册（Weline_Ai 可能未安装）
-                return;
-            }
-        } catch (\Throwable) {
-            return;
-        }
-
         $adapters = [
             [
                 'code' => 'agent',
@@ -318,17 +314,33 @@ class Install implements InstallInterface
             ],
         ];
 
-        foreach ($adapters as $adapter) {
-            // 检查是否已存在
-            $existing = $connection->query(
-                "SELECT id FROM {$tableName} WHERE code = ?",
-                [$adapter['code']]
-            )->fetch();
+        try {
+            /** @var \Weline\Ai\Model\AiScenarioAdapter $adapterModel */
+            $adapterModel = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Ai\Model\AiScenarioAdapter::class
+            );
+        } catch (\Throwable) {
+            // Weline_Ai 未安装时跳过
+            return;
+        }
 
-            if (!$existing) {
+        $now = time();
+        foreach ($adapters as $adapter) {
+            try {
+                $existing = $adapterModel->clear()
+                    ->where(\Weline\Ai\Model\AiScenarioAdapter::schema_fields_CODE, $adapter['code'])
+                    ->find()
+                    ->fetch();
+                if ($existing->getId()) {
+                    continue;
+                }
+
                 $adapter['created_time'] = $now;
                 $adapter['updated_time'] = $now;
-                $connection->insert($tableName, $adapter);
+                $adapterModel->clear()->setData($adapter)->save();
+            } catch (\Throwable) {
+                // 单个适配器失败不影响其它；表未就绪时由后续升级重试
+                continue;
             }
         }
     }

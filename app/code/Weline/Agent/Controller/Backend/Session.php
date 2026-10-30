@@ -38,12 +38,13 @@ class Session extends BackendController
             $sessions->where(AgentChatSession::schema_fields_CHANNEL, $channel);
         }
 
-        $sessions->order(AgentChatSession::schema_fields_UPDATED_AT, 'DESC')
+        // 模板 $get() 兼容数组/对象，取数组行；分页仍在 $sessions 上。
+        $rows = $sessions->order(AgentChatSession::schema_fields_UPDATED_AT, 'DESC')
             ->pagination()
             ->select()
-            ->fetch();
+            ->fetchArray();
 
-        $this->assign('sessions', $sessions->getItems());
+        $this->assign('sessions', $rows);
         $this->assign('pagination', $sessions->getPagination());
         $this->assign('current_status', $status);
         $this->assign('current_channel', $channel);

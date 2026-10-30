@@ -269,8 +269,8 @@ class AgentQueryProvider implements QueryProviderInterface
             ->where(AgentRole::schema_fields_STATUS, AgentRole::STATUS_ENABLED)
             ->limit($limit)
             ->select()
-            ->fetch();
-        return $roles->getItems();
+            ->fetchArray();
+        return $roles;
     }
 
     private function getDefaultRole(): ?array
@@ -294,8 +294,7 @@ class AgentQueryProvider implements QueryProviderInterface
         if ($activeOnly) {
             $skills->where(AgentSkill::schema_fields_IS_ACTIVE, 1);
         }
-        $skills->select()->fetch();
-        return $skills->getItems();
+        return $skills->select()->fetchArray();
     }
 
     private function getSkill(array $params): ?array
@@ -337,8 +336,8 @@ class AgentQueryProvider implements QueryProviderInterface
         $sessions->order(AgentChatSession::schema_fields_UPDATED_AT, 'DESC')
             ->limit($limit)
             ->select()
-            ->fetch();
-        return $sessions->getItems();
+            ->fetchArray();
+        return $sessions;
     }
 
     private function getSchedules(array $params): array
@@ -351,8 +350,8 @@ class AgentQueryProvider implements QueryProviderInterface
         $schedules->order(AgentSchedule::schema_fields_SCHEDULE_ID, 'DESC')
             ->limit(100)
             ->select()
-            ->fetch();
-        return $schedules->getItems();
+            ->fetchArray();
+        return $schedules;
     }
 
     private function getDueSchedules(array $params): array
@@ -364,7 +363,7 @@ class AgentQueryProvider implements QueryProviderInterface
             ->where(AgentSchedule::schema_fields_NEXT_RUN_AT, $now, '<=')
             ->limit($limit)
             ->select()
-            ->fetch();
-        return $schedules->getItems();
+            ->fetchArray();
+        return $schedules;
     }
 }

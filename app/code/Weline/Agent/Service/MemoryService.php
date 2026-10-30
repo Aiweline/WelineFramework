@@ -87,7 +87,8 @@ class MemoryService
             ->select()
             ->fetch();
 
-        $items = $memories->getItems();
+        // 需要 isExpired()/incrementAccess()/save()，必须对象化。
+        $items = $memories->toModels();
 
         // 过滤过期记忆
         $validMemories = [];
@@ -121,7 +122,8 @@ class MemoryService
             ->select()
             ->fetch();
 
-        $items = $memories->getItems();
+        // 需要 incrementAccess()/save()，必须对象化。
+        $items = $memories->toModels();
 
         // 更新访问计数
         foreach ($items as $memory) {
@@ -208,7 +210,8 @@ class MemoryService
             ->select()
             ->fetch();
 
-        foreach ($memories->getItems() as $memory) {
+        // 需要 shouldForget()/setData()->save()，必须对象化。
+        foreach ($memories->toModels() as $memory) {
             if ($memory->shouldForget()) {
                 $memory->setData(AgentMemoryNode::schema_fields_STATUS, AgentMemoryNode::STATUS_FORGETTING);
                 $memory->save();
@@ -224,18 +227,19 @@ class MemoryService
      */
     public function getUserPreferences(string $contextId): array
     {
+        // 只读字段，取数组行；对 $this->memoryNode 调 getItems() 恒为空。
         $preferences = $this->memoryNode->reset()
             ->where(AgentMemoryNode::schema_fields_NODE_TYPE, self::TYPE_PREFERENCE)
             ->where(AgentMemoryNode::schema_fields_STATUS, AgentMemoryNode::STATUS_ACTIVE)
             ->order(AgentMemoryNode::schema_fields_IMPORTANCE, 'DESC')
             ->limit(20)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $result = [];
-        foreach ($preferences->getItems() as $pref) {
-            $key = $pref->getData(AgentMemoryNode::schema_fields_NODE_KEY);
-            $value = $pref->getData(AgentMemoryNode::schema_fields_NODE_VALUE);
+        foreach ($preferences as $pref) {
+            $key = $pref[AgentMemoryNode::schema_fields_NODE_KEY] ?? null;
+            $value = $pref[AgentMemoryNode::schema_fields_NODE_VALUE] ?? null;
             $result[$key] = $value;
         }
 

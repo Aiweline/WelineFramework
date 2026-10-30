@@ -37,9 +37,9 @@ class Schedule extends BackendController
         $schedules->order(AgentSchedule::schema_fields_SCHEDULE_ID, 'DESC')
             ->pagination()
             ->select()
-            ->fetch();
+            ->fetchArray();
 
-        $this->assign('schedules', $schedules->getItems());
+        $this->assign('schedules', $schedules);
         $this->assign('pagination', $schedules->getPagination());
         return $this->fetch();
     }
@@ -53,12 +53,13 @@ class Schedule extends BackendController
     #[Acl('Weline_Agent::schedule_add', '添加任务', '', '添加调度任务')]
     public function getAdd()
     {
+        // 模板 $roles 分支兼容数组，取数组行。
         $roles = $this->roleModel->reset()
             ->where(AgentRole::schema_fields_STATUS, AgentRole::STATUS_ENABLED)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
-        $this->assign('roles', $roles->getItems());
+        $this->assign('roles', $roles);
         $this->assign('schedule', null);
         return $this->fetch('form');
     }
@@ -74,13 +75,14 @@ class Schedule extends BackendController
             return $this->redirect('*/backend/schedule/listing');
         }
 
+        // 同 getAdd()：模板兼容数组，取数组行。
         $roles = $this->roleModel->reset()
             ->where(AgentRole::schema_fields_STATUS, AgentRole::STATUS_ENABLED)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $this->assign('schedule', $schedule);
-        $this->assign('roles', $roles->getItems());
+        $this->assign('roles', $roles);
         return $this->fetch('form');
     }
 

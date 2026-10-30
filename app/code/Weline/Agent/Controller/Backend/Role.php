@@ -29,11 +29,12 @@ class Role extends BackendController
     #[Acl('Weline_Agent::role_list', '角色列表', '', '查看角色列表')]
     public function getList()
     {
-        $roles = $this->roleModel->reset()
+        // 模板直接用 $role['xxx']，取数组行；分页仍在 $roles 上。
+        $roleRows = $this->roleModel->reset()
             ->order(AgentRole::schema_fields_ROLE_ID, 'DESC')
             ->pagination()
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         $guideConfig = $this->getGuideConfig();
         $guideProfiles = $this->normalizeGuideProfiles($guideConfig);
@@ -44,8 +45,8 @@ class Role extends BackendController
             array_map(static fn(array $skill): string => (string) ($skill['code'] ?? ''), $skills)
         );
 
-        $this->assign('roles', $roles->getItems());
-        $this->assign('pagination', $roles->getPagination());
+        $this->assign('roles', $roleRows);
+        $this->assign('pagination', $this->roleModel->getPagination());
         $this->assign('guide_enabled', (bool) ($guideConfig['enabled'] ?? true));
         $this->assign('guide_config', $guideConfig);
         $this->assign('guide_profiles', $guideProfiles);
@@ -410,14 +411,16 @@ class Role extends BackendController
      */
     private function getAvailableSkills(): array
     {
+        // 逐行调用 getId()/getData()，必须对象化。
         $skills = $this->skillModel->reset()
             ->where(AgentSkill::schema_fields_IS_ACTIVE, 1)
             ->order(AgentSkill::schema_fields_CATEGORY, 'ASC')
             ->select()
-            ->fetch();
+            ->fetch()
+            ->toModels();
 
         $data = [];
-        foreach ($skills->getItems() as $skill) {
+        foreach ($skills as $skill) {
             $data[] = [
                 'id' => (int) $skill->getId(),
                 'code' => (string) $skill->getData(AgentSkill::schema_fields_CODE),
