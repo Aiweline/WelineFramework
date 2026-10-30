@@ -175,7 +175,7 @@ final class CacheSuffixTheme extends WelineTheme
     public function getId(mixed $default = 0) { return $this->getData('id') ?? $default; }
     public function getPath(): string { return (string)$this->getData('path'); }
     public function reset(): static { return $this->setData([]); }
-    public function load(string|int $field_or_pk_value, $value = null, bool $forceReload = false): \Weline\Framework\Database\AbstractModel
+    public function load(string|int $field_or_pk_value, $value = null, bool $forceReload = false): static
     {
         return $this->setData(['id' => (int)$field_or_pk_value, 'path' => '/theme-' . $field_or_pk_value . '/']);
     }

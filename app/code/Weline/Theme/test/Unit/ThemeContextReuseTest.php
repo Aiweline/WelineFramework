@@ -255,7 +255,7 @@ final class ThemeContextReuseModel extends WelineTheme
     public static int $missingId = 0;
     public function clearData(bool $with_query = true): static { $this->setData([]); return $this; }
     public function clearQuery(): static { return $this; }
-    public function load(string|int $field_or_pk_value, $value = null, bool $forceReload = false): \Weline\Framework\Database\AbstractModel
+    public function load(string|int $field_or_pk_value, $value = null, bool $forceReload = false): static
     {
         self::$loads++;
         if ((int)$field_or_pk_value === self::$missingId) { return $this->setData([]); }
