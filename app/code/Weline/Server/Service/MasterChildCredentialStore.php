@@ -320,15 +320,6 @@ final class MasterChildCredentialStore
         $prunableCredentialIds = $this->collectPrunableCredentialIds(
             $this->readState($instance)['records'] ?? [],
         );
-        // I3 的进程存活观测同样必须在**拿账本锁之前**完成：
-        // observeProcessIdentity 在事故主机上可能耗时数百毫秒到数秒，放在
-        // mutate 闭包里会长时间占用 WLS state lock，把一次补位放大成
-        // "Timed out acquiring the WLS state lock" 的 respawn storm。
-        // 锁内只做纯内存决策（查表），不做任何进程观测。
-        $liveSlotOwners = $this->collectLiveSlotOwners(
-            $this->readState($instance)['records'] ?? [],
-            $prepared,
-        );
 
         return $this->mutate($instance, function (?array $state) use (
             $leaseFile,
@@ -338,7 +329,6 @@ final class MasterChildCredentialStore
             $masterToken,
             $prepared,
             $prunableCredentialIds,
-            $liveSlotOwners,
         ): array {
             $currentLease = $this->requireRunningMaster(
                 $leaseFile,
@@ -355,48 +345,33 @@ final class MasterChildCredentialStore
             $authorized = [];
             foreach ($prepared as $child) {
                 $slotId = (string)$child['slot_id'];
-                $existing = $this->findActiveServiceRecordForSlot($records, $slotId);
-                if ($existing !== null) {
-                    // I2（幂等）：完全相同的 launch tuple 重复授权时，直接复用既有
-                    // 记录，不重建 nonce/credential_id。buildRecord 每次生成随机
-                    // nonce，而 deriveSubjectCredential 的 HMAC 含 nonce —— 重授权
-                    // 会让**运行中**子进程持有的旧 credential 立刻失效，下一次自检
-                    // 就命中 `not uniquely authorized for this PID` 并 exit(0)。
-                    // 批量路径与单实例路径都可能对同一 slot 授权，必须幂等。
-                    if ($this->isSameCredentialLaunchTuple($existing, $child)) {
-                        $authorized[$slotId] = [
-                            'credential_id' => (string)$existing['credential_id'],
-                            'pid' => (int)$existing['pid'],
-                            'process_birth' => (string)$existing['process_birth'],
-                            'pid_namespace_id' => (string)$existing['pid_namespace_id'],
-                        ];
-                        continue;
-                    }
+                $childPid = (int)$child['pid'];
+                $childLaunchId = (string)$child['launch_id'];
+                $recordsBefore = \count($records);
 
-                    // I3（活进程刹车）：同一 slot 已有一条 active 记录，且其 PID
-                    // 与本次不同、旧进程仍然 OWNER_MATCH（活着）时，**拒绝替换**。
-                    // 否则会出现「补位把仍在服务的 worker 凭据删掉 → 那个 worker
-                    // 自杀」的连锁，正是线上 worker 池归零的直接机制。
-                    // 只有确认旧进程已退出（MISSING/MISMATCH）才允许换新。
-                    $existingPid = (int)($existing['pid'] ?? 0);
-                    if ($existingPid > 0
-                        && $existingPid !== (int)$child['pid']
-                        && ($liveSlotOwners[$slotId] ?? false)
-                    ) {
-                        WlsLogger::warning_(
-                            'managed-child credential replacement refused: slot held by live process'
-                            . ' instance=' . $instance
-                            . ' slot=' . $slotId
-                            . ' existing_pid=' . $existingPid
-                            . ' new_pid=' . (int)$child['pid']
-                        );
-                        // 保留旧记录（旧 worker 继续服务），本次跳过该 slot 的授权；
-                        // 新 worker 会在下一次补位重试，直到旧进程真正退出。
-                        continue;
-                    }
+                // I2（幂等）：同 slot + 同 launch_id 已在账本且 active → 原样复用，不重建
+                // nonce/credential_id。buildRecord 每次生成随机 nonce，而
+                // deriveSubjectCredential 的 HMAC 含 nonce —— 重授权会让**运行中**子进程
+                // 手里的旧 credential 立刻失效，下一次自检就 exit(0)。
+                $sameLaunch = $this->findActiveServiceRecordByLaunch($records, $slotId, $childLaunchId);
+                if ($sameLaunch !== null) {
+                    $authorized[$slotId] = [
+                        'credential_id' => (string)$sameLaunch['credential_id'],
+                        'pid' => (int)$sameLaunch['pid'],
+                        'process_birth' => (string)$sameLaunch['process_birth'],
+                        'pid_namespace_id' => (string)$sameLaunch['pid_namespace_id'],
+                    ];
+                    continue;
                 }
 
-                $this->removeServiceSlotAndDescendants($records, $slotId);
+                // 架构约束（事故根因修复）：授权只维护「本进程自己」的记录。
+                // 旧实现用 removeServiceSlotAndDescendants 按 slot 整体删除，滚动重启/热重载
+                // 会把**仍在服务的旧一代 worker** 记录一并抹掉；那个 worker 下一次自检命中
+                // `credential record missing for this PID` → exit(0)，3→0 只需二十余秒，
+                // 就是线上 worker 池归零的直接机制。现在只删「同 slot 且同 PID」的重复记录，
+                // 其他 PID（旧一代）一律保留，由 prune（死进程 + 最小年龄）在旧进程真正退出后清理。
+                $this->removeServiceSlotPidRecords($records, $slotId, $childPid);
+
                 $record = $this->buildRecord($child, $currentLease);
                 $records[] = $record;
                 $authorized[$record['slot_id']] = [
@@ -405,6 +380,17 @@ final class MasterChildCredentialStore
                     'process_birth' => (string)$record['process_birth'],
                     'pid_namespace_id' => (string)$record['pid_namespace_id'],
                 ];
+
+                // 审计：每次账本新增都留痕（槽位 / PID / launch 前缀 / 账本前后条数），
+                // 下次"为什么变成 0"可直接判断是不是授权路径动了别的进程的记录。
+                WlsLogger::info_(
+                    'managed-child credential authorized'
+                    . ' instance=' . $instance
+                    . ' slot=' . $slotId
+                    . ' pid=' . $childPid
+                    . ' launch=' . \substr($childLaunchId, 0, 12)
+                    . ' records=' . $recordsBefore . '->' . \count($records)
+                );
             }
             if (\count($records) > self::MAX_RECORDS) {
                 throw new \RuntimeException('WLS managed-child credential ledger is full.');
@@ -943,8 +929,16 @@ final class MasterChildCredentialStore
                     $matches[] = $record;
                 }
             }
-            if (\count($matches) !== 1) {
-                throw new \RuntimeException('Managed-child credential is not uniquely authorized for this PID.');
+            if ($matches === []) {
+                // 只有「本 PID 在账本里一条匹配凭据都没有」才算失败。
+                // 旧实现要求恰好 1 条（!== 1 即失败），把两种**健康**场景误判成致命：
+                //   1) 滚动重启/热重载期间，新 worker 授权时旧的 slot 记录被整体删除，
+                //      老 worker 仍存活却变成 0 条 → 下次自检 exit(0) → 整池连锁归零；
+                //   2) 同一 launch tuple 被重复授权留下多条 → 被判「不唯一」。
+                // credential 是 HMAC(master_token, record 全字段含 nonce/process_birth)，
+                // 能匹配上就证明本进程持有该记录对应的合法凭据；多条只会在重复授权时
+                // 出现且彼此等价，取第一条即可，不应判死。
+                throw new \RuntimeException('Managed-child credential record missing for this PID.');
             }
             $this->assertRecordProcessAndParent($matches[0], $state['records']);
 
@@ -1394,14 +1388,20 @@ final class MasterChildCredentialStore
     }
 
     /**
-     * 找到该 slot 当前 active 的 service 记录（同 slot 最多一条）。
+     * 找到该 slot + 指定 launch_id 的 active service 记录（幂等复用用）。
+     *
+     * 同一 slot 允许多代际记录共存（不同 launch_id / 不同 PID）：滚动重启时
+     * 旧一代 worker 仍在服务，必须能被各自的 launch_id 精确匹配到，不能互相覆盖。
      *
      * @param list<array<string,mixed>> $records
      * @return array<string,mixed>|null
      */
-    private function findActiveServiceRecordForSlot(array $records, string $slotId): ?array
-    {
-        if ($slotId === '') {
+    private function findActiveServiceRecordByLaunch(
+        array $records,
+        string $slotId,
+        string $launchId,
+    ): ?array {
+        if ($slotId === '' || $launchId === '') {
             return null;
         }
         foreach ($records as $record) {
@@ -1411,7 +1411,9 @@ final class MasterChildCredentialStore
             if (($record['lifecycle_state'] ?? '') !== 'active') {
                 continue;
             }
-            if (\hash_equals($slotId, (string)($record['slot_id'] ?? ''))) {
+            if (\hash_equals($slotId, (string)($record['slot_id'] ?? ''))
+                && \hash_equals($launchId, (string)($record['launch_id'] ?? ''))
+            ) {
                 return $record;
             }
         }
@@ -1420,77 +1422,34 @@ final class MasterChildCredentialStore
     }
 
     /**
-     * 判定两次授权是否描述同一个子进程启动（幂等复用的前提）。
+     * 只删除「同 slot 且同 PID」的 service 记录（同一进程重复授权的去重）。
      *
-     * 只有 launch_id / lease_id / generation / pid 全部相同才算同一次启动。
-     * 任一字段变化都代表是新的进程代际，必须重新授权（换新 nonce 是正确的）。
-     *
-     * @param array<string,mixed> $existing
-     * @param array<string,mixed> $child
-     */
-    private function isSameCredentialLaunchTuple(array $existing, array $child): bool
-    {
-        return \hash_equals(
-            (string)($existing['launch_id'] ?? ''),
-            (string)($child['launch_id'] ?? ''),
-        )
-            && \hash_equals(
-                (string)($existing['lease_id'] ?? ''),
-                (string)($child['lease_id'] ?? ''),
-            )
-            && (int)($existing['generation'] ?? -1) === (int)($child['generation'] ?? -2)
-            && (int)($existing['pid'] ?? 0) === (int)($child['pid'] ?? -1);
-    }
-
-    /**
-     * 锁外预观测：对每个待授权的 slot，判断其既有 active 记录对应的进程是否仍存活。
-     *
-     * 返回 `[slot_id => bool]`，锁内只做查表决策。任何进程观测都不得发生在
-     * 账本锁内（会长时间占用 WLS state lock，放大成 respawn storm）。
-     *
-     * 判定口径：只有 OWNER_MATCH 才算「活着」；OWNER_UNKNOWN（观测不可用）按
-     * 「未必死」处理为 true，宁可暂时不替换也不误删活进程凭据；
-     * OWNER_MISSING / OWNER_MISMATCH 是确定性的可替换信号。
+     * 关键架构约束：**绝不删除其他 PID 的记录**。旧实现 removeServiceSlotAndDescendants
+     * 按 slot 整体删除，会把仍在服务的旧一代 worker 记录抹掉，导致它自检失败自杀，
+     * 是 worker 池归零的根因。旧一代记录交由 prune（死进程 + 最小年龄）清理。
      *
      * @param list<array<string,mixed>> $records
-     * @param list<array<string,mixed>> $prepared
-     * @return array<string,bool>
      */
-    private function collectLiveSlotOwners(array $records, array $prepared): array
+    private function removeServiceSlotPidRecords(array &$records, string $slotId, int $pid): void
     {
-        $owners = [];
-        foreach ($prepared as $child) {
-            $slotId = (string)($child['slot_id'] ?? '');
-            if ($slotId === '' || isset($owners[$slotId])) {
-                continue;
-            }
-            $existing = $this->findActiveServiceRecordForSlot($records, $slotId);
-            if ($existing === null) {
-                continue;
-            }
-            $pid = (int)($existing['pid'] ?? 0);
-            $birth = (string)($existing['process_birth'] ?? '');
-            if ($pid <= 0 || \preg_match('/\A[a-f0-9]{64}\z/D', $birth) !== 1) {
-                $owners[$slotId] = false;
-                continue;
-            }
-            try {
-                $status = $this->runtimeIdentity->observeProcessIdentity(
-                    $pid,
-                    $birth,
-                    (string)($existing['pid_namespace_id'] ?? ''),
-                );
-            } catch (\Throwable) {
-                // 观测异常不得被当成「已死」。
-                $owners[$slotId] = true;
-                continue;
-            }
-            $owners[$slotId] = $status === MasterLeaseRuntimeIdentity::OWNER_UNKNOWN
-                ? true
-                : $status === MasterLeaseRuntimeIdentity::OWNER_MATCH;
+        if ($slotId === '' || $pid <= 0) {
+            return;
         }
-
-        return $owners;
+        $targets = [];
+        foreach ($records as $record) {
+            if (($record['kind'] ?? '') !== self::KIND_SERVICE) {
+                continue;
+            }
+            if ((int)($record['pid'] ?? 0) !== $pid) {
+                continue;
+            }
+            if (\hash_equals($slotId, (string)($record['slot_id'] ?? ''))) {
+                $targets[] = (string)$record['credential_id'];
+            }
+        }
+        foreach ($targets as $credentialId) {
+            $this->removeRecordAndDescendants($records, $credentialId);
+        }
     }
 
     /**
@@ -1518,19 +1477,6 @@ final class MasterChildCredentialStore
         }
 
         return $records;
-    }
-
-    /** @param list<array<string,mixed>> $records */
-    private function removeServiceSlotAndDescendants(array &$records, string $slotId): void
-    {
-        foreach ($records as $record) {
-            if ($record['kind'] === self::KIND_SERVICE
-                && \hash_equals($slotId, $record['slot_id'])
-            ) {
-                $this->removeRecordAndDescendants($records, $record['credential_id']);
-                return;
-            }
-        }
     }
 
     /** @param list<array<string,mixed>> $records */
@@ -1759,10 +1705,16 @@ final class MasterChildCredentialStore
                 ) {
                     throw new \RuntimeException('Managed service credential ancestry is invalid.');
                 }
-                if (isset($serviceSlots[$record['slot_id']])) {
-                    throw new \RuntimeException('Managed service credential slot is duplicated.');
+                // 滚动重启的架构前提：同一 slot 允许**不同进程（PID）的代际记录短暂共存**。
+                // 新一代 worker 授权时，老一代 worker 可能仍在 drain/服务；若这里强制 slot
+                // 唯一，授权就必然要删除仍然活着的旧记录 → 旧 worker 自检 0 条 → exit(0)
+                // → 整池归零（线上实测二十余秒）。去重键改为 (slot_id, pid)：同一进程的
+                // 同一 slot 仍只允许一条（防重复授权），不同 PID 代表不同代际，各自独立有效。
+                $slotPidKey = $record['slot_id'] . "\0" . (int)$record['pid'];
+                if (isset($serviceSlots[$slotPidKey])) {
+                    throw new \RuntimeException('Managed service credential slot is duplicated for this PID.');
                 }
-                $serviceSlots[$record['slot_id']] = true;
+                $serviceSlots[$slotPidKey] = true;
             } else {
                 self::assertTaskId($record['subject_id']);
                 if ($record['parent_credential_id'] === ''
