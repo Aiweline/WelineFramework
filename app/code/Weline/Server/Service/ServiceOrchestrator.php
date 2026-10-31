@@ -12235,12 +12235,35 @@ class ServiceOrchestrator
             3
         ) ?? 3);
 
+        // 批次规模必须受「当前真实存活并接受请求的 Worker 数」约束。
+        // 只用配置槽位数规划会让小池死锁：8 槽规划出每批 3 个，而实际只有 4 个
+        // Worker 存活时，任何一批摘 3 个都只剩 1 个，min_ready 守卫恒拒，
+        // 滚动重启永远无法推进（线上实测即此形态，最终 worker 池归零）。
+        // 存活数少于规划数时，按存活数重算下限，让每批小到既能推进又留够余量。
+        $liveAccepting = $this->countLiveAcceptingWorkers();
+        $minReady = $this->resolveWorkerReloadMinReady($workerCount);
+        if ($liveAccepting > 1 && $liveAccepting < $workerCount) {
+            $liveMinReady = WorkerRestartBatchPlanner::resolveMinReady($liveAccepting);
+            if ($liveMinReady < $minReady) {
+                WlsLogger::warning_(
+                    '[Orchestrator][WorkerBatchPlan] rebase min_ready to live capacity'
+                    . ', planned_workers=' . $workerCount
+                    . ', live_accepting=' . $liveAccepting
+                    . ', planned_min_ready=' . $minReady
+                    . ', live_min_ready=' . $liveMinReady
+                );
+                $minReady = $liveMinReady;
+            }
+        }
+
         return WorkerRestartBatchPlanner::plan(
             $orderedInstanceIds,
             $forceSingleBatch,
             $minThree,
             $batchCount,
-            $this->resolveWorkerReloadMinReady($workerCount)
+            $minReady,
+            // 让批次规划同时受真实存活容量约束，避免小池按大池批次自杀式摘除。
+            $liveAccepting > 1 ? $liveAccepting : null
         );
     }
 
@@ -13160,7 +13183,31 @@ class ServiceOrchestrator
             }
         }
         $remainingReady = $currentAccepting - $batchAccepting;
+        // min_ready 是「全池」下限，规划时按配置的 workerCount 推导；但本守卫
+        // 必须回答「本批摘除后还剩几个」，两者基数不同时会死锁：
+        // 实测线上 8 槽规划、仅 4 个 Worker 存活，整批摘 3 个 → 4-3=1 < 5，
+        // 每一批都被拒，滚动重启永远失败且不推进，最后 worker 池归零。
+        // 正确的下限必须按「当前真实接受请求的 Worker 数」推导，并保证本批摘除
+        // 后仍留下至少一个 acceptor（否则 Master LISTEN 会变成 SYN 黑洞）。
         $minReady = (int)$batchMeta['min_ready'];
+        $plannedWorkers = \max(1, $totalWorkers);
+        if ($currentAccepting < $plannedWorkers) {
+            // 池子比规划小：按真实存活数重新推导下限，避免用全池下限卡死小池。
+            $minReady = WorkerRestartBatchPlanner::resolveMinReady($currentAccepting);
+            WlsLogger::warning_(
+                '[Orchestrator][RouteTransition] reason=runtime_min_ready_rebased'
+                . ', planned_workers=' . $plannedWorkers
+                . ', current_accepting=' . $currentAccepting
+                . ', planned_min_ready=' . $batchMeta['min_ready']
+                . ', rebased_min_ready=' . $minReady
+                . ', batch_ids=' . $batchList
+            );
+        }
+        // 无论下限怎么算，摘除本批后至少留 1 个 acceptor（池子够大时才有意义）。
+        $minReady = \max(0, \min(\max(0, $currentAccepting - 1), $minReady));
+        if (!$hasConfirmedAlternateCapacity && $minReady < 1 && $currentAccepting > 1) {
+            $minReady = 1;
+        }
         if (!$hasConfirmedAlternateCapacity && $remainingReady < $minReady) {
             $reason = 'runtime_min_ready_guard';
             WlsLogger::error_(
@@ -14829,7 +14876,38 @@ class ServiceOrchestrator
         ?ServiceInstance $instance = null,
     ): void {
         if ($this->isRecoveryCriticalRole($role)) {
-            $this->requestFullRestart($reason);
+            if ($this->requestFullRestart($reason)) {
+                return;
+            }
+
+            // 整组重启被熔断/冷却/停机流程拒绝时，绝不能什么都不做：
+            // critical slot（worker/dispatcher）的重启预算已耗尽，若此处直接
+            // return，则「restarts 超限 → 只请求整组重启 → 熔断返回 → 既不整组
+            // 重启也不单槽复活」形成永久死锁，worker 池恒为 0 而 Master 仍报可用。
+            // 正确降级：重置该槽重启预算后走单槽复活，至少保住一个可用 acceptor。
+            $instance ??= $this->registry->getInstance($role, $instanceId);
+            if ($instance !== null
+                && $this->canUseLocalSlotResurrection($instance)
+            ) {
+                $instance->restarts = 0;
+                $this->registry->updateInstance($instance);
+                WlsLogger::warning_(
+                    '[Orchestrator] 整组重启不可用，降级为单槽复活: '
+                    . $role . '#' . $instanceId . ', reason=' . $reason
+                );
+                $this->scheduleResurrectionWithDelay($instance, 0.0, false, true);
+                $this->scheduleResurrectQueueMainLoopTaskIfDue(self::monotonicSeconds());
+                if ($this->context !== null) {
+                    $this->persistServicesInfo($this->context);
+                }
+
+                return;
+            }
+
+            WlsLogger::error_(
+                '[Orchestrator] 整组重启不可用，且单槽复活不可用，槽位保持失败: '
+                . $role . '#' . $instanceId . ', reason=' . $reason
+            );
 
             return;
         }
@@ -15223,16 +15301,24 @@ class ServiceOrchestrator
         ));
     }
 
-    private function requestFullRestart(string $reason): void
+    /**
+     * 请求整组重启。
+     *
+     * 返回值表示「整组重启是否真的被接受」。被熔断/冷却/停机流程拒绝时必须返回
+     * false，让调用方能够降级到单槽复活 —— 否则会出现永久死锁：worker 的
+     * restarts 已达上限 → 只请求整组重启 → 整组重启被熔断直接 return →
+     * 既不整组重启也不单槽复活 → worker 池永久为 0，Master 仍报「自愈 on」。
+     */
+    private function requestFullRestart(string $reason): bool
     {
         if (!$this->haMode || !$this->fullRestartOnFailure || $this->isStopFlowActive()) {
-            return;
+            return false;
         }
 
         $now = self::monotonicSeconds();
         if (($now - $this->lastFullRestartAt) < $this->fullRestartCooldown) {
             WlsLogger::warning_("[Orchestrator] 忽略频繁整组重启请求（冷却中）: {$reason}");
-            return;
+            return false;
         }
 
         if ($this->fullRestartCircuitOpen($now)) {
@@ -15246,16 +15332,19 @@ class ServiceOrchestrator
                 );
             }
 
-            return;
+            return false;
         }
 
         if ($this->fullRestartRequested) {
-            return;
+            // 已有整组重启在推进，视为已接受，避免调用方重复降级。
+            return true;
         }
 
         $this->fullRestartRequested = true;
         $this->fullRestartReason = $reason;
         WlsLogger::warning_("[Orchestrator] 已标记整组重启，原因: {$reason}");
+
+        return true;
     }
 
     /**

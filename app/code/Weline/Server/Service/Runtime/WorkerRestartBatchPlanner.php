@@ -13,6 +13,9 @@ final class WorkerRestartBatchPlanner
 {
     /**
      * @param int[] $orderedInstanceIds
+     * @param int|null $liveCapacity 当前真实存活并接受请求的 Worker 数；null 表示等于列表长度。
+     *        批次规模必须同时受它约束：只按槽位列表规划会让小池死锁（8 槽每批 3 个，
+     *        而实际只有 4 个存活时，任一批摘 3 个都只剩 1 个，min_ready 守卫恒拒）。
      * @return array<int, int[]>
      */
     public static function plan(
@@ -20,7 +23,8 @@ final class WorkerRestartBatchPlanner
         bool $forceSingleBatch = false,
         int $threeBatchMinCount = 4,
         int $configuredBatchCount = 3,
-        ?int $minReady = null
+        ?int $minReady = null,
+        ?int $liveCapacity = null
     ): array {
         $ids = \array_map('intval', \array_values($orderedInstanceIds));
         $workerCount = \count($ids);
@@ -34,9 +38,15 @@ final class WorkerRestartBatchPlanner
         // Illegal / typo thresholds clamp to the safe wave2 default (4), not the legacy 7.
         $threeBatchMinCount = $threeBatchMinCount >= 4 ? $threeBatchMinCount : 4;
         $configuredBatchCount = $configuredBatchCount >= 1 ? $configuredBatchCount : 3;
-        $minReady ??= self::resolveMinReady($workerCount);
-        $minReady = \max(0, \min($workerCount - 1, $minReady));
-        $maxBatchSize = \max(1, $workerCount - $minReady);
+
+        // 批次规模以「可安全摘除的并发度」为准，而不是槽位列表长度。
+        $capacity = $workerCount;
+        if ($liveCapacity !== null) {
+            $capacity = \max(1, \min($workerCount, $liveCapacity));
+        }
+        $minReady ??= self::resolveMinReady($capacity);
+        $minReady = \max(0, \min($capacity - 1, $minReady));
+        $maxBatchSize = \max(1, $capacity - $minReady);
         $requiredBatchCount = (int) \ceil($workerCount / $maxBatchSize);
 
         $batchCount = $workerCount < $threeBatchMinCount
