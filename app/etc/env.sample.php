@@ -751,6 +751,15 @@ return [
         'update_time' => null,
         'config' => null,
         'static_version' => '1.0.0',
+        // ==================== 主题源变更自动重固 cron（默认关闭）====================
+        // 执行名 theme_layout_origin_watch，类 Weline\Theme\Cron\LayoutOriginWatch，
+        // 调度 * * * * *（每分钟）；发现主题源文件变更后就地重固并级联固化 / chrome heal。
+        // 闸门 ThemeOriginWatchCronGate 在 deploy 判定之前短路：未启用时调度器不 claim 也不 spawn。
+        // prod（system.deploy=prod）默认不启用；开发环境也需显式设为 true 才会运行。
+        // 未启用时手动执行返回 skip:disabled。
+        'origin_watch_cron' => [
+            'enabled' => false,
+        ],
     ],
     
     // ==================== CLI 控制台（php bin/w …）====================

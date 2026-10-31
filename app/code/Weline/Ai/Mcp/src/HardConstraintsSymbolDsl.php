@@ -493,6 +493,22 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '空间不足先按清理技能清再备份',
                 'rule_ids' => ['backup_requires_skill_keep_one_and_space_precheck'],
             ],
+            'FwCmd' => [
+                'gloss_zh' => '框架命令(bin/w等)',
+                'rule_ids' => ['deploy_user_weline_forbids_root'],
+            ],
+            'AsWeline' => [
+                'gloss_zh' => 'su到weline执行',
+                'rule_ids' => ['deploy_user_weline_forbids_root'],
+            ],
+            'NoRoot' => [
+                'gloss_zh' => 'root 直跑/sudo/代跑',
+                'rule_ids' => ['deploy_user_weline_forbids_root'],
+            ],
+            'RootOwned' => [
+                'gloss_zh' => 'root属主残留(find -user root)',
+                'rule_ids' => ['deploy_user_weline_forbids_root'],
+            ],
             'Findings' => [
                 'gloss_zh' => '缺陷/问题/剩余项清单（含自审与子智能体回报）',
                 'rule_ids' => ['finding_reality_gate_before_defect_list'],
@@ -859,6 +875,11 @@ final class HardConstraintsSymbolDsl
             'backup_requires_skill_keep_one_and_space_precheck' => [
                 'formula' => 'Backup→□(Skill∧KeepOne∧SpaceFirst)|(¬SpaceFirst→□CleanFirst)',
                 'gloss_zh' => '备份前读技能·只留一版·先查空间；不足先清再备',
+                'cluster' => '§P',
+            ],
+            'deploy_user_weline_forbids_root' => [
+                'formula' => 'FwCmd→□AsWeline∧NoRoot→⊥',
+                'gloss_zh' => '框架命令须weline身份；root直跑禁',
                 'cluster' => '§P',
             ],
             'social_scope_mailbox_for_platform_register' => [

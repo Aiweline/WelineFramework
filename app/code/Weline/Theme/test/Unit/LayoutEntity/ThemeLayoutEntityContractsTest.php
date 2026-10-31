@@ -10,6 +10,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\View\Template;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
+use Weline\Theme\Cron\LayoutOriginWatch;
 use Weline\Theme\Dto\ThemeComponentDefinition;
 use Weline\Theme\Dto\ThemeRenderable;
 use Weline\Theme\Model\ThemeScopeVersion;
@@ -33,6 +34,8 @@ use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySolidifyQueue;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySolidifySerialKey;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySolidifyJobStore;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySolidifyStampStore;
+use Weline\Theme\Service\LayoutEntity\ThemeOriginWatchCronGate;
+use Weline\Theme\Service\LayoutEntity\ThemeLayoutOriginWatchService;
 use Weline\Theme\Service\LayoutEntity\WidgetAssetArtifactPublisher;
 use Weline\Theme\Service\LayoutEntity\WidgetAssetOptimizer;
 use Weline\Theme\Service\RuntimeTemplateMaterializer;
@@ -527,6 +530,14 @@ final class ThemeLayoutEntityContractsTest extends TestCase
         },
             'ThemeLayoutOriginWatch::testCronFastSkipsNonDevAndRegistersExecuteName' => function () {
             $this->assert_ThemeLayoutOriginWatch_testCronFastSkipsNonDevAndRegistersExecuteName();
+        },
+            'ThemeLayoutOriginWatch::testCronGateDefaultsOffAndHonorsExplicitEnableInMemory' => function () {
+            $this->setUp_ThemeLayoutOriginWatchCronGate();
+            try {
+                $this->assert_ThemeLayoutOriginWatch_testCronGateDefaultsOffAndHonorsExplicitEnableInMemory();
+            } finally {
+                $this->tearDown_ThemeLayoutOriginWatchCronGate();
+            }
         },
             'ThemeLayoutOriginWatch::testWatchServiceCascadesWidgetsViaLedgerNotLayoutTextScan' => function () {
             $this->assert_ThemeLayoutOriginWatch_testWatchServiceCascadesWidgetsViaLedgerNotLayoutTextScan();
@@ -2941,6 +2952,184 @@ private function assert_ThemeLayoutOriginWatch_testCronFastSkipsNonDevAndRegiste
     self::assertNotFalse($skipPos);
     self::assertNotFalse($runPos);
     self::assertLessThan($runPos, $skipPos);
+
+    // —— 配置闸门（ThemeOriginWatchCronGate，默认关闭）契约：既有断言全部保留，以下为追加 ——
+    self::assertStringContainsString('ThemeOriginWatchCronGate', $src, '注入闸门');
+    self::assertStringContainsString("return 'skip:disabled';", $src, 'execute() 未启用兜底');
+    self::assertStringContainsString('theme.origin_watch_cron.enabled', $src, '配置键需在源码可读');
+    $pendingStart = \strpos($src, 'function hasPendingWork(): bool');
+    self::assertNotFalse($pendingStart);
+    $pendingEnd = \strpos($src, 'function execute(): string', (int) $pendingStart);
+    self::assertNotFalse($pendingEnd);
+    $pendingBody = \substr($src, (int) $pendingStart, (int) $pendingEnd - (int) $pendingStart);
+    // 双闸顺序：gate->isEnabled() 必须短路在 Env::system('deploy') 之前（默认关即不读 deploy）。
+    $gatePos = \strpos($pendingBody, '$this->gate->isEnabled()');
+    $deployPos = \strpos($pendingBody, "Env::system('deploy')");
+    self::assertNotFalse($gatePos, 'hasPendingWork 需先过 gate');
+    self::assertNotFalse($deployPos, 'hasPendingWork 仍需 deploy 判定');
+    self::assertLessThan($deployPos, $gatePos, 'gate 短路必须在 Env::system 之前');
+    // tip 文案必须写明默认关闭与配置键。
+    $tip = (new \ReflectionClass(\Weline\Theme\Cron\LayoutOriginWatch::class))
+        ->newInstanceWithoutConstructor()
+        ->tip();
+    $defaultOff = \strpos($tip, '默认关闭') !== false || \strpos($tip, '默认不启用') !== false;
+    self::assertTrue($defaultOff, 'tip 需含「默认关闭」或「默认不启用」');
+    self::assertStringContainsString('theme.origin_watch_cron.enabled', $tip, 'tip 需含配置键');
+}
+
+/**
+ * 备份 Env 单例的私有 $config，供 tearDown_ThemeLayoutOriginWatchCronGate() 原值还原。
+ */
+private ?array $savedEnvConfigForOriginWatchGate = null;
+
+private function setUp_ThemeLayoutOriginWatchCronGate(): void
+{
+    $prop = new \ReflectionProperty(\Weline\Framework\App\Env::class, 'config');
+    $prop->setAccessible(true);
+    $config = $prop->getValue(\Weline\Framework\App\Env::getInstance());
+    self::assertIsArray($config, 'Env::$config 必须为数组');
+    $this->savedEnvConfigForOriginWatchGate = $config;
+}
+
+private function tearDown_ThemeLayoutOriginWatchCronGate(): void
+{
+    if ($this->savedEnvConfigForOriginWatchGate === null) {
+        return;
+    }
+    $prop = new \ReflectionProperty(\Weline\Framework\App\Env::class, 'config');
+    $prop->setAccessible(true);
+    $prop->setValue(\Weline\Framework\App\Env::getInstance(), $this->savedEnvConfigForOriginWatchGate);
+    $this->savedEnvConfigForOriginWatchGate = null;
+}
+
+/**
+ * 只改内存里的 Env::$config，**绝不**调用 Env::setConfig()/Env::set()：那两个会原子改写磁盘上的
+ * app/etc/env.php（真实开发配置）。这里用 Reflection 写回私有数组，不触发任何写盘路径。
+ */
+private function injectOriginWatchCronConfigInMemory(mixed $rawValue): void
+{
+    $prop = new \ReflectionProperty(\Weline\Framework\App\Env::class, 'config');
+    $prop->setAccessible(true);
+    $env = \Weline\Framework\App\Env::getInstance();
+    $config = $prop->getValue($env);
+    self::assertIsArray($config);
+    unset($config['theme']['origin_watch_cron']['enabled'], $config[self::originWatchCronConfigKey()]);
+    if ($rawValue !== self::originWatchCronUnsetMarker()) {
+        $config['theme']['origin_watch_cron']['enabled'] = $rawValue;
+    }
+    $prop->setValue($env, $config);
+}
+
+private static function originWatchCronConfigKey(): string
+{
+    return ThemeOriginWatchCronGate::CONFIG_KEY;
+}
+
+/**
+ * 「该键未配置」的标记（与任何 env.php 手写值都不可能相等）。
+ */
+private static function originWatchCronUnsetMarker(): object
+{
+    static $marker = null;
+
+    return $marker ??= new \stdClass();
+}
+
+/**
+ * 真实行为测试（非源码字符串断言）：
+ * - 默认未配置 → isEnabled() === false 且 reason() === 'disabled_by_default'；
+ * - 内存里临时置 true → isEnabled() === true，dev 下 hasPendingWork() 转 true；
+ * - execute() 未启用兜底 'skip:disabled'（不跑固化），启用但非 dev → 'skip:non_dev'（双闸不破）；
+ * - 归一边界：'on'/'1'/1/'true'/'yes'/true → true；'off'/'0'/'false'/'no'/'garbage'/false/2 → false。
+ *
+ * 注：ThemeOriginWatchCronGate 与 ThemeLayoutOriginWatchService 均为 final，无法用子类假体，
+ * 故「不触达固化」只经 execute() 的短路返回值证明（skip:disabled 早于 $this->watch->run()），
+ * 不真的调用 run()（未初始化依赖会抛异常）。
+ */
+private function assert_ThemeLayoutOriginWatch_testCronGateDefaultsOffAndHonorsExplicitEnableInMemory(): void
+{
+    self::assertTrue(class_exists(ThemeOriginWatchCronGate::class));
+    self::assertSame('theme.origin_watch_cron.enabled', self::originWatchCronConfigKey());
+
+    // 1) 默认（未配置）：关，且原因可区分「没配」与「显式关」。
+    $this->injectOriginWatchCronConfigInMemory(self::originWatchCronUnsetMarker());
+    $gate = new ThemeOriginWatchCronGate();
+    self::assertFalse($gate->isEnabled(), '未配置必须默认关闭');
+    self::assertSame('disabled_by_default', $gate->reason());
+
+    // 显式 false 与未配置都是 false，但 reason() 必须能区分（运维排查用）。
+    $this->injectOriginWatchCronConfigInMemory(false);
+    self::assertFalse((new ThemeOriginWatchCronGate())->isEnabled());
+    self::assertSame('disabled_by_config', (new ThemeOriginWatchCronGate())->reason());
+
+    // 2) 内存里临时置 true：启用（走 Env::getConfig 点号路径，即 env.php 真实写法）。
+    $this->injectOriginWatchCronConfigInMemory(true);
+    self::assertTrue((new ThemeOriginWatchCronGate())->isEnabled(), '内存置 true 后必须启用');
+    self::assertSame('enabled', (new ThemeOriginWatchCronGate())->reason());
+
+    // 归一边界（本用例目标：'on'/'1'/1 → true；'off'/'0'/'false'/'garbage' → false）。
+    // 数值只断言契约声明的「仅 1 为 true」：0/2/-1 为 false，1 与 1.0 为 true（浮点按 (int) 比较，不在此列）。
+    foreach (['on', '1', 1, 'true', 'TRUE', ' 1 ', 'yes', true, 1.0] as $truthy) {
+        self::assertTrue(ThemeOriginWatchCronGate::normalize($truthy), 'normalize 应为 true: ' . \var_export($truthy, true));
+    }
+    foreach (['off', '0', 0, 'false', 'no', 'garbage', '', null, [], false, 2, -1] as $falsy) {
+        self::assertFalse(ThemeOriginWatchCronGate::normalize($falsy), 'normalize 应为 false: ' . \var_export($falsy, true));
+    }
+    // 字符串形态也必须驱动真实闸门（不只测纯函数）。
+    $this->injectOriginWatchCronConfigInMemory('on');
+    self::assertTrue((new ThemeOriginWatchCronGate())->isEnabled(), "'on' 应启用");
+    $this->injectOriginWatchCronConfigInMemory('garbage');
+    self::assertFalse((new ThemeOriginWatchCronGate())->isEnabled(), '非法值必须按关闭');
+
+    // 4) 调度行为（UC-1/UC-3 + A4/A5）：未启用恒 skip:disabled；启用但非 dev 仍 skip:non_dev。
+    $cron = new LayoutOriginWatch(
+        (new \ReflectionClass(ThemeLayoutOriginWatchService::class))->newInstanceWithoutConstructor(),
+        new ThemeOriginWatchCronGate(),
+    );
+    $this->injectOriginWatchCronConfigInMemory(self::originWatchCronUnsetMarker());
+    self::assertSame('skip:disabled', $cron->execute(), '未启用必须 skip:disabled（早于 watch->run()）');
+    self::assertFalse($cron->hasPendingWork(), '未配置 hasPendingWork 必须 false（prod/dev 都不 claim）');
+
+    $this->injectOriginWatchCronConfigInMemory(true);
+    self::assertSame('skip:non_dev', $this->runOriginWatchExecuteUnderDeploy('prod'), 'prod 显式启用仍 skip:non_dev');
+
+    // dev 下启用：hasPendingWork() 为 true（gate 与 deploy 双闸都放行）。
+    self::assertTrue($cron->hasPendingWork(), 'dev + 启用 → hasPendingWork 必须 true');
+    self::assertTrue($this->deployModeForOriginWatchGateIsDev(), '基线：当前 deploy 为 dev');
+
+    // 清理：还原成未配置，避免污染同套件其它用例。
+    $this->injectOriginWatchCronConfigInMemory(self::originWatchCronUnsetMarker());
+    self::assertFalse($cron->hasPendingWork(), '还原后 hasPendingWork 必须回到 false');
+}
+
+/**
+ * 在指定 deploy 值（只在内存里改 Env::$config['system']['deploy']）下调用 execute() 并还原。
+ */
+private function runOriginWatchExecuteUnderDeploy(string $deploy): string
+{
+    $prop = new \ReflectionProperty(\Weline\Framework\App\Env::class, 'config');
+    $prop->setAccessible(true);
+    $env = \Weline\Framework\App\Env::getInstance();
+    $saved = $prop->getValue($env);
+    self::assertIsArray($saved);
+    $mutated = $saved;
+    $mutated['system']['deploy'] = $deploy;
+    $prop->setValue($env, $mutated);
+    try {
+        $cron = new LayoutOriginWatch(
+            (new \ReflectionClass(ThemeLayoutOriginWatchService::class))->newInstanceWithoutConstructor(),
+            new ThemeOriginWatchCronGate(),
+        );
+
+        return $cron->execute();
+    } finally {
+        $prop->setValue($env, $saved);
+    }
+}
+
+private function deployModeForOriginWatchGateIsDev(): bool
+{
+    return (\Weline\Framework\App\Env::system('deploy') ?? '') === 'dev';
 }
 
 private function assert_ThemeLayoutOriginWatch_testWatchServiceCascadesWidgetsViaLedgerNotLayoutTextScan(): void

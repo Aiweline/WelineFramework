@@ -8,15 +8,20 @@ use Weline\Cron\CronTaskPreflightInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutOriginWatchService;
+use Weline\Theme\Service\LayoutEntity\ThemeOriginWatchCronGate;
 
 /**
  * Dev-only watch: design origin hash → ensure bound scopes → cascade solidify / chrome heal.
  * Production and other deploy modes must fast-skip (no disk scan, no bake).
+ *
+ * 额外闸门：由 ThemeOriginWatchCronGate 配置驱动，默认关闭（dev/prod 均默认关），
+ * 开发环境需在 app/etc/env.php 显式设 theme.origin_watch_cron.enabled=true 才会运行。
  */
 final class LayoutOriginWatch implements CronTaskInterface, CronTaskPreflightInterface
 {
     public function __construct(
         private readonly ThemeLayoutOriginWatchService $watch,
+        private readonly ThemeOriginWatchCronGate $gate,
     ) {
     }
 
@@ -37,7 +42,10 @@ final class LayoutOriginWatch implements CronTaskInterface, CronTaskPreflightInt
             . '账本 * / 共享模板→全主题；chrome heal。含 Taglib→com_*。'
             . '固化/编译完成后仅按涉及布局 impact.slugs 清 FPC（禁止全站 clearAll）。'
             . '内嵌/账本用到的外模块部件以 __ext__ 监视；启用模块 view/statics 的 css/js 以 __modstatic__ 监视并 remirror live；'
-            . '不监视主题 assets/ 图片字体。开发机须 Cron 进程在跑。非开发 skip:non_dev。店面闸门不能替代本任务。';
+            . '不监视主题 assets/ 图片字体。开发机须 Cron 进程在跑。非开发 skip:non_dev。店面闸门不能替代本任务。'
+            . '【启用开关】默认关闭（dev/prod 都不跑）；开发环境需在 app/etc/env.php 设 '
+            . 'theme.origin_watch_cron.enabled = true 才会运行；生产不配即不启用（恒不产生子进程）。'
+            . '未启用时手动执行本任务返回 skip:disabled。';
     }
 
     public function cron_time(): string
@@ -48,9 +56,16 @@ final class LayoutOriginWatch implements CronTaskInterface, CronTaskPreflightInt
     /**
      * 非开发模式不产生子进程：本任务在 prod 恒为 skip:non_dev，
      * 此前每分钟仍要付一次完整框架冷启动才发现要跳过。
+     *
+     * 配置闸门（ThemeOriginWatchCronGate）短路在 Env::system('deploy') **之前**：
+     * 默认关闭时直接返回 false，调度器既不 claim 也不 spawn，连 deploy 读取都省掉。
      */
     public function hasPendingWork(): bool
     {
+        if (!$this->gate->isEnabled()) {
+            return false;
+        }
+
         try {
             return (Env::system('deploy') ?? '') === 'dev';
         } catch (\Throwable) {
@@ -60,6 +75,10 @@ final class LayoutOriginWatch implements CronTaskInterface, CronTaskPreflightInt
 
     public function execute(): string
     {
+        if (!$this->gate->isEnabled()) {
+            return 'skip:disabled';
+        }
+
         if ((Env::system('deploy') ?? '') !== 'dev') {
             return 'skip:non_dev';
         }
