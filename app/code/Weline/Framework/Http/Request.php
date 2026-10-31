@@ -476,13 +476,11 @@ class Request extends Request\RequestAbstract implements RequestInterface, Reque
 
     public function getAuth(string $auth_type = 'bearer')
     {
-        $serverBag = $this->getServerBag();
-        
         switch ($auth_type) {
             case self::auth_TYPE_BEARER:
-                return $serverBag->getBearerToken() ?? '';
+                return $this->getBearerToken() ?? '';
             case self::auth_TYPE_BASIC_AUTH:
-                $basicAuth = $serverBag->getBasicAuth();
+                $basicAuth = $this->getBasicAuth();
                 return $basicAuth ? ['USER' => $basicAuth['user'], 'PW' => $basicAuth['password']] : ['USER' => '', 'PW' => ''];
             default:
                 return null;
@@ -605,7 +603,7 @@ class Request extends Request\RequestAbstract implements RequestInterface, Reque
 
     public function clientIP()
     {
-        return $this->getServerBag()->getClientIp();
+        return $this->getClientIp();
     }
 
     /**
@@ -709,7 +707,7 @@ class Request extends Request\RequestAbstract implements RequestInterface, Reque
 
     public function getUserIpAddress()
     {
-        return $this->getServerBag()->getClientIp();
+        return $this->getClientIp();
     }
 
     public function getPathSplit(): array

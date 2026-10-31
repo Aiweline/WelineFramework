@@ -49,7 +49,7 @@ final class ScopeRateLimitObserver implements ObserverInterface
             }
             /** @var Request $request */
             $request = ObjectManager::getInstance(Request::class);
-            $subject = $request->getServerBag()->getClientIp();
+            $subject = $request->getClientIp();
             /** @var ScopeRateLimiter $limiter */
             $limiter = ObjectManager::getInstance(ScopeRateLimiter::class);
             if (!$limiter->allow($scope, $bucket, $limit, $window, $subject)) {

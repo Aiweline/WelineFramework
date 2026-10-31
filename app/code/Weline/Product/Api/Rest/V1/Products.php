@@ -162,7 +162,7 @@ final class Products extends FrontendRestController
             return \Weline\Product\Service\ProductRestTranslations::normalizeLocale($locale);
         }
         return \Weline\Product\Service\ProductRestTranslations::negotiateLocale(
-            (string)($this->request->getServerBag()->getHeader('Accept-Language') ?? ''),
+            (string)($this->request->getHeader('Accept-Language') ?? ''),
             (string)\Weline\Framework\Env\WelineEnv::getLangLocal(),
         );
     }

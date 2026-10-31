@@ -61,45 +61,44 @@ final class RequestPipeline implements RequestPipelineInterface
         bool $bootstrapRequestCycle = true,
         bool $startSession = true,
     ): RequestPipelineResult {
-        // Closed panel: no timings map, no TraceGate recorder load, no per-stage microtime
-        // except stage-listener notify (url/route) which needs a single elapsed float.
+        // Stage timings always run: microtime() costs ~0.1 µs per sample (under
+        // 1 µs for the whole pipeline), but with the trace panel closed every
+        // stage read 0 — the pipeline became unmeasurable exactly when someone
+        // was investigating a slow request. TraceGate span recording stays behind
+        // the flag, so the closed panel still avoids the recorder load.
         $traceEnabled = TraceGate::isArmed();
         $timings = [];
 
         if ($bootstrapRequestCycle) {
-            if ($traceEnabled) {
-                $startedAt = \microtime(true);
-                try {
-                    $app->bootstrapRequestCycle();
-                } finally {
-                    $timings['bootstrap_ms'] = self::elapsedMilliseconds($startedAt);
-                }
-            } else {
+            $startedAt = \microtime(true);
+            try {
                 $app->bootstrapRequestCycle();
+            } finally {
+                $timings['bootstrap_ms'] = self::elapsedMilliseconds($startedAt);
             }
         }
 
+        $startedAt = \microtime(true);
         if ($traceEnabled) {
-            $startedAt = \microtime(true);
             TraceGate::pushCurrentParent('pre_route_gate');
-            try {
-                $app->dispatchPreRouteGate();
-            } finally {
-                $timings['pre_route_gate_ms'] = self::elapsedMilliseconds($startedAt);
+        }
+        try {
+            $app->dispatchPreRouteGate();
+        } finally {
+            $timings['pre_route_gate_ms'] = self::elapsedMilliseconds($startedAt);
+            if ($traceEnabled) {
                 TraceGate::popCurrentParent();
                 TraceGate::recordSpan('pre_route_gate', $timings['pre_route_gate_ms'], 'framework');
             }
-        } else {
-            $app->dispatchPreRouteGate();
         }
 
-        if ($traceEnabled) {
-            $urlStartedAt = \microtime(true);
-            $parseStartedAt = \microtime(true);
-            try {
-                $parsedUrl = $app->parseUrl();
-            } finally {
-                $timings['url_parser_call_ms'] = self::elapsedMilliseconds($parseStartedAt);
+        $urlStartedAt = \microtime(true);
+        $parseStartedAt = \microtime(true);
+        try {
+            $parsedUrl = $app->parseUrl();
+        } finally {
+            $timings['url_parser_call_ms'] = self::elapsedMilliseconds($parseStartedAt);
+            if ($traceEnabled) {
                 TraceGate::recordSpan(
                     'url_parser::parse',
                     $timings['url_parser_call_ms'],
@@ -107,12 +106,14 @@ final class RequestPipeline implements RequestPipelineInterface
                     'url_parser'
                 );
             }
-            if (\is_array($parsedUrl)) {
-                $applyStartedAt = \microtime(true);
-                try {
-                    $app->applyParsedUrl($parsedUrl);
-                } finally {
-                    $timings['process_url_parse_ms'] = self::elapsedMilliseconds($applyStartedAt);
+        }
+        if (\is_array($parsedUrl)) {
+            $applyStartedAt = \microtime(true);
+            try {
+                $app->applyParsedUrl($parsedUrl);
+            } finally {
+                $timings['process_url_parse_ms'] = self::elapsedMilliseconds($applyStartedAt);
+                if ($traceEnabled) {
                     TraceGate::recordSpan(
                         'url_parser::apply',
                         $timings['process_url_parse_ms'],
@@ -121,17 +122,12 @@ final class RequestPipeline implements RequestPipelineInterface
                     );
                 }
             }
-            $timings['url_parser_ms'] = self::elapsedMilliseconds($urlStartedAt);
-            TraceGate::recordSpan('url_parser', $timings['url_parser_ms'], 'framework');
-            $this->notifyStage(self::STAGE_URL, $timings['url_parser_ms']);
-        } else {
-            $urlStartedAt = \microtime(true);
-            $parsedUrl = $app->parseUrl();
-            if (\is_array($parsedUrl)) {
-                $app->applyParsedUrl($parsedUrl);
-            }
-            $this->notifyStage(self::STAGE_URL, self::elapsedMilliseconds($urlStartedAt));
         }
+        $timings['url_parser_ms'] = self::elapsedMilliseconds($urlStartedAt);
+        if ($traceEnabled) {
+            TraceGate::recordSpan('url_parser', $timings['url_parser_ms'], 'framework');
+        }
+        $this->notifyStage(self::STAGE_URL, $timings['url_parser_ms']);
 
         $cachedResponse = self::earlyResponse();
         if ($cachedResponse instanceof Response) {
@@ -143,27 +139,27 @@ final class RequestPipeline implements RequestPipelineInterface
             );
         }
 
+        $startedAt = \microtime(true);
         if ($traceEnabled) {
-            $startedAt = \microtime(true);
             TraceGate::pushCurrentParent('run_before');
-            try {
-                $app->dispatchRunBefore();
-            } finally {
-                $timings['run_before_ms'] = self::elapsedMilliseconds($startedAt);
+        }
+        try {
+            $app->dispatchRunBefore();
+        } finally {
+            $timings['run_before_ms'] = self::elapsedMilliseconds($startedAt);
+            if ($traceEnabled) {
                 TraceGate::popCurrentParent();
                 TraceGate::recordSpan('run_before', $timings['run_before_ms'], 'framework');
             }
-        } else {
-            $app->dispatchRunBefore();
         }
 
         if ($startSession) {
-            if ($traceEnabled) {
-                $startedAt = \microtime(true);
-                try {
-                    $app->startSessionIfNeeded();
-                } finally {
-                    $timings['session_start_ms'] = self::elapsedMilliseconds($startedAt);
+            $startedAt = \microtime(true);
+            try {
+                $app->startSessionIfNeeded();
+            } finally {
+                $timings['session_start_ms'] = self::elapsedMilliseconds($startedAt);
+                if ($traceEnabled) {
                     TraceGate::recordSpan(
                         'router_start::session',
                         $timings['session_start_ms'],
@@ -171,32 +167,32 @@ final class RequestPipeline implements RequestPipelineInterface
                         'router_start'
                     );
                 }
-            } else {
-                $app->startSessionIfNeeded();
             }
-        } elseif ($traceEnabled) {
+        } else {
             // 阶段被主动跳过（如内部首页 FPC 预热不启会话）时，仍要产出计时键。
-            // 追踪开启时 $timings 是**固定键集合的契约**，下游 reader（WlsRuntime 汇总
+            // $timings 是**固定键集合的契约**，下游 reader（WlsRuntime 汇总
             // router_start_ms）不逐个判键；缺键会掉成 Undefined array key 警告。
             $timings['session_start_ms'] = 0.0;
         }
 
-        if ($traceEnabled) {
-            $routerPhaseStartedAt = \microtime(true);
-            $startedAt = \microtime(true);
-            try {
-                $router = $app->initializeRouter();
-            } finally {
-                $timings['router_init_ms'] = self::elapsedMilliseconds($startedAt);
+        $routerPhaseStartedAt = \microtime(true);
+        $startedAt = \microtime(true);
+        try {
+            $router = $app->initializeRouter();
+        } finally {
+            $timings['router_init_ms'] = self::elapsedMilliseconds($startedAt);
+            if ($traceEnabled) {
                 TraceGate::recordSpan('router_init', $timings['router_init_ms'], 'framework');
+                TraceGate::pushCurrentParent('router_start');
             }
-            TraceGate::pushCurrentParent('router_start');
-            $startedAt = \microtime(true);
-            try {
-                $result = $app->runRouter($router);
-            } finally {
-                $timings['router_start_call_ms'] = self::elapsedMilliseconds($startedAt);
-                $timings['router_start_ms'] = self::elapsedMilliseconds($routerPhaseStartedAt);
+        }
+        $startedAt = \microtime(true);
+        try {
+            $result = $app->runRouter($router);
+        } finally {
+            $timings['router_start_call_ms'] = self::elapsedMilliseconds($startedAt);
+            $timings['router_start_ms'] = self::elapsedMilliseconds($routerPhaseStartedAt);
+            if ($traceEnabled) {
                 TraceGate::popCurrentParent();
                 TraceGate::recordSpan(
                     'router_start::dispatch',
@@ -205,32 +201,23 @@ final class RequestPipeline implements RequestPipelineInterface
                     'router_start'
                 );
                 TraceGate::recordSpan('router_start', $timings['router_start_ms'], 'framework');
-                $this->notifyStage(self::STAGE_ROUTE, $timings['router_start_ms']);
             }
-            unset($router);
-        } else {
-            $routerPhaseStartedAt = \microtime(true);
-            $router = $app->initializeRouter();
-            try {
-                $result = $app->runRouter($router);
-            } finally {
-                $this->notifyStage(self::STAGE_ROUTE, self::elapsedMilliseconds($routerPhaseStartedAt));
-            }
-            unset($router);
+            $this->notifyStage(self::STAGE_ROUTE, $timings['router_start_ms']);
         }
+        unset($router);
 
+        $startedAt = \microtime(true);
         if ($traceEnabled) {
-            $startedAt = \microtime(true);
             TraceGate::pushCurrentParent('run_after');
-            try {
-                $result = $app->dispatchRunAfter($result);
-            } finally {
-                $timings['run_after_ms'] = self::elapsedMilliseconds($startedAt);
+        }
+        try {
+            $result = $app->dispatchRunAfter($result);
+        } finally {
+            $timings['run_after_ms'] = self::elapsedMilliseconds($startedAt);
+            if ($traceEnabled) {
                 TraceGate::popCurrentParent();
                 TraceGate::recordSpan('run_after', $timings['run_after_ms'], 'framework');
             }
-        } else {
-            $result = $app->dispatchRunAfter($result);
         }
 
         return new RequestPipelineResult(

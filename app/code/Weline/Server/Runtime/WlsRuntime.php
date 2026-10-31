@@ -428,17 +428,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return $this->readyGateHomepageFpcProof;
         }
 
-        if ($this->shouldRunReadyGateWorkerRegistryWarmup()) {
-            $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
-            $this->router ??= ObjectManager::getInstance(Router::class);
-            $this->logReadyGateWarmupStep('registry_begin', $workerId, $startedAt);
-            $this->preloadWorkerRegistries(true);
-            $this->readyGateWorkerRegistryWarmupCompleted = true;
-            $this->logReadyGateWarmupStep('registry_done', $workerId, $startedAt);
-            SchedulerSystem::yield();
-        } else {
-            $this->logReadyGateWarmupStep('registry_skipped', $workerId, $startedAt);
-        }
+        // Worker start-up preload: registries and critical runtime classes are read
+        // into process memory before this worker joins the public READY pool, so the
+        // first real request never pays their cold-start cost. Always on — no config
+        // switch, because a lazily-loaded worker produces a slow first request.
+        $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
+        $this->router ??= ObjectManager::getInstance(Router::class);
+        $this->logReadyGateWarmupStep('registry_begin', $workerId, $startedAt);
+        $this->preloadWorkerRegistries(true);
+        $this->readyGateWorkerRegistryWarmupCompleted = true;
+        $this->logReadyGateWarmupStep('registry_done', $workerId, $startedAt);
+        SchedulerSystem::yield();
 
         if ($this->shouldRunReadyGateWorkerBootstrapObserverWarmup()) {
             $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
@@ -1075,16 +1075,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $rawFlag = \getenv('WLS_WORKER_READY_GATE_OBSERVER_WARMUP');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
             $rawFlag = Env::get('wls.worker.ready_gate_observer_warmup', '0');
-        }
-
-        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync'], true);
-    }
-
-    private function shouldRunReadyGateWorkerRegistryWarmup(): bool
-    {
-        $rawFlag = \getenv('WLS_WORKER_READY_GATE_REGISTRY_WARMUP');
-        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.ready_gate_registry_warmup', '0');
         }
 
         return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync'], true);
@@ -8284,6 +8274,20 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         
         // 性能统计：仅当请求耗时 > 1 秒时写入 var/log/wls/timing.log，便于定位 TTFB 瓶颈
         $t0 = \microtime(true);
+        // R2-c: pre-telemetry breakdown.
+        //
+        // `pre_telemetry_total_ms` spanned everything from handle() entry to the
+        // telemetry snapshot but had no breakdown: the storefront cold first
+        // request showed 12.56 ms (16.9%) belonging to no stage at all, so the
+        // remaining cost could not be attributed. These marks split that span into
+        // named segments so the gap is visible instead of silently absorbed.
+        $__seg = [];
+        $__segT = $t0;
+        $__mark = static function (string $name) use (&$__seg, &$__segT): void {
+            $now = \microtime(true);
+            $__seg[$name] = \round(($now - $__segT) * 1000, 2);
+            $__segT = $now;
+        };
         $timing = [
             'uri' => '',
             'run_before_ms' => 0,
@@ -8347,6 +8351,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 // Template、PreparedContentStore 等请求级状态依赖 RequestContext
                 // 分片；缺失时会退回到 Fiber/连接级实例，导致模板数据跨请求串味。
                 RequestContext::init();
+                $__mark('bootstrap.request_context_init');
                 $this->namespaceGenerationRepository()->beginRequestSnapshot();
                 $namespaceSnapshotStarted = true;
                 RequestContext::set('view.template.profile', []);
@@ -8395,12 +8400,15 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             // 常驻内存：新请求入口 OM/标签基线（与 StateManager 中对应 reset 回调对齐，供 peer Fiber 存在时 finally 可安全 omit）
             if (Runtime::isPersistent()) {
                 StateManager::runWlsPersistentRequestEntryBaseline();
+                $__mark('bootstrap.state_baseline');
             }
             $this->putRequestServer('WLS_REQUEST_COUNT',  $this->requestCount);
             Context::current()->set('runtime.request_count', $this->requestCount);
             $app->bootstrapRequestCycle();
+            $__mark('bootstrap.cycle');
             if ($request !== null) {
                 $this->installBackendWarmupContext($request);
+                $__mark('bootstrap.backend_warmup');
             }
             $timing['uri'] = ($this->requestServer('REQUEST_URI') ?? '') ?: '/';
             WelineEnv::set('request.uri', $timing['uri'], 'WlsRuntime handle');
@@ -8436,6 +8444,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             foreach ($pipelineExecution->timings as $name => $durationMs) {
                 $timing[$name] = $durationMs;
             }
+            $__mark('bootstrap.pipeline_done');
+            $timing['bootstrap_breakdown'] = $__seg;
             $parse = $pipelineExecution->parsedUrl;
             if (\is_array($parse) && isset($parse['_perf']) && \is_array($parse['_perf'])) {
                 $timing['url_parser_perf'] = $parse['_perf'];
@@ -8500,6 +8510,19 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             if (\is_array($routerProfile) && $routerProfile !== []) {
                 $timing['router_profile'] = $routerProfile;
             }
+            // Phase totals collected by TraceGate with the panel closed
+            // (slot/widget render phases). Without them component_render cost is
+            // invisible unless the trace panel is forced on, which changes the
+            // measured workload.
+            $phaseTotals = RequestContext::get(\Weline\Framework\Runtime\TraceGate::PHASE_TOTALS_KEY);
+            if (\is_array($phaseTotals) && $phaseTotals !== []) {
+                $timing['phase_totals'] = $phaseTotals;
+            }
+            // R3-d: attribution counters for fill_unmarked (repeat work vs true miss).
+            $fillCounters = RequestContext::get('theme.slots.fill_unmarked.counters');
+            if (\is_array($fillCounters) && $fillCounters !== []) {
+                $timing['fill_unmarked_counters'] = $fillCounters;
+            }
             unset(
                 $pipelineExecution,
                 $queryBinTiming,
@@ -8558,6 +8581,25 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             unset($result);
             $this->releaseCompletedRequestPhase('normalize_output');
             $timing['pre_telemetry_total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
+            // R2-c: expose the part of pre_telemetry no stage accounts for.
+            //
+            // Known stage timings plus the bootstrap breakdown are summed and
+            // subtracted from pre_telemetry_total_ms. A positive remainder is time
+            // spent in spans that still have no mark; reporting it explicitly keeps
+            // an unaccounted gap visible instead of hidden inside the total.
+            if (isset($timing['bootstrap_breakdown']) && \is_array($timing['bootstrap_breakdown'])) {
+                $accountedMs = \array_sum($timing['bootstrap_breakdown']);
+                foreach ([
+                    'run_before_ms', 'url_parser_call_ms', 'process_url_parse_ms',
+                    'router_init_ms', 'router_start_call_ms', 'run_after_ms',
+                ] as $stageKey) {
+                    $accountedMs += (float)($timing[$stageKey] ?? 0);
+                }
+                $timing['pre_telemetry_unattributed_ms'] = \round(
+                    \max(0.0, $timing['pre_telemetry_total_ms'] - $accountedMs),
+                    2,
+                );
+            }
             // Panel-armed only: WLS entry → response-ready (before panel/telemetry decoration).
             $this->recordWlsHandleSpanIfPanelArmed($timing);
             $telemetryStart = \microtime(true);
@@ -10256,9 +10298,26 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $slowThreshold = (float)($config['slow_request_threshold_ms'] ?? 500.0);
         $this->recordWlsPerformancePanelTiming($timing, $isDev);
 
-        $shouldLog = ($timing['total_ms'] >= $slowThreshold) || ($isDev && !empty($config['log_all_in_dev']));
+        // First request of every Worker is always recorded.
+        //
+        // The threshold-only rule meant the worker's very first request vanished
+        // from timing.log whenever it finished under the threshold — and that
+        // request is exactly the one that carries cold-load cost. Once the
+        // storefront cold first request dropped to ~100-240 ms it stopped being
+        // logged at all, so cold regressions became invisible; measuring them
+        // required dropping slow_request_threshold_ms to 0, which changes what is
+        // logged for every request and hides which sample was actually first.
+        $isColdFirstRequest = (int)($timing['request_count'] ?? 0) === 1;
+
+        $shouldLog = $isColdFirstRequest
+            || ($timing['total_ms'] >= $slowThreshold)
+            || ($isDev && !empty($config['log_all_in_dev']));
         if (!$shouldLog) {
             return;
+        }
+
+        if ($isColdFirstRequest) {
+            $timing['cold_first_request'] = true;
         }
 
         if (!empty($config['debug_log_enabled'])) {

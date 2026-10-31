@@ -439,20 +439,19 @@ class Extension extends FrontendController
 
     private function requestToken(): string
     {
-        $bag = $this->request->getServerBag();
-        $token = $bag->getHeader('X-Social-Ext-Token');
+        $token = $this->request->getHeader('X-Social-Ext-Token');
         if (\is_array($token)) {
             $token = (string)\reset($token);
         }
         $token = \is_string($token) ? \trim($token) : '';
 
         if ($token === '') {
-            $raw = $bag->get('HTTP_X_SOCIAL_EXT_TOKEN', '');
+            $raw = $this->request->getServer('HTTP_X_SOCIAL_EXT_TOKEN');
             $token = \is_string($raw) ? \trim($raw) : '';
         }
 
         if ($token === '') {
-            $authorization = $bag->getHeader('Authorization');
+            $authorization = $this->request->getHeader('Authorization');
             if (\is_array($authorization)) {
                 $authorization = (string)\reset($authorization);
             }
@@ -463,7 +462,7 @@ class Extension extends FrontendController
         }
 
         if ($token === '') {
-            $bearer = $bag->getBearerToken();
+            $bearer = $this->request->getBearerToken();
             if (\is_string($bearer)) {
                 $token = \trim($bearer);
             }

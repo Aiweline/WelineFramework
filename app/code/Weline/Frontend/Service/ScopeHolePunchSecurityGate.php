@@ -375,7 +375,7 @@ final class ScopeHolePunchSecurityGate
     private function clientIp(Request $request): string
     {
         try {
-            $ip = \trim((string)$request->getServerBag()->getClientIp());
+            $ip = \trim((string)$request->getClientIp());
         } catch (\Throwable) {
             $ip = '';
         }

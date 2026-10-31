@@ -20,6 +20,81 @@ final class StorefrontRenderContextInstaller
 {
     private const PENDING_KEY = 'storefront.render_context.install_pending.v1';
 
+    /**
+     * Process-level cache for built snapshots, keyed by the scope triple.
+     *
+     * buildSnapshot() projects website-localisation rows and resolves the locale
+     * catalogue (installed-language list) on every storefront request. Both are
+     * global facts for a given (website, store, channel) and measured ~10 ms per
+     * request before this cache. The bag installed into StorefrontRenderContext
+     * stays request-scoped; only the snapshot it is built from is shared.
+     *
+     * @var array<string, StorefrontRenderContext>
+     */
+    private static array $processSnapshotCache = [];
+
+    private const PROCESS_CACHE_MAX = 64;
+
+    /**
+     * Drop cached render-context snapshots (website / locale config changed).
+     */
+    public static function clearProcessCache(): void
+    {
+        self::$processSnapshotCache = [];
+    }
+
+    /**
+     * Build one snapshot for a scope triple and store it in the process cache.
+     *
+     * Called from module preload providers at Worker start-up. It deliberately
+     * does NOT install into the request bag (there is no request during
+     * warm-up); the request path installs the cached snapshot itself.
+     *
+     * @return bool whether a snapshot was cached
+     */
+    public function warmSnapshot(
+        int $websiteId,
+        string $websiteCode,
+        string $websiteUrl,
+        string $locale,
+        string $currency,
+        string $timezone,
+    ): bool {
+        if ($websiteCode === '') {
+            return false;
+        }
+
+        $cacheKey = \implode("\n", [$websiteId, $websiteCode, $locale, $currency, $timezone]);
+        if (isset(self::$processSnapshotCache[$cacheKey])) {
+            return true;
+        }
+
+        try {
+            $snapshot = $this->buildSnapshotFor(
+                $websiteId,
+                $websiteCode,
+                $websiteUrl,
+                $locale,
+                $currency,
+                $timezone,
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+
+        if (!$snapshot->complete) {
+            return false;
+        }
+        if (\count(self::$processSnapshotCache) >= self::PROCESS_CACHE_MAX
+            && !isset(self::$processSnapshotCache[$cacheKey])
+        ) {
+            unset(self::$processSnapshotCache[\array_key_first(self::$processSnapshotCache)]);
+        }
+        self::$processSnapshotCache[$cacheKey] = $snapshot;
+
+        return true;
+    }
+
     public function installOnce(): StorefrontRenderContext
     {
         $existing = StorefrontRenderContext::current();
@@ -42,8 +117,25 @@ final class StorefrontRenderContextInstaller
 
         RequestContext::set(self::PENDING_KEY, true);
         try {
+            $cacheKey = self::snapshotCacheKey();
+            if ($cacheKey !== null && isset(self::$processSnapshotCache[$cacheKey])) {
+                $cached = self::$processSnapshotCache[$cacheKey];
+                StorefrontRenderContext::install($cached);
+
+                return $cached;
+            }
+
             $built = $this->buildSnapshot();
+            if ($cacheKey !== null && $built->complete) {
+                if (\count(self::$processSnapshotCache) >= self::PROCESS_CACHE_MAX
+                    && !isset(self::$processSnapshotCache[$cacheKey])
+                ) {
+                    unset(self::$processSnapshotCache[\array_key_first(self::$processSnapshotCache)]);
+                }
+                self::$processSnapshotCache[$cacheKey] = $built;
+            }
             StorefrontRenderContext::install($built);
+
             return $built;
         } catch (\Throwable $e) {
             $failed = $this->incomplete(
@@ -66,6 +158,43 @@ final class StorefrontRenderContextInstaller
         return $this->installOnce();
     }
 
+    /**
+     * Cache key for the built snapshot: the resolved scope triple plus the
+     * request-localisation inputs the snapshot embeds.
+     *
+     * Returns null when any input is missing, which keeps the caller on the
+     * uncached path instead of storing a snapshot built from partial facts.
+     */
+    private static function snapshotCacheKey(): ?string
+    {
+        if (!Context::hasCurrent()) {
+            return null;
+        }
+        $identity = RequestContext::scopeIdentity();
+        $websiteId = $identity?->websiteId;
+        if ($websiteId === null) {
+            $websiteId = RequestContext::getWelineWebsiteId();
+        }
+        $websiteCode = \trim((string)($identity?->websiteCode ?? ''));
+        if ($websiteCode === '') {
+            $websiteCode = \trim((string)RequestContext::getWelineWebsiteCode());
+        }
+        if ($websiteCode === '') {
+            return null;
+        }
+
+        return \implode("\n", [
+            (string)(int)$websiteId,
+            $websiteCode,
+            \trim((string)RequestContext::getWelineUserLang()),
+            \trim((string)RequestContext::getWelineUserCurrency()),
+            \trim((string)RequestContext::getWelineTimezone()),
+        ]);
+    }
+
+    /**
+     * Build a snapshot from the current request context.
+     */
     private function buildSnapshot(): StorefrontRenderContext
     {
         $identity = RequestContext::scopeIdentity();
@@ -77,10 +206,36 @@ final class StorefrontRenderContextInstaller
         if ($websiteCode === '') {
             $websiteCode = trim(RequestContext::getWelineWebsiteCode());
         }
-        $websiteUrl = trim(RequestContext::getWelineWebsiteUrl());
-        $locale = trim(RequestContext::getWelineUserLang()) ?: 'zh_Hans_CN';
-        $currency = trim(RequestContext::getWelineUserCurrency()) ?: 'CNY';
-        $timezone = trim(RequestContext::getWelineTimezone()) ?: \date_default_timezone_get();
+
+        return $this->buildSnapshotFor(
+            (int)$websiteId,
+            $websiteCode,
+            trim(RequestContext::getWelineWebsiteUrl()),
+            trim(RequestContext::getWelineUserLang()),
+            trim(RequestContext::getWelineUserCurrency()),
+            trim(RequestContext::getWelineTimezone()),
+        );
+    }
+
+    /**
+     * Build a snapshot for an explicit scope triple.
+     *
+     * Split out of {@see self::buildSnapshot()} so preload providers can build the
+     * same snapshot at Worker start-up without a request context present.
+     */
+    private function buildSnapshotFor(
+        int $websiteId,
+        string $websiteCode,
+        string $websiteUrl,
+        string $locale,
+        string $currency,
+        string $timezone,
+    ): StorefrontRenderContext {
+        $websiteCode = trim($websiteCode);
+        $websiteUrl = trim($websiteUrl);
+        $locale = trim($locale) ?: 'zh_Hans_CN';
+        $currency = trim($currency) ?: 'CNY';
+        $timezone = trim($timezone) ?: \date_default_timezone_get();
 
         $hasWebsite = $websiteCode !== ''
             && ($websiteId > 0 || $websiteCode === 'default' || $websiteId === 0);

@@ -58,6 +58,15 @@ final class CompiledRegistryWarmProvider implements WorkerPreloadProviderInterfa
         );
     }
 
+    /**
+     * Compiled artifacts are the outermost prerequisite — nothing else may run
+     * before them.
+     */
+    public function dependsOn(): array
+    {
+        return [];
+    }
+
     public function invalidationKeys(): array
     {
         $keys = [];

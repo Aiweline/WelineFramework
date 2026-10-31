@@ -49,6 +49,17 @@ use Weline\Framework\Runtime\RequestLocalInterface;
 
 class Template extends DataObject implements RequestLocalInterface
 {
+    /**
+     * Process-level memo for convertFetchFileName()'s context key.
+     *
+     * The key is derived from view environment + theme + compile scope, all
+     * process-global facts, yet it was rebuilt on every call. Cleared through
+     * {@see self::clearProcessViewFileCache()} alongside the file map.
+     *
+     * @var array<string, string>
+     */
+    private static array $processTemplateContextKey = [];
+
     use TraitTemplate;
 
     private string $file_ext = '.phtml';
@@ -266,6 +277,7 @@ class Template extends DataObject implements RequestLocalInterface
     public static function clearProcessViewFileCache(): void
     {
         self::$processViewFileCache = [];
+        self::$processTemplateContextKey = [];
     }
 
     public static function processViewFileCacheItemCount(): int
@@ -936,9 +948,18 @@ class Template extends DataObject implements RequestLocalInterface
         // Path maps must key by the same w_env compile scope as physical dirs.
         // viewEnvironmentCacheSuffix alone can freeze an early Storefront fence
         // lang and collide hi_IN / en_US onto one processViewFileCache entry.
-        $templateContextKey = $this->viewEnvironmentCacheSuffix('template-file-map')
-            . '|' . $this->resolveThemeCacheKeyForFetchFile($this->view_dir . $fileName)
-            . '|compile_scope:' . $this->templateCompileScopeMapKey();
+        // Context key is request-stable: it depends on the view environment, theme
+        // and compile scope, not on $fileName. Recomputing it per call cost
+        // 85-128 us (suffix 18-27 + theme key 24-53 + compile scope 43-48), and a
+        // storefront request renders dozens of components through this path.
+        $ctxKeyCacheKey = $this->view_dir . "\0template_context_key";
+        $templateContextKey = self::$processTemplateContextKey[$ctxKeyCacheKey] ?? null;
+        if ($templateContextKey === null) {
+            $templateContextKey = $this->viewEnvironmentCacheSuffix('template-file-map')
+                . '|' . $this->resolveThemeCacheKeyForFetchFile($this->view_dir . $fileName)
+                . '|compile_scope:' . $this->templateCompileScopeMapKey();
+            self::$processTemplateContextKey[$ctxKeyCacheKey] = $templateContextKey;
+        }
         $comFileName_cache_key = $this->view_dir . $fileName . '_comFileName|' . $templateContextKey;
         $tplFile_cache_key = $this->view_dir . $fileName . '_tplFile|' . $templateContextKey;
         $processViewFileCacheKey = $comFileName_cache_key . "\0" . $tplFile_cache_key;
@@ -2852,10 +2873,10 @@ class Template extends DataObject implements RequestLocalInterface
         int $bytes,
         ?array $io = null
     ): void {
-        $traceEnabled = TraceGate::isArmed();
-        if (!$traceEnabled && $totalMs < 20.0 && $includeMs < 20.0) {
+        if (!RenderProfileThreshold::isSlowEnough($totalMs, $includeMs)) {
             return;
         }
+        $traceEnabled = TraceGate::isArmed();
         $path = \str_replace('\\', '/', $filename);
         $basePath = \defined('BP') ? \str_replace('\\', '/', BP) : '';
         if ($basePath !== '' && \str_starts_with($path, $basePath)) {
@@ -2898,7 +2919,7 @@ class Template extends DataObject implements RequestLocalInterface
             RequestContext::set('view.template.aggregate', $aggregate);
         }
 
-        if ($totalMs < 20.0 && $includeMs < 20.0) {
+        if (!RenderProfileThreshold::isSlowEnough($totalMs, $includeMs)) {
             return;
         }
         $profile = RequestContext::get('view.template.profile');

@@ -18,12 +18,13 @@ use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Cache\KeyBuilder;
+use Weline\Framework\Http\RequestInterface;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Http\WlsPublicOriginPort;
 use Weline\Framework\Manager\ObjectManager;
 
-abstract class RequestAbstract extends RequestFilter
+abstract class RequestAbstract extends RequestFilter implements RequestInterface
 {
     /**缓存专区*/
     public string $uri_cache_key = '';
@@ -55,20 +56,8 @@ abstract class RequestAbstract extends RequestFilter
      */
     public ?\Weline\Framework\Http\Response $_response = null;
 
-    /**
-     * ServerBag - 服务器变量管理器
-     * @var ServerBag|null
-     */
-    protected ?ServerBag $serverBag = null;
-
     public function __init()
     {
-        // 初始化 ServerBag
-        if ($this->serverBag === null) {
-            $this->serverBag = new ServerBag();
-            $this->serverBag->initFromGlobals();
-        }
-        
         # FIXME 兼容$_GET将"."替换成"_"的情况，暂不清楚$_POST情况，可能第一层键名也会有此情况
         $query_str = $this->getServer('QUERY_STRING');
         if (str_contains($query_str ?? '', '.')) {
@@ -323,57 +312,89 @@ abstract class RequestAbstract extends RequestFilter
      *
      * @return string|array
      */
+    /**
+     * Server keys that live outside `input.server` in the request Context.
+     *
+     * The Context is the single source of truth for request facts. Most SERVER
+     * values sit under `input.server`, but the routing/runtime facts the
+     * framework derives during URL parsing are stored on their own paths. Keeping
+     * this table next to the reader avoids the old ServerBag → WelineEnv →
+     * Context round-trip that rebuilt a full snapshot on every call.
+     *
+     * @var array<string, string>
+     */
+    private const SERVER_CONTEXT_PATHS = [
+        'WELINE_AREA' => 'route.area',
+        'WELINE_AREA_ROUTE' => 'route.area_route',
+        'WELINE_WEBSITE_ID' => 'route.website_id',
+        'WELINE_WEBSITE_CODE' => 'route.website_code',
+        'WELINE_WEBSITE_URL' => 'route.website_url',
+        'WELINE_USER_LANG' => 'route.language',
+        'WELINE_USER_CURRENCY' => 'route.currency',
+        'WELINE_URL_PARSED' => 'route.url_parsed',
+        'WELINE_IS_BACKEND' => 'route.is_backend',
+        'WLS_REDIRECT_COUNT' => 'runtime.redirect_count',
+        'WLS_REQUEST_COUNT' => 'runtime.request_count',
+    ];
+
+    /**
+     * Read one SERVER value straight from the request Context.
+     *
+     * `input.server` is authoritative for the raw transport facts; the routing
+     * facts derived later in the request live on their own Context paths
+     * (see {@see self::SERVER_CONTEXT_PATHS}). No snapshot is rebuilt and no
+     * intermediate bag is consulted.
+     */
+    private function readServerFromContext(Context $context, string $key): mixed
+    {
+        if ($key === '') {
+            return $context->server();
+        }
+
+        $contextPath = self::SERVER_CONTEXT_PATHS[$key] ?? null;
+        if ($contextPath !== null) {
+            return $context->get($contextPath, '');
+        }
+
+        $server = $context->server();
+
+        return $server[$key] ?? '';
+    }
+
     public function getServer(string $key = ''): string|array
     {
-        $filter = RequestFilter::getInstance();
-        $filter->init();
-        
-        // 确保 ServerBag 已初始化
-        if ($this->serverBag === null) {
-            $this->serverBag = new ServerBag();
-        }
-        
-        // WLS 模式下，每次调用都需要检查是否需要重新初始化
-        // initFromGlobals() 内部会检查请求 ID 是否变化
-        $this->serverBag->initFromGlobals();
-        
-        if ($key) {
-            switch ($key) {
-                case self::HEADER:
-                    // 获取所有 HTTP Headers
-                    return $this->serverBag->getHeaders();
-                default:
-                    return $this->serverBag->get($key, '');
+        $context = Context::getCurrent();
+
+        if ($context !== null) {
+            $value = $this->readServerFromContext($context, $key);
+            if ($key !== '' && $key !== self::HEADER && ($value === '' || $value === null)
+                && isset($_SERVER[$key])
+            ) {
+                // WLS writes a few transport markers (WLS_* warmup flags, request
+                // counters) that are supersets of the Context snapshot. Fall back
+                // only when the Context has no value at all.
+                $value = $_SERVER[$key];
+            } elseif ($key === self::HEADER) {
+                return $this->getHeaders();
             }
+
+            return $key === '' ? (array)$value : (string)$value;
         }
-        
-        return $this->serverBag->all();
-    }
-    
-    /**
-     * 获取 ServerBag 实例
-     * 
-     * @return ServerBag
-     */
-    public function getServerBag(): ServerBag
-    {
-        if ($this->serverBag === null) {
-            $this->serverBag = new ServerBag();
+
+        // No Context (CLI, unit tests, very early bootstrap): superglobals remain
+        // the only available source.
+        if ($key === '') {
+            return $_SERVER;
         }
-        // WLS 模式下，每次调用都需要检查是否需要重新初始化
-        $this->serverBag->initFromGlobals();
-        return $this->serverBag;
+        if ($key === self::HEADER) {
+            return $this->getHeaders();
+        }
+
+        return isset($_SERVER[$key]) ? (string)$_SERVER[$key] : '';
     }
 
     /**
      * @DESC         |设置服务器变量
-     *
-     * @Author       秋枫雁飞
-     * @Email        aiweline@qq.com
-     * @Forum        https://bbs.aiweline.com
-     * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
-     *
-     * 参数区：
      *
      * @param string $key
      * @param string $value
@@ -382,13 +403,20 @@ abstract class RequestAbstract extends RequestFilter
      */
     public function setServer(string $key, string $value, bool $reload = false): static
     {
-        // 确保 ServerBag 已初始化
-        if ($this->serverBag === null) {
-            $this->serverBag = new ServerBag();
-            $this->serverBag->initFromGlobals();
+        // Write into the same store getServer() reads: the request Context.
+        // Without this, "write then read" would silently return the old value.
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $contextPath = self::SERVER_CONTEXT_PATHS[$key] ?? null;
+            if ($contextPath !== null) {
+                $context->set($contextPath, $value);
+            } else {
+                $server = $context->server();
+                $server[$key] = $value;
+                $context->set('input.server', $server);
+            }
         }
-        
-        $this->serverBag->set($key, $value);
+
         return $this;
     }
 
@@ -401,7 +429,7 @@ abstract class RequestAbstract extends RequestFilter
      */
     public function getMethod(): string
     {
-        return $this->getServerBag()->getMethod();
+        return strtoupper((string)$this->getServer('REQUEST_METHOD') ?: self::GET);
     }
 
     /**
@@ -426,20 +454,18 @@ abstract class RequestAbstract extends RequestFilter
      */
     public function isMobile(): bool
     {
-        $serverBag = $this->getServerBag();
-        
         //如果有HTTP_X_WAP_PROFILE则一定是移动设备
-        if ($serverBag->has('HTTP_X_WAP_PROFILE')) {
+        if ($this->getServer('HTTP_X_WAP_PROFILE') !== '') {
             return true;
         }
         //如via信息有wap一定是移动设备，但是部分服务商会屏蔽该信息
-        $via = $serverBag->get('HTTP_VIA', '');
+        $via = (string)$this->getServer('HTTP_VIA');
         if ($via) {
             //找不到为flase,否则为true
             return stristr($via, 'wap') ? true : false;
         }
         //判断手机发送的客户端标志,兼容性有待提高
-        $userAgent = $serverBag->getUserAgent();
+        $userAgent = (string)$this->getServer('HTTP_USER_AGENT');
         if ($userAgent) {
             //从HTTP_USER_AGENT中查找手机浏览器的关键字
             if (preg_match(
@@ -450,7 +476,7 @@ abstract class RequestAbstract extends RequestFilter
             }
         }
         //协议法，因为有可能不准确，放到最后判断
-        $accept = $serverBag->get('HTTP_ACCEPT', '');
+        $accept = (string)$this->getServer('HTTP_ACCEPT');
         if ($accept) {
             //如果只支持wml并且不支持html那一定是app
             //如果支持wml和html但是wml在html之前则是app
@@ -929,9 +955,7 @@ abstract class RequestAbstract extends RequestFilter
 
     public function isAjax(): bool
     {
-        $serverBag = $this->getServerBag();
-        
-        if ($serverBag->isAjax()) {
+        if (strcasecmp((string)$this->getServer('HTTP_X_REQUESTED_WITH'), 'XMLHttpRequest') === 0) {
             return true;
         }
         return \w_env_get('isAjax') !== null || \w_env_post('isAjax') !== null;
@@ -977,12 +1001,7 @@ abstract class RequestAbstract extends RequestFilter
 
     public function isIframe(): bool
     {
-        $serverBag = $this->getServerBag();
-        
-        if ($serverBag->get('HTTP_SEC_FETCH_DEST') == 'iframe') {
-            return true;
-        }
-        if ($serverBag->get('Sec-Fetch-Dest') == 'iframe') {
+        if ($this->requestHeaderValue('Sec-Fetch-Dest') === 'iframe') {
             return true;
         }
         return \w_env_get('isIframe') !== null || \w_env_post('isIframe') !== null;
@@ -990,16 +1009,91 @@ abstract class RequestAbstract extends RequestFilter
 
     private function requestHeaderValue(string $name): string
     {
-        $serverBag = $this->getServerBag();
         $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
-        $value = $serverBag->get($serverKey, '');
+        $value = $this->getServer($serverKey);
         if ($value === '') {
-            $value = $serverBag->get($name, '');
+            $value = $this->getServer($name);
         }
         if ($value === '') {
-            $value = $serverBag->get(str_replace('-', '_', $name), '');
+            $value = $this->getServer(str_replace('-', '_', $name));
         }
 
         return is_array($value) ? implode(',', $value) : (string)$value;
+    }
+
+    /**
+     * Resolve the client IP from the request Context (proxy headers first).
+     *
+     * Moved here from ServerBag so the value is read straight from the request
+     * Context instead of a per-call rebuilt snapshot.
+     */
+    public function getClientIp(): string
+    {
+        // 基础 keys：通用代理头，不含 CDN 专有项
+        $ipKeys = [
+            'HTTP_CLIENT_IP',
+            'HTTP_X_FORWARDED_FOR',
+            'HTTP_X_FORWARDED',
+            'HTTP_X_CLUSTER_CLIENT_IP',
+            'HTTP_FORWARDED_FOR',
+            'HTTP_FORWARDED',
+            'REMOTE_ADDR',
+        ];
+        $eventData = ['keys' => $ipKeys];
+        try {
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $eventsManager->dispatch('Weline_Framework_Http::integration::client_ip_keys', $eventData);
+        } catch (\Throwable $e) {
+            // 事件失败不影响 IP 解析
+        }
+        $ipKeys = \is_array($eventData['keys'] ?? null) ? $eventData['keys'] : $ipKeys;
+
+        foreach ($ipKeys as $key) {
+            $ip = $this->getServer((string)$key);
+            if ($ip !== '' && $ip !== null) {
+                $ip = (string)$ip;
+                // X-Forwarded-For 可能包含多个 IP，取第一个
+                if (str_contains($ip, ',')) {
+                    $ip = \trim(\explode(',', $ip)[0]);
+                }
+                if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
+            }
+        }
+
+        return '0.0.0.0';
+    }
+
+    /**
+     * Bearer token from the Authorization header (Context-backed).
+     */
+    public function getBearerToken(): ?string
+    {
+        $auth = $this->requestHeaderValue('Authorization');
+        if ($auth !== '' && str_starts_with($auth, 'Bearer ')) {
+            return substr($auth, 7);
+        }
+
+        return null;
+    }
+
+    /**
+     * Basic auth credentials from the request Context.
+     *
+     * @return array{user: string, password: string}|null
+     */
+    public function getBasicAuth(): ?array
+    {
+        $user = $this->getServer('PHP_AUTH_USER');
+        if ($user === '' || $user === null) {
+            return null;
+        }
+
+        return [
+            'user' => (string)$user,
+            'password' => (string)$this->getServer('PHP_AUTH_PW'),
+        ];
     }
 }

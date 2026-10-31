@@ -129,10 +129,36 @@ final class TraceGate
      * @param array<string, mixed>|callable(): array<string, mixed> $meta
      * @return T
      */
+    public const PHASE_TOTALS_KEY = 'runtime.trace_gate.phase_totals';
+
     public static function measurePhase(string $name, callable $callback, array|callable $meta = []): mixed
     {
         if (!self::isArmed()) {
-            return $callback();
+            // Phase totals stay available with the panel closed.
+            //
+            // The panel gates fine-grained span recording, not the question "how
+            // long did this phase take". With the panel closed the storefront
+            // renderer had no measurement at all: component_render cost could only
+            // be observed by disabling the gate, which changes the workload. Two
+            // microtime() calls per phase (~0.2 µs) keep the number available.
+            if (!\Weline\Framework\Context::hasCurrent() || !RequestContext::isInitialized()) {
+                return $callback();
+            }
+            $startedAt = \microtime(true);
+            try {
+                return $callback();
+            } finally {
+                $totals = RequestContext::get(self::PHASE_TOTALS_KEY, []);
+                if (!\is_array($totals)) {
+                    $totals = [];
+                }
+                $elapsedMs = (\microtime(true) - $startedAt) * 1000;
+                $entry = $totals[$name] ?? ['count' => 0, 'total_ms' => 0.0];
+                $entry['count'] = (int)$entry['count'] + 1;
+                $entry['total_ms'] = \round((float)$entry['total_ms'] + $elapsedMs, 2);
+                $totals[$name] = $entry;
+                RequestContext::set(self::PHASE_TOTALS_KEY, $totals);
+            }
         }
         $resolved = self::resolveMeta($meta);
 

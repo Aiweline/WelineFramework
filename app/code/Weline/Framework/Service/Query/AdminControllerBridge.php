@@ -123,12 +123,15 @@ final class AdminControllerBridge
         } else {
             $requestId = 'admin-bridge-' . spl_object_id($request);
         }
-        $server['__SERVERBAG_REQUEST_ID__'] = $requestId;
-        $serverBag = new \Weline\Framework\Http\Request\ServerBag();
-        $serverBag->initFromArray($server);
-        $serverProperty = new \ReflectionProperty(\Weline\Framework\Http\Request\RequestAbstract::class, 'serverBag');
-        $serverProperty->setAccessible(true);
-        $serverProperty->setValue($request, $serverBag);
+        // SERVER values are read straight from the request Context. Seed the
+        // Context instead of reflectively attaching a ServerBag to the request.
+        $bridgeContext = \Weline\Framework\Context::getCurrent();
+        if ($bridgeContext !== null) {
+            $bridgeContext->set(
+                'input.server',
+                \array_merge($bridgeContext->server(), $server)
+            );
+        }
 
         foreach ($queryParams as $key => $value) {
             $request->setGet((string)$key, $value);

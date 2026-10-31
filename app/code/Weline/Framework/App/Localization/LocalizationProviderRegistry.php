@@ -23,21 +23,48 @@ final class LocalizationProviderRegistry implements ProcessSharedInterface
     /** @var list<LocalizationProviderInterface>|null */
     private ?array $providers = null;
 
+    /**
+     * Process-scoped memo for compiled catalogue answers.
+     *
+     * installedLanguageCodes() walks every provider and, for the storefront
+     * provider, reads the installed-language catalogue from the database. The
+     * storefront render context asks for it on every request
+     * (StorefrontRenderContextInstaller::resolveLocaleCatalog), where it measured
+     * ~4 ms per request with no caching in between. This registry is a
+     * process-level singleton (ObjectManager), so a plain instance memo is
+     * process-scoped. Dropped by {@see self::clearCaches()}.
+     *
+     * @var array<string, array<int, string>>
+     */
+    private array $memo = [];
+
     public function __construct(
         private readonly ServiceProviderRegistry $serviceProviders,
     ) {
     }
 
+    /**
+     * Drop memoised catalogue answers and the provider list (catalogue changed).
+     */
+    public function clearCaches(): void
+    {
+        $this->memo = [];
+        $this->providers = null;
+    }
+
     /** @return list<string> */
     public function preferredLanguageCodes(): array
     {
+        if (isset($this->memo['language_codes'])) {
+            return $this->memo['language_codes'];
+        }
         foreach ($this->providers() as $provider) {
             $codes = $this->normalizeLanguageCodes($provider->languageCodes());
             if ($codes !== []) {
-                return $codes;
+                return $this->memo['language_codes'] = $codes;
             }
         }
-        return [];
+        return $this->memo['language_codes'] = [];
     }
 
     /** @return list<string> */
@@ -117,6 +144,10 @@ final class LocalizationProviderRegistry implements ProcessSharedInterface
      */
     public function preferredInstalledLanguageCodes(): array
     {
+        if (isset($this->memo['installed_language_codes'])) {
+            return $this->memo['installed_language_codes'];
+        }
+
         foreach ($this->providers() as $provider) {
             $codes = $provider->installedLanguageCodes();
             if ($codes === null) {
@@ -124,11 +155,11 @@ final class LocalizationProviderRegistry implements ProcessSharedInterface
             }
             $normalized = $this->normalizeLanguageCodes($codes);
             if ($normalized !== []) {
-                return $normalized;
+                return $this->memo['installed_language_codes'] = $normalized;
             }
         }
 
-        return [];
+        return $this->memo['installed_language_codes'] = [];
     }
 
     /**

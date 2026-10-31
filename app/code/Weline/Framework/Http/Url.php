@@ -1983,8 +1983,14 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         # 如果网站匹配失败，从完整URL中提取路径部分，并回退到默认网站
         $perfMark('site_match');
         if (!isset($data['website']) && str_contains($url, '://')) {
-            self::resetWebsiteParserSites();
-            self::ensureParserSitesLoaded();
+            // The site map is process state, already populated by the earlier
+            // ensureParserSitesLoaded() call in this same parse. Resetting it
+            // here forced a full detect_website dispatch (DB read) on every
+            // absolute-URL parse — the common storefront path. Only reload when
+            // the map really is empty.
+            if (empty(self::$parserSites)) {
+                self::ensureParserSitesLoaded();
+            }
             $bestMatch = self::selectLongestWebsiteBaseMatch($url, $requestScheme, (string)$portPart);
             if ($bestMatch !== null) {
                 $site_url = $bestMatch['site_url'];
@@ -3324,6 +3330,20 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Worker start-up warm-up for the parser site map.
+     *
+     * Url::parser() keeps the site catalogue in a process static and populates it
+     * from the `Weline_Framework_Url::detect_website` event. Without this call the
+     * first parse of each Worker pays that population inline (measured ~4.7 ms of
+     * extra `fallback_site` work on the first request, ~0 afterwards). Called by
+     * the Worker preload phase, never on the request path.
+     */
+    public static function warmParserSites(): void
+    {
+        self::ensureParserSitesLoaded();
     }
 
     private static function ensureParserSitesLoaded(): void

@@ -16,6 +16,17 @@ final class RouteRegistryPreloadProvider implements WorkerPreloadProviderInterfa
         return 'route_registry';
     }
 
+    /**
+     * Providers whose process-memory output this warm-up reads.
+     */
+    public function dependsOn(): array
+    {
+        return [
+            'compiled_registry_warm',
+            'object_metadata',
+        ];
+    }
+
     public function phase(): string
     {
         return WorkerPreloadContext::PHASE_BOOTSTRAP;

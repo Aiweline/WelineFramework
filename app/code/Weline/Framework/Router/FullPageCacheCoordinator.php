@@ -278,9 +278,21 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 : null);
     }
 
-    public function getCachedResponse(string $method = 'GET', bool $processOnly = false): ?Response
-    {
-        if (!$this->canServeCachedResponse($method)) {
+    /**
+     * Read a cached response.
+     *
+     * `$gateChecked` lets a caller that has already run
+     * {@see self::canServeCachedResponse()} for this request skip the repeat.
+     * The gate is a pure function of request state, but it costs 0.2–0.5 ms per
+     * call, and the storefront fast path ran it three times per request (once in
+     * App, then inside each of the two getCachedResponse probes).
+     */
+    public function getCachedResponse(
+        string $method = 'GET',
+        bool $processOnly = false,
+        bool $gateChecked = false,
+    ): ?Response {
+        if (!$gateChecked && !$this->canServeCachedResponse($method)) {
             return null;
         }
 
@@ -809,6 +821,14 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $fiberYieldAt[$fiber] = $now;
         SchedulerSystem::yield();
     }
+
+    /**
+     * Process-static FPC policy snapshot.
+     *
+     * @var array<string, mixed>|null
+     */
+    private static ?array $processFpcSnapshotMemo = null;
+
 
     public function canServeCachedResponse(string $method = 'GET'): bool
     {
@@ -5113,16 +5133,88 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
      */
     private function fpcPolicySnapshot(\Weline\Framework\Controller\Extra\ExtraPolicyResolver $resolver): array
     {
-        $memo = RequestContext::get(self::MEMO_FPC_SNAPSHOT);
-        if (\is_array($memo) && \is_array($memo['snapshot'] ?? null)) {
-            return $memo['snapshot'];
+        // Process-static memo, not RequestContext: the FPC policy snapshot is a
+        // global publication (declared once, freshTtlSeconds=3600), identical for
+        // every request in the Worker. The request-scoped memo meant each request
+        // re-entered the hot-cache read path, and because the ~149 KB declaration
+        // map is rejected by L1 it fell through to Shared every time — measured
+        // 3–4 ms on the first effectiveFpcPolicy() call of every request.
+        if (self::$processFpcSnapshotMemo !== null) {
+            return self::$processFpcSnapshotMemo;
         }
         $snapshot = $resolver->fpcSnapshot();
-        if (Context::hasCurrent()) {
-            RequestContext::set(self::MEMO_FPC_SNAPSHOT, ['snapshot' => $snapshot]);
+
+        return self::$processFpcSnapshotMemo = $snapshot;
+    }
+
+    /**
+     * Drop the process-static FPC policy snapshot (policy republished).
+     */
+    public static function clearProcessCaches(): void
+    {
+        self::$processFpcSnapshotMemo = null;
+    }
+
+    /**
+     * Prime the data the full-page-cache serve gate reads on every request.
+     *
+     * Called from Worker start-up preload. The gate's first call in a cold Worker
+     * measured ~5.6 ms, split across three lazy loads: the store adapter registry
+     * (provider resolution), the ~149 KB FPC policy snapshot (re-read from Shared
+     * because L1 rejects entries that large) and the CDN dev-mode config flag
+     * (system-config row resolution). After priming, the gate is memory reads.
+     *
+     * Fail-open: warm-up never throws into Worker boot.
+     */
+    public function warmServeGateData(\Weline\Framework\Runtime\ScopeIdentity $identity): void
+    {
+        try {
+            // Store adapter registry (ObjectManager provider resolution).
+            $this->hasActiveFpcStoreAdapter();
+        } catch (\Throwable) {
         }
 
-        return $snapshot;
+        try {
+            // Policy snapshot (process-static after this call) + one path resolve
+            // so the resolver's own candidate list is built.
+            $resolver = ObjectManager::getInstance(\Weline\Framework\Controller\Extra\ExtraPolicyResolver::class);
+            $this->fpcPolicySnapshot($resolver);
+            try {
+                $resolver->resolveFpcForPath('/', $identity);
+            } catch (\Throwable) {
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            // CDN dev-mode flag resolution (system-config rows).
+            if (\class_exists(\Weline\Framework\Http\Fpc\FpcBypassFactsBuilder::class)) {
+                \Weline\Framework\Http\Fpc\FpcBypassFactsBuilder::resolveCdnFpcDevModeFlag();
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            // Bypass rule sidecar (generated/framework/fpc_bypass_rules.php).
+            // The evaluator caches it process-wide, but the first read is a real
+            // file stat + include — measured 0.34 ms on the gate's first call.
+            if (\class_exists(\Weline\Framework\Http\Fpc\FpcBypassEvaluator::class)) {
+                \Weline\Framework\Http\Fpc\FpcBypassEvaluator::loadRules();
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            // Fact builder dependencies: pierce-stamp secret file read and the
+            // hot-cache L1/L2 wiring used when building request facts.
+            if (\class_exists(\Weline\Framework\Http\Fpc\FpcPierceStamp::class)) {
+                \Weline\Framework\Http\Fpc\FpcPierceStamp::isValidRequest(null, []);
+            }
+            if (\class_exists(\Weline\Framework\Http\Fpc\FpcBypassFactsBuilder::class)) {
+                \Weline\Framework\Http\Fpc\FpcBypassFactsBuilder::build('', [], '', [], false);
+            }
+        } catch (\Throwable) {
+        }
     }
 
     private function getUnifiedCacheKey(string $method): string

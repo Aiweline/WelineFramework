@@ -15,10 +15,39 @@ use Weline\Framework\Runtime\ProcessSharedInterface;
 /** Resolves and freezes the authoritative storefront generation vector. */
 final class StorefrontCacheKeyContextResolver implements ProcessSharedInterface
 {
+    /**
+     * Process-level freeze cache, keyed by the resolved scope triple.
+     *
+     * The frozen context is a pure function of (ScopeIdentity, lang, currency):
+     * the namespace fingerprint derives from the identity plus the translation
+     * locale chain, which in turn derives from lang and the website default
+     * locale. Every request in a Worker re-froze the same triple, paying the
+     * namespace-path expansion and the generation fingerprint each time. Sharing
+     * the frozen result across requests keeps it as process memory, which is what
+     * it is conceptually — a global cache-key coordinate, not request state.
+     *
+     * Only contexts that are cacheable are stored: the provisional/failed shapes
+     * describe transient namespace trouble and must be recomputed per request.
+     * Cleared by {@see self::clearProcessCache()} when namespace generations bump.
+     *
+     * @var array<string, StorefrontCacheKeyContext>
+     */
+    private static array $processFreezeCache = [];
+
+    private const PROCESS_FREEZE_MAX = 64;
+
     public function __construct(
         private readonly NamespaceGenerationInterface $generations,
         private readonly NamespacePath $namespacePath,
     ) {
+    }
+
+    /**
+     * Drop the process-level freeze cache (namespace generations changed).
+     */
+    public static function clearProcessCache(): void
+    {
+        self::$processFreezeCache = [];
     }
 
     public function freezeCurrent(): StorefrontCacheKeyContext
@@ -72,6 +101,21 @@ final class StorefrontCacheKeyContextResolver implements ProcessSharedInterface
             return $existing;
         }
 
+        // Process-level freeze: the resolved context only depends on the scope
+        // triple, so a peer request in this Worker already computed it.
+        $freezeKey = \implode("\n", [
+            $identity->canonicalKey(),
+            $lang !== '' ? $lang : 'zh_Hans_CN',
+            $currency !== '' ? $currency : 'CNY',
+            $defaultLocale,
+        ]);
+        if (isset(self::$processFreezeCache[$freezeKey])) {
+            $shared = self::$processFreezeCache[$freezeKey];
+            StorefrontCacheKeyContext::install($shared);
+
+            return $shared;
+        }
+
         $provisional = $this->requestFence(
             $identity,
             $lang,
@@ -94,6 +138,13 @@ final class StorefrontCacheKeyContextResolver implements ProcessSharedInterface
                 $provisional->translationLocales,
             );
             StorefrontCacheKeyContext::install($resolved);
+            if (\count(self::$processFreezeCache) >= self::PROCESS_FREEZE_MAX
+                && !isset(self::$processFreezeCache[$freezeKey])
+            ) {
+                unset(self::$processFreezeCache[\array_key_first(self::$processFreezeCache)]);
+            }
+            self::$processFreezeCache[$freezeKey] = $resolved;
+
             return $resolved;
         } catch (\Throwable) {
             $failed = new StorefrontCacheKeyContext(

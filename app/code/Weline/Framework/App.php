@@ -283,14 +283,14 @@ class App
 
     public function applyParsedUrl(array $parse): void
     {
-        // B3: manual profiling is opt-in via RequestLifecycleTrace (panel
-        // signature cookie / template overlay). Closed → the step recorder is a
-        // no-op: no microtime, no profile array, no RequestContext::set.
-        // Consumers (WlsRuntime) already guard with is_array() && !== [], so a
-        // missing 'app.apply_url.profile' key is tolerated everywhere.
-        $applyUrlProfileEnabled = TraceGate::isArmed();
+        // Step profiling always runs. Each mark costs one microtime() (~0.1 µs);
+        // with 22 marks that is ~2 µs for the whole stage, and without it
+        // applyParsedUrl was a black box — the caller could only see one 28 ms
+        // number with no way to tell which step owned it. TraceGate span
+        // recording keeps its own flag so the trace panel is unaffected.
+        $applyUrlProfileEnabled = true;
         $applyUrlProfile = [];
-        $applyUrlLast = $applyUrlProfileEnabled ? \microtime(true) : 0.0;
+        $applyUrlLast = \microtime(true);
         $markApplyUrlStep = static function (string $name, array $meta = []) use (&$applyUrlProfile, &$applyUrlLast, $applyUrlProfileEnabled): void {
             if (!$applyUrlProfileEnabled) {
                 return;
@@ -422,6 +422,10 @@ class App
         // dimensions once here, before Storefront scope and every cache key.
         State::resetRequestPathLocalizationCache();
         $this->synchronizeParsedLocalization($parse, $rawRequestUri);
+        Context::current()->set(
+            'app.localization.synced_website_url',
+            \trim((string)(RequestContext::getWelineWebsiteUrl() ?? '')),
+        );
 
         $welineArea = (string)WelineEnv::get('area', 'frontend');
         $isBackend = $welineArea === 'backend' || $welineArea === 'rest_backend';
@@ -513,8 +517,18 @@ class App
         // The Scope provider may install Website defaults while resolving the
         // Store/Channel identity. Re-assert the immutable visitor-path
         // localization before freezing the one shared cache-key context.
-        State::resetRequestPathLocalizationCache();
-        $this->synchronizeParsedLocalization($parse, $rawRequestUri);
+        //
+        // Only re-run when the Scope install actually changed the website facts
+        // this pass reads. When the site was already known (the steady state) the
+        // inputs are identical and the whole normalization walk would repeat
+        // identical work on every storefront request.
+        $scopeWebsiteUrl = \trim((string)(RequestContext::getWelineWebsiteUrl() ?? ''));
+        $lastSyncedWebsiteUrl = (string)(Context::current()->get('app.localization.synced_website_url', '') ?? '');
+        if ($scopeWebsiteUrl !== $lastSyncedWebsiteUrl) {
+            State::resetRequestPathLocalizationCache();
+            $this->synchronizeParsedLocalization($parse, $rawRequestUri);
+            Context::current()->set('app.localization.synced_website_url', $scopeWebsiteUrl);
+        }
         $markApplyUrlStep('storefront_scope_install', [
             'installed' => RequestContext::scopeIdentity() instanceof ScopeIdentity,
             'route_path' => $navigationScope?->routePath,
@@ -546,7 +560,6 @@ class App
                 $applicationContextData,
             );
         }
-
         $scopeIdentity = RequestContext::scopeIdentity();
         $cacheKeyContextResolver = ObjectManager::getInstance(StorefrontCacheKeyContextResolver::class);
         if ($scopeIdentity instanceof ScopeIdentity
@@ -838,9 +851,11 @@ class App
             // Process L1 first, then shared. processOnly-only misses forced a full
             // Router SSR even when shared FPC was warm (debug 70285b: process-miss
             // + shared_hit/hydrate_ok for logged-in `/` and `/products`).
-            $response = $coordinator->getCachedResponse('GET', true);
+            // The gate above already ran for this request, so the probes must not
+            // re-run it (0.2–0.5 ms each).
+            $response = $coordinator->getCachedResponse('GET', true, true);
             if (!$response instanceof Response) {
-                $response = $coordinator->getCachedResponse('GET', false);
+                $response = $coordinator->getCachedResponse('GET', false, true);
             }
             if (!$response instanceof Response) {
                 return false;
@@ -1798,7 +1813,8 @@ class App
     {
         $request = $this->resolveRequest();
         if ($request !== null) {
-            $request->getServerBag()->initFromGlobals(true);
+            // SERVER values are read straight from the request Context now, so
+            // there is no per-call snapshot to force-refresh here.
             Request::clearStaticUrlPathCache();
         }
         if ($request !== null && \method_exists($request, 'invalidateUriCache')) {

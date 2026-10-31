@@ -18,6 +18,16 @@ final class EventDescriptorPreloadProvider implements WorkerPreloadProviderInter
         return 'event_descriptors';
     }
 
+    /**
+     * Providers whose process-memory output this warm-up reads.
+     */
+    public function dependsOn(): array
+    {
+        return [
+            'compiled_registry_warm',
+        ];
+    }
+
     public function phase(): string
     {
         return WorkerPreloadContext::PHASE_BOOTSTRAP;

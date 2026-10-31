@@ -820,18 +820,18 @@ class ObjectManager implements ManagerInterface
         
         // 解析构造函数参数（依赖注入）
         $arguments = self::resolveConstructorArguments($new_class, $arguments);
-        
+
         // 获取反射类（使用缓存）- 这里不应该再是接口
         $refClass = self::getReflectionInstance($new_class);
-        
+
         // 再次验证不是接口（防止getReflectionInstance返回接口的反射）
         if ($refClass->isInterface()) {
             throw new Exception("尝试实例化接口 {$new_class}，接口必须通过工厂类实例化");
         }
-        
+
         // 实例化对象（处理私有构造函数）
         $new_object = self::instantiateObject($refClass, $new_class, $arguments);
-        
+
         // 初始化对象（__init、工厂类处理）
         $new_object = self::initClassInstance($class, $new_object);
         

@@ -20,7 +20,6 @@ final class RequestLocatorUsageGuardTest extends TestCase
         'app/code/Weline/Framework/Http/Observer/ResultBridgeRedirect.php',
         'app/code/Weline/Framework/Http/Request.php',
         'app/code/Weline/Framework/Http/Request/RequestAbstract.php',
-        'app/code/Weline/Framework/Http/Request/ServerBag.php',
         'app/code/Weline/Framework/Http/Response.php',
         'app/code/Weline/Framework/Http/Url.php',
         'app/code/Weline/Framework/Router/CacheManager.php',

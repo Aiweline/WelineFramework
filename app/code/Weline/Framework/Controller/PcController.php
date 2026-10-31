@@ -11,6 +11,7 @@ namespace Weline\Framework\Controller;
 
 use ReflectionException;
 use Weline\Framework\Context;
+use Weline\Framework\View\RenderProfileThreshold;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
@@ -734,7 +735,7 @@ class PcController extends Core
                 $fetchMeta,
             );
         }
-        if ($fetchProfileTotalMs >= 20.0) {
+        if (RenderProfileThreshold::isSlowEnough($fetchProfileTotalMs)) {
             $entry = [
                 'file' => (string)$fileName,
                 'uri' => $uri,

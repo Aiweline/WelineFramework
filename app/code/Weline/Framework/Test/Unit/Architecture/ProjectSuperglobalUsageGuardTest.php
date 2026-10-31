@@ -35,7 +35,6 @@ final class ProjectSuperglobalUsageGuardTest extends TestCase
         'app/code/Weline/Framework/Http/Request/ParameterBag.php',
         'app/code/Weline/Framework/Http/Request/RequestAbstract.php',
         'app/code/Weline/Framework/Http/Request/RequestFilter.php',
-        'app/code/Weline/Framework/Http/Request/ServerBag.php',
         'app/code/Weline/Framework/Exception/ExceptionBootstrap.php',
         'app/code/Weline/Framework/Module/Console/Model/Rebuild.php',
         'app/code/Weline/Framework/Output/Cli/AbstractPrint.php',

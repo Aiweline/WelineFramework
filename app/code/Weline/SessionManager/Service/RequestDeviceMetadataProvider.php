@@ -22,7 +22,7 @@ final class RequestDeviceMetadataProvider implements DeviceMetadataProviderInter
         // call time so concurrent Fibers cannot reuse constructor-time UA/IP.
         $request = ObjectManager::getInstance(Request::class);
         return $this->parser->parse(
-            $request->getServerBag()->getUserAgent(),
+            (string)$request->getServer('HTTP_USER_AGENT'),
             (string)$request->clientIP(),
         );
     }
