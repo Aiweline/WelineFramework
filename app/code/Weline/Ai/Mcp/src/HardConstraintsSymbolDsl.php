@@ -16,8 +16,8 @@ final class HardConstraintsSymbolDsl
 
     public const GLOSS_MAX = 64;
 
-    /** Raised 9200→9400 when browser_tab_group_identity entered the hot package (2026-10-20); 9400→9500 for no_error_masking_or_patch_workaround (2026-10-21); 9500→9700 for google_chrome_reuse_before_connect (2026-10-21); 9700→9900 for hosts_write_precheck_no_repeat_prompt + ego hot entries (2026-10-29); 9900→10300 for algorithm_understanding_pseudocode_report (2026-10-29); 10300→10600 for backup_requires_skill_keep_one_and_space_precheck + finding_reality_gate/param-writeback hot entries (2026-10-29). */
-    public const PACKAGE_TOKEN_BUDGET = 10600;
+    /** Raised 9200→9400 when browser_tab_group_identity entered the hot package (2026-10-20); 9400→9500 for no_error_masking_or_patch_workaround (2026-10-21); 9500→9700 for google_chrome_reuse_before_connect (2026-10-21); 9700→9900 for hosts_write_precheck_no_repeat_prompt + ego hot entries (2026-10-29); 9900→10300 for algorithm_understanding_pseudocode_report (2026-10-29); 10300→10600 for backup_requires_skill_keep_one_and_space_precheck + finding_reality_gate/param-writeback hot entries (2026-10-29); 10600→10800 for diagnosis_routes_to_debug_skill (2026-10-31 user decree, atoms Diag/Log/Code/Symptom). */
+    public const PACKAGE_TOKEN_BUDGET = 10800;
 
     public const EXPAND_IDS_MAX = 20;
 
@@ -163,6 +163,10 @@ final class HardConstraintsSymbolDsl
     {
         return [
             'Ask' => ['gloss_zh' => '用户一条需求', 'rule_ids' => ['intent_lane_router']],
+            'Diag' => ['gloss_zh' => '找问题意图→先debug', 'rule_ids' => ['diagnosis_routes_to_debug_skill']],
+            'Log' => ['gloss_zh' => '先读日志取证', 'rule_ids' => ['diagnosis_routes_to_debug_skill']],
+            'Code' => ['gloss_zh' => '日志圈定后审代码', 'rule_ids' => ['diagnosis_routes_to_debug_skill']],
+            'Symptom' => ['gloss_zh' => '症状禁当根因', 'rule_ids' => ['diagnosis_routes_to_debug_skill']],
             'Lane' => ['gloss_zh' => '意图车道路由', 'rule_ids' => ['intent_lane_router']],
             'Grade' => ['gloss_zh' => '需求工程分级', 'rule_ids' => ['requirement_engineering_grade_gate']],
             'Eng' => ['gloss_zh' => '工程任务(改码/文档/验收)', 'rule_ids' => ['mcp_call_scope']],
@@ -556,6 +560,11 @@ final class HardConstraintsSymbolDsl
                 'formula' => '∀t.Ask(t)→□Lane(t)',
                 'gloss_zh' => '每条需求先意图车道；未路由禁进队',
                 'cluster' => '§L',
+            ],
+            'diagnosis_routes_to_debug_skill' => [
+                'formula' => 'Diag→□(Log∧Code∧¬Symptom)',
+                'gloss_zh' => '找问题先debug：日志先于代码，循环到根因',
+                'cluster' => '§P',
             ],
             'requirement_engineering_grade_gate' => [
                 'formula' => 'Ask→□(Lane∧Grade)∧Misgrade→⊥',
