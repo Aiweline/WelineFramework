@@ -1489,6 +1489,30 @@ final class MasterChildCredentialStore
     /** @param list<array<string,mixed>> $records */
     private function removeRecordAndDescendants(array &$records, string $credentialId): void
     {
+        // 审计：这里是账本记录被删除的**唯一入口**。记下被删记录的关键字段与调用栈，
+        // 使「worker 凭据被删 → 自检 record missing → exit(0)」在生产日志里可直接看到
+        // 是谁（哪个调用方）在何时删的，而不是只能看到「结果缺失」。排查整池归零必备。
+        foreach ($records as $record) {
+            if (\hash_equals($credentialId, (string)$record['credential_id'])) {
+                $frames = [];
+                foreach (\debug_backtrace(\DEBUG_BACKTRACE_IGNORE_ARGS, 8) as $frame) {
+                    if (($frame['function'] ?? '') === __FUNCTION__) {
+                        continue;
+                    }
+                    $frames[] = ($frame['class'] ?? '') . '::' . ($frame['function'] ?? '');
+                }
+                WlsLogger::warning_(
+                    'managed-child credential record removed'
+                    . ' kind=' . (string)($record['kind'] ?? '')
+                    . ' role=' . (string)($record['role'] ?? '')
+                    . ' slot=' . (string)($record['slot_id'] ?? '')
+                    . ' pid=' . (int)($record['pid'] ?? 0)
+                    . ' state=' . (string)($record['lifecycle_state'] ?? '')
+                    . ' caller=' . \implode(' <- ', \array_slice($frames, 0, 6))
+                );
+                break;
+            }
+        }
         $remove = [$credentialId => true];
         do {
             $changed = false;
