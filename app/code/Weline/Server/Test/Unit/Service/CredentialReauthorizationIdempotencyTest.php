@@ -102,6 +102,57 @@ final class CredentialReauthorizationIdempotencyTest extends TestCase
         );
     }
 
+    /**
+     * 第二根因回归：active 记录即使被瞬时观测为 MISSING，也不得被 prune 删除。
+     *
+     * 修复前 collectPrunableCredentialIds 对**全账本（含 active）**单次观测 prune；
+     * Master 每 20 秒自检补齐都会顺带跑一次，观测抖动（/proc 竞态、drain、GC）即误删
+     * 活 worker 记录 → 该 worker 下次自检 `credential record missing` → exit(0)。
+     */
+    public function testActiveRecordIsNotPrunedWhenObservationFlickers(): void
+    {
+        [$instance, $token, $store, $lease, $masterPid] = $this->fixture('idem-no-prune-active');
+        $slotA = ControlMessage::ROLE_WORKER . '#1';
+
+        $pidA = 6_300_301;
+        $this->markAlive($pidA, 'a-start');
+        $store->authorizeServicesWithIdentity($lease, $instance, $masterPid, 3, $token, [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'slot_id' => $slotA,
+            'launch_id' => 'a-launch',
+            'lease_id' => 'a-lease',
+            'generation' => 1,
+            'pid' => $pidA,
+        ]]);
+
+        // 越过 prune 最小年龄（30s），并让 A 在此刻"观测不到"（模拟 /proc 抖动）。
+        $this->now += 60.0;
+        $this->processAlive[$pidA] = false;
+        $lease = $this->rewriteLease($lease, $instance, $masterPid, $token);
+
+        // 再授权另一个 slot，触发 collectPrunableCredentialIds prune 路径。
+        $pidB = 6_300_302;
+        $this->markAlive($pidB, 'b-start');
+        $store->authorizeServicesWithIdentity($lease, $instance, $masterPid, 3, $token, [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'slot_id' => ControlMessage::ROLE_WORKER . '#2',
+            'launch_id' => 'b-launch',
+            'lease_id' => 'b-lease',
+            'generation' => 1,
+            'pid' => $pidB,
+        ]]);
+
+        $aRecords = \array_values(\array_filter(
+            $this->records($instance),
+            static fn (array $r): bool => (int)($r['pid'] ?? 0) === $pidA,
+        ));
+        self::assertCount(
+            1,
+            $aRecords,
+            'active 记录不得因单次观测抖动被 prune——误删会让活 worker 自检 missing 自杀'
+        );
+    }
+
     private function rewriteLease(string $leaseFile, string $instance, int $masterPid, string $token): string
     {
         // 用同一 identity 重新发布 running lease，把 heartbeat 推到当前 $now。

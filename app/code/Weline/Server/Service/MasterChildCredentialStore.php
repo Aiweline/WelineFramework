@@ -1366,10 +1366,17 @@ final class MasterChildCredentialStore
                 (string)$record['process_birth'],
                 (string)$record['pid_namespace_id'],
             );
-            // 观测本身必须发生（账本锁内的决策依赖这份锁外观测快照），
-            // 但**刚授权**的记录不参与 prune 删除：新 worker 的进程可能还在
-            // exec/bootstrap 窗口里观测不到，此时删记录等于删掉一个健康 worker
-            // 的凭据，让它下一次自检 exit(0)（详见 PRUNE_MIN_RECORD_AGE_SEC）。
+            // 只清理**明确要求退役**（lifecycle_state=draining）的记录。
+            // active 记录绝不因「单次进程观测 MISSING/MISMATCH」被删除：
+            // observeProcessIdentity 会抖动（/proc 读取竞态、drain 中、Zend GC 期间），
+            // 一旦把仍在服务的 worker 误判为已死并删记录，它下次自检命中
+            // `credential record missing for this PID` 直接 exit(0) —— 这是线上
+            // 19:13:35 实证的**第二根因**（第一条是授权路径按 slot 整体删除，已修）。
+            // 真正死掉的 active 记录由 revokeService（进程正常退出时自删）与 Master
+            // 重启时的账本代际重置兜底；观测本身仍执行，以维持锁外快照契约。
+            if (($record['lifecycle_state'] ?? '') !== 'draining') {
+                continue;
+            }
             $authorizedAt = (float)($record['authorized_monotonic'] ?? 0.0);
             if ($authorizedAt > 0.0
                 && ($now - $authorizedAt) < self::PRUNE_MIN_RECORD_AGE_SEC
