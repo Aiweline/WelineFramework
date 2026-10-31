@@ -677,11 +677,66 @@ class MasterProcess
         return $context;
     }
 
+    /**
+     * 上一代 Master 异常退出时，lease 会残留为 `state=running` 且指向一个已不存在的 PID。
+     *
+     * 这种 stale lease 会让**新启动的** Worker / Dispatcher 在凭据校验阶段失败并自杀：
+     *   Managed-child Master lease is not authorized: Master owner evidence is not observable
+     * 随后 Master 每 20 秒"执行补齐"，新起的 worker 又读到同一份 stale lease 再自杀，
+     * 形成「启动即归零」的死循环，直到有人手工删掉 lease（线上实测 changanhanfu）。
+     *
+     * 因此 Master 发布自己的 lease 之前，必须先判定上一代 owner 是否**确定不在**
+     * （OWNER_MISSING / OWNER_MISMATCH）并丢弃残留；MATCH / UNKNOWN 一律保留，
+     * 避免把 alive 的上一代误判成死进程而制造双 Master。
+     */
+    private function discardStaleLeaseIfOwnerGone(): void
+    {
+        $leasePath = MasterLeaseManager::pathForInstance($this->instanceName);
+        try {
+            $raw = GatewayProjectStateFilesystem::readOptional(
+                $leasePath,
+                65_536,
+                'WLS master lease',
+            );
+            if ($raw === null) {
+                return;
+            }
+            $lease = \json_decode($raw, true);
+            if (!\is_array($lease)) {
+                return;
+            }
+            $ownerPid = (int)($lease['master_pid'] ?? 0);
+            if ($ownerPid <= 0 || $ownerPid === (int)\getmypid()) {
+                return;
+            }
+            $identity = new MasterLeaseRuntimeIdentity();
+            $ownerStatus = $identity->observeOwner($lease, true);
+            if (!\in_array($ownerStatus, [
+                MasterLeaseRuntimeIdentity::OWNER_MISSING,
+                MasterLeaseRuntimeIdentity::OWNER_MISMATCH,
+            ], true)) {
+                return;
+            }
+            @\unlink($leasePath);
+            WlsLogger::warning_(
+                '[Master] 已清理 stale Master lease: previous_owner_pid=' . $ownerPid
+                . ' owner_status=' . $ownerStatus
+            );
+        } catch (\Throwable $throwable) {
+            // 清理失败不阻断启动：writeRunning 自身仍会做所有权判定。
+            WlsLogger::warning_(
+                '[Master] stale Master lease 检查失败: ' . $throwable->getMessage()
+            );
+        }
+    }
+
     private function writeMasterLeaseRunning(?ServiceContext $context): void
     {
         if ($context === null || $context->masterToken === '') {
             return;
         }
+
+        $this->discardStaleLeaseIfOwnerGone();
 
         try {
             $path = (new MasterLeaseManager())->writeRunning(
