@@ -1537,14 +1537,25 @@ class SlotRendererService
         }
 
         $scanner = $this->boundaryScanner();
+        // R3-d counters: distinguish slots that were already filled (repeat work),
+        // slots with no wrapper in this HTML (true miss) and slots actually filled.
+        // Without them a 11 ms fill_unmarked cannot be attributed to either cause.
+        $skippedAlreadyFilled = 0;
+        $missedNoWrapper = 0;
+        $filledCount = 0;
         foreach ($slotWidgets as $slotId => $widgets) {
             $slotId = trim((string)$slotId);
-            if ($slotId === '' || $widgets === [] || isset($this->pass()->filledSlotIds[$slotId])) {
+            if ($slotId === '' || $widgets === []) {
+                continue;
+            }
+            if (isset($this->pass()->filledSlotIds[$slotId])) {
+                ++$skippedAlreadyFilled;
                 continue;
             }
 
             $bounds = $scanner->findSlotWrapperBounds($html, $slotId);
             if ($bounds === null) {
+                ++$missedNoWrapper;
                 continue;
             }
 
@@ -1572,9 +1583,35 @@ class SlotRendererService
 
             $html = $nextHtml;
             $this->pass()->filledSlotIds[$slotId] = true;
+            ++$filledCount;
         }
 
+        $this->reportFillUnmarkedCounters($skippedAlreadyFilled, $missedNoWrapper, $filledCount);
+
         return $html;
+    }
+
+    /**
+     * Record fill_unmarked attribution counters on the request.
+     *
+     * `already_filled` = repeat work (slot filled earlier in this request),
+     * `no_wrapper` = true miss (slot has no wrapper in this HTML),
+     * `filled` = slots actually filled here. A large already_filled value points at
+     * duplicate scanning rather than a genuine positional miss.
+     */
+    private function reportFillUnmarkedCounters(int $alreadyFilled, int $noWrapper, int $filled): void
+    {
+        try {
+            if (!\Weline\Framework\Runtime\RequestContext::isInitialized()) {
+                return;
+            }
+            \Weline\Framework\Runtime\RequestContext::set('theme.slots.fill_unmarked.counters', [
+                'already_filled' => $alreadyFilled,
+                'no_wrapper' => $noWrapper,
+                'filled' => $filled,
+            ]);
+        } catch (\Throwable) {
+        }
     }
 
     /**

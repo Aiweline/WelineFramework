@@ -54,23 +54,39 @@ final class SeoDecodeObserver implements ObserverInterface
 
     private function isAmayumRequest(int $payloadWebsiteId): bool
     {
-        $amayumId = $this->amayumWebsiteId();
         $currentId = $payloadWebsiteId;
         if ($currentId <= 0) {
             $currentId = (int)($_SERVER['WELINE_WEBSITE_ID'] ?? 0);
         }
-        if ($currentId > 0) {
-            return $amayumId > 0 && $currentId === $amayumId;
-        }
 
+        // Cheap, DB-free checks first: this observer runs on EVERY storefront's
+        // seo_decode, so resolving the Amayum website id up front would put a
+        // full website lookup (cold DB connect + ORM + query, ~142 ms first hit)
+        // on the first request of every site just to learn "not Amayum".
         $host = \strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
-        if ($host !== '' && \preg_match('/(^|\.)amayum\.com(:\d+)?$/', $host) === 1) {
-            return true;
+        $hostLooksAmayum = $host !== ''
+            && \preg_match('/(^|\.)amayum\.com(:\d+)?$/', $host) === 1;
+        if ($currentId <= 0) {
+            $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            $uriLooksAmayum = \str_contains($uri, '/~site/amayum/')
+                || \str_ends_with($uri, '/~site/amayum');
+
+            return $hostLooksAmayum || $uriLooksAmayum;
         }
 
-        $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        // A concrete website id is known. The id lookup is still worth paying
+        // only when this request could possibly be Amayum: either the host says
+        // so, or the Amayum id was already resolved earlier in this process.
+        // A non-Amayum host whose id is still unknown cannot match.
+        if (self::$amayumWebsiteId !== null) {
+            $amayumId = self::$amayumWebsiteId;
+        } elseif ($hostLooksAmayum) {
+            $amayumId = $this->amayumWebsiteId();
+        } else {
+            return false;
+        }
 
-        return \str_contains($uri, '/~site/amayum/') || \str_ends_with($uri, '/~site/amayum');
+        return $amayumId > 0 && $currentId === $amayumId;
     }
 
     private function amayumWebsiteId(): int

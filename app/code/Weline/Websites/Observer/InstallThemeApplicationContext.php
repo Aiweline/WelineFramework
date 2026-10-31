@@ -7,6 +7,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Runtime\ThemeApplicationContext;
+use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Service\ThemeApplicationContextProducer;
 
@@ -26,6 +27,34 @@ final class InstallThemeApplicationContext implements ObserverInterface
             || $identity->websiteId === null || ThemeApplicationContext::current('frontend') !== null) {
             return;
         }
+
+        // Fast path: the Worker preload provider already built the context for
+        // this scope. Loading the website row here — only to read its display
+        // name and default locale — cost ~1.2 ms per request even when the build
+        // was cached, because the row read ran before the cache lookup. Use the
+        // site object the scope installer already published into process memory,
+        // and only touch the database when that is unavailable.
+        $storeMode = $identity->storeMode ?? ScopeIdentity::MODE_NORMAL;
+        $published = WebsiteData::getWebsite();
+        if ($published instanceof Website
+            && (int)$published->getId() === (int)$identity->websiteId
+        ) {
+            $publishedLocale = \trim((string)$published->getDefaultLanguage());
+            if ($publishedLocale !== '') {
+                $cached = $this->producer->cachedRuntimeContext(
+                    $identity,
+                    $storeMode,
+                    $publishedLocale,
+                    (string)$published->getName(),
+                );
+                if ($cached !== null) {
+                    $cached->install();
+
+                    return;
+                }
+            }
+        }
+
         $website = clone $this->websites;
         $website = $website->load($identity->websiteId, null, true);
         if (!$website->hasData(Website::schema_fields_ID)
@@ -38,7 +67,7 @@ final class InstallThemeApplicationContext implements ObserverInterface
         }
         $this->producer->build(
             identity: $identity,
-            storeMode: $identity->storeMode ?? ScopeIdentity::MODE_NORMAL,
+            storeMode: $storeMode,
             defaultLocale: $locale,
             displayName: (string)$website->getName(),
             purpose: 'runtime',

@@ -14,6 +14,54 @@ use Weline\Widget\Service\ParamSchemaRegistry;
 
 class ThemeResourceCatalog
 {
+    /**
+     * Theme-version-scoped resource catalogue, shared by every instance in the process.
+     *
+     * Building it walks the theme's component/widget directories and parses the meta
+     * of every file (177 entries on the current storefront). That measured 20.96 ms
+     * per build while the result is a pure function of (type, area, theme id):
+     * request-scoped instance caches meant every newly constructed catalogue — and
+     * every Worker, and every observed boot — paid it again.
+     *
+     * Keys carry the theme id, so a theme switch lands on a fresh key and the old
+     * entry simply stops being read; no explicit invalidation is required for
+     * correctness. Cleared wholesale by {@see self::clearProcessCaches()} when theme
+     * files change underneath a running Worker.
+     *
+     * @var array<string, array<int, array<string, mixed>>>
+     */
+    private static array $processRawCache = [];
+
+    /** @var array<string, array<int, array<string, mixed>>> */
+    private static array $processResolvedCache = [];
+
+    /** @var array<string, array<string, mixed>> */
+    private static array $processSlotCache = [];
+
+    private const PROCESS_CACHE_MAX_ENTRIES = 32;
+
+    /**
+     * Drop every theme-version-scoped resource catalogue entry.
+     */
+    public static function clearProcessCaches(): void
+    {
+        self::$processRawCache = [];
+        self::$processResolvedCache = [];
+        self::$processSlotCache = [];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    public static function processCacheStats(): array
+    {
+        return [
+            'raw' => \count(self::$processRawCache),
+            'resolved' => \count(self::$processResolvedCache),
+            'slots' => \count(self::$processSlotCache),
+        ];
+    }
+
     private array $rawCache = [];
     private array $resolvedCache = [];
     private array $slotCache = [];
@@ -31,6 +79,9 @@ class ThemeResourceCatalog
         if (isset($this->rawCache[$cacheKey])) {
             return $this->rawCache[$cacheKey];
         }
+        if (isset(self::$processRawCache[$cacheKey])) {
+            return $this->rawCache[$cacheKey] = self::$processRawCache[$cacheKey];
+        }
 
         $resources = [];
         foreach ($this->directoryResolver->getAreaDirectories($area, $theme) as $directory) {
@@ -47,6 +98,11 @@ class ThemeResourceCatalog
             }
         }
 
+        if (\count(self::$processRawCache) >= self::PROCESS_CACHE_MAX_ENTRIES) {
+            unset(self::$processRawCache[\array_key_first(self::$processRawCache)]);
+        }
+        self::$processRawCache[$cacheKey] = $resources;
+
         $this->rawCache[$cacheKey] = $resources;
         return $resources;
     }
@@ -59,6 +115,9 @@ class ThemeResourceCatalog
         if (isset($this->resolvedCache[$cacheKey])) {
             return $this->resolvedCache[$cacheKey];
         }
+        if (isset(self::$processResolvedCache[$cacheKey])) {
+            return $this->resolvedCache[$cacheKey] = self::$processResolvedCache[$cacheKey];
+        }
 
         $resources = [];
         foreach ($this->getRawResources($type, $area, $theme) as $resource) {
@@ -68,6 +127,11 @@ class ThemeResourceCatalog
             }
             $resources[$logicalKey] = $resource;
         }
+
+        if (\count(self::$processResolvedCache) >= self::PROCESS_CACHE_MAX_ENTRIES) {
+            unset(self::$processResolvedCache[\array_key_first(self::$processResolvedCache)]);
+        }
+        self::$processResolvedCache[$cacheKey] = $resources;
 
         $this->resolvedCache[$cacheKey] = $resources;
         return $resources;
@@ -190,6 +254,9 @@ class ThemeResourceCatalog
         if (isset($this->slotCache[$cacheKey])) {
             return $this->slotCache[$cacheKey];
         }
+        if (isset(self::$processSlotCache[$cacheKey])) {
+            return $this->slotCache[$cacheKey] = self::$processSlotCache[$cacheKey];
+        }
 
         $slots = [];
         foreach (['layouts', 'partials', 'components', 'widgets'] as $type) {
@@ -204,6 +271,11 @@ class ThemeResourceCatalog
             }
         }
 
+        if (\count(self::$processSlotCache) >= self::PROCESS_CACHE_MAX_ENTRIES) {
+            unset(self::$processSlotCache[\array_key_first(self::$processSlotCache)]);
+        }
+        self::$processSlotCache[$cacheKey] = $slots;
+
         $this->slotCache[$cacheKey] = $slots;
         return $slots;
     }
@@ -213,6 +285,9 @@ class ThemeResourceCatalog
         $this->rawCache = [];
         $this->resolvedCache = [];
         $this->slotCache = [];
+        // Theme files changed underneath this Worker: the version-scoped process
+        // catalogue must not outlive an explicit cache clear.
+        self::clearProcessCaches();
     }
 
     private function iterateFiles(string $root, string $type): \Generator

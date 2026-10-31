@@ -18,6 +18,20 @@ final class ScopeDisplayTypeResolver
 {
     public const REQUEST_PRIVATE_KEY = 'runtime.request_context.display_type';
 
+    /**
+     * Process-level display-type cache, keyed by "website:store:channel".
+     *
+     * display_type is a global fact about the scope triple: every request in
+     * this Worker resolves the same triple to the same value until an admin
+     * changes it. resolveForScope() runs on every storefront request (via
+     * ScopeResolver::resolve) and previously issued up to three DB reads
+     * (channel → store → website) every single time; measured 4.7 ms warm per
+     * request. Cleared by {@see self::clearProcessCache()}.
+     *
+     * @var array<string, string>
+     */
+    private static array $processCache = [];
+
     public function __construct(
         private readonly ScopeDisplayTypeRegistry $registry,
         private readonly Website $websiteModel,
@@ -26,12 +40,30 @@ final class ScopeDisplayTypeResolver
     ) {
     }
 
+    /**
+     * Drop the process-level display-type cache (scope config changed).
+     */
+    public static function clearProcessCache(): void
+    {
+        self::$processCache = [];
+    }
+
     public function resolveForScope(int $websiteId, int $storeId, int $channelId): string
     {
         if ($websiteId < 0 || $storeId < 0 || $channelId < 0) {
             return '';
         }
 
+        $cacheKey = $websiteId . ':' . $storeId . ':' . $channelId;
+        if (\array_key_exists($cacheKey, self::$processCache)) {
+            return self::$processCache[$cacheKey];
+        }
+
+        return self::$processCache[$cacheKey] = $this->resolveForScopeUncached($websiteId, $storeId, $channelId);
+    }
+
+    private function resolveForScopeUncached(int $websiteId, int $storeId, int $channelId): string
+    {
         $candidates = [
             $this->readChannelDisplayType($channelId),
             $this->readStoreDisplayType($storeId),

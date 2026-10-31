@@ -9,6 +9,31 @@ namespace Weline\Theme\Service;
  */
 final class SlotBoundaryScanner
 {
+    /**
+     * Per-HTML scan cache.
+     *
+     * findSlotWrapperBounds() walks every tag in the fragment, and the finalizer
+     * asks about ~10 slots against the same 600+ KB layout HTML. A scan of that
+     * document measured 27-32 ms, so ten lookups cost ~120 ms — the single largest
+     * block in hard_cut_finalize. The tag list depends only on the HTML string, so
+     * scanning once per distinct document collapses the repeats.
+     *
+     * Held per-instance (the scanner is service-scoped), bounded, keyed by content
+     * hash so different documents never alias.
+     *
+     * @var array<string, list<array{name:string,start:int,end:int,html:string,closing:bool,self_closing:bool}>>
+     */
+    private array $tagCache = [];
+
+    /**
+     * Per-document index: slot id → byte offset of its opening wrapper tag.
+     *
+     * @var array<string, array<string, int>>
+     */
+    private array $slotIndexCache = [];
+
+    private const TAG_CACHE_MAX_DOCUMENTS = 4;
+
     private const OPEN_PATTERN = '/<!--@weline-slot:([\w.-]+)-->/';
     private const CLOSE_PATTERN = '/<!--@\/weline-slot:([\w.-]+)-->/';
     private const MARKER_PATTERN = '/<!--@(\/?)weline-slot:([\w.-]+)-->/';
@@ -417,13 +442,10 @@ final class SlotBoundaryScanner
      */
     public function findSlotWrapperBounds(string $fragment, string $slotId): ?array
     {
-        foreach ($this->scanTags($fragment) as $tag) {
-            if ($tag['closing']) {
-                continue;
-            }
-            foreach (['data-wslot', 'data-slot-id', 'data-preview-slot'] as $attribute) {
-                if ($this->attributeValue($tag['html'], $attribute) === $slotId) {
-                    $bounds = $this->findElementBounds($fragment, $tag['start']);
+        foreach ($this->slotOpenTags($fragment, $slotId) as $openStart) {
+            {
+                {
+                    $bounds = $this->findElementBounds($fragment, $openStart);
                     return $bounds === null ? null : [
                         'open_start' => $bounds['open_start'],
                         'open_end' => $bounds['open_end'],
@@ -444,6 +466,104 @@ final class SlotBoundaryScanner
      *
      * @return \Generator<int,array{name:string,start:int,end:int,html:string,closing:bool,self_closing:bool}>
      */
+    /**
+     * scanTags() memoised per document.
+     *
+     * Only used where the fragment is scanned repeatedly (wrapper bounds lookups).
+     * Callers that stream tags over large documents should keep using scanTags()
+     * directly to avoid materialising the whole list.
+     *
+     * @return list<array{name:string,start:int,end:int,html:string,closing:bool,self_closing:bool}>
+     */
+    /**
+     * Tags starting at or after $offset, from the memoised document scan when warm.
+     *
+     * Falls back to a fresh generator walk (and does not populate the cache) when
+     * the document has been seen with a different offset only.
+     *
+     * @return iterable<int, array{name:string,start:int,end:int,html:string,closing:bool,self_closing:bool}>
+     */
+    private function cachedScanTagsFrom(string $fragment, int $offset): iterable
+    {
+        $key = \md5($fragment);
+        $tags = $this->tagCache[$key] ?? null;
+        if ($tags === null) {
+            return $this->scanTags($fragment, $offset);
+        }
+
+        // Tag starts are ascending, so binary-search the first offset >= $offset and
+        // yield lazily — array_slice() on a 60k-entry list costs more than it saves.
+        $lo = 0;
+        $hi = \count($tags);
+        while ($lo < $hi) {
+            $mid = intdiv($lo + $hi, 2);
+            if ($tags[$mid]['start'] < $offset) {
+                $lo = $mid + 1;
+            } else {
+                $hi = $mid;
+            }
+        }
+
+        $count = \count($tags);
+        for ($i = $lo; $i < $count; $i++) {
+            yield $tags[$i];
+        }
+    }
+
+    /**
+     * Byte offsets of opening tags that carry one of the slot attributes with $slotId.
+     *
+     * Built once per document: the storefront finalizer asks about ~10 slots against
+     * the same layout HTML, and re-filtering 60k tags per lookup cost 6-9 ms each.
+     *
+     * @return list<int>
+     */
+    private function slotOpenTags(string $fragment, string $slotId): array
+    {
+        $docKey = \md5($fragment);
+        $index = $this->slotIndexCache[$docKey] ?? null;
+        if ($index === null) {
+            $index = [];
+            foreach ($this->cachedScanTags($fragment) as $tag) {
+                if ($tag['closing']) {
+                    continue;
+                }
+                foreach (['data-wslot', 'data-slot-id', 'data-preview-slot'] as $attribute) {
+                    $value = $this->attributeValue($tag['html'], $attribute);
+                    if ($value !== null && $value !== '' && !isset($index[$value])) {
+                        $index[$value] = $tag['start'];
+                    }
+                }
+            }
+            if (\count($this->slotIndexCache) >= self::TAG_CACHE_MAX_DOCUMENTS) {
+                unset($this->slotIndexCache[\array_key_first($this->slotIndexCache)]);
+            }
+            $this->slotIndexCache[$docKey] = $index;
+        }
+
+        return isset($index[$slotId]) ? [$index[$slotId]] : [];
+    }
+
+    private function cachedScanTags(string $fragment): array
+    {
+        $key = \md5($fragment);
+        if (isset($this->tagCache[$key])) {
+            return $this->tagCache[$key];
+        }
+
+        $tags = [];
+        foreach ($this->scanTags($fragment) as $tag) {
+            $tags[] = $tag;
+        }
+
+        if (\count($this->tagCache) >= self::TAG_CACHE_MAX_DOCUMENTS) {
+            unset($this->tagCache[\array_key_first($this->tagCache)]);
+        }
+        $this->tagCache[$key] = $tags;
+
+        return $tags;
+    }
+
     public function scanTags(string $html, int $offset = 0): \Generator
     {
         $length = strlen($html);
@@ -485,7 +605,9 @@ final class SlotBoundaryScanner
     {
         $opening = null;
         $depth = 0;
-        foreach ($this->scanTags($html, $openStart) as $tag) {
+        // Use the memoised tag list when the whole document is already scanned;
+        // re-walking from $openStart with the generator rescans the tail every call.
+        foreach ($this->cachedScanTagsFrom($html, $openStart) as $tag) {
             if ($opening === null) {
                 if ($tag['start'] !== $openStart || $tag['closing']) {
                     return null;

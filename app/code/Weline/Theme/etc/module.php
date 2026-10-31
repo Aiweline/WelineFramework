@@ -23,6 +23,10 @@ return [
         'Weline_Websites' => '*',
     ],
     "provides" => [
+        // Worker start-up preload owned by this module: publishes the theme
+        // component/widget catalogue before the first request builds it.
+        'worker_preload_provider.Weline_Theme' =>
+            \Weline\Theme\Service\Preload\ThemeCataloguePreloadProvider::class,
         \Weline\Theme\Api\DefaultThemeInterface::class => \Weline\Theme\Service\RegisteredDefaultTheme::class,
         \Weline\Framework\Runtime\DefaultThemeConfigProviderInterface::class => \Weline\Theme\Service\RegisteredDefaultTheme::class,
         'schedule_window_utc_migration.Weline_Theme'

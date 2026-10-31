@@ -467,12 +467,13 @@ class DetectWebsite implements
             return;
         }
         $path = (string)($parsed['path'] ?? '');
-        // The reserved bare host belongs to the default Website; explicit
-        // path mounts must remain available to the native longest-base matcher.
-        if ($this->isReservedProjectHost($host) && \trim($path, '/') === '') {
-            return;
-        }
-
+        // Reserved project Hosts publish their bare binding too. Without it the
+        // parser site map has no entry for the host, Url::parser's longest-prefix
+        // match misses, and applyParsedUrl() ran its fallback branch on every
+        // request only to resolve "default" anyway.
+        //
+        // Port matters: the bare host is published under the request's own port
+        // so the map key matches what the Worker actually parses.
         $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
 
         $hosts = [$host];
@@ -618,12 +619,12 @@ class DetectWebsite implements
                     continue;
                 }
                 $subPath = \trim((string)($domainRow[WebsiteDomain::schema_fields_SUB_PATH] ?? ''), '/');
-                // Reserved project Host bare bindings (empty sub_path) stay with
-                // the default site. Non-empty sub_path mounts MUST be published
-                // so Url::parser can peel /daocharms before localization 301.
-                if ($this->isReservedProjectHost($domain) && $subPath === '') {
-                    continue;
-                }
+                // Reserved project Host bare bindings are published too: without a
+                // bare-host entry Url::parser's longest-prefix match can never
+                // resolve the host, so every request fell through the
+                // applyParsedUrl() fallback branch just to land on "default".
+                // Publishing the binding lets the match happen inline.
+                //
                 // Synthetic /~site/{code} owns that prefix on the project Host —
                 // never publish a colliding WebsiteDomain sub_path into the parser.
                 if ($this->isReservedProjectHost($domain)
@@ -632,7 +633,11 @@ class DetectWebsite implements
                     continue;
                 }
 
-                $baseUrl = $scheme . '://' . $domain . $port;
+                // Reserved project Hosts are served on the public origin (no port);
+                // the site row's own :port belongs to its configured storefront URL
+                // and would never match a real request.
+                $domainPort = $this->isReservedProjectHost($domain) ? '' : $port;
+                $baseUrl = $scheme . '://' . $domain . $domainPort;
                 if ($subPath !== '') {
                     $baseUrl .= '/' . $subPath;
                 }
@@ -832,7 +837,7 @@ class DetectWebsite implements
             return null;
         }
 
-        $cachePath = $matchContext['path'];
+        $cachePath = $this->resolveSiteInheritedPath($matchContext);
         $cacheIdentity = \implode("\n", [
             $matchContext['scheme'],
             $matchContext['host'],
@@ -868,6 +873,31 @@ class DetectWebsite implements
             unset(self::$processValueCache[$processKey], self::$processValueCacheExpiresAt[$processKey]);
         }
 
+        // Cross-worker shared layer. Site matches are global facts: every Worker
+        // in this instance resolves the same host/mount to the same website, so a
+        // worker that starts cold should hydrate from a peer's result instead of
+        // re-reading the store/channel catalogue (~25–53 ms per worker).
+        $sharedKey = self::CACHE_KEY_MATCHED_SITE_PREFIX . sha1($cacheIdentity);
+        try {
+            $sharedCached = $this->getCache()->get($sharedKey);
+        } catch (\Throwable) {
+            $sharedCached = null;
+        }
+        if (\is_array($sharedCached)
+            && $this->processCachedMatchStillValid($sharedCached, $matchContext['path'])
+        ) {
+            RequestContext::set($requestKey, $sharedCached);
+            $this->setProcessValueCache($processKey, $sharedCached);
+
+            return $sharedCached;
+        }
+        if ($sharedCached === false) {
+            RequestContext::set($requestKey, false);
+            $this->setProcessValueCache($processKey, false);
+
+            return null;
+        }
+
         $currentHost = $matchContext['host'];
         if ($this->isReservedProjectHost($currentHost)) {
             // Order: synthetic /~site/{code} → WebsiteDomain non-empty sub_path → bare default.
@@ -897,6 +927,13 @@ class DetectWebsite implements
             // runs on website/domain changes, so a newly added route can still
             // become visible without making invalid probes rescan the catalog.
             $this->setProcessValueCache($processKey, false);
+        }
+
+        // Publish to the shared pool so peer Workers hydrate instead of rescanning.
+        try {
+            $this->getCache()->set($sharedKey, $cachedValue, self::CACHE_TTL);
+        } catch (\Throwable) {
+            // Shared pool unavailable: the process/request layers still work.
         }
 
         return $matchedSite;
@@ -1415,6 +1452,69 @@ class DetectWebsite implements
             self::clearProcessCache();
         }
         self::$processCacheVersion = $version;
+    }
+
+    /**
+     * Resolve the *site-inherited* path for a request: the longest configured
+     * mount (WebsiteDomain.sub_path) that this request path falls under, or '/'
+     * when the host has no path mount matching it.
+     *
+     * Why this is the cache identity
+     * ------------------------------
+     * Website resolution for a given host depends only on which mount prefix the
+     * request path falls under, not on the full path. Keying the match cache by
+     * the full path made every distinct URL (/best-sellers, /products, …)
+     * recompute the same match (measured 25–28 ms per new path because the cold
+     * branch re-reads the store/channel catalog).
+     *
+     * Keying by the inherited path keeps the semantics identical — a longer mount
+     * still wins because the longest matching prefix IS the inherited path — while
+     * collapsing every URL under the same mount onto one cache entry.
+     *
+     * Example (host p05113ef3.test.weline.com, mounts: / (bare), /daocharms):
+     *   /daocharms/about  → /daocharms   (same cache entry as /daocharms/products)
+     *   /best-sellers     → /            (same cache entry as /products)
+     *
+     * @param array{scheme:string,host:string,port:string|int,path:string} $matchContext
+     */
+    private function resolveSiteInheritedPath(array $matchContext): string
+    {
+        $requestPath = $this->canonicalRequestPath($matchContext['path'] === '' ? '/' : $matchContext['path']);
+        $hostNorm = \strtolower(\trim((string)$matchContext['host']));
+        if ($hostNorm === '') {
+            return $requestPath;
+        }
+
+        $inherited = '/';
+        $inheritedLength = 0;
+        foreach ($this->getWebsiteDomainRows() as $domainRow) {
+            $domain = \strtolower(\trim((string)($domainRow[WebsiteDomain::schema_fields_DOMAIN] ?? '')));
+            if ($domain === '' || !$this->isHostMatch($hostNorm, $domain)) {
+                continue;
+            }
+            $subPath = \trim((string)($domainRow[WebsiteDomain::schema_fields_SUB_PATH] ?? ''));
+            if ($subPath === '') {
+                continue;
+            }
+            if (!\str_starts_with($subPath, '/')) {
+                $subPath = '/' . $subPath;
+            }
+            $configuredPath = $this->canonicalConfiguredPath($subPath);
+            if ($configuredPath === '/') {
+                continue;
+            }
+            $length = \strlen($configuredPath);
+            if ($length <= $inheritedLength) {
+                continue;
+            }
+            if (!CanonicalStorefrontUrl::matchesPathSegmentBoundary($configuredPath, $requestPath)) {
+                continue;
+            }
+            $inherited = $configuredPath;
+            $inheritedLength = $length;
+        }
+
+        return $inherited;
     }
 
     /**

@@ -1988,13 +1988,12 @@ class Website extends BackendController
             return true;
         }
 
-        $server = $this->request->getServerBag();
-        $apiFlag = strtolower(trim((string)$server->getHeader('X-Weline-Api', '')));
+        $apiFlag = strtolower(trim((string)$this->request->getHeader('X-Weline-Api')));
         if ($apiFlag === '1' || $apiFlag === 'true') {
             return true;
         }
 
-        $accept = strtolower(trim((string)$server->getHeader('Accept', '')));
+        $accept = strtolower(trim((string)$this->request->getHeader('Accept')));
         if ($accept !== ''
             && str_contains($accept, 'application/json')
             && !str_contains($accept, 'text/html')
@@ -2003,7 +2002,7 @@ class Website extends BackendController
         }
 
         // Dedicated Worker 代发时 Referer 指向 weline-api-worker.js；无需等客户端 JS 热更新即可止血。
-        $referer = strtolower(trim((string)$server->getHeader('Referer', '')));
+        $referer = strtolower(trim((string)$this->request->getHeader('Referer')));
         if ($referer !== '' && str_contains($referer, 'weline-api-worker.js')) {
             return true;
         }
@@ -2038,15 +2037,14 @@ class Website extends BackendController
         }
         $logged = true;
 
-        $server = $this->request->getServerBag();
         w_log_warning(sprintf(
             '[Websites] Api-style website mutation (%s): method=%s uri=%s referer=%s ua=%s x-weline-api=%s',
             $phase,
             (string)$this->request->getMethod(),
-            (string)$server->get('REQUEST_URI', ''),
-            (string)$server->getHeader('Referer', ''),
-            (string)$server->getHeader('User-Agent', ''),
-            (string)$server->getHeader('X-Weline-Api', ''),
+            (string)$this->request->getServer('REQUEST_URI'),
+            (string)$this->request->getHeader('Referer'),
+            (string)$this->request->getHeader('User-Agent'),
+            (string)$this->request->getHeader('X-Weline-Api'),
         ));
     }
 

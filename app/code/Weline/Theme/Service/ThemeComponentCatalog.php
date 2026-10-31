@@ -67,7 +67,6 @@ class ThemeComponentCatalog
         ]) as $definition) {
             $this->appendDefinition($definitions, $seen, $nativeThemeComponentCodes, $definition);
         }
-
         $this->cache[$cacheKey] = array_values($definitions);
         $this->identityIndex[$cacheKey] = [];
         foreach ($this->cache[$cacheKey] as $definition) {

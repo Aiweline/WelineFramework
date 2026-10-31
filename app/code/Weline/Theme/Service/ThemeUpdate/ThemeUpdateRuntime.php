@@ -49,6 +49,20 @@ final class ThemeUpdateRuntime
     /** 构建期强制代次（让编译产物烘焙「正在构建的批次」前缀）。 */
     private static ?array $forced = null;
 
+    /**
+     * Process-level generation identity snapshot.
+     *
+     * Theme publication is Worker-wide state, not request state: every request
+     * in the process sees the same theme version until a theme update lands.
+     * Keeping it per-request meant re-reading the published version row on
+     * every cache-key computation (~2.2 ms warm, ~120 ms on first touch).
+     * Reset by {@see self::resetGenerationIdentityCache()} when publication
+     * changes.
+     *
+     * @var array<string, array{themeCode:string,versionNumber:int,themeId:int}|null>
+     */
+    private static array $generationIdentityProcessCache = [];
+
 
     /** @param array{batch_id:string,static_ns:string,entity_root:string,theme_prefix:string,epoch:int,pair_segment?:string,static_build?:string}|null $active */
     public static function forceBatch(?array $active): void
@@ -56,6 +70,10 @@ final class ThemeUpdateRuntime
         self::$forced = $active;
         RequestContext::remove(self::REQUEST_STATE_KEY);
         RequestContext::remove(self::GENERATION_IDENTITY_MEMO_KEY);
+        // Forced batch changes the memo key namespace; drop the process snapshot
+        // so the next read resolves under the new key rather than serving a
+        // stale auto-published identity.
+        self::$generationIdentityProcessCache = [];
     }
 
     /**
@@ -255,6 +273,9 @@ final class ThemeUpdateRuntime
     private static function generationIdentity(): ?array
     {
         $memoKey = self::generationIdentityMemoKey();
+
+        // Request-local copy first: once this request resolved the identity it
+        // must keep seeing the same value even if the process snapshot is reset.
         if (RequestContext::sharedHas($memoKey)) {
             /** @var array{themeCode:string,versionNumber:int,themeId:int}|null $cached */
             $cached = RequestContext::sharedGet($memoKey);
@@ -262,26 +283,49 @@ final class ThemeUpdateRuntime
             return $cached;
         }
 
-        $identity = null;
-        if (\class_exists('\\Weline\\Theme\\Service\\ThemePublishedVersionRuntimeResolver')) {
-            try {
-                $themeId = self::appliedThemeId();
-                /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
-                $resolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class);
-                $resolved = $resolver->resolveGenerationIdentity($themeId > 0 ? $themeId : null);
+        // Process-level snapshot (shared by every request in this Worker).
+        // Theme publication is process state: it only changes when a theme
+        // update runs, which resets this snapshot. Resolving it per request put
+        // a published-version DB read on every cache-key computation.
+        $processKey = $memoKey;
+        if (\array_key_exists($processKey, self::$generationIdentityProcessCache)) {
+            $identity = self::$generationIdentityProcessCache[$processKey];
+        } else {
+            $identity = null;
+            if (\class_exists('\\Weline\\Theme\\Service\\ThemePublishedVersionRuntimeResolver')) {
+                try {
+                    $themeId = self::appliedThemeId();
+                    /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
+                    $resolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class);
+                    $resolved = $resolver->resolveGenerationIdentity($themeId > 0 ? $themeId : null);
 
-                $identity = [
-                    'themeCode' => \trim((string)($resolved['themeCode'] ?? '')),
-                    'versionNumber' => (int)($resolved['versionNumber'] ?? 0),
-                    'themeId' => (int)($resolved['themeId'] ?? 0),
-                ];
-            } catch (\Throwable) {
-                $identity = null;
+                    $identity = [
+                        'themeCode' => \trim((string)($resolved['themeCode'] ?? '')),
+                        'versionNumber' => (int)($resolved['versionNumber'] ?? 0),
+                        'themeId' => (int)($resolved['themeId'] ?? 0),
+                    ];
+                } catch (\Throwable) {
+                    $identity = null;
+                }
             }
+            self::$generationIdentityProcessCache[$processKey] = $identity;
         }
-        RequestContext::sharedSet($memoKey, $identity);
+
+        // Copy into the current request Context so later readers in this
+        // request hit a cheap request-local lookup.
+        if (RequestContext::isInitialized()) {
+            RequestContext::sharedSet($memoKey, $identity);
+        }
 
         return $identity;
+    }
+
+    /**
+     * Drop the process-level generation snapshot (theme publication changed).
+     */
+    public static function resetGenerationIdentityCache(): void
+    {
+        self::$generationIdentityProcessCache = [];
     }
 
     /**
@@ -461,6 +505,7 @@ final class ThemeUpdateRuntime
     {
         RequestContext::remove(self::REQUEST_STATE_KEY);
         RequestContext::remove(self::GENERATION_IDENTITY_MEMO_KEY);
+        self::$generationIdentityProcessCache = [];
         self::$forced = null;
         StaticBuildId::override(null);
     }

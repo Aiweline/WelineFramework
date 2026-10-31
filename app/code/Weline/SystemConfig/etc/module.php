@@ -21,5 +21,9 @@ return [
         \Weline\Framework\Http\Security\SecurityHeaderPolicyOverrideProviderInterface::class
             => \Weline\SystemConfig\Service\SystemConfigSecurityHeaderPolicyOverrideProvider::class,
         'process_cache_resetter.Weline_SystemConfig' => \Weline\SystemConfig\Api\Runtime\ProcessCacheResetter::class,
+        // Worker start-up preload owned by this module: publishes the config keys
+        // that gate every storefront request into process memory.
+        'worker_preload_provider.Weline_SystemConfig' =>
+            \Weline\SystemConfig\Service\Preload\SystemConfigHotKeysPreloadProvider::class,
     ],
 ];

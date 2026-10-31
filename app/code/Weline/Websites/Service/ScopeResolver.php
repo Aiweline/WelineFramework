@@ -152,7 +152,15 @@ class ScopeResolver
 
         // HotCache: scope=store channel catalog can write L2 only after freeze.
         // Publish now so layout/chrome consumers HIT instead of paying a cold builder.
-        $this->publishScopeCatalogHotCache($store, $channel);
+        //
+        // Skip when the path match already came from cache: publish re-freezes the
+        // key context and writes 5–6 scope-catalog entries to the shared pool, and
+        // on a cache hit those entries were written by whichever Worker populated
+        // the match in the first place. Measured 12–15 ms per request on the
+        // cache-hit path before this guard.
+        if (!$fromCache) {
+            $this->publishScopeCatalogHotCache($store, $channel);
+        }
 
         return new StorefrontNavigationScope($identity, $routePath);
     }

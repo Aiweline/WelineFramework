@@ -52,5 +52,13 @@ return [
         'request_resetter.Weline_Websites' => \Weline\Websites\Api\Runtime\RequestResetter::class,
         'process_cache_resetter.Weline_Websites' => \Weline\Websites\Api\Runtime\ProcessCacheResetter::class,
         'cache.warmer.websites.scope_catalog' => \Weline\Websites\Service\ScopeCatalogCacheWarmer::class,
+        // Worker start-up preload owned by this module. The framework runtime only
+        // schedules providers; each module publishes its own global data here.
+        'worker_preload_provider.Weline_Websites.directory' =>
+            \Weline\Websites\Service\Preload\WebsiteDirectoryPreloadProvider::class,
+        'worker_preload_provider.Weline_Websites.site_detection' =>
+            \Weline\Websites\Service\Preload\SiteDetectionPreloadProvider::class,
+        'worker_preload_provider.Weline_Websites.theme_application' =>
+            \Weline\Websites\Service\Preload\StorefrontThemeApplicationPreloadProvider::class,
     ],
 ];

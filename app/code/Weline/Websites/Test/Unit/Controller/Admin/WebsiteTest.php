@@ -276,7 +276,7 @@ class WebsiteTest extends TestCore
         WelineEnv::set('is_backend', true, 'WebsiteTest backend request');
         /** @var Request $request */
         $request = ObjectManager::getInstance(Request::class);
-        $request->getServerBag()->reset()->initFromGlobals(true);
+        // SERVER values come straight from the request Context; no snapshot to reset.
         $request->setBackend();
         $request->setServer('WELINE_AREA', 'backend');
         $request->setServer('WELINE_IS_BACKEND', '1');

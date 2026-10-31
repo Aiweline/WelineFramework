@@ -12,6 +12,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\View\RenderProfileThreshold;
 use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\StorefrontWidgetRuntimeSchedule;
 use Weline\Framework\Runtime\TemplateRenderRouteTrace;
@@ -1147,7 +1148,7 @@ HTML;
 
         $uri = $this->currentUri();
         if (
-            $totalMs < 20.0
+            !RenderProfileThreshold::isSlowEnough($totalMs)
             && !\str_contains($uri, 'customer/account')
             && !\str_contains($contentTemplate, 'account')
         ) {
