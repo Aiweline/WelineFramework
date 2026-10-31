@@ -191,26 +191,12 @@
                   disabled="false"
                   shared="true"
                   sort="130"/>
-        <!-- After Widget registry refresh (sort=50) and Theme static publish (≤250): drop stale bake disks -->
+        <!--
+            After Widget registry refresh (sort=50) and Theme static publish (≤250): 只处理「主题还没有代次指针」的首次安装。
+            setup:upgrade 后这里只做两件事：首次安装就地固化，或（既有代次指针时）只写脏标记。
+            主题产物由 `php bin/w theme:update` 负责；核心更新（core:update）与 deploy:upgrade 不再触发主题布局固化。
+        -->
         <observer name="Weline_Theme::setup_upgrade_purge_layout_entities"
-                  instance="Weline\Theme\Observer\SetupUpgradeAfterPurgeLayoutEntities"
-                  disabled="false"
-                  shared="true"
-                  sort="300"/>
-    </event>
-
-    <!-- deploy:upgrade 静态铺平后：同语义清布局固化物（与 setup:upgrade 共享 Observer + runOnce） -->
-    <event name="Weline_Framework_Deploy::upgrade_after">
-        <observer name="Weline_Theme::deploy_upgrade_purge_layout_entities"
-                  instance="Weline\Theme\Observer\SetupUpgradeAfterPurgeLayoutEntities"
-                  disabled="false"
-                  shared="true"
-                  sort="300"/>
-    </event>
-
-    <!-- core:update 核心同步后：同语义清布局固化物（代码已换仍可能直读旧壳） -->
-    <event name="Weline_Deploy::core_update_after">
-        <observer name="Weline_Theme::core_update_purge_layout_entities"
                   instance="Weline\Theme\Observer\SetupUpgradeAfterPurgeLayoutEntities"
                   disabled="false"
                   shared="true"

@@ -13,17 +13,25 @@ use Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime;
 
 /**
- * setup:upgrade / deploy:upgrade / core:update 后：迁到 generated/ 并全主题预固化布局模板（§0 R5/R6）。
+ * 只服务 setup:upgrade：首次安装时就地固化布局模板（§0 R5/R6）。
  *
- * 非 dev：已进入主题更新代次机制的站点不再就地固化（那会在维护窗内改线上主题字节），
- * 改为给绑定主题写脏标记，由发布流水线里的 `php bin/w theme:update` 构建新代次后翻指针。
+ * setup:upgrade 后只有两种动作：
+ * - 主题还没有代次指针（首次安装 / 空站）→ 就地固化，保证升级后店面有产物可用；
+ * - 所有绑定主题都已有代次指针 → 只写脏标记，不在维护窗内改线上主题字节。
+ * setup.layout_solidify=never 不固化；dev 环境始终就地固化。
+ *
+ * core:update 与 deploy:upgrade 不再触发主题布局固化（本观察者不挂这两个事件）。
+ * 主题产物由 `php bin/w theme:update` 负责（ThemeUpgradeCutoverService →
+ * ThemeLayoutEntityUpgradeSolidifyService::cutover），外加上面说的首次安装就地固化。
  * （原每分钟轮询的 theme_update_auto_publish cron 已删除：发布由 SSE 同步收敛，不需要轮询兜底。）
- * 首次安装（主题还没有代次指针）仍就地固化，保证空站升级后店面有产物可用。
  *
  * @see app/code/Weline/Theme/doc/布局固化与默认注入.md §0 · §3.4
  */
 final class SetupUpgradeAfterPurgeLayoutEntities implements ObserverInterface
 {
+    /** 本观察者只挂 setup:upgrade，reason 固定（原 deploy/core 分支已随事件解绑删除）。 */
+    private const REASON = 'setup_upgrade_layout_entities_solidified';
+
     public function __construct(
         private readonly ThemeLayoutEntityUpgradeSolidifyService $solidifyService,
         private readonly ThemeApplicationUsageService $themeApplicationUsage,
@@ -32,13 +40,12 @@ final class SetupUpgradeAfterPurgeLayoutEntities implements ObserverInterface
 
     public function execute(Event &$event): void
     {
-        $reason = $this->reasonForEvent($event);
         if ($this->shouldDeferToThemeUpdate()) {
-            $this->deferToThemeUpdate($reason);
+            $this->deferToThemeUpdate(self::REASON);
 
             return;
         }
-        $this->solidifyService->runOnce($reason);
+        $this->solidifyService->runOnce(self::REASON);
     }
 
     /** @internal */
@@ -88,14 +95,5 @@ final class SetupUpgradeAfterPurgeLayoutEntities implements ObserverInterface
         foreach ($themeIds as $themeId) {
             ThemeUpdateRuntime::markDirty($themeId, $reason);
         }
-    }
-
-    private function reasonForEvent(Event $event): string
-    {
-        return match ($event->getName()) {
-            'Weline_Framework_Deploy::upgrade_after' => 'deploy_upgrade_layout_entities_solidified',
-            'Weline_Deploy::core_update_after' => 'core_update_layout_entities_solidified',
-            default => 'setup_upgrade_layout_entities_solidified',
-        };
     }
 }

@@ -199,7 +199,7 @@ DB 与缓存不是一个跨系统原子事务：提交前已开始的请求可�
 
 默认注入变更按变更前后涉及布局的并集处理相关主题、正式版本和草稿。每个 owner 下页面与公共 Partial 候选全部生成后统一替换；在途请求使用此前已固定的完整源字节。全主题批次可以逐 owner 执行，不承诺全站同时替换，但必须如实报告每个目标结果。无剩余编辑意图、参数覆盖和有效注入时删除派生 PHTML；显式卸载全部节点仍是有效意图。
 
-`setup:upgrade` / `deploy:upgrade` / `core:update` 成功收尾走 **`ThemeLayoutEntityUpgradeSolidifyService`**：迁旧 var 树（若有）→ **仅站点已绑定主题**（+ 后台应用 + 注册 Default）的**当前生效正式版**预固化到 `generated/theme-layout-entities/`（publish 门禁含 Taglib→`com_*`）→ 清遗留 var → 失效 Theme/FPC。未绑定站的安装主题不进升级预固。生成与保存共用 owner 互斥，候选全部成功后再替换；**不得**以「只 purge + 首访重建」代替 R5。DB 版本、草稿、release、决定和源码不在删除范围。普通请求缺派生文件时选择原模板；授权历史预览仅凭精确 V/R 的既有引用重编内存候选，缺历史依据明确报告。
+`setup:upgrade` 成功收尾走 **`ThemeLayoutEntityUpgradeSolidifyService`**：迁旧 var 树（若有）→ **仅站点已绑定主题**（+ 后台应用 + 注册 Default）的**当前生效正式版**预固化到 `generated/theme-layout-entities/`（publish 门禁含 Taglib→`com_*`）→ 清遗留 var → 失效 Theme/FPC。未绑定站的安装主题不进升级预固。生成与保存共用 owner 互斥，候选全部成功后再替换；**不得**以「只 purge + 首访重建」代替 R5。DB 版本、草稿、release、决定和源码不在删除范围。普通请求缺派生文件时选择原模板；授权历史预览仅凭精确 V/R 的既有引用重编内存候选，缺历史依据明确报告。`deploy:upgrade`、`core:update` 收尾不再触发主题布局固化：主题观察者只挂 `setup:upgrade`，主题产物由 `php bin/w theme:update` 构建。
 
 ### 10. 缓存与清理
 
@@ -321,6 +321,7 @@ draft、Token/画布预览、事务候选、可变 Model 不进公共 HotCache/F
           - 证据（`[case:GAP-02-04]`，真实 DB 行）：`snapshot_count>0`、`snapshot_types` 含 `layout` 且**不含 `theme_binding`**、每行 `theme_version_id` == 发布版本、`content_revision >= 1`、`resource_identity_hash` 为 64 位十六进制；`snapshot_records_page_artifact=true`（至少一行记录的指纹 == 磁盘上那个页面产物的 sha256，快照不是空壳）。
         - ✅ **UC-11 已验通过（`[case:UC-11]`，2026-09-25 接手续轮）**：源模板变更被重烘采纳、清盘只删派生磁盘产物、首访从「当前源模板 + 该版本持久用户意图」重建、失效操作有诊断。
           - 真实通路：独立 scope 走控制器「创建→存部件→封存→发布」出产物 → **改源模板**（删掉旧默认节点，源文件 sha256 变化）→ 跑真实的 `SetupUpgradeAfterPurgeLayoutEntities` 清盘 → 走真实「首访」入口 `dynamicSolidifyPublishedPage` 重建。
+            - 夹具直接 `new`/调用该观察者，**不经** `core:update` / `deploy:upgrade`：这两个事件自 2026-10-31 起因 Theme 观察者解绑已不再触发主题布局固化，本用例的语义是「观察者本身的清盘行为」，与哪个命令派发无关。
           - 证据（全部从真实磁盘/DB/HTTP 直读）：页面结构键 `501b2e50…` → **`4e34446e…`**（源指纹被采纳），而 **chrome 结构键 `afe33e8d…` 前后不变**（排除「任何重烘都会换键」，把变化唯一归因到源模板）；清盘后 `artifact_count_after_purge=0`、`version_formal_dir_gone_after_purge=true`；DB 侧 `selection_intact_after_purge` / `version_row_survives_purge` / `db_payload_intact_after_purge` 全真，重建用的节点来自 `db_version_payload`（不是夹具自造）；重建后产物回到新页面结构键、用户覆盖标记仍在产物内容里；`dynamicSolidifyPublishedPage` 对非法 theme/scope/layout 一律 fail-closed 返回空，越界 purge 根被 `theme_layout_entity_purge_basename_mismatch` 拒绝、本根被接受。
           - 真实 HTTP 首访：全站清盘后首页首访 `http=200`（冷重建 ~11.5s，随后 ~2.1s），正文 ~1.00 MB 且 `nav`/`header`/`footer`/`weline-code` 齐备。
           - **未覆盖（不伪造）**：本用例只验「源模板文件指纹」这条源；required 默认注入**账本**一侧由 UC-12 与 `homepage-required-injection-smoke` 覆盖，未在此重复。

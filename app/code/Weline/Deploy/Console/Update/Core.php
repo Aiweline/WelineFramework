@@ -254,7 +254,7 @@ class Core extends CommandAbstract
         $this->printer->success('═══════════════════════════════════════════════════════════════');
         $this->printer->note('');
         $this->printer->warning(__(
-            '提醒：core:update 已派发 core_update_after（Theme 可清布局固化物）；仍不算静态发布完成。请再执行 php bin/w setup:upgrade（或 deploy:upgrade）以达 Deploy\\Upgrade 双树铺平与 FPC deploy 世代。'
+            '提醒：core:update 已派发 core_update_after（仅作事件广播，核心更新不触发主题更新）；仍不算静态发布完成。请再执行 php bin/w setup:upgrade（或 deploy:upgrade）以达 Deploy\\Upgrade 双树铺平与 FPC deploy 世代；主题产物另用 php bin/w theme:update 构建。'
         ));
         $this->printer->note('');
         

@@ -2662,11 +2662,61 @@ private function assert_ThemeLayoutEntityUpgradePurge_testUpgradeEventsRegisterS
 {
     $xml = simplexml_load_file('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/etc/event.xml');
     self::assertNotFalse($xml);
-    foreach (['Weline_Framework_Setup::upgrade_after', 'Weline_Framework_Deploy::upgrade_after', 'Weline_Deploy::core_update_after'] as $event) {
+    $observerClass = 'Weline\Theme\Observer\SetupUpgradeAfterPurgeLayoutEntities';
+    $observersOf = static function (string $event) use ($xml): array {
         $observers = $xml->xpath('//*[local-name()="event" and @name="' . $event . '"]/*[local-name()="observer"]');
-        $classes = array_map(static fn($observer): string => (string) $observer['instance'], $observers);
-        self::assertContains('Weline\Theme\Observer\SetupUpgradeAfterPurgeLayoutEntities', $classes, $event);
+        return array_map(static fn($observer): string => (string) $observer['instance'], $observers);
+    };
+
+    // setup:upgrade 收尾仍挂本观察者：首次安装就地固化，非 dev 且已有代次指针时只写脏标记。
+    self::assertContains(
+        $observerClass,
+        $observersOf('Weline_Framework_Setup::upgrade_after'),
+        'Weline_Framework_Setup::upgrade_after 必须挂 ' . $observerClass
+        . '（setup:upgrade 收尾仍按首次安装/代次指针两种语义处理主题布局固化）',
+    );
+
+    // 核心更新与 deploy:upgrade 不再触发主题布局固化：主题产物只由 `php bin/w theme:update` 负责构建。
+    self::assertNotContains(
+        $observerClass,
+        $observersOf('Weline_Deploy::core_update_after'),
+        'Weline_Deploy::core_update_after 不得挂 ' . $observerClass
+        . '（核心更新不再触发主题布局固化，主题更新有自己的命令 theme:update）',
+    );
+    self::assertNotContains(
+        $observerClass,
+        $observersOf('Weline_Framework_Deploy::upgrade_after'),
+        'Weline_Framework_Deploy::upgrade_after 不得挂 ' . $observerClass
+        . '（deploy:upgrade 不再触发主题布局固化，主题更新有自己的命令 theme:update）',
+    );
+
+    // 两个已解绑的事件整段不应再出现在 event.xml 中（含 observer name 标记）。
+    $eventNames = [];
+    foreach ($xml->xpath('//*[local-name()="event"]') as $eventNode) {
+        $eventNames[] = (string) $eventNode['name'];
     }
+    self::assertNotContains(
+        'Weline_Deploy::core_update_after',
+        $eventNames,
+        'event.xml 不应再声明 Weline_Deploy::core_update_after（主题观察者已解绑，核心更新不再触发主题布局固化）',
+    );
+    self::assertNotContains(
+        'Weline_Framework_Deploy::upgrade_after',
+        $eventNames,
+        'event.xml 不应再声明 Weline_Framework_Deploy::upgrade_after（主题观察者已解绑，deploy:upgrade 不再触发主题布局固化）',
+    );
+
+    $rawXml = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/etc/event.xml');
+    self::assertStringNotContainsString(
+        'deploy_upgrade_purge_layout_entities',
+        $rawXml,
+        'event.xml 不应再有 deploy_upgrade_purge_layout_entities 观察者名（deploy:upgrade 不再触发主题布局固化）',
+    );
+    self::assertStringNotContainsString(
+        'core_update_purge_layout_entities',
+        $rawXml,
+        'event.xml 不应再有 core_update_purge_layout_entities 观察者名（核心更新不再触发主题布局固化）',
+    );
 }
 
 private function assert_ThemeLayoutEntityUpgradePurge_testThemeUpgradeCommandWiresLayoutSolidify(): void
