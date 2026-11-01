@@ -465,6 +465,119 @@ final class ThemeUpdateBatchService
         ];
     }
 
+    // ---------------------------------------------------- 就地发布的静态代次
+
+    /**
+     * 就地发布（dev 增量）后推进主题静态发布代次 `static_build`。
+     *
+     * 只改指针里这一行的 `static_build`：`batch_id` / `epoch` / `static_ns` / `entity_root` /
+     * `pair_segment` 原样保留，所以主题"业务版本"不变，但 `pageGeneration()` 与资源
+     * `?v=` 会跟着换 → FPC 页桶与浏览器缓存一起失效。
+     *
+     * @return array{changed:bool,static_build:string,reason:string}
+     */
+    public function refreshInPlaceStaticBuild(int $themeId, int $websiteId = 0, string $area = self::AREA_FRONTEND): array
+    {
+        $key = self::pointerConfigKey($websiteId, $themeId, $area);
+        $doc = self::rawPointerDocument();
+        $map = (array)($doc['map'] ?? []);
+        $row = $map[$key] ?? null;
+
+        $prefix = \is_array($row) ? \trim((string)($row['theme_prefix'] ?? '')) : '';
+        $fingerprint = '';
+        if ($prefix !== '') {
+            $root = \rtrim((string)BP, '/\\') . \DIRECTORY_SEPARATOR . 'pub' . \DIRECTORY_SEPARATOR
+                . 'static' . \DIRECTORY_SEPARATOR . \str_replace('/', \DIRECTORY_SEPARATOR, \trim($prefix, '/'));
+            $fingerprint = ThemeStaticTreeFingerprint::compute($root);
+        }
+
+        $plan = self::planInPlaceStaticBuild($row, $fingerprint);
+        $stamp = \preg_match('/^[0-9a-f]{12}$/', $fingerprint) === 1 ? $fingerprint : '';
+        if ($plan['changed'] !== true) {
+            // 指针行已经是最新时也要补全局戳（老部署升级上来时戳还不存在），
+            // 否则首屏 header 在主题上下文缺位时仍拿不到换桶信号。
+            if ($stamp !== '' && ThemeUpdateRuntime::inPlaceStaticBuildStamp() !== $stamp) {
+                $this->writeGlobalStaticStamp($stamp);
+                ThemeUpdateRuntime::reset();
+            }
+
+            return $plan;
+        }
+
+        $row['static_build'] = $plan['static_build'];
+        $map[$key] = $row;
+        $epoch = \max(0, (int)($doc['epoch'] ?? 0));
+        $this->writePointerFile($map, $epoch);
+        try {
+            $env = Env::getInstance();
+            $env->setConfig(self::CONFIG_CURRENT_MAP, $map);
+            $env->setConfig(self::CONFIG_EPOCH, $epoch);
+        } catch (\Throwable) {
+            // Env 写失败不影响指针文件（渲染期会回读指针）
+        }
+        if ($stamp !== '') {
+            $this->writeGlobalStaticStamp($stamp);
+        }
+        ThemeUpdateRuntime::reset();
+        $this->invalidateThemeCaches($themeId, 'static_build_refresh');
+
+        return $plan;
+    }
+
+    /** 写全局静态戳（首屏 header 早于主题上下文时用它换页桶，见 ThemeUpdateRuntime::inPlaceStaticBuildStamp）。 */
+    private function writeGlobalStaticStamp(string $stamp): void
+    {
+        try {
+            Env::getInstance()->setConfig('theme_static_build_stamp', $stamp);
+        } catch (\Throwable) {
+            // Env 不可写时只是少一个兜底信号，指针行仍生效
+        }
+    }
+
+    /**
+     * 纯决策：是否需要用新指纹替换 `static_build`。不碰文件与 DB，便于单测。
+     *
+     * @param array<string,mixed>|null $row 指针里该主题那一行
+     * @return array{changed:bool,static_build:string,reason:string}
+     */
+    public static function planInPlaceStaticBuild(?array $row, string $fingerprint): array
+    {
+        if (!\is_array($row) || \trim((string)($row['batch_id'] ?? '')) === '') {
+            return ['changed' => false, 'static_build' => '', 'reason' => 'no_pointer'];
+        }
+        if (\trim((string)($row['theme_prefix'] ?? '')) === '') {
+            return ['changed' => false, 'static_build' => '', 'reason' => 'no_theme_prefix'];
+        }
+        $fingerprint = \strtolower(\trim($fingerprint));
+        if (\preg_match('/^[0-9a-f]{12}$/', $fingerprint) !== 1) {
+            return ['changed' => false, 'static_build' => '', 'reason' => 'empty_tree'];
+        }
+        $current = \strtolower(\trim((string)($row['static_build'] ?? '')));
+        if ($current === $fingerprint) {
+            return ['changed' => false, 'static_build' => $fingerprint, 'reason' => 'unchanged'];
+        }
+
+        return ['changed' => true, 'static_build' => $fingerprint, 'reason' => 'updated'];
+    }
+
+    /** 原样读指针文件（保留 `{site}|{theme}|{area}` 键，不用 batch_id 重建）。 */
+    private static function rawPointerDocument(): array
+    {
+        $raw = @\file_get_contents(self::pointerFile());
+        if (!\is_string($raw) || $raw === '') {
+            return ['epoch' => 0, 'map' => []];
+        }
+        $decoded = \json_decode($raw, true);
+        if (!\is_array($decoded)) {
+            return ['epoch' => 0, 'map' => []];
+        }
+
+        return [
+            'epoch' => \max(0, (int)($decoded['epoch'] ?? 0)),
+            'map' => \is_array($decoded['map'] ?? null) ? $decoded['map'] : [],
+        ];
+    }
+
     // ---------------------------------------------------------------- 构建
 
     public function createBatch(int $themeId, int $websiteId = 0, string $area = self::AREA_FRONTEND): ThemeUpdateBatch

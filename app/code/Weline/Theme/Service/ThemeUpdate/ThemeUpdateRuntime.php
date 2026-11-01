@@ -125,6 +125,24 @@ final class ThemeUpdateRuntime
             self::currentArea(),
         );
 
+        // 静态发布代次也要进缓存键：dev 就地增量发布时 epoch 不变，只推进 static_build，
+        // 不拼进来的话 assetVersion / 资源 ?v= 永远不动（2026-11-01 掉样式事故）。
+        // 只有「指针上的代次与部署号不同」时才追加：旧指针 static_build == 部署号，
+        // 此时格式与历史完全一致，不制造无意义换键。
+        $pinnedBuild = self::pinnedStaticBuild();
+        if ($pinnedBuild !== ''
+            && $pinnedBuild !== StaticBuildId::current()
+            && !\str_contains($base, $pinnedBuild)
+        ) {
+            $base .= '~' . $pinnedBuild;
+        }
+
+        // 显式 forceBatch（测试/预览）时不吃全局戳：调用方已钉死代次。
+        $stamp = self::$forced === null ? self::inPlaceStaticBuildStamp() : '';
+        if ($stamp !== '' && !\str_contains($base, $stamp)) {
+            $base .= '~s' . $stamp;
+        }
+
         return $epoch > 0 ? $base . '~e' . $epoch : $base;
     }
 
@@ -193,31 +211,62 @@ final class ThemeUpdateRuntime
         );
         $epochSegment = $epoch > 0 ? '~e' . $epoch : '';
         if ($pair !== '' && $build !== '') {
-            return $pair . $epochSegment . '~' . $build;
-        }
-        if ($pair !== '') {
-            return $pair . $epochSegment;
-        }
-        if ($build !== '') {
+            $token = $pair . $epochSegment . '~' . $build;
+        } elseif ($pair !== '') {
+            $token = $pair . $epochSegment;
+        } elseif ($build !== '') {
             // Even without a theme pair, the epoch must move the token so a TU
             // rollback invalidates build-keyed FPC entries.
-            return $build . $epochSegment;
+            $token = $build . $epochSegment;
+        } else {
+            $token = $epoch > 0 ? 'e' . $epoch : '';
         }
 
-        return $epoch > 0 ? 'e' . $epoch : '';
+        // 就地发布的全局静态戳：首屏 header 可能早于主题上下文渲染，这时
+        // resolve() 拿不到指针行（多主题 map → singleAreaEntry 返回 null），
+        // 只能靠这个与主题无关的戳让页桶/资源版本随发布前进（2026-11-01 事故）。
+        // 显式 forceBatch（测试/预览）时不吃全局戳：调用方已钉死代次。
+        $stamp = self::$forced === null ? self::inPlaceStaticBuildStamp() : '';
+        if ($stamp !== '' && !\str_contains($token, $stamp)) {
+            $token .= '~s' . $stamp;
+        }
+
+        return $token;
     }
 
     /**
-     * 当前静态构建段：部署构建号优先，否则取指针上主题更新写下的 12 位号。
+     * 就地发布（dev 增量）写下的全局静态戳：12 位 hex，没有则 ''。
+     *
+     * 与主题无关：它只回答「上次静态发布是什么时候/什么内容」，用于在
+     * 主题上下文缺失时仍然能换 FPC 页桶与资源 ?v=。
+     */
+    public static function inPlaceStaticBuildStamp(): string
+    {
+        try {
+            $value = \strtolower(\trim((string)(Env::getInstance()->getConfig('theme_static_build_stamp', '') ?? '')));
+        } catch (\Throwable) {
+            return '';
+        }
+
+        return \preg_match('/^[0-9a-f]{12}$/', $value) === 1 ? $value : '';
+    }
+
+    /**
+     * 当前静态构建段：**指针上的主题静态发布代次优先**，没有才回落部署构建号。
+     *
+     * 2026-11-01 事故：dev 就地增量只改文件、不推进任何代次，而部署构建号又长期不变，
+     * 于是 pageGeneration 恒定 → FPC 页桶不换 → 旧 HTML 一直指向被回收的 bundle → 掉样式。
+     * 指针 `static_build` 是"本次主题静态发布"的语义，必须压过部署号才能让发布真正生效。
+     * 没有指针（或指针上是旧的部署号）时行为与以前完全一致。
      */
     public static function staticBuildSegment(): string
     {
-        $deploy = StaticBuildId::current();
-        if ($deploy !== '') {
-            return $deploy;
+        $pinned = self::pinnedStaticBuild();
+        if ($pinned !== '') {
+            return $pinned;
         }
 
-        return self::pinnedStaticBuild();
+        return StaticBuildId::current();
     }
 
     /** 指针（或构建期强制代次）上的 12 位主题静态构建号；没有则 ''。 */

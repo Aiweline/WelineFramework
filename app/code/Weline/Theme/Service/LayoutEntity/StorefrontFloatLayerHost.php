@@ -69,18 +69,33 @@ final class StorefrontFloatLayerHost
      */
     public static function ensureInHtml(string $html): string
     {
+        $__p = static function (string $name, float $ms): void {
+            \Weline\Framework\Runtime\TraceGate::measurePhase($name, static fn() => $ms);
+        };
         if ($html === '') {
             return $html;
         }
+        $__t0 = \microtime(true);
 
         // Always collapse first: destinations may already exist twice (synth + footer).
         $html = self::collapseDuplicateFloatLayers($html);
+        $__t1 = \microtime(true);
 
         if (self::htmlHasFloatDestinations($html)) {
+            $__t2 = \microtime(true);
             $html = self::ensureFloatLayerModuleLoadAttr($html);
+            $__t3 = \microtime(true);
             $html = self::ensureFloatEdgeShellsInHtml($html);
+            $__t4 = \microtime(true);
+            $html = self::healBakedChineseFloatEdgeLabels($html);
+            $__t5 = \microtime(true);
+            $__p('flh.collapse', ($__t1 - $__t0) * 1000);
+            $__p('flh.hasdest', ($__t2 - $__t1) * 1000);
+            $__p('flh.loadattr', ($__t3 - $__t2) * 1000);
+            $__p('flh.edgeshell', ($__t4 - $__t3) * 1000);
+            $__p('flh.heal', ($__t5 - $__t4) * 1000);
 
-            return self::healBakedChineseFloatEdgeLabels($html);
+            return $html;
         }
 
         // Shell present without slots: never add a second id= layer (would dual-inject).

@@ -48,9 +48,20 @@ final class ThemeUpdateAutoService
                 return ['mode' => 'dev', 'dry_run' => true];
             }
 
-            return $this->flights->execute('origin-watch', function (string $batchId): array {
+            return $this->flights->execute('origin-watch', function (string $batchId) use ($themeId): array {
                 unset($batchId);
                 $report = $this->originWatch->run();
+                // 就地固化只换文件，必须再推进一次「静态发布代次」，否则缓存键与 ?v= 不动，
+                // 旧 HTML 会继续指向被回收的 bundle（2026-11-01 掉样式事故）。
+                try {
+                    $report['static_build'] = $this->batches->refreshInPlaceStaticBuild($themeId);
+                } catch (\Throwable $e) {
+                    $report['static_build'] = [
+                        'changed' => false,
+                        'static_build' => '',
+                        'reason' => 'error: ' . $e->getMessage(),
+                    ];
+                }
                 $this->flights->finishProcessing('origin-watch');
 
                 return ['mode' => 'dev', 'report' => $report];

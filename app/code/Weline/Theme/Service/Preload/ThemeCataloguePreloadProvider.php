@@ -6,9 +6,11 @@ namespace Weline\Theme\Service\Preload;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Preload\AbstractWorkerPreloadProvider;
+use Weline\Framework\Runtime\Preload\ViewWarmupContributionRegistry;
 use Weline\Framework\Runtime\Preload\WorkerPreloadContext;
 use Weline\Framework\Runtime\Preload\WorkerPreloadResult;
 use Weline\Framework\Runtime\RuntimeInterface;
+use Weline\Framework\View\Template;
 use Weline\Theme\Service\ThemeComponentCatalog;
 use Weline\Theme\Service\ThemeDirectoryResolver;
 use Weline\Theme\Service\ThemePlaceableRegistry;
@@ -119,6 +121,48 @@ final class ThemeCataloguePreloadProvider extends AbstractWorkerPreloadProvider
             ++$items;
         } catch (\Throwable $exception) {
             $failures['placeable_registry'] = $exception->getMessage();
+        }
+
+        // Hook contributors: the slot/widget hook graph this theme version renders.
+        //
+        // Warm module `view_warmup_contribution` hook names only fill HookReader's
+        // file lists. The runtime still had to resolve each contributor to a compiled
+        // path and compile it on first use: the first product card of the first
+        // listing paid 9.38 ms resolving `product-card-add-to-cart.phtml` plus 19.95 ms
+        // compiling and streaming it, and the same again for buy-now — 44 ms against a
+        // 0.58 ms steady state.
+        //
+        // Warming here resolves every contributed hook to its compiled artifact while
+        // the Worker boots, so the request path only reads. Contributors that do not
+        // apply to this theme/locale are skipped individually, not fatally.
+        $hookNames = [];
+        try {
+            $contributionRegistry = ObjectManager::getInstance(ViewWarmupContributionRegistry::class);
+            foreach ($contributionRegistry->aggregate()->hookNames as $hookName) {
+                if (\is_string($hookName) && $hookName !== '') {
+                    $hookNames[$hookName] = true;
+                }
+            }
+        } catch (\Throwable $exception) {
+            $failures['hook_names'] = $exception->getMessage();
+        }
+
+        // Every hook the product-card CTA block renders, whether or not a module
+        // declared it: this is the hottest hook chain on storefront listings.
+        foreach ([
+            'Weline_Theme::frontend::partials::product-card::add-to-cart',
+            'Weline_Theme::frontend::partials::product-card::buy-now',
+        ] as $hotHook) {
+            $hookNames[$hotHook] = true;
+        }
+
+        if ($hookNames !== []) {
+            try {
+                $template = Template::getInstance();
+                $items += $template->warmHookContributorTemplates(\array_keys($hookNames));
+            } catch (\Throwable $exception) {
+                $failures['hook_templates'] = $exception->getMessage();
+            }
         }
 
         // The directory resolver is injected but only used indirectly; referencing it

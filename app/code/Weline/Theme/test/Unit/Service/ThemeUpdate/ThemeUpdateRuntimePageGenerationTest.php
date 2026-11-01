@@ -73,4 +73,22 @@ final class ThemeUpdateRuntimePageGenerationTest extends TestCase
         self::assertSame(5, ThemeUpdateRuntime::epochForTheme(1));
         self::assertSame('hanfu/v3~e5', ThemeUpdateRuntime::pointerCacheGeneration());
     }
+
+    public function testPinnedStaticBuildFromPointerMovesPageGeneration(): void
+    {
+        StaticBuildId::override('abc123def456');
+        ThemeUpdateRuntime::forceBatch([
+            'batch_id' => 'tu-20261022-015300-ab12cd',
+            'static_ns' => 'tu-20261022-015300-ab12cd',
+            'entity_root' => 'tu-20261022-015300-ab12cd',
+            'theme_prefix' => 'Weline/hanfu',
+            'pair_segment' => 'hanfu/v3',
+            'epoch' => 1,
+            'static_build' => 'feedfacecafe',
+        ]);
+
+        // 指针上的 static_build 必须压过部署构建号，否则就地增量发布永远换不了页桶。
+        self::assertSame('feedfacecafe', ThemeUpdateRuntime::staticBuildSegment());
+        self::assertSame('hanfu/v3~e1~feedfacecafe', ThemeUpdateRuntime::pageGeneration());
+    }
 }
