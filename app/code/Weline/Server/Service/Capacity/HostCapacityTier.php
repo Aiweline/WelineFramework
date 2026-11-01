@@ -487,7 +487,7 @@ NGINX;
 
     private static function envString(string $key): ?string
     {
-        $v = $_ENV[$key] ?? $_SERVER[$key] ?? \getenv($key);
+        $v = $_ENV[$key] ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal($key, null) ?? \getenv($key);
         if (!\is_string($v) || \trim($v) === '') {
             return null;
         }

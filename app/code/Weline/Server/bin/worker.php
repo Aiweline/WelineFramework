@@ -7409,7 +7409,15 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         && \stripos($rawRequest, "\r\nIf-Match:") === false
         && \stripos($rawRequest, "\r\nIf-Unmodified-Since:") === false
         && \stripos($rawRequest, "\r\nIf-Range:") === false;
-    if ($plainGetCacheEligible && isset($staticUriIndex[$normalizedUri])) {
+    // 2026-11-01：静态 URL 不再带 ?v= 版本号，刷新交给「theme:update 就地覆盖 + FPC/CDN 清理」。
+    // 进程级静态缓存的 1 年有效期只对「内容寻址文件名」成立；命名路由（handlers/…）会被
+    // 就地覆盖，必须按 mtime 校验，否则覆盖后本 worker 仍回吐旧字节。
+    // 判定只看 URI，不读盘：内容寻址（32~64 位 hex 文件名校验过）才允许跳过 stat。
+    $staticUriContentAddressed = \preg_match(
+        '#(?:^|/)[0-9a-f]{32,64}\.(?:css|js|mjs|map|json|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|eot|txt|xml|wasm|mp4|webm|mp3|ogg|wav)$#i',
+        '/' . ltrim($normalizedUri, '/')
+    ) === 1;
+    if ($plainGetCacheEligible && $staticUriContentAddressed && isset($staticUriIndex[$normalizedUri])) {
         $indexedFilename = $staticUriIndex[$normalizedUri];
         $indexed = $staticFileCache[$indexedFilename] ?? null;
         $now = wlsWorkerMonotonicNow();
@@ -7600,9 +7608,12 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     // 获取 MIME 类型
     $mimeType = $mimeTypes[$extension] ?? 'application/octet-stream';
     
-    // 缓存控制（静态资源可以长期缓存）
-    $maxAge = 31536000; // 1 年（浏览器+中间层；指纹/版本化 URL 可安全 immutable）
-    $expires = \gmdate('D, d M Y H:i:s', \time() + $maxAge) . ' GMT';
+    // 缓存控制（2026-11-01 用户决定：静态资源统一强缓存 1 年）
+    // URL 不再带版本号，靠 theme:update 就地覆盖 + FPC 页桶重指 + CDN 前缀清理来换内容；
+    // 浏览器侧代价：旧标签页会继续用旧资源直到刷新，属已确认接受的取舍。
+    $maxAge = 31536000;
+    $staticCacheControl = "public, max-age={$maxAge}, immutable";
+    $expires = \gmdate('D, d M Y H:i:s', \time() + \max(1, $maxAge)) . ' GMT';
     
     // 大文件阈值（超过此大小使用流式传输标记）
     $largeFileThreshold = 2 * 1024 * 1024; // 2MB
@@ -7698,7 +7709,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         $responseHeaders = "HTTP/1.1 200 OK\r\n";
         $responseHeaders .= "Content-Type: {$mimeType}\r\n";
         $responseHeaders .= "Content-Length: {$actualContentLength}\r\n";
-        $responseHeaders .= "Cache-Control: public, max-age={$maxAge}, immutable\r\n";
+        $responseHeaders .= "Cache-Control: {$staticCacheControl}\r\n";
         $responseHeaders .= "ETag: {$etag}\r\n";
         $responseHeaders .= "Vary: Accept-Encoding\r\n";
         $responseHeaders .= "Last-Modified: {$lastModified}\r\n";
@@ -7781,7 +7792,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     
     $response .= "Content-Type: {$mimeType}\r\n";
     $response .= "Content-Length: {$contentLength}\r\n";
-    $response .= "Cache-Control: public, max-age={$maxAge}, immutable\r\n";
+    $response .= "Cache-Control: {$staticCacheControl}\r\n";
     $response .= "ETag: {$etag}\r\n";
     $response .= "Vary: Accept-Encoding\r\n";
     $response .= "Last-Modified: {$lastModified}\r\n";

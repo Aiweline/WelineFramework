@@ -574,7 +574,7 @@ class LongRunningPhpRuntime
 
     protected function isWlsDaemonProcess(): bool
     {
-        $roleValue = $_SERVER['WLS_PROCESS_ROLE']
+        $roleValue = \Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_PROCESS_ROLE', null)
             ?? $_ENV['WLS_PROCESS_ROLE']
             ?? \getenv('WLS_PROCESS_ROLE');
         $role = \is_string($roleValue) ? $roleValue : '';
@@ -582,7 +582,8 @@ class LongRunningPhpRuntime
             return true;
         }
 
-        $script = \basename((string)($_SERVER['argv'][0] ?? $_SERVER['SCRIPT_FILENAME'] ?? ''));
+        $script = \basename((string)(\Weline\Framework\Env\WelineEnv::serverOrGlobal('argv', [])[0]
+            ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal('SCRIPT_FILENAME', '')));
         return \in_array($script, [
             'dispatcher.php',
             'session_server.php',

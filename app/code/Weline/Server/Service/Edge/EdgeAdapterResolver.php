@@ -87,7 +87,7 @@ final class EdgeAdapterResolver
             return false;
         }
 
-        foreach ((array)($_SERVER['argv'] ?? []) as $argument) {
+        foreach ((array)\Weline\Framework\Env\WelineEnv::serverOrGlobal('argv', []) as $argument) {
             if (\in_array((string)$argument, ['--no-nginx', '--no_nginx'], true)) {
                 return true;
             }

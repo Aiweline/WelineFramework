@@ -415,6 +415,26 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         // The flag is fail-open so a warmup defect cannot take WLS offline.
         $this->runReadyGateStorefrontFpcWarmup($workerId, $startedAt);
 
+        // Worker start-up preload: registries and critical runtime classes are read
+        // into process memory before this worker joins the public READY pool, so the
+        // first real request never pays their cold-start cost. Always on — no config
+        // switch, because a lazily-loaded worker produces a slow first request.
+        //
+        // This block used to sit *behind* the optional bootstrap-warmup flag, which
+        // defaults to '0' — so it never ran, and every module-contributed preload
+        // provider (theme catalogue, storefront chrome render) was silently skipped.
+        // Measured on /best-sellers: no provider logged, chrome template artifacts
+        // stayed out of opcache, and each chrome partial paid ~98 ms of first-include
+        // compile on every Worker's first request. Registry preload is mandatory,
+        // not optional; only the *observer/backend/dynamic* warmups are opt-in.
+        $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
+        $this->router ??= ObjectManager::getInstance(Router::class);
+        $this->logReadyGateWarmupStep('registry_begin', $workerId, $startedAt);
+        $this->preloadWorkerRegistries(true);
+        $this->readyGateWorkerRegistryWarmupCompleted = true;
+        $this->logReadyGateWarmupStep('registry_done', $workerId, $startedAt);
+        SchedulerSystem::yield();
+
         if (!$this->shouldRunReadyGateWorkerBootstrapWarmup()) {
             $this->logReadyGateWarmupStep('optional_bootstrap_skipped', $workerId, $startedAt);
             $this->logReadyGateWarmupStep('homepage_fpc_final_begin', $workerId, $startedAt);
@@ -427,18 +447,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $this->scheduleNextHomepageKeepWarm();
             return $this->readyGateHomepageFpcProof;
         }
-
-        // Worker start-up preload: registries and critical runtime classes are read
-        // into process memory before this worker joins the public READY pool, so the
-        // first real request never pays their cold-start cost. Always on — no config
-        // switch, because a lazily-loaded worker produces a slow first request.
-        $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
-        $this->router ??= ObjectManager::getInstance(Router::class);
-        $this->logReadyGateWarmupStep('registry_begin', $workerId, $startedAt);
-        $this->preloadWorkerRegistries(true);
-        $this->readyGateWorkerRegistryWarmupCompleted = true;
-        $this->logReadyGateWarmupStep('registry_done', $workerId, $startedAt);
-        SchedulerSystem::yield();
 
         // Observer warm-up always runs: it is what moves template/hook compilation
         // off the first request. See dispatchWorkerBootstrapWarmup().

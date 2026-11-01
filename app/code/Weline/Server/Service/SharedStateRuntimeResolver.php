@@ -148,8 +148,8 @@ class SharedStateRuntimeResolver
             \getenv('WLS_INSTANCE_NAME'),
             $_ENV['WLS_INSTANCE'] ?? null,
             $_ENV['WLS_INSTANCE_NAME'] ?? null,
-            $_SERVER['WLS_INSTANCE'] ?? null,
-            $_SERVER['WLS_INSTANCE_NAME'] ?? null,
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_INSTANCE', null),
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_INSTANCE_NAME', null),
         ] as $candidate) {
             if (\is_string($candidate) && \trim($candidate) !== '') {
                 return \trim($candidate);

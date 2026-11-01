@@ -498,8 +498,8 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheBatchS
             \getenv('WLS_INSTANCE_NAME'),
             $_ENV['WLS_INSTANCE'] ?? null,
             $_ENV['WLS_INSTANCE_NAME'] ?? null,
-            $_SERVER['WLS_INSTANCE'] ?? null,
-            $_SERVER['WLS_INSTANCE_NAME'] ?? null,
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_INSTANCE', null),
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_INSTANCE_NAME', null),
             \w_env('wls.instance', ''),
             \w_env('wls.instance_name', ''),
         ] as $candidate) {

@@ -1814,11 +1814,11 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     $ipWhitelistRule = $ruleEditor('ip_whitelist');
                     $protectedPathsRule = $ruleEditor('protected_paths');
                     $crawlerBlockRule = $ruleEditor('crawler_block');
-                    $crawlerProtoVariant = strtoupper(trim((string)($_GET['variant'] ?? '')));
+                    $crawlerProtoVariant = strtoupper(trim((string)(\Weline\Framework\Env\WelineEnv::getGet('variant', ''))));
                     if (!in_array($crawlerProtoVariant, ['A', 'B', 'C'], true)) {
                         $crawlerProtoVariant = 'A';
                     }
-                    $crawlerProtoMode = isset($_GET['variant']);
+                    $crawlerProtoMode = \Weline\Framework\Env\WelineEnv::getGet('variant', null) !== null;
                     ?>
                     <w:form class="wls-security-rules-form"
                           data-wls-security-rules-form

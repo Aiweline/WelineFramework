@@ -568,7 +568,7 @@ $this->printer->note('  ssl:auto list                    ' . __('- 查看证书�
     {
         // 尝试从配置获取
         $envConfig = \Weline\Framework\App\Env::getInstance()->getConfig();
-        return $envConfig['admin_email'] ?? $envConfig['email'] ?? 'admin@' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+        return $envConfig['admin_email'] ?? $envConfig['email'] ?? 'admin@' . \Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', 'localhost');
     }
     
     /**

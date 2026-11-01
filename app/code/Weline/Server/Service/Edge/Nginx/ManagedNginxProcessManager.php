@@ -1331,9 +1331,9 @@ final class ManagedNginxProcessManager
         return [
             '/bin/sh',
             '-c',
-            'i=3; while [ $i -le 255 ]; do '
-                . 'if [ -e /proc/self/fd/$i ]; then eval "exec $i>&-" 2>/dev/null || exit 1; fi; '
-                . 'i=$((i+1)); done; exec "$@"',
+            'for i in $(seq 3 255); do '
+                . 'eval "exec $i>&-" 2>/dev/null || true; '
+                . 'done; exec "$@"',
             'wls-fd-close',
             ...$command,
         ];

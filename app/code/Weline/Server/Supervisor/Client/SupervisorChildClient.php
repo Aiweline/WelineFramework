@@ -336,7 +336,7 @@ final class SupervisorChildClient implements
                 => DispatcherPolicyControl::readinessSnapshot(),
             default => [],
         };
-        $rawHostLeaseId = $_SERVER['WLS_GATEWAY_HOST_LEASE_ID']
+        $rawHostLeaseId = \Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_GATEWAY_HOST_LEASE_ID', null)
             ?? $_ENV['WLS_GATEWAY_HOST_LEASE_ID']
             ?? \getenv('WLS_GATEWAY_HOST_LEASE_ID');
         $hostLeaseId = \is_string($rawHostLeaseId)
@@ -616,7 +616,7 @@ final class SupervisorChildClient implements
         $slotId = $this->buildSlotId($role, $workerId);
         $leaseId = $launchId !== '' ? $launchId : (string)($this->registerInfo['lease_id'] ?? '');
         $generation = $epoch > 0 ? $epoch : (int)($this->registerInfo['generation'] ?? 0);
-        $argv = $GLOBALS['argv'] ?? ($_SERVER['argv'] ?? []);
+        $argv = $GLOBALS['argv'] ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal('argv', []);
         if (!\is_array($argv)) {
             return [$slotId, $leaseId, $generation];
         }

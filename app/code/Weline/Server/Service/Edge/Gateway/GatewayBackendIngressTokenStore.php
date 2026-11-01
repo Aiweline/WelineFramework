@@ -319,7 +319,7 @@ final class GatewayBackendIngressTokenStore
     {
         $values = [];
         foreach ([
-            $_SERVER[$name] ?? null,
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal($name, null),
             $_ENV[$name] ?? null,
             \getenv($name),
         ] as $value) {

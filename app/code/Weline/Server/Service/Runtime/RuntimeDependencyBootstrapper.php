@@ -1484,7 +1484,7 @@ PHP;
 
     public function relaunchCurrentStartCommand(): int
     {
-        $argv = \array_values(\array_map('strval', $_SERVER['argv'] ?? []));
+        $argv = \array_values(\array_map('strval', (array)\Weline\Framework\Env\WelineEnv::serverOrGlobal('argv', [])));
         if ($argv === [] || !\in_array('server:start', $argv, true)) {
             return 125;
         }

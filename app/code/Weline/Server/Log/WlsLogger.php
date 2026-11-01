@@ -923,7 +923,7 @@ class WlsLogger
         $candidates = [
             \getenv('WLS_PROCESS_TAG'),
             $_ENV['WLS_PROCESS_TAG'] ?? null,
-            $_SERVER['WLS_PROCESS_TAG'] ?? null,
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_PROCESS_TAG', null),
         ];
 
         foreach ($candidates as $candidate) {
@@ -941,7 +941,7 @@ class WlsLogger
             return null;
         }
 
-        $argv = $_SERVER['argv'] ?? [];
+        $argv = \Weline\Framework\Env\WelineEnv::serverOrGlobal('argv', []);
         if (!\is_array($argv)) {
             return 'CLI';
         }

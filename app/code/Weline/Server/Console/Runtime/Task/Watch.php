@@ -173,7 +173,7 @@ final class Watch extends CommandAbstract
         // ARM64 x64-emulation PID transition cannot leave the launcher PID as
         // the service authority.
         WorkerProcessLease::register($processName, $launchId, $epoch);
-        $arguments = $GLOBALS['argv'] ?? ($_SERVER['argv'] ?? []);
+        $arguments = $GLOBALS['argv'] ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal('argv', []);
         $masterToken = (new MasterLeaseManager())->resolveProtectedCredentialFromArguments(
             \is_array($arguments) ? $arguments : [],
             $instanceName,

@@ -1331,7 +1331,7 @@ class MasterProcess
         $context['total_ms'] = \round(($nowNs - $traceStartNs) / 1_000_000, 3);
         $context['delta_ms'] = \round(($nowNs - $tracePreviousNs) / 1_000_000, 3);
         $wallNow = self::diagnosticWallSeconds();
-        $requestStartedAt = (float)($_SERVER['REQUEST_TIME_FLOAT'] ?? $wallNow);
+        $requestStartedAt = (float)\Weline\Framework\Env\WelineEnv::serverOrGlobal('REQUEST_TIME_FLOAT', $wallNow);
         $context['process_elapsed_ms'] = \round(\max(0.0, $wallNow - $requestStartedAt) * 1000, 3);
         $context['memory_mb'] = (int)\round(\memory_get_usage(true) / 1048576);
         $tracePreviousNs = $nowNs;

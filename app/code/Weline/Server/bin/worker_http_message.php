@@ -473,8 +473,8 @@ function wlsDecorateFormattedBenchmarkWorkerIdentity(string $response, string $r
         return $response;
     }
 
-    $workerId = (string)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: '');
-    $workerPort = (string)($_SERVER['WLS_PORT'] ?? $_ENV['WLS_PORT'] ?? \getenv('WLS_PORT') ?: '');
+    $workerId = (string)(\Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_WORKER_ID', null) ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: '');
+    $workerPort = (string)(\Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_PORT', null) ?? $_ENV['WLS_PORT'] ?? \getenv('WLS_PORT') ?: '');
 
     $headers = ['X-WLS-Worker-PID' => (string)\getmypid()];
     if ($workerId !== '') {

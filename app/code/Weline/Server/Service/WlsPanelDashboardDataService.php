@@ -172,7 +172,10 @@ class WlsPanelDashboardDataService
     {
         $host = \trim((string)(\function_exists('w_env') ? \w_env('server.http_host', '') : ''));
         if ($host === '') {
-            $host = \trim((string)($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? ''));
+            $host = \trim((string)(
+                \Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '')
+                ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('SERVER_NAME', '')
+            ));
         }
 
         return $host !== '' ? $host : 'localhost';

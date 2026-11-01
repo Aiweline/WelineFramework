@@ -114,7 +114,7 @@ final class PlaintextWorkerPublicHttpsRedirect
         $edge = \strtolower(\trim($edgeAdapter));
         if ($edge === '') {
             $edge = \strtolower(\trim((string)(
-                $_SERVER['WLS_EDGE_ADAPTER']
+                \Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_EDGE_ADAPTER', null)
                 ?? $_ENV['WLS_EDGE_ADAPTER']
                 ?? \getenv('WLS_EDGE_ADAPTER')
                 ?: ''

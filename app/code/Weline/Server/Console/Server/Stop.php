@@ -384,7 +384,7 @@ class Stop extends CommandAbstract
                 'command' => \substr(
                     \implode(' ', \array_map(
                         static fn(mixed $argument): string => (string)$argument,
-                        (array)($_SERVER['argv'] ?? []),
+                        (array)\Weline\Framework\Env\WelineEnv::serverOrGlobal('argv', []),
                     )),
                     0,
                     4096,

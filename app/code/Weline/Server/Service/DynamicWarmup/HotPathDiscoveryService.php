@@ -208,8 +208,8 @@ final class HotPathDiscoveryService
 
             $data = new DataObject([
                 'paths' => $paths,
-                'instance_name' => (string)($_SERVER['WLS_INSTANCE'] ?? $_ENV['WLS_INSTANCE'] ?? \getenv('WLS_INSTANCE') ?: ''),
-                'port' => (int)($_SERVER['WLS_PORT'] ?? $_ENV['WLS_PORT'] ?? \getenv('WLS_PORT') ?: 0),
+                'instance_name' => (string)(\Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_INSTANCE', null) ?? $_ENV['WLS_INSTANCE'] ?? \getenv('WLS_INSTANCE') ?: ''),
+                'port' => (int)(\Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_PORT', null) ?? $_ENV['WLS_PORT'] ?? \getenv('WLS_PORT') ?: 0),
                 'hosts' => $this->resolveObserverHosts(),
                 'source' => 'worker-dynamic-deferred-warmup',
             ]);

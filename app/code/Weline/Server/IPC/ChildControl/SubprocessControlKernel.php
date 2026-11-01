@@ -389,7 +389,7 @@ final class SubprocessControlKernel
         if ($this->helloAuthSecret !== '') {
             return $this->helloAuthSecret;
         }
-        $arguments = $GLOBALS['argv'] ?? ($_SERVER['argv'] ?? []);
+        $arguments = $GLOBALS['argv'] ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal('argv', []);
         if (!\is_array($arguments)) {
             return '';
         }

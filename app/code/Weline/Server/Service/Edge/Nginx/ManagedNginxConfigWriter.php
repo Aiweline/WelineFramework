@@ -319,7 +319,7 @@ NGINX;
         "~*(?:^|&)(?:v|weline_asset|_weline_dev)=" 1;
     }
     map "\$wls_static_versioned\$wls_static_arg_versioned" \$wls_static_cache_control {
-        default "public, max-age=0, must-revalidate";
+        default "public, max-age=31536000, immutable";
         "~1" "public, max-age=31536000, immutable";
     }
     map \$http_authorization \$wls_fpc_html_bypass_auth {

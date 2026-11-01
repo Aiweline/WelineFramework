@@ -359,7 +359,7 @@ final class WorkerResponseMemoryGuard
         }
 
         $envRaw = $_ENV['wls.fiber.admission_memory_headroom_bytes']
-            ?? $_SERVER['wls.fiber.admission_memory_headroom_bytes']
+            ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal('wls.fiber.admission_memory_headroom_bytes', null)
             ?? \getenv('wls.fiber.admission_memory_headroom_bytes');
         if (\is_string($envRaw) && $envRaw !== '' && \ctype_digit($envRaw)) {
             $parsed = (int)$envRaw;
@@ -457,7 +457,7 @@ final class WorkerResponseMemoryGuard
         }
 
         $envRaw = $_ENV['wls.fiber.admission_memory_hard_floor_bytes']
-            ?? $_SERVER['wls.fiber.admission_memory_hard_floor_bytes']
+            ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal('wls.fiber.admission_memory_hard_floor_bytes', null)
             ?? \getenv('wls.fiber.admission_memory_hard_floor_bytes');
         if (\is_string($envRaw) && $envRaw !== '' && \ctype_digit($envRaw)) {
             $parsed = (int)$envRaw;

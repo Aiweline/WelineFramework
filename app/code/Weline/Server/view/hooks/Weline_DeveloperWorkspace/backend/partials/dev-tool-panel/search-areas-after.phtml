@@ -31,7 +31,7 @@ foreach (['WLS_MODE', 'WLS_PROCESS_ROLE', 'WLS_INSTANCE', 'WLS_INSTANCE_NAME', '
         $wlsSignalValue = (string)\constant($wlsSignalKey);
     }
     if ($wlsSignalValue === '') {
-        $wlsSignalValue = (string)($_SERVER[$wlsSignalKey] ?? $_ENV[$wlsSignalKey] ?? \getenv($wlsSignalKey) ?: '');
+        $wlsSignalValue = (string)(\Weline\Framework\Env\WelineEnv::serverOrGlobal($wlsSignalKey, null) ?? $_ENV[$wlsSignalKey] ?? \getenv($wlsSignalKey) ?: '');
     }
     if ($wlsSignalValue !== '') {
         $wlsRuntimeSignals[$wlsSignalKey] = $wlsSignalValue;
@@ -56,7 +56,7 @@ try {
     $wlsPanelArea = '';
 }
 if ($wlsPanelArea === '') {
-    $wlsPanelArea = (string)($_SERVER['WELINE_AREA'] ?? '');
+    $wlsPanelArea = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_AREA', '');
 }
 if ($wlsPanelArea === '' && \function_exists('w_env')) {
     $wlsPanelArea = (string)w_env('area', '');
