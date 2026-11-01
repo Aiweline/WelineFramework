@@ -30320,6 +30320,25 @@ class ServiceOrchestrator
 
         $operationId = \strtolower(\trim((string)($msg['operation_id'] ?? '')));
         if (!\hash_equals($this->pendingSslCertReloadAck['operation_id'], $operationId)) {
+            // 迟到 ACK 识别：上一轮 reload 未收尾时，本轮等待窗口里会先收到上一轮的 ACK。
+            // 若该 client 在上一轮已成功 ACK 过（same manifest generation+digest），
+            // 说明它确实已装好同一份证书材料 —— 记为本轮成功，而不是判 ack_operation_mismatch。
+            // 否则一次 ack_timeout 会让下一轮被上一轮的迟到 ACK 拖累，形成连续失败。
+            $previousAcked = $this->pendingSslCertReloadAck['previous_acked'][$clientId] ?? null;
+            if (\is_array($previousAcked)
+                && (int)($previousAcked['applied_manifest_generation'] ?? -1)
+                    === (int)$this->pendingSslCertReloadAck['expected_manifest_generation']
+                && \hash_equals(
+                    (string)$this->pendingSslCertReloadAck['expected_manifest_digest'],
+                    (string)($previousAcked['applied_manifest_digest'] ?? ''),
+                )
+            ) {
+                $this->pendingSslCertReloadAck['acked'][$clientId] = \array_merge(
+                    $expected,
+                    ['late_ack_from_previous_operation' => true],
+                );
+                return;
+            }
             $this->failPendingSslCertReloadTarget($clientId, 'ack_operation_mismatch');
             return;
         }
@@ -32075,8 +32094,18 @@ class ServiceOrchestrator
         $baseResult['expected_retired_context_count'] = (int)$retirement['count'];
         $baseResult['expected_retired_context_digest'] = (string)$retirement['digest'];
 
+        // 上一轮若仍未收尾，先取走它的已 ACK 快照，供迟到 ACK 识别。
+        $previousPendingAck = $this->pendingSslCertReloadAck;
+
         $this->pendingSslCertReloadAck = [
             'operation_id' => $operationId,
+            // 上一轮 reload 尚未完成时，它的迟到 ACK 会带着旧 operation_id 到达本轮等待窗口，
+            // 被判 ack_operation_mismatch。记录上一轮成功 ACK 过的 client→generation 映射，
+            // 让迟到 ACK 可以被识别为「上一轮的成功证明」而不再算本轮失败。
+            'previous_acked' => \is_array($previousPendingAck['acked'] ?? null)
+                ? $previousPendingAck['acked']
+                : [],
+            'previous_operation_id' => (string)($previousPendingAck['operation_id'] ?? ''),
             'expected_manifest_generation' => $expectedManifestGeneration,
             'expected_manifest_digest' => $expectedManifestDigest,
             'expected_manifest_path' => (string)$currentManifest['path'],
