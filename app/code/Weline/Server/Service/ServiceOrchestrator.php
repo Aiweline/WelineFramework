@@ -30737,34 +30737,30 @@ class ServiceOrchestrator
         if ($failures === []) {
             return false;
         }
-        $deferrableCodes = [
-            'ack_timeout',
-            'ipc_disconnected',
-            'send_failed',
-            'tls_worker_population_changed',
-            'tls_worker_transition_in_progress',
-            'tls_worker_process_identity_unverified',
-            'tls_worker_fail_stop_unverified',
-            'exact_tls_reload_capability_missing',
-            'ready_tls_worker_without_ipc',
-            'no_eligible_tls_workers',
-            'control_operation_aborted',
-            'control_plane_busy',
-            'ssl_cert_reload_already_in_progress',
-            'manifest_preflight_failed',
-            'reload_ack_incomplete',
-            'worker_ack_incomplete',
+        // **默认可延迟**（与 CertificateMaterialUpdateCoordinator::nativeTlsReloadFailureIsDeferrable
+        // 的默认语义一致）：只有**确证**「manifest 已被改动 / 身份不符 / commit 失败」这类
+        // 安全信号才 containment；其余（ack_timeout、ack_operation_mismatch、IPC 抖动、
+        // 过渡态、population 变化、preflight 瞬时不一致…）一律延迟重试。
+        // 线上实证：ack_operation_mismatch 是上一轮 reload 的 ACK 与本轮 operation 竞态，
+        // 属瞬时；若按白名单判定会误升级为 containment → 直接导致 worker 池清零。
+        $nonDeferrableCodes = [
+            'applied_manifest_identity_changed',
+            'manifest_fence_changed',
+            'manifest_commit_failed',
+            'reload_mutation_exception',
+            'tls_reload_applied_manifest_mismatch',
+            'containment_manifest_commit_failed',
         ];
         foreach ($failures as $failure) {
             if (!\is_array($failure)) {
+                // 无法识别的失败结构 → 保守 containment。
                 return false;
             }
             $code = (string)($failure['code'] ?? '');
             if ($code === '') {
                 return false;
             }
-            if (!\in_array($code, $deferrableCodes, true)) {
-                // 任一非可延迟失败 → 整批必须 containment（保守优先）。
+            if (\in_array($code, $nonDeferrableCodes, true)) {
                 return false;
             }
         }
