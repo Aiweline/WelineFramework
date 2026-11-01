@@ -262,10 +262,18 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
             $config,
             'Nginx-synthesized upstream failure must be 503 so crawlers retry.',
         );
+        // HTML origin 先尝试只读 FPC 兜底（有缓存直接返回，无缓存才 503），
+        // 因此 502/504 在 @wls_html_origin 里应指向 @wls_html_fpc_stale，
+        // 而 503 由 fallback location 在未命中时转给 @wls_origin_unavailable。
         self::assertMatchesRegularExpression(
-            '/location @wls_html_origin\s*\{[^}]*error_page 502 504 =503 @wls_origin_unavailable;/s',
+            '/location @wls_html_origin\s*\{[^}]*error_page 502 504 = @wls_html_fpc_stale;/s',
             $config,
             'HTML origin location defines its own error_page chain, so 502 must be mapped there too.',
+        );
+        self::assertMatchesRegularExpression(
+            '/location @wls_html_fpc_stale\s*\{[^}]*error_page 418 = @wls_origin_unavailable;/s',
+            $config,
+            'HTML FPC fallback must fall through to the 503 origin-unavailable page on a miss.',
         );
         self::assertStringContainsString('recursive_error_pages on;', $config);
         self::assertStringContainsString('Retry-After 60 always;', $config);
