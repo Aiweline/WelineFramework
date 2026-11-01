@@ -16,6 +16,16 @@ final class StaticBuildGc
             throw new \RuntimeException('static_root_missing');
         }
         $current = StaticBuildId::current($root);
+        // 2026-11-01（Task 5）：发布状态里各站 3 版窗口内的构建段一律保留。
+        // 只按"当前代 + 最近 N 代 + 代龄"猜会删掉其它站仍在窗口内的段 → 旧标签页 404。
+        $windowBuilds = [];
+        try {
+            foreach (PublishStateStore::keptDeployBuilds() as $build) {
+                $windowBuilds[\strtolower($build)] = true;
+            }
+        } catch (\Throwable) {
+            $windowBuilds = [];
+        }
         $deleted = [];
         $kept = [];
         $tmpDirs = [];
@@ -60,6 +70,7 @@ final class StaticBuildGc
             $name = $build['name'];
             $mtime = $build['mtime'];
             $shouldKeep = $name === $current
+                || isset($windowBuilds[\strtolower($name)])
                 || $index < \max(0, $keepLast)
                 || $mtime >= $now - $keepDays * 86400;
             if ($shouldKeep) {

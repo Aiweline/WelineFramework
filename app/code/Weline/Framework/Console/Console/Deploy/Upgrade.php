@@ -81,6 +81,20 @@ class Upgrade extends CommandAbstract
             'data' => $data,
         ];
         $eventsManager->dispatch('Weline_Framework_Deploy::upgrade_after', $afterPayload);
+
+        // 2026-11-01（D4）：观察者（如主题世代推进）失败时必须让 s:up 返回非零，
+        // 否则会出现"退出 0 但业务没生效"。观察者通过 payload 写回
+        // `generation_promote_failed=true` 表达失败；站点此时仍在服务旧版，不会掉样式。
+        if (!empty($afterPayload['generation_promote_failed'])) {
+            $this->printer->error(__(
+                '系统更新完成，但世代版本号推进失败（站点继续服务旧版）：%{1}',
+                [(string)($afterPayload['generation_promote_detail'] ?? 'unknown')]
+            ));
+
+            return 1;
+        }
+
+        return 0;
     }
 
     /**

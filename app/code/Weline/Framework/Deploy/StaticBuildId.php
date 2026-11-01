@@ -270,6 +270,41 @@ final class StaticBuildId
     }
 
     /**
+     * `/static/{X}/…` 的 X 是否是设计主题命名空间（`app/design/{Vendor}/{theme}`）。
+     * 只有这类命名空间的产物有「按构建代次隔离」的镜像目录（`/{code}/v{n}/{build}/…`）；
+     * 模块命名空间（Weline/Frontend/…）的静态就在 pub/static 原地，不参与构建段。
+     */
+    private static function isDesignNamespaceSegment(string $name): bool
+    {
+        $name = \trim($name);
+        if ($name === '' || \preg_match('/^[A-Za-z0-9_.-]+$/D', $name) !== 1) {
+            return false;
+        }
+        try {
+            $designRoot = \rtrim((string)\Weline\Framework\App\Env::path_THEME_DESIGN_DIR, '/\\');
+        } catch (\Throwable) {
+            return false;
+        }
+        if ($designRoot === '' || !\is_dir($designRoot)) {
+            return false;
+        }
+        $vendors = @\scandir($designRoot);
+        if (!\is_array($vendors)) {
+            return false;
+        }
+        foreach ($vendors as $vendor) {
+            if ($vendor === '.' || $vendor === '..') {
+                continue;
+            }
+            if (\is_dir($designRoot . \DIRECTORY_SEPARATOR . $vendor . \DIRECTORY_SEPARATOR . $name)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * 主题自有资源 → 主题对前缀段（`{code}/v{n}`），非主题资源返回 null。
      * 弱依赖 Theme；内容寻址文件名不参与。
      *
