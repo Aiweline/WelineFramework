@@ -36,6 +36,35 @@ final class LanguageCatalogInvalidationService
         } catch (\Throwable) {
         }
 
+        // State keeps the allowed-language map per process (no TTL), so a catalog
+        // change is invisible to workers already running until something clears it.
+        // Only the cache_clear broadcast used to do that, which a plain catalog save
+        // never fires — the storefront then kept rejecting an added language (or
+        // accepting a removed one) until a manual cache:clear or a restart.
+        //
+        // The registry memo must go first: State rebuilds its map from
+        // LocalizationProviderRegistry, so clearing State alone would just re-read
+        // the same stale catalogue answers.
+        try {
+            ObjectManager::getInstance(
+                \Weline\Framework\App\Localization\LocalizationProviderRegistry::class
+            )->clearCaches();
+        } catch (\Throwable) {
+        }
+
+        try {
+            \Weline\Framework\App\State::clearProcessLocalizationCaches();
+        } catch (\Throwable) {
+        }
+
+        // Third holder of the same fact (B2): the storefront render-context snapshot
+        // embeds language/currency for its scope triple. Its reset method existed but
+        // had no caller, so a catalog change left the frozen snapshot stale.
+        try {
+            \Weline\Framework\Runtime\StorefrontRenderContextInstaller::clearProcessCache();
+        } catch (\Throwable) {
+        }
+
         // Soft reorder must not wipe the whole i18n pool — that thrash can poke
         // Frontend Scope/generation stamp checks (user-facing 409 toast) even on
         // backend pages that embed language widgets. Targeted clears above + bump below.

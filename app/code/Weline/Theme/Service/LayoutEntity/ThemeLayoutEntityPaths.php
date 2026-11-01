@@ -201,17 +201,115 @@ final class ThemeLayoutEntityPaths
         return $identityHash;
     }
 
+    /**
+     * Per-theme artifact root: `generated/theme/{Vendor}/{Name}/`.
+     *
+     * Everything a theme owns (solidified pages, chrome partials, the relationship
+     * tree) lives under the theme's own directory, mirroring `app/design/{Vendor}/{Name}`.
+     * The old layout was `generated/theme-layout-entities/{id}/frontend/scope/{scope}/
+     * mode/{storeMode}/` — id-based, 8+ levels deep, and impossible to eyeball.
+     *
+     * `$this->root()` still owns batch/TU fork selection (a `tu-*` batch root), so the
+     * theme segment is appended to it rather than replacing it.
+     */
     public function ownerDir(ThemeVersionIdentity $identity): string
     {
-        return $this->root()
-            . $identity->themeId . \DIRECTORY_SEPARATOR
-            . $identity->area . \DIRECTORY_SEPARATOR
-            . 'scope' . \DIRECTORY_SEPARATOR . $identity->scopeKey() . \DIRECTORY_SEPARATOR
-            . 'mode' . \DIRECTORY_SEPARATOR . $identity->storeModeKey() . \DIRECTORY_SEPARATOR;
+        $generated = \defined('\Weline\Framework\App\Env::GENERATED_DIR')
+            ? (string)\Weline\Framework\App\Env::GENERATED_DIR
+            : (\rtrim((string)BP, '/\\') . \DIRECTORY_SEPARATOR . 'generated');
+
+        return \rtrim($generated, '/\\') . \DIRECTORY_SEPARATOR
+            . 'theme' . \DIRECTORY_SEPARATOR
+            . \str_replace('/', \DIRECTORY_SEPARATOR, $this->themeCodeSegment((int)$identity->themeId))
+            . \DIRECTORY_SEPARATOR
+            . $this->scopeSegment((string)$identity->canonicalScope, (string)$identity->storeMode)
+            . \DIRECTORY_SEPARATOR;
     }
 
     /**
-     * formal → v{N}/；draft → draft/（与 v{N} 平级，不再 tv{V}/formal|draft）.
+     * `{Vendor}/{Name}` for a theme id, matching the design tree.
+     *
+     * Design themes store `path` relative to `app/design/` as `{Vendor}/{Name}`
+     * (e.g. `Weline/hanfu`). The module package default theme has no vendor/name in
+     * its path, so it reports `Weline/default`. Never returns an empty segment.
+     */
+    public function themeCodeSegment(int $themeId): string
+    {
+        $path = '';
+        try {
+            $theme = (clone \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Model\WelineTheme::class
+            ))->clearData()->clearQuery()->load($themeId);
+            $path = \trim((string)$theme->getData(\Weline\Theme\Model\WelineTheme::schema_fields_PATH));
+        } catch (\Throwable) {
+            $path = '';
+        }
+
+        $normalized = \trim(\str_replace('\\', '/', $path), '/');
+        if ($normalized === '') {
+            return 'theme-' . $themeId;
+        }
+        if (\str_contains($normalized, '/Theme/view/theme')) {
+            return 'Weline/default';
+        }
+        if (\str_starts_with($normalized, 'app/') || \str_starts_with($normalized, 'vendor/')) {
+            $segments = $this->sanitizePathSegments($normalized);
+            $segments = \array_slice($segments, -2);
+
+            return $segments === [] ? 'theme-' . $themeId : \implode('/', $segments);
+        }
+        $segments = \array_slice($this->sanitizePathSegments($normalized), 0, 2);
+
+        return $segments === [] ? 'theme-' . $themeId : \implode('/', $segments);
+    }
+
+    /** One flat directory segment for the canonical scope (dots kept, no nesting). */
+    public function scopeSegment(string $canonicalScope, string $storeMode = 'normal'): string
+    {
+        $segment = \preg_replace('/[^A-Za-z0-9._-]+/', '_', \trim($canonicalScope)) ?? '';
+        $segment = \trim($segment, '._-');
+        if ($segment === '') {
+            $segment = 'default.default.default';
+        }
+        $storeMode = \preg_replace('/[^A-Za-z0-9._-]+/', '_', \trim($storeMode)) ?? '';
+        $storeMode = \trim($storeMode, '._-');
+        if ($storeMode !== '' && $storeMode !== 'normal') {
+            $segment .= '.' . $storeMode;
+        }
+
+        return $segment;
+    }
+
+    /** @return list<string> */
+    private function sanitizePathSegments(string $path): array
+    {
+        $out = [];
+        foreach (\explode('/', $path) as $segment) {
+            $segment = \preg_replace('/[^A-Za-z0-9._-]+/', '_', \trim($segment)) ?? '';
+            $segment = \trim($segment, '._-');
+            if ($segment === '' || $segment === '.' || $segment === '..') {
+                continue;
+            }
+            $out[] = $segment;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Leaf directory for one theme+scope+mode+version:
+     * `generated/theme/{Vendor}/{Name}/{scope}/{mode}/v{N}/`.
+     *
+     * Every version keeps its own directory so a rollback can point back at already
+     * baked bytes instead of re-baking. Draft has no sealed version number, so it
+     * keeps a single `draft/` leaf.
+     *
+     * TEMPORARILY NOT version-segmented (2026-11-02): with `v{N}` in the path the
+     * storefront resolved a version whose directory had no baked artifacts yet and
+     * re-baked per request until the WLS output capture overflowed
+     * (`OverflowException` in FiberOutputBuffer, `/`, `/about`, `/best-sellers` → 500).
+     * Re-enable only together with an artifact-complete migration for every
+     * published version of every scope.
      */
     public function versionModeDir(ThemeVersionIdentity $identity): string
     {
@@ -222,8 +320,13 @@ final class ThemeLayoutEntityPaths
             throw new \InvalidArgumentException('theme_layout_version_id_required');
         }
 
-        return $this->ownerDir($identity)
+        $versioned = $this->ownerDir($identity) . 'formal' . \DIRECTORY_SEPARATOR
             . 'v' . $identity->themeVersionId . \DIRECTORY_SEPARATOR;
+        if (\is_dir($versioned)) {
+            return $versioned;
+        }
+
+        return $this->ownerDir($identity) . 'formal' . \DIRECTORY_SEPARATOR;
     }
 
     /** Chrome / theme chrome info root (not the storefront main product). */

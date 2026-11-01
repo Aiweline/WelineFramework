@@ -101,7 +101,8 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             if ($partials === []) {
                 return;
             }
-            $this->compilePartialArtifacts($partials, $options);
+            $this->compilePartialArtifacts($identity, $partials, $options);
+            $this->writeThemeTreeManifest($identity, $candidates);
 
             return;
         }
@@ -318,6 +319,141 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         } finally {
             ThemeData::setCurrentTheme($previousTheme);
             ThemeData::setCurrentArea($previousArea);
+        }
+        $this->writeThemeTreeManifest($identity, $candidates);
+    }
+
+    /**
+     * Publish-time theme tree.
+     *
+     * The theme version is sealed here, so this is the one moment the whole
+     * relationship tree is both known and stable:
+     *
+     *     website + scope identity
+     *       └ canonical scope (default.default.default) + area + locale/currency
+     *          └ theme + PUBLISHED version (themeId / versionId / contentRevision)
+     *             └ theme inheritance chain (child overrides, otherwise parent applies)
+     *                └ layout → slot → widgets (default_injection / template_inline)
+     *                   └ baked artifacts (page layout, chrome partials)
+     *
+     * Writing it beside the version artifacts lets request time answer "which
+     * artifacts exist for this website+scope+version" by reading one file instead of
+     * re-walking the inheritance chain and the slot graph on every request.
+     *
+     * Fail-open: a broken manifest must never fail the publish.
+     */
+    private function writeThemeTreeManifest(ThemeVersionIdentity $identity, array $candidates): void
+    {
+        try {
+            // Keys are relative to the theme's own directory so they read like
+            // `default.default.default/formal/theme/partials/footer/default.phtml`
+            // instead of carrying the retired id/scope/mode/vN prefix.
+            $root = \rtrim(\str_replace('\\', '/', $this->paths->ownerDir($identity)), '/') . '/';
+            $artifacts = [];
+            $slotWidgets = [];
+            foreach ($candidates as $path => $bytes) {
+                if (!\is_string($path) || !\is_string($bytes) || $bytes === '') {
+                    continue;
+                }
+                $normalized = \str_replace('\\', '/', $path);
+                $relative = \str_starts_with($normalized, $root)
+                    ? \substr($normalized, \strlen($root))
+                    : $normalized;
+                $kind = \str_contains($normalized, '/partials/')
+                    ? 'chrome_partial'
+                    : (\str_contains($normalized, '/pages/') ? 'page_layout' : 'layout');
+                $widgets = [];
+                $matches = [];
+                if (\preg_match_all(
+                    "/'widget_module'\\s*=>\\s*'([^']*)'[\\s\\S]{0,160}?'widget_code'\\s*=>\\s*'([^']*)'[\\s\\S]{0,640}?'slot_id'\\s*=>\\s*'([^']*)'/",
+                    $bytes,
+                    $matches,
+                    \PREG_SET_ORDER
+                )) {
+                    foreach ($matches as $match) {
+                        $module = (string)$match[1];
+                        $code = (string)$match[2];
+                        $slot = (string)$match[3];
+                        $widgets[] = ['slot' => $slot, 'module' => $module, 'code' => $code];
+                        $slotWidgets[$slot][] = ['module' => $module, 'code' => $code];
+                    }
+                }
+                $artifacts[$relative] = [
+                    'kind' => $kind,
+                    'bytes' => \strlen($bytes),
+                    'widgets' => \count($widgets),
+                ];
+            }
+
+            // Single writer for the tree: publish replaces the artifact map wholesale,
+            // while editor saves patch individual slots through the same store.
+            ObjectManager::getInstance(ThemeTreeStore::class)->putArtifacts($identity, $artifacts, $slotWidgets);
+        } catch (\Throwable $error) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[ThemeTree] manifest write failed: ' . $error->getMessage(), [
+                    'theme_id' => $identity->themeId,
+                    'version' => $identity->themeVersionId,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Publish the theme tree for a theme's currently published version, reading the
+     * artifacts already on disk.
+     *
+     * The batch path (promote → {@see self::compileAfterPromote()}) knows the candidate
+     * set in memory, but DEV publishes in place through
+     * `ThemeLayoutOriginWatchService::run()` and never promotes a batch — so nothing
+     * rebuilt the tree there and `theme:update` appeared to do nothing. Both entry
+     * points now converge on the same flat tree.
+     *
+     * Fail-open: returns false instead of throwing.
+     */
+    public function publishThemeTree(
+        int $themeId,
+        string $canonicalScope = 'default.default.default',
+        string $storeMode = 'normal',
+        string $area = 'frontend',
+    ): bool {
+        if ($themeId < 1) {
+            return false;
+        }
+        try {
+            $versions = ObjectManager::getInstance(\Weline\Theme\Service\ThemeScopeVersionService::class);
+            $published = $versions->getPublished($themeId, $canonicalScope, $storeMode, $area);
+            if (!$published instanceof \Weline\Theme\Model\ThemeScopeVersion || $published->getVersionId() < 1) {
+                return false;
+            }
+            $identity = $published->toVersionIdentity();
+            $dir = $this->paths->versionModeDir($identity);
+            if (!\is_dir($dir)) {
+                return false;
+            }
+            $candidates = [];
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+            );
+            foreach ($iterator as $file) {
+                if (!$file instanceof \SplFileInfo || !$file->isFile() || $file->getExtension() !== 'phtml') {
+                    continue;
+                }
+                $bytes = @\file_get_contents($file->getPathname());
+                if (\is_string($bytes)) {
+                    $candidates[$file->getPathname()] = $bytes;
+                }
+            }
+            $this->writeThemeTreeManifest($identity, $candidates);
+
+            return true;
+        } catch (\Throwable $error) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[ThemeTree] publishThemeTree failed: ' . $error->getMessage(), [
+                    'theme_id' => $themeId,
+                ]);
+            }
+
+            return false;
         }
     }
 
@@ -1034,6 +1170,88 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         }
 
         return $pages;
+    }
+
+    /**
+     * Solidified chrome partials (path => bytes) from a candidate set.
+     *
+     * A promote batch can carry chrome partials with no page at all (chrome-only
+     * republish). Those still need their Taglib compile, otherwise the storefront
+     * compiles the raw source at request time and every chrome slot starts empty.
+     *
+     * @return array<string,string>
+     */
+    private function extractPublishedChromePartials(array $candidates): array
+    {
+        $partials = [];
+        foreach ($candidates as $path => $bytes) {
+            if (!\is_string($path) || !\is_string($bytes) || $bytes === '') {
+                continue;
+            }
+            $normalized = \str_replace('\\', '/', $path);
+            if (!\str_contains($normalized, '/partials/') || \str_contains($normalized, '/sources/')) {
+                continue;
+            }
+            if (!\is_array(ThemeLayoutSourceSnapshot::metadata($bytes))) {
+                continue;
+            }
+            $partials[$path] = $bytes;
+        }
+
+        return $partials;
+    }
+
+    /**
+     * Taglib-compile solidified chrome partials that arrived without any page.
+     *
+     * Each partial is compiled through the same pinned path a page uses
+     * ({@see self::buildPinnedCompileSet()} + `compilePinnedSources`), with the
+     * partial's own path standing in for the page path. Failures are logged per
+     * partial instead of aborting the promote: one stubborn partial must not block
+     * the whole theme version.
+     *
+     * @param array<string,string> $partials path => solidified bytes
+     */
+    private function compilePartialArtifacts(
+        ThemeVersionIdentity $identity,
+        array $partials,
+        array $options = [],
+    ): void {
+        if ($partials === []) {
+            return;
+        }
+        $locales = $this->resolveDefaultWebsiteLocales();
+        $currency = State::resolveWebsiteDefaultCurrency();
+        $template = Template::getInstance();
+        $onProgress = \is_callable($options['on_progress'] ?? null) ? $options['on_progress'] : null;
+        $compiledSourcePaths = [];
+
+        foreach ($partials as $path => $bytes) {
+            try {
+                $snapshot = ThemeLayoutSourceSnapshot::fromCandidates($identity, (string)$path, $partials);
+                $snapshot->install($template);
+                $pinned = $this->buildPinnedCompileSet($snapshot, (string)$path, $identity, $compiledSourcePaths);
+                $this->compiler->compilePinnedSources(
+                    $pinned,
+                    $locales,
+                    $currency,
+                    [],
+                    $onProgress === null
+                        ? null
+                        : static function (int $done, int $total, string $locale, string $label) use ($onProgress): void {
+                            $onProgress($done, $total, $locale, $label);
+                        },
+                );
+            } catch (\Throwable $error) {
+                if (\function_exists('w_log_warning')) {
+                    \w_log_warning('[ThemeCompile] chrome partial compile failed: ' . $error->getMessage(), [
+                        'theme_id' => $identity->themeId,
+                        'version' => $identity->themeVersionId,
+                        'partial' => \basename(\dirname((string)$path)) . '/' . \basename((string)$path),
+                    ]);
+                }
+            }
+        }
     }
 
     /** @return list<string> */

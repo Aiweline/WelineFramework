@@ -278,9 +278,74 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         $owner = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
             $context->themeId, $context->scope->storageScope, $context->scope->storeMode, $context->area,
         );
-        return \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityOwnerLock::write(
+        $result = \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityOwnerLock::write(
             $owner, fn(): array => $this->applyChangesLocked($context, $expectedRevision, $expectedParentReleaseId, $changes, $actorId, $actorName, $summary, $skipContentValidation),
         );
+        // Visual editing must be visible immediately: mirror the just-written layout
+        // nodes into the theme tree. The database stays the source of truth; the tree
+        // is the derived index request time reads.
+        $this->syncThemeTree($context);
+
+        return $result;
+    }
+
+    /**
+     * Incrementally mirror the layout slot→widget map into the theme tree.
+     *
+     * Every editor mutation (add / remove / move / sort / replace / clear) funnels
+     * through {@see self::applyChanges()}, so syncing here covers all of them without
+     * patching seven endpoints. The payload read back is the INHERITANCE-MERGED one
+     * ({@see self::composeLayoutPayloadBySlotNearPriority()}: a slot claimed by the
+     * child excludes the parent's nodes for that slot), which is exactly the structure
+     * the tree is meant to hold.
+     *
+     * Fail-open by design: an editor save must never fail because the derived index
+     * could not be refreshed — the next save or the next publish refreshes it.
+     */
+    private function syncThemeTree(ThemeEditorContext $context): void
+    {
+        if ($context->resourceType !== ThemeEditorContext::RESOURCE_LAYOUT) {
+            return;
+        }
+        try {
+            // The write just landed; drop the request-scoped snapshot so the read
+            // below sees the new revision instead of the pre-save payload.
+            $this->invalidateRequestLoadCache();
+            $state = $this->load($context, true);
+            $identityData = $state['version_identity'] ?? null;
+            if (!\is_array($identityData)) {
+                return;
+            }
+            $identity = \Weline\Theme\Api\Version\ThemeVersionIdentity::fromArray($identityData);
+            $nodes = \is_array($state['draft_payload']['nodes'] ?? null)
+                ? $state['draft_payload']['nodes']
+                : [];
+            $slots = [];
+            foreach ($nodes as $node) {
+                if (!\is_array($node)) {
+                    continue;
+                }
+                $slotId = \trim((string)($node['slot_id'] ?? ''));
+                $code = \trim((string)($node['widget_code'] ?? ''));
+                if ($slotId === '' || $code === '') {
+                    continue;
+                }
+                $slots[$slotId][] = [
+                    'module' => \trim((string)($node['widget_module'] ?? '')),
+                    'code' => $code,
+                ];
+            }
+            \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\ThemeTreeStore::class
+            )->putSlots($identity, $slots);
+        } catch (\Throwable $error) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[ThemeTree] editor sync failed: ' . $error->getMessage(), [
+                    'theme_id' => $context->themeId,
+                    'area' => $context->area,
+                ]);
+            }
+        }
     }
 
     private function applyChangesLocked(

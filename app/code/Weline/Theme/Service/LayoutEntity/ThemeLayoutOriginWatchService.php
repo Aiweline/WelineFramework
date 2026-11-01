@@ -81,12 +81,14 @@ final class ThemeLayoutOriginWatchService
             'messages' => [],
         ];
 
+        $treeThemeIds = [];
         foreach ($this->themeApplicationUsage->themesForDefaultUpgrade() as $theme) {
             ++$report['themes_scanned'];
             $themeId = (int)$theme->getId();
             if ($themeId < 1) {
                 continue;
             }
+            $treeThemeIds[] = $themeId;
             try {
                 $result = $this->processTheme($theme);
             } catch (\Throwable $e) {
@@ -124,6 +126,21 @@ final class ThemeLayoutOriginWatchService
             }
         } catch (\Throwable $e) {
             $report['messages'][] = 'module_statics_error:' . $e->getMessage();
+        }
+
+        // DEV publishes in place — it never promotes a batch, so the batch-only tree
+        // writer never ran and `theme:update` looked like a no-op for the tree.
+        // Rebuild it from the artifacts this run just solidified.
+        foreach (\array_unique($treeThemeIds) as $treeThemeId) {
+            try {
+                $published = ObjectManager::getInstance(ThemeLayoutEntityFormalLocaleCompileService::class)
+                    ->publishThemeTree((int)$treeThemeId);
+                if ($published) {
+                    $report['tree_published'] = (int)($report['tree_published'] ?? 0) + 1;
+                }
+            } catch (\Throwable $e) {
+                $report['messages'][] = 'theme_tree_' . $treeThemeId . '_error:' . $e->getMessage();
+            }
         }
 
         return $report;

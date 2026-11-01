@@ -441,9 +441,9 @@ class App
             'currency' => (string)($parse['currency'] ?? ''),
         ]);
 
-        if (!$isBackend && $welineArea === 'frontend') {
-            $this->redirectDefaultLocalizationPrefixIfNeeded($rawRequestUri, $parse);
-        }
+        // 语言/货币段不是 301 目标：路径里的语言与货币就是访客要的地址，
+        // 不得重定向到更短路径或英语。历史上这里调用过一个方法体只有
+        // unset() 的空实现（redirectDefaultLocalizationPrefixIfNeeded），已删除。
 
         // 必须用 parser 已合并进 input.server 的 REQUEST_URI，不能读旧的 request.uri（WlsRuntime 预写会残留）。
         $serverMerged = Context::current()->server();
@@ -613,16 +613,6 @@ class App
         $this->invalidateCurrentRequestUriCache();
         $markApplyUrlStep('invalidate_uri_cache');
         $flushApplyUrlProfile();
-    }
-
-    /**
-     * Language and currency on the visitor URL are not 301 targets.
-     * The path segments are the language and currency. Do not send the visitor
-     * to a shorter path or to English.
-     */
-    private function redirectDefaultLocalizationPrefixIfNeeded(string $rawRequestUri, array $parse = []): void
-    {
-        unset($rawRequestUri, $parse);
     }
 
     /**

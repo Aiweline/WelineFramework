@@ -1060,6 +1060,56 @@ class SlotRendererService
      * Memoised per request: this runs once per rendered storefront document, but the
      * resolution walks scope/version lookups and must not repeat per call.
      */
+    private function hasFillableChromeSlotMarkers(string $html, int $themeId, string $area): bool
+    {
+        // Cheap rejection first: no slot boundary markers at all, nothing to fill.
+        if ($html === '' || !\str_contains($html, '<!--@weline-slot:')) {
+            return false;
+        }
+
+        try {
+            $chrome = $this->loadSharedChromeSlotWidgetsFromEntity($themeId, $area);
+        } catch (\Throwable) {
+            return false;
+        }
+        if (!\is_array($chrome) || $chrome === []) {
+            return false;
+        }
+
+        // Only a slot that BOTH has chrome widgets to place AND is still an empty
+        // shell is worth running the (expensive) region pass for. A document compiled
+        // from the solidified artifact has every chrome slot already populated, so
+        // this returns false and the existing fast-skip stays in effect.
+        //
+        // The wrapper-presence test is what keeps this cheap and accurate: the fill
+        // pass locates each slot with `BoundaryScanner::findSlotWrapperBounds()`, which
+        // is a regex sweep over the whole document. On a 530 KB storefront document
+        // that sweep ran 11 times to discover `no_wrapper: 11` / `filled: 0` — 46.88 ms
+        // of pure waste per request (measured `theme.layout.hard_cut_finalize` 46.88 ms
+        // with nothing filled). A document that carries the slot marker but no
+        // `data-wslot` wrapper has nothing the region pass could ever fill, so reject
+        // it here with a single string scan instead.
+        foreach (\array_keys($chrome) as $slotId) {
+            $slotId = \trim((string)$slotId);
+            if ($slotId === '') {
+                continue;
+            }
+            if (!\str_contains($html, '<!--@weline-slot:' . $slotId . '-->')) {
+                continue;
+            }
+            if (!\str_contains($html, 'data-wslot="' . $slotId . '"')
+                && !\str_contains($html, "data-wslot='" . $slotId . "'")
+            ) {
+                continue;
+            }
+            if (!$this->htmlSlotInnerHasWidgetCode($html, $slotId)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function hasSolidifiedChromeForScope(int $themeId, string $area): bool
     {
         static $memo = [];
@@ -1258,7 +1308,18 @@ class SlotRendererService
         // carries slot markers for hosts this pass never targets (`content`,
         // `list-grid`, `storefront-float-*`, …), so a marker-presence test never
         // short-circuits. Themes without a solidified version keep the full path.
-        if ($this->hasSolidifiedChromeForScope($themeId, $area)) {
+        //
+        // 2026-11-01: the guard alone is not sufficient. A document compiled from the
+        // theme SOURCE carries EMPTY `<w:slot>` bodies, and skipping this pass left
+        // those slots empty forever — the chrome slots then had to be re-SSR'd by
+        // RequiredDefaultInjectionRuntimeSafetyNet on every request (hard_cut_finalize
+        // 178.64 ms, 11 injections). A document compiled from the SOLIDIFIED artifact
+        // is already final, and its leftover markers belong to hosts this pass never
+        // targets. Distinguish them by whether any slice host actually has fragments
+        // for the marker ids present in the document, not by mere marker presence.
+        if ($this->hasSolidifiedChromeForScope($themeId, $area)
+            && !$this->hasFillableChromeSlotMarkers($html, $themeId, $area)
+        ) {
             return $html;
         }
 
