@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Deploy Core Update Command
  * 
- * 从 Git 仓库更新框架核心代码（使用临时目录，不影响项目 Git 仓库）
+ * 从 Git 仓库增量更新框架核心代码（常驻缓存仓 var/cache/core-update，不影响项目 Git 仓库）
  *
  * @package Weline\Deploy\Console\Update
  * @author WelineFramework Team
@@ -87,9 +87,20 @@ class Core extends CommandAbstract
     private string $gitCommand = 'git';
 
     private bool $updateAll = false;  // 是否更新整个项目
-    private bool $forceUpdate = false;  // 是否仍走强制覆盖（删除缓存后整包重克）
-    /** 传了 -f，但预检确认本地核心与上次同步一致，已降为增量 */
-    private bool $forceRelaxedBecauseClean = false;
+    /**
+     * -f：本地核心有私改时不再拒绝，并把这些私改文件并入增量拷贝集回刷为仓库版本。
+     * -f 不再决定「删缓存仓重克」：缓存仓一律先 fetch 增量前进，只有仓坏了 / 拉不下来 /
+     * 取不到 diff 时才整包重克。
+     */
+    private bool $forceUpdate = false;
+    /**
+     * -f 预检记下的本地私改核心文件（相对路径）；增量模式下并入拷贝集。
+     *
+     * @var list<string>
+     */
+    private array $forceOverwriteFiles = [];
+    /** 旧基线 → 线上 tip 的 diff 取不到时（浅历史对象被 gc 等）降级为全树覆盖。 */
+    private bool $needsFullCopy = false;
     private int $updatedFiles = 0;  // 更新的文件数
     private int $skippedFiles = 0;  // 跳过的文件数（受保护的配置文件）
     private int $newFiles = 0;  // 新增的文件数
@@ -142,18 +153,18 @@ class Core extends CommandAbstract
                 '-b, --branch=<分支名>' => __('指定分支（未配置默认分支时必填，如：main, master, dev）'),
                 '-t, --tag=<标签名>' => '指定标签版本（可选，如：v1.0.0）',
                 '--repo=<仓库地址>' => __('指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）'),
-                '-f, --force' => '请求强制覆盖：先对比上次同步 commit 与线上 tip；本地核心无改动则仍按增量更新；本地有改动或缓存/提交错乱才整包重克覆盖',
+                '-f, --force' => '请求强制覆盖：缓存仓仍然只做 fetch 增量前进；本地核心私改的文件一并回刷为仓库版本。只有缓存仓坏了 / 拉不下来 / 取不到 diff 才整包重克并全树覆盖',
                 '-h, --help' => '显示帮助信息',
             ],
             [
                 '双仓库策略' => __('未指定仓库时：GitHub 可达则对比 GitHub/Gitee 同分支 tip；一致时优先 GitHub，不一致时选用 Gitee 以免拉到落后镜像；GitHub 不可达则用 Gitee。增量更新会把缓存 origin 切到本次选用仓库'),
                 '仓库可配置' => __('仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换'),
                 '两阶段语义' => __('旧缓存 HEAD 只用于检测「项目本地核心是否相对上次同步被私改」；检测通过后必须把缓存仓更新到线上最新 tip，再按旧基线→新 tip 的 diff（并补缺失）同步到项目。绝不能用旧缓存内容当作本次更新源'),
-                '增量更新' => __('默认先对比旧基线做冲突检测，再 git fetch 线上最新；仅把相对旧基线有变更的核心文件覆盖到项目，另补本地缺失文件；已存在但内容不同的本地核心不因与新 tip hash 不一致而被误回刷（私改应由冲突检测拦截）'),
+                '增量更新' => __('默认先对比旧基线做冲突检测，再 git fetch 线上最新；仅把相对旧基线有变更的核心文件覆盖到项目，另补本地缺失文件；已存在但内容不同的本地核心不因与新 tip hash 不一致而被误回刷（私改应由冲突检测拦截，或在 -f 下按私改清单精确回刷）'),
                 '同步范围' => __('仅同步核心仓库路径：app/code/Weline 与必要启动/样例/bin/dev/pub/setup；业务模块不在更新范围内'),
-                '本地冲突检测' => __('只对比「本地核心文件」与 tmp/core-update 缓存仓上次同步的核心 commit；绝不读取业务项目 git status。本地核心相对该基线有私改才拒绝；-f 强制覆盖。业务模块改动完全忽略'),
-                '强制更新' => __('传 -f 会先对比上次同步 commit 与线上 tip，并检查本地核心。无严重冲突时 -f 不生效，仍走增量更新；本地私改或缓存仓/提交对不上（错乱）才删除缓存并完整覆盖。成功后缓存仓 HEAD 即成为下次对比基线'),
-                '临时目录方式' => '使用临时目录下载，不影响项目 Git 仓库',
+                '本地冲突检测' => __('只对比「本地核心文件」与 var/cache/core-update 缓存仓上次同步的核心 commit；绝不读取业务项目 git status。本地核心相对该基线有私改才拒绝；-f 不拒绝，改为把这些文件回刷为仓库版本。业务模块改动完全忽略'),
+                '强制更新' => __('传 -f 不再删除缓存仓、也不再整树覆盖：缓存仓照旧 fetch 前进到线上 tip，拷贝面 = Git 变更 ∪ 本地私改文件 ∪ 本地缺失文件。只有缓存仓缺 HEAD/取不到 diff 才整包重克并全树覆盖。成功后缓存仓 HEAD 即成为下次对比基线'),
+                '缓存仓位置' => __('缓存仓常驻 var/cache/core-update（不是 var/backup/tmp 临时目录，部署整理清理不会把它删掉）；始终用独立仓操作，不碰项目 Git 仓库'),
                 '版本验证' => '如果指定了标签但不存在，命令会报错并退出',
                 '排除目录' => __('不会拷贝 app/code/Aiweline、GuoLaiRen、WeShop；这些由目标项目自行管理'),
                 '保护文件' => 'app/etc/env.php、modules.php、module_dependencies.php、.env、dev/deploy/.config 等已存在时不覆盖',
@@ -161,7 +172,7 @@ class Core extends CommandAbstract
             ],
             [
                 '增量更新到最新' => 'php bin/w core:update master  （或 update:core -b master）',
-                '强制完整更新' => 'php bin/w update:core -b main -f',
+                '强制回刷本地私改核心文件' => 'php bin/w update:core -b main -f',
                 '指定标签' => 'php bin/w update:core -b main -t v1.0.0',
                 __('使用自定义仓库（需先配置 .env 或 env.php）') => 'php bin/w update:core -b master',
                 '生产补静态铺平' => 'php bin/w setup:upgrade   # 或 php bin/w deploy:upgrade',
@@ -183,7 +194,7 @@ class Core extends CommandAbstract
         $this->printer->note('');
         $this->printer->setup('═══════════════════════════════════════════════════════════════');
         if ($this->forceUpdate) {
-            $this->printer->setup(__('框架核心代码更新（已指定 -f，先对比上次同步与线上提交）'));
+            $this->printer->setup(__('框架核心代码更新（已指定 -f：回刷本地私改核心文件，缓存仓仍增量前进）'));
         } else {
             $this->printer->setup(__('框架核心代码更新（增量模式 - 基于 Git diff 更新变化文件）'));
         }
@@ -210,31 +221,27 @@ class Core extends CommandAbstract
         if ($tag) {
             $this->printer->note(__('标签：%{1}', [$tag]));
         }
+        $cacheDir = $this->cacheRepositoryDir();
         if ($this->forceUpdate) {
-            $this->relaxForceWhenLocalCoreHasNoConflict(
-                Env::backupDir() . 'tmp' . DS . 'core-update',
-                $branch
-            );
+            $this->preflightForceAgainstCacheRepository($cacheDir, $branch);
         }
         $this->printer->note(__('更新模式：%{1}', [
             $this->forceUpdate
-                ? '强制完整更新（本地核心有差异或缓存/提交无法对比，重克后覆盖）'
-                : ($this->forceRelaxedBecauseClean
-                    ? '增量更新（已指定 -f，但本地核心与上次同步一致，不整包覆盖）'
-                    : '两阶段：旧基线仅做冲突检测 → 拉取线上最新 → 按 diff 同步到项目'),
+                ? '增量（-f）：缓存仓照常 fetch 到线上最新，拷贝面 = Git 变更 ∪ 本地私改核心文件 ∪ 本地缺失文件'
+                : '两阶段：旧基线仅做冲突检测 → 缓存仓 fetch 线上最新 → 按 diff 同步到项目',
         ]));
         $this->printer->note('');
 
-        // 3. 准备缓存目录（当前 HEAD = 上次已同步到项目的核心 commit，仅作冲突基线）
-        $this->printer->setup(__('步骤 3/7：准备临时目录...'));
-        $tmpDir = $this->prepareTempDirectory();
+        // 3. 准备常驻缓存仓（当前 HEAD = 上次已同步到项目的核心 commit，仅作冲突基线）
+        $this->printer->setup(__('步骤 3/7：准备核心缓存仓...'));
+        $tmpDir = $this->prepareCacheRepository();
 
         // 4. 旧基线只用于检测：本地核心相对「上次同步 commit」是否被私改
         $this->printer->setup(__('步骤 4/7：检查本地核心是否相对上次同步有改动...'));
         $this->assertLocalCoreUnmodifiedSinceLastSyncUnlessForced($tmpDir);
 
         // 5. 冲突检测已通过：必须把缓存仓更新到线上最新 tip（绝不能继续用旧内容当更新源）
-        $this->printer->setup(__('步骤 5/7：下载框架代码（线上最新）...'));
+        $this->printer->setup(__('步骤 5/7：缓存仓拉取线上最新...'));
         $this->downloadFramework($tmpDir, $branch, $tag);
 
         // 6. 用「已更新到最新 tip」的缓存树，按旧基线→新 tip 的变更同步到项目
@@ -244,8 +251,8 @@ class Core extends CommandAbstract
 
         // 7. 保留缓存；此时 HEAD = 新 tip，成为下次冲突检测基线
         $this->printer->setup(__('步骤 7/7：完成处理...'));
-        $this->printer->note(__('保留缓存目录：当前 HEAD 仅作为下次冲突检测基线'));
-        $this->printer->success(__('✓ 缓存目录：%{1}', [$tmpDir]));
+        $this->printer->note(__('保留缓存仓（常驻增量仓）：当前 HEAD 即下次冲突检测基线；-f 也不重克'));
+        $this->printer->success(__('✓ 缓存仓：%{1}', [$tmpDir]));
         $this->printSyncedCoreBaseline($tmpDir);
 
         $this->printer->note('');
@@ -292,8 +299,8 @@ class Core extends CommandAbstract
     }
 
     /**
-     * 打印本次写入的核心基线（tmp/core-update 的 HEAD）。
-     * 下次无 -f 时只与该基线对比本地核心文件，不看业务仓 git。
+     * 打印本次写入的核心基线（var/cache/core-update 缓存仓的 HEAD）。
+     * 下次只与该基线对比本地核心文件，不看业务仓 git。
      */
     private function printSyncedCoreBaseline(string $tmpDir): void
     {
@@ -426,16 +433,19 @@ class Core extends CommandAbstract
      * 对比对象：本地磁盘 CORE_UPDATE_PATHS ↔ 该旧基线树同路径内容。
      * 绝不读取业务项目 git；GuoLaiRen 等业务改动完全忽略。
      * 本检查必须在 downloadFramework（拉线上最新）之前完成；通过后旧树才会被前进到新 tip。
-     * 显式 -f 且预检确认必须覆盖时可跳过；预检已确认干净时不再扫第二遍。首次尚无缓存时跳过。
+     * 显式 -f 时不拒绝：由预检记下私改清单，随本次增量一并回刷。首次尚无缓存时跳过。
      */
     private function assertLocalCoreUnmodifiedSinceLastSyncUnlessForced(string $tmpDir): void
     {
-        if ($this->forceRelaxedBecauseClean) {
-            $this->printer->success(__('✓ -f 预检已确认本地核心与上次同步一致，继续增量更新'));
-            return;
-        }
         if ($this->forceUpdate) {
-            $this->printer->warning(__('⚠ 已显式启用 -f/--force，本地核心有差异或无法对比，将强制覆盖核心文件'));
+            if ($this->forceOverwriteFiles !== []) {
+                $this->printer->success(__(
+                    '✓ -f 预检：已记录 %{1} 个本地私改核心文件，随本次增量一并回刷',
+                    [count($this->forceOverwriteFiles)]
+                ));
+            } else {
+                $this->printer->success(__('✓ -f 预检：本地核心无私改需回刷，按增量拷贝'));
+            }
             return;
         }
 
@@ -488,12 +498,13 @@ class Core extends CommandAbstract
     }
 
     /**
-     * 传了 -f 时先对比「上次同步 commit」和「线上 tip」。
-     * 本地核心与上次同步一致、缓存仓可读且干净 → 降为增量，-f 不生效。
-     * 本地有私改，或两个提交/缓存仓对不上（错乱）→ 保持强制整包覆盖。
-     * 线上 tip 仅仅比上次同步新，不算必须强制。
+     * -f 预检：只记录「要回刷的本地私改文件」与缓存仓可用性，绝不删除缓存仓。
+     *
+     * 语义（2026-11-01 用户指定）：-f 也是增量。缓存仓照旧 fetch 前进到线上 tip，
+     * 拷贝面 = Git 变更 ∪ 本地私改文件 ∪ 本地缺失文件；只有缓存仓本身对不上
+     * （缺 HEAD / 工作树脏 / 浅历史缺对象）或整包重克时才全树覆盖。
      */
-    private function relaxForceWhenLocalCoreHasNoConflict(string $tmpDir, string $branch): void
+    private function preflightForceAgainstCacheRepository(string $tmpDir, string $branch): void
     {
         if (!$this->forceUpdate) {
             return;
@@ -501,7 +512,7 @@ class Core extends CommandAbstract
 
         $gitDir = $tmpDir . DS . '.git';
         if (!is_dir($gitDir)) {
-            $this->printer->warning(__('⚠ 已请求 -f：没有可对比的上次同步缓存，按强制完整更新'));
+            $this->printer->note(__('已指定 -f：尚无缓存仓，本次按候选仓库浅克隆后全树覆盖'));
             return;
         }
 
@@ -519,6 +530,18 @@ class Core extends CommandAbstract
             }
         }
 
+        if ($this->isFullGitCommit($lastSyncedCommit) && $this->isFullGitCommit($remoteTip)) {
+            $this->printer->note(__('对比提交：上次同步 %{1} ↔ 线上 tip %{2}', [
+                substr($lastSyncedCommit, 0, 12),
+                substr($remoteTip, 0, 12),
+            ]));
+        }
+
+        if (!$this->isFullGitCommit($lastSyncedCommit)) {
+            $this->printer->warning(__('⚠ 已指定 -f：缓存仓没有可用提交（仓坏了），将整包重克并全树覆盖'));
+            return;
+        }
+
         $statusOutput = [];
         $statusCode = $this->runGitCommand($tmpDir, ['status', '--porcelain'], $statusOutput);
         $cacheWorktreeClean = $statusCode === 0;
@@ -530,59 +553,34 @@ class Core extends CommandAbstract
                 }
             }
         }
-
-        if ($this->isFullGitCommit($lastSyncedCommit) && $this->isFullGitCommit($remoteTip)) {
-            $this->printer->note(__('对比提交：上次同步 %{1} ↔ 线上 tip %{2}', [
-                substr($lastSyncedCommit, 0, 12),
-                substr($remoteTip, 0, 12),
-            ]));
-        }
-
-        $drifted = [];
-        $commitsComparable = $this->isFullGitCommit($lastSyncedCommit) && $this->isFullGitCommit($remoteTip) && $cacheWorktreeClean;
-        if ($commitsComparable) {
-            $drifted = $this->collectLocalCoreDriftAgainstLastSynced($tmpDir);
-        }
-
-        if ($this->shouldHonorRequestedForce($lastSyncedCommit, $remoteTip, $cacheWorktreeClean, $drifted)) {
-            if (!$this->isFullGitCommit($lastSyncedCommit) || !$this->isFullGitCommit($remoteTip) || !$cacheWorktreeClean) {
-                $this->printer->warning(__('⚠ 已请求 -f：缓存仓或两个提交对不上（错乱），按强制完整更新'));
-                return;
-            }
-            $this->printer->warning(__('⚠ 已请求 -f：本地核心相对上次同步有 %{1} 处更改，按强制完整覆盖', [count($drifted)]));
-            foreach (array_slice($drifted, 0, 15) as $path) {
-                $this->printer->note('  ' . $path);
-            }
-            if (count($drifted) > 15) {
-                $this->printer->note(__('  ……另有 %{1} 项未显示', [count($drifted) - 15]));
-            }
+        if (!$cacheWorktreeClean) {
+            $this->needsFullCopy = true;
+            $this->printer->warning(__(
+                '⚠ 已指定 -f：缓存仓工作树不干净（上次同步基线不可信），拉完线上最新后按全树覆盖；缓存仓仍只 fetch，不重克'
+            ));
             return;
         }
 
-        $this->forceUpdate = false;
-        $this->forceRelaxedBecauseClean = true;
-        $this->printer->success(__(
-            '✓ 已指定 -f，但本地核心与上次同步 %{1} 一致，无严重冲突，改为增量更新（线上 tip %{2}）',
-            [substr($lastSyncedCommit, 0, 12), substr($remoteTip, 0, 12)]
-        ));
-    }
+        $this->forceOverwriteFiles = $this->collectLocalCoreDriftAgainstLastSynced($tmpDir);
 
-    /**
-     * -f 是否仍要整包覆盖。线上 tip 与上次同步不同、但本地无漂移时返回 false。
-     *
-     * @param list<string> $drifted
-     */
-    private function shouldHonorRequestedForce(
-        string $lastSyncedCommit,
-        string $remoteTip,
-        bool $cacheWorktreeClean,
-        array $drifted
-    ): bool {
-        if (!$this->isFullGitCommit($lastSyncedCommit) || !$this->isFullGitCommit($remoteTip) || !$cacheWorktreeClean) {
-            return true;
+        if ($this->forceOverwriteFiles === []) {
+            $this->printer->success(__(
+                '✓ 已指定 -f，但本地核心与上次同步 %{1} 一致：缓存仓照常 fetch，仍按增量拷贝（不整树覆盖）',
+                [substr($lastSyncedCommit, 0, 12)]
+            ));
+            return;
         }
 
-        return $drifted !== [];
+        $this->printer->warning(__(
+            '⚠ 已指定 -f：本地核心相对上次同步有 %{1} 处私改，随本次增量一并回刷为仓库版本（缓存仓不删不重克）',
+            [count($this->forceOverwriteFiles)]
+        ));
+        foreach (array_slice($this->forceOverwriteFiles, 0, 15) as $path) {
+            $this->printer->note('  ' . $path);
+        }
+        if (count($this->forceOverwriteFiles) > 15) {
+            $this->printer->note(__('  ……另有 %{1} 项未显示', [count($this->forceOverwriteFiles) - 15]));
+        }
     }
 
     private function isFullGitCommit(string $commit): bool
@@ -1010,23 +1008,29 @@ class Core extends CommandAbstract
         return $branch;
     }
 
-    private function prepareTempDirectory(): string
+    /**
+     * 核心更新缓存仓：常驻的增量仓，放 var/cache/core-update。
+     *
+     * 不能放 var/backup/tmp/core-update —— 部署第 1 步的整理清理默认删除
+     * var/backup/tmp/*（超过 6 小时），等于每次上线都把缓存仓清空、只能整包重克。
+     */
+    private function cacheRepositoryDir(): string
     {
-        $tmpDir = Env::backupDir() . 'tmp' . DS . 'core-update';
-        
-        // 只有在强制模式下才删除旧目录
-        if ($this->forceUpdate && is_dir($tmpDir)) {
-            $this->printer->note(__('强制模式：删除旧缓存目录...'));
-            $this->removeDirectory($tmpDir);
-        }
-        
+        return \rtrim(Env::varDir(), '/\\') . DS . 'cache' . DS . 'core-update';
+    }
+
+    private function prepareCacheRepository(): string
+    {
+        $tmpDir = $this->cacheRepositoryDir();
+
+        // 缓存仓常驻：-f 只影响拷贝范围，绝不在这里删缓存重克。
         if (!is_dir($tmpDir)) {
-            mkdir($tmpDir, 0755, true);
-            $this->printer->success(__('✓ 创建新缓存目录：%{1}', [$tmpDir]));
+            $this->ensureDirectoryExists($tmpDir);
+            $this->printer->success(__('✓ 创建新缓存仓：%{1}', [$tmpDir]));
         } else {
-            $this->printer->success(__('✓ 使用现有缓存目录：%{1}', [$tmpDir]));
+            $this->printer->success(__('✓ 复用现有缓存仓：%{1}', [$tmpDir]));
         }
-        
+
         return $tmpDir;
     }
 
@@ -1038,9 +1042,13 @@ class Core extends CommandAbstract
         $gitDir = $tmpDir . DS . '.git';
         $isExistingRepo = is_dir($gitDir);
         
-        if ($isExistingRepo && !$this->forceUpdate) {
+        // 缓存仓在就只增量前进（-f 也一样）；仓坏了 / 拉不下来 / 取不到 tip 才整包重克。
+        if ($isExistingRepo) {
             // 冲突检测已用旧 HEAD 做完。此处旧 HEAD 只记作基线，缓存仓必须前进到线上最新 tip。
-            $this->printer->note(__('冲突检测已通过：旧缓存仅作基线，开始拉取线上最新 tip...'));
+            $this->printer->note(__(
+                '冲突检测已通过：缓存仓保留原对象库，只 fetch 线上最新 tip%{1}',
+                [$this->forceUpdate ? '（已指定 -f，仍不重克）' : '']
+            ));
             $this->ensureCacheOriginUsesPreferredRepo($tmpDir);
             
             // 记录旧基线（仅用于算 diff）；之后 reset 到线上最新
@@ -1137,7 +1145,8 @@ class Core extends CommandAbstract
             $this->showLatestCommit($tmpDir);
             
         } else {
-            // 强制模式或新仓库：完整克隆
+            // 缓存仓不存在（首次，或目录被清掉）：完整浅克隆 → 全树拷贝
+            $this->printer->note(__('尚无缓存仓（首次或被清理），按候选仓库浅克隆...'));
             $this->cloneRepository($tmpDir, $branch, $tag);
             // 标记为新克隆，需要全量拷贝
             $this->isNewClone = true;
@@ -1161,7 +1170,14 @@ class Core extends CommandAbstract
         $diffCode = $this->runGitCommand($tmpDir, ['diff', '--name-status', $fromRef . '..' . $toRef], $diffOutput);
         
         if ($diffCode !== 0) {
-            throw new \RuntimeException((string)__('无法获取核心更新 diff，已中止。'));
+            // 浅克隆的旧基线对象可能已被 gc：拿不到 diff 不中止，降级为全树覆盖（缓存仓仍不重克）。
+            $this->printer->warning(__(
+                '无法获取核心更新 diff（旧基线 %{1} 对象不齐），本次降级为全树覆盖',
+                [substr($fromRef, 0, 8)]
+            ));
+            $this->needsFullCopy = true;
+
+            return [];
         }
         
         foreach ($diffOutput as $line) {
@@ -1342,21 +1358,30 @@ class Core extends CommandAbstract
         $allPaths = self::CORE_UPDATE_PATHS;
         $this->printer->note(__('同步目录：%{1}', [implode(', ', $allPaths)]));
         
-        // 判断更新模式：
-        // 1. 强制模式(-f)或新克隆 → 全量覆盖
-        // 2. 增量模式 → 仅 Git diff 变更覆盖；再补本地缺失文件（不因内容不同回刷本地私改）
+        // 判断更新模式（2026-11-01 用户指定：-f 也是增量，不再整树覆盖）：
+        // 1. 新克隆 / 取不到旧基线→线上 tip 的 diff → 全树覆盖
+        // 2. 其余 → Git 变更 ∪（-f 时的本地私改清单）∪ 本地缺失文件
         
-        if ($this->forceUpdate || $this->isNewClone) {
-            // 强制模式或新克隆：完全覆盖所有文件
-            $this->printer->note(__('完全覆盖模式：更新所有文件...'));
+        if ($this->isNewClone || $this->needsFullCopy) {
+            $this->printer->note(__(
+                '完全覆盖模式：更新所有文件（%{1}）',
+                [$this->isNewClone ? __('缓存仓为整包新克隆') : __('旧基线→线上 tip 的 diff 不可用')]
+            ));
             $this->copyAllFiles($tmpDir, $allPaths);
         } else {
             $processedBefore = $this->newFiles + $this->updatedFiles;
 
-            $this->printer->note(__('增量模式：Git 变更覆盖 + 仅补本地缺失文件...'));
+            $this->printer->note(__(
+                '增量模式：Git 变更覆盖%{1} + 仅补本地缺失文件...',
+                [$this->forceUpdate && $this->forceOverwriteFiles !== [] ? __(' + -f 私改回刷') : '']
+            ));
 
             if (!empty($this->changedFiles)) {
                 $this->copyChangedFilesOnly($tmpDir, $allPaths);
+            }
+
+            if ($this->forceUpdate && $this->forceOverwriteFiles !== []) {
+                $this->copyForceOverwrittenCoreFiles($tmpDir);
             }
 
             $this->syncIncrementalCoreFiles($tmpDir);
@@ -1463,9 +1488,75 @@ class Core extends CommandAbstract
     }
 
     /**
+     * -f 增量回刷：把预检记下的本地私改核心文件恢复成仓库版本（不整树遍历）。
+     *
+     * 私改清单在缓存仓 fetch/reset 前进之前采集，比对的是「上次同步基线」；
+     * 这里取的是同一批相对路径，源文件读的是已前进到新 tip 的缓存树。
+     * 已在 Git 变更清单里的路径跳过，避免重复计数。
+     */
+    private function copyForceOverwrittenCoreFiles(string $tmpDir): void
+    {
+        $alreadyCopied = [];
+        foreach (array_keys($this->changedFiles) as $changedPath) {
+            $alreadyCopied[$this->normalizeCoreUpdateRelativePath((string)$changedPath)] = true;
+        }
+
+        $restoredCount = 0;
+        $upstreamDeleted = 0;
+
+        foreach ($this->forceOverwriteFiles as $relativePath) {
+            $normalizedPath = $this->normalizeCoreUpdateRelativePath((string)$relativePath);
+
+            if ($normalizedPath === ''
+                || isset($alreadyCopied[$normalizedPath])
+                || $this->shouldSkipCoreDriftPath($normalizedPath)
+                || !$this->isInCoreUpdatePath($normalizedPath, self::CORE_UPDATE_PATHS)
+            ) {
+                continue;
+            }
+
+            $sourcePath = $tmpDir . DS . str_replace('/', DS, $normalizedPath);
+            $targetPath = BP . str_replace('/', DS, $normalizedPath);
+
+            if (!is_file($sourcePath)) {
+                // 上游已删除该文件：私改保留，交给删除流程/人工处理，不在这里静默删本地文件。
+                $upstreamDeleted++;
+                continue;
+            }
+
+            $this->ensureDirectoryExists(dirname($targetPath));
+            if (!@copy($sourcePath, $targetPath)) {
+                $this->failedFiles++;
+                continue;
+            }
+
+            if (file_exists($targetPath)) {
+                $this->updatedFiles++;
+            } else {
+                $this->newFiles++;
+            }
+            $restoredCount++;
+        }
+
+        if ($restoredCount > 0) {
+            $this->printer->note(__(
+                '强制回刷：%{1} 个本地私改核心文件已恢复为仓库版本',
+                [$restoredCount]
+            ));
+        }
+        if ($upstreamDeleted > 0) {
+            $this->printer->warning(__(
+                '⚠ %{1} 个本地私改文件在线上已被删除，保留本地未动（需自行处理）',
+                [$upstreamDeleted]
+            ));
+        }
+    }
+
+    /**
      * 增量模式：仅补本地缺失的核心文件。
      * 已存在但内容不同的文件不在此覆盖——避免把本地领先/私改核心打回缓存仓旧版。
-     * 上游有变更时由 copyChangedFilesOnly（git diff）覆盖；全量覆盖仅 -f / 新克隆。
+     * 上游有变更时由 copyChangedFilesOnly（git diff）覆盖；-f 的本地私改由 copyForceOverwrittenCoreFiles 回刷；
+     * 全量覆盖仅整包新克隆或取不到 diff。
      */
     private function syncIncrementalCoreFiles(string $tmpDir): void
     {

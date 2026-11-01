@@ -50,14 +50,20 @@ final class DeployUpdateContractsTest extends TestCase
             'CoreUpdateScope::testIncrementalSyncOnlyFillsMissingFilesAndDoesNotOverwriteDrift' => function () {
             $this->assert_CoreUpdateScope_testIncrementalSyncOnlyFillsMissingFilesAndDoesNotOverwriteDrift();
         },
-            'CoreUpdateScope::testRequestedForceIsIgnoredWhenCommitsDifferButLocalCoreIsClean' => function () {
-            $this->assert_CoreUpdateScope_testRequestedForceIsIgnoredWhenCommitsDifferButLocalCoreIsClean();
+            'CoreUpdateScope::testForceKeepsCacheRepoAndCopiesIncrementally' => function () {
+            $this->assert_CoreUpdateScope_testForceKeepsCacheRepoAndCopiesIncrementally();
         },
-            'CoreUpdateScope::testRequestedForceStaysWhenLocalDriftOrCommitsAreIncomparable' => function () {
-            $this->assert_CoreUpdateScope_testRequestedForceStaysWhenLocalDriftOrCommitsAreIncomparable();
+            'CoreUpdateScope::testForceRecordsLocalDriftForRestore' => function () {
+            $this->assert_CoreUpdateScope_testForceRecordsLocalDriftForRestore();
         },
-            'CoreUpdateScope::testRelaxForceUsesCacheCommitAgainstLocalCore' => function () {
-            $this->assert_CoreUpdateScope_testRelaxForceUsesCacheCommitAgainstLocalCore();
+            'CoreUpdateScope::testForceMarksFullCopyWhenCacheWorktreeDirty' => function () {
+            $this->assert_CoreUpdateScope_testForceMarksFullCopyWhenCacheWorktreeDirty();
+        },
+            'CoreUpdateCache::testCacheRepositoryLivesOutsideDeployTmp' => function () {
+            $this->assert_CoreUpdateCache_testCacheRepositoryLivesOutsideDeployTmp();
+        },
+            'CoreUpdateCache::testMissingDiffDegradesToFullTreeCopy' => function () {
+            $this->assert_CoreUpdateCache_testMissingDiffDegradesToFullTreeCopy();
         },
             'CoreUpdateCache::testBrokenCacheIsReplacedByShallowCloneNotFullInit' => function () {
             $this->assert_CoreUpdateCache_testBrokenCacheIsReplacedByShallowCloneNotFullInit();
@@ -259,79 +265,129 @@ private function assert_CoreUpdateScope_testNoisePathsAreSkippedInDriftScan(): v
     self::assertFalse($skip->invoke($core, 'app/code/Weline/Deploy/Console/Update/Core.php'));
 }
 
-private function assert_CoreUpdateScope_testRequestedForceIsIgnoredWhenCommitsDifferButLocalCoreIsClean(): void
+/**
+ * 2026-11-01 用户指定：-f 也是增量。缓存仓只要能用就只 fetch 前进，
+ * -f 不得删缓存仓、不得整树覆盖；只有新克隆 / 取不到 diff 才全树。
+ */
+private function assert_CoreUpdateScope_testForceKeepsCacheRepoAndCopiesIncrementally(): void
 {
-    $core = new Core($this->createMock(\Weline\Framework\Output\Cli\Printing::class), $this->createMock(\Weline\Framework\App\System::class));
-    $decide = $this->method_CoreUpdateScope('shouldHonorRequestedForce');
-    $last = str_repeat('a', 40);
-    $remote = str_repeat('b', 40);
-    self::assertFalse($decide->invoke($core, $last, $remote, true, []));
-    self::assertFalse($decide->invoke($core, $last, $last, true, []));
-}
+    $src = (string) file_get_contents(BP . 'app/code/Weline/Deploy/Console/Update/Core.php');
+    self::assertStringContainsString('if ($isExistingRepo) {', $src, '-f 也必须走缓存仓增量分支');
+    self::assertStringNotContainsString('$isExistingRepo && !$this->forceUpdate', $src);
+    self::assertStringNotContainsString('删除旧缓存目录', $src, '-f 不得删除缓存仓');
+    self::assertStringContainsString('if ($this->isNewClone || $this->needsFullCopy) {', $src);
+    self::assertStringNotContainsString('$this->forceUpdate || $this->isNewClone', $src, '拷贝面不再由 -f 决定');
 
-private function assert_CoreUpdateScope_testRequestedForceStaysWhenLocalDriftOrCommitsAreIncomparable(): void
-{
-    $core = new Core($this->createMock(\Weline\Framework\Output\Cli\Printing::class), $this->createMock(\Weline\Framework\App\System::class));
-    $decide = $this->method_CoreUpdateScope('shouldHonorRequestedForce');
-    $last = str_repeat('a', 40);
-    $remote = str_repeat('b', 40);
-    self::assertTrue($decide->invoke($core, $last, $remote, true, ['app/code/Weline/Deploy/Console/Update/Core.php']));
-    self::assertTrue($decide->invoke($core, '', $remote, true, []));
-    self::assertTrue($decide->invoke($core, $last, '', true, []));
-    self::assertTrue($decide->invoke($core, 'deadbeef', $remote, true, []));
-    self::assertTrue($decide->invoke($core, $last, $remote, false, []));
-}
-
-private function assert_CoreUpdateScope_testRelaxForceUsesCacheCommitAgainstLocalCore(): void
-{
-    $root = sys_get_temp_dir() . '/core-up-force-' . bin2hex(random_bytes(4));
-    $bare = $root . '/remote.git';
-    $cache = $root . '/cache';
+    $root = sys_get_temp_dir() . '/core-up-force-keep-' . bin2hex(random_bytes(4));
     $rel = 'app/code/Weline/Deploy/Console/Update/Core.php';
-    $local = BP . $rel;
-    self::assertTrue(is_file($local));
     try {
-        $this->git_CoreUpdateScope('', 'init --bare -b dev ' . escapeshellarg($bare));
-        $this->git_CoreUpdateScope('', 'init -b dev ' . escapeshellarg($cache));
-        $cacheFile = $cache . '/' . $rel;
-        mkdir(dirname($cacheFile), 0755, true);
-        copy($local, $cacheFile);
-        $this->git_CoreUpdateScope($cache, 'add -- ' . escapeshellarg($rel));
-        $this->git_CoreUpdateScope($cache, '-c user.email=core-update@example.test -c user.name=core-update commit -m baseline');
-        $this->git_CoreUpdateScope($cache, 'remote add origin ' . escapeshellarg($bare));
-        $this->git_CoreUpdateScope($cache, 'push origin HEAD:dev');
-
+        $cache = $this->makeCacheRepo_CoreUpdateForce($root, $rel, false);
         $core = new Core($this->createMock(\Weline\Framework\Output\Cli\Printing::class), $this->createMock(\Weline\Framework\App\System::class));
-        $relax = $this->method_CoreUpdateScope('relaxForceWhenLocalCoreHasNoConflict');
-        $this->setPrivate_CoreUpdateScope($core, 'repoCandidates', [$bare]);
+        $this->setPrivate_CoreUpdateScope($core, 'repoCandidates', [$root . '/remote.git']);
         $this->setPrivate_CoreUpdateScope($core, 'forceUpdate', true);
-        $relax->invoke($core, $cache, 'dev');
-        self::assertFalse($this->readPrivate_CoreUpdateScope($core, 'forceUpdate'));
-        self::assertTrue($this->readPrivate_CoreUpdateScope($core, 'forceRelaxedBecauseClean'));
+        $this->method_CoreUpdateScope('preflightForceAgainstCacheRepository')->invoke($core, $cache, 'dev');
 
-        $ahead = $root . '/ahead';
-        $this->git_CoreUpdateScope('', 'clone ' . escapeshellarg($bare) . ' ' . escapeshellarg($ahead));
-        file_put_contents($ahead . '/README-force-probe.txt', "ahead\n");
-        $this->git_CoreUpdateScope($ahead, 'add -- README-force-probe.txt');
-        $this->git_CoreUpdateScope($ahead, '-c user.email=core-update@example.test -c user.name=core-update commit -m ahead');
-        $this->git_CoreUpdateScope($ahead, 'push origin HEAD:dev');
-        $this->setPrivate_CoreUpdateScope($core, 'forceUpdate', true);
-        $this->setPrivate_CoreUpdateScope($core, 'forceRelaxedBecauseClean', false);
-        $relax->invoke($core, $cache, 'dev');
-        self::assertFalse($this->readPrivate_CoreUpdateScope($core, 'forceUpdate'), 'remote tip ahead of a clean core must not keep -f');
-        self::assertTrue($this->readPrivate_CoreUpdateScope($core, 'forceRelaxedBecauseClean'));
-
-        file_put_contents($cacheFile, "<?php\n// drifted baseline\n");
-        $this->git_CoreUpdateScope($cache, 'add -- ' . escapeshellarg($rel));
-        $this->git_CoreUpdateScope($cache, '-c user.email=core-update@example.test -c user.name=core-update commit -m drift');
-        $this->setPrivate_CoreUpdateScope($core, 'forceUpdate', true);
-        $this->setPrivate_CoreUpdateScope($core, 'forceRelaxedBecauseClean', false);
-        $relax->invoke($core, $cache, 'dev');
-        self::assertTrue($this->readPrivate_CoreUpdateScope($core, 'forceUpdate'));
-        self::assertFalse($this->readPrivate_CoreUpdateScope($core, 'forceRelaxedBecauseClean'));
+        self::assertTrue($this->readPrivate_CoreUpdateScope($core, 'forceUpdate'), '-f 不再被自行降级');
+        self::assertSame([], $this->readPrivate_CoreUpdateScope($core, 'forceOverwriteFiles'));
+        self::assertFalse($this->readPrivate_CoreUpdateScope($core, 'needsFullCopy'), '本地核心干净时 -f 仍按增量');
     } finally {
         $this->removeTree_CoreUpdateScope($root);
     }
+}
+
+private function assert_CoreUpdateScope_testForceRecordsLocalDriftForRestore(): void
+{
+    $root = sys_get_temp_dir() . '/core-up-force-drift-' . bin2hex(random_bytes(4));
+    $rel = 'app/code/Weline/Deploy/Console/Update/Core.php';
+    try {
+        $cache = $this->makeCacheRepo_CoreUpdateForce($root, $rel, true);
+        $core = new Core($this->createMock(\Weline\Framework\Output\Cli\Printing::class), $this->createMock(\Weline\Framework\App\System::class));
+        $this->setPrivate_CoreUpdateScope($core, 'repoCandidates', [$root . '/remote.git']);
+        $this->setPrivate_CoreUpdateScope($core, 'forceUpdate', true);
+        $this->method_CoreUpdateScope('preflightForceAgainstCacheRepository')->invoke($core, $cache, 'dev');
+
+        self::assertTrue($this->readPrivate_CoreUpdateScope($core, 'forceUpdate'));
+        self::assertContains($rel, $this->readPrivate_CoreUpdateScope($core, 'forceOverwriteFiles'), '-f 私改清单必须进入增量拷贝面');
+        self::assertFalse($this->readPrivate_CoreUpdateScope($core, 'needsFullCopy'), '有私改也不整树覆盖');
+    } finally {
+        $this->removeTree_CoreUpdateScope($root);
+    }
+}
+
+private function assert_CoreUpdateScope_testForceMarksFullCopyWhenCacheWorktreeDirty(): void
+{
+    $root = sys_get_temp_dir() . '/core-up-force-dirty-' . bin2hex(random_bytes(4));
+    $rel = 'app/code/Weline/Deploy/Console/Update/Core.php';
+    try {
+        $cache = $this->makeCacheRepo_CoreUpdateForce($root, $rel, false);
+        file_put_contents($cache . '/' . $rel, "<?php\n// uncommitted cache noise\n");
+        $core = new Core($this->createMock(\Weline\Framework\Output\Cli\Printing::class), $this->createMock(\Weline\Framework\App\System::class));
+        $this->setPrivate_CoreUpdateScope($core, 'repoCandidates', [$root . '/remote.git']);
+        $this->setPrivate_CoreUpdateScope($core, 'forceUpdate', true);
+        $this->method_CoreUpdateScope('preflightForceAgainstCacheRepository')->invoke($core, $cache, 'dev');
+
+        self::assertTrue($this->readPrivate_CoreUpdateScope($core, 'needsFullCopy'), '基线不可信时降级全树');
+        self::assertSame([], $this->readPrivate_CoreUpdateScope($core, 'forceOverwriteFiles'));
+        self::assertTrue(is_dir($cache . '/.git'), '脏仓也只 fetch，不删缓存仓');
+    } finally {
+        $this->removeTree_CoreUpdateScope($root);
+    }
+}
+
+private function assert_CoreUpdateCache_testCacheRepositoryLivesOutsideDeployTmp(): void
+{
+    $src = (string) file_get_contents(BP . 'app/code/Weline/Deploy/Console/Update/Core.php');
+    self::assertStringNotContainsString("Env::backupDir() . 'tmp' . DS . 'core-update'", $src);
+
+    $core = new Core($this->createMock(\Weline\Framework\Output\Cli\Printing::class), $this->createMock(\Weline\Framework\App\System::class));
+    $dir = str_replace('\\', '/', (string) $this->method_CoreUpdateScope('cacheRepositoryDir')->invoke($core));
+    self::assertStringContainsString('cache/core-update', $dir);
+    self::assertStringNotContainsString('backup', $dir, '缓存仓不得放在 var/backup 下：部署整理清理会按 mtime 删它，导致每次上线都整包重克');
+}
+
+private function assert_CoreUpdateCache_testMissingDiffDegradesToFullTreeCopy(): void
+{
+    $src = (string) file_get_contents(BP . 'app/code/Weline/Deploy/Console/Update/Core.php');
+    self::assertStringNotContainsString("throw new \\RuntimeException((string)__('无法获取核心更新 diff", $src);
+
+    $root = sys_get_temp_dir() . '/core-up-diff-' . bin2hex(random_bytes(4));
+    $rel = 'app/code/Weline/Deploy/Console/Update/Core.php';
+    try {
+        $cache = $this->makeCacheRepo_CoreUpdateForce($root, $rel, false);
+        $core = new Core($this->createMock(\Weline\Framework\Output\Cli\Printing::class), $this->createMock(\Weline\Framework\App\System::class));
+        $changed = $this->method_CoreUpdateScope('getGitChangedFiles')->invoke($core, $cache, str_repeat('f', 40), 'HEAD');
+        self::assertSame([], $changed, '取不到 diff 时不得抛断更新');
+        self::assertTrue($this->readPrivate_CoreUpdateScope($core, 'needsFullCopy'));
+    } finally {
+        $this->removeTree_CoreUpdateScope($root);
+    }
+}
+
+/**
+ * 造一个「可用缓存仓」夹具：树内只放一个真实核心文件，另配一个 bare 远端。
+ * $drift=true 时把缓存侧内容改成与本地不同（模拟本地私改）。
+ */
+private function makeCacheRepo_CoreUpdateForce(string $root, string $rel, bool $drift): string
+{
+    $bare = $root . '/remote.git';
+    $cache = $root . '/cache';
+    $local = BP . $rel;
+    self::assertTrue(is_file($local), 'fixture 需要真实核心文件');
+
+    $this->git_CoreUpdateScope('', 'init --bare -b dev ' . escapeshellarg($bare));
+    $this->git_CoreUpdateScope('', 'init -b dev ' . escapeshellarg($cache));
+    $cacheFile = $cache . '/' . $rel;
+    mkdir(dirname($cacheFile), 0755, true);
+    copy($local, $cacheFile);
+    if ($drift) {
+        file_put_contents($cacheFile, "<?php\n// drifted last-synced baseline\n");
+    }
+    $this->git_CoreUpdateScope($cache, 'add -- ' . escapeshellarg($rel));
+    $this->git_CoreUpdateScope($cache, '-c user.email=core-update@example.test -c user.name=core-update commit -m baseline');
+    $this->git_CoreUpdateScope($cache, 'remote add origin ' . escapeshellarg($bare));
+    $this->git_CoreUpdateScope($cache, 'push origin HEAD:dev');
+
+    return $cache;
 }
 
 private function git_CoreUpdateScope(string $cwd, string $args): void
