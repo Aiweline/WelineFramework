@@ -66,6 +66,7 @@ final class CertificateMaterialUpdateCoordinator
         $legacyManaged = false;
         $liveGatewayParticipants = [];
         $liveProjectInstances = [];
+        $liveProjectEndpoints = [];
         $nativeReloadRequired = [];
         $nativeContainmentTargets = [];
         $preflightFailures = [];
@@ -234,6 +235,8 @@ final class CertificateMaterialUpdateCoordinator
                 continue;
             }
             $liveProjectInstances[$instanceName] = $fence;
+            // 记录 endpoint 快照，供后续 reload 前的幂等短路判定（见 nativeReloadAlreadyApplied）。
+            $liveProjectEndpoints[$instanceName] = $endpoint;
             $nativeReloadRequired[$instanceName] = $this->nativeReloadRequired(
                 $endpoint,
                 $deadlineMonotonic,
@@ -385,6 +388,18 @@ final class CertificateMaterialUpdateCoordinator
                                     );
                                 }
                                 if (($nativeReloadRequired[$instanceName] ?? false) !== true) {
+                                    continue;
+                                }
+                                // 幂等短路：endpoint 已应用同一份 manifest（generation+digest+route 全等
+                                // 且 converged=true）时不必再广播 reload。非吊销事务才算，吊销必须重应用。
+                                if (!$revocationCommitted
+                                    && $this->nativeReloadAlreadyApplied(
+                                        $liveProjectEndpoints[$instanceName] ?? [],
+                                        (int)$publication['generation'],
+                                        (string)$publication['digest'],
+                                        (int)$publication['route_count'],
+                                    )
+                                ) {
                                     continue;
                                 }
                                 $this->assertRetirementBudget(
@@ -2161,6 +2176,50 @@ final class CertificateMaterialUpdateCoordinator
                 (string)($expectedGateway['project_uuid'] ?? ''),
                 (string)($currentGateway['project_uuid'] ?? ''),
             );
+    }
+
+    /**
+     * 幂等短路：目标 instance 的 endpoint 已声明应用过**同一份** serving manifest
+     * （generation 相同且 digest 相同）时，无需再发一次 SSL_CERT_RELOAD。
+     *
+     * 线上问题：纯 WLS 服务的站点 `nativeReloadRequired()` 恒为 true（那是「谁是 TLS 面」
+     * 的判定，不看材料是否已应用），于是每次 notify 都广播一次 reload；实测 78 次、
+     * 间隔 3–11 分钟，虚增 ACK 超时概率进而引发 fail-stop 连锁。
+     *
+     * 安全边界：只认**完全相等**的 generation+digest，且必须是非吊销事务
+     * （吊销/退役必须显式重新应用）。任何字段缺失或格式不符 → 视为需要 reload。
+     *
+     * @param array<string,mixed> $endpoint
+     */
+    private function nativeReloadAlreadyApplied(
+        array $endpoint,
+        int $generation,
+        string $digest,
+        int $routeCount,
+    ): bool {
+        if ($generation < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+            || $routeCount < 0
+        ) {
+            return false;
+        }
+        $gateway = \is_array($endpoint['gateway'] ?? null) ? $endpoint['gateway'] : [];
+        $appliedGeneration = (int)($gateway['serving_manifest_generation'] ?? 0);
+        $appliedDigest = \strtolower(\trim((string)($gateway['serving_manifest_digest'] ?? '')));
+        $appliedRoutes = $gateway['serving_manifest_route_count'] ?? null;
+        if ($appliedGeneration !== $generation
+            || !\hash_equals($digest, $appliedDigest)
+            || !\is_int($appliedRoutes)
+            || $appliedRoutes !== $routeCount
+        ) {
+            return false;
+        }
+        // 已收敛的标记必须为真：converged=false 说明上次发布尚未落地。
+        if (($gateway['serving_manifest_converged'] ?? null) !== true) {
+            return false;
+        }
+
+        return true;
     }
 
     /** @param array<string,mixed> $endpoint */
