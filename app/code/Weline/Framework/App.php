@@ -334,18 +334,16 @@ class App
         // synchronizeParsedLocalization would wipe path language back to the
         // website default. Routing still uses decode via parse['uri'] / REQUEST_URI.
         $visitorLocalizationUri = \trim((string)(
-            $_SERVER['WELINE_VISITOR_REQUEST_URI']
-            ?? $server['WELINE_VISITOR_REQUEST_URI']
-            ?? WelineEnv::server('WELINE_VISITOR_REQUEST_URI', '')
-            ?: ''
+            WelineEnv::server('WELINE_VISITOR_REQUEST_URI', '')
+            ?: ($server['WELINE_VISITOR_REQUEST_URI'] ?? '')
         ));
         if ($visitorLocalizationUri === '') {
             $visitorLocalizationUri = \trim((string)(
-                $_SERVER['WELINE_ORIGIN_REQUEST_URI']
-                ?? $server['WELINE_ORIGIN_REQUEST_URI']
-                ?? $_SERVER['REQUEST_URI']
-                ?? $server['REQUEST_URI']
-                ?? $this->getCurrentRequestUri()
+                WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
+                ?: ($server['WELINE_ORIGIN_REQUEST_URI'] ?? '')
+                ?: WelineEnv::server('REQUEST_URI', '')
+                ?: ($server['REQUEST_URI'] ?? '')
+                ?: $this->getCurrentRequestUri()
             ));
         }
         $visitorLocalizationUri = $this->normalizeParsedUri($visitorLocalizationUri);
@@ -484,12 +482,11 @@ class App
         $visitorIdentityPath = \Weline\Framework\Http\Fpc\FpcEngineIdentity::preferVisitorUri(
             (string)(
                 WelineEnv::server('WELINE_VISITOR_REQUEST_URI', '')
-                ?: ($_SERVER['WELINE_VISITOR_REQUEST_URI'] ?? '')
                 ?: ($server['WELINE_VISITOR_REQUEST_URI'] ?? '')
             ),
             $rawRequestUri,
             $currentUri,
-            (string)($_SERVER['REQUEST_URI'] ?? ''),
+            (string)WelineEnv::server('REQUEST_URI', ''),
         );
         $visitorIdentityFull = ($host !== '' && $visitorIdentityPath !== '')
             ? $scheme . '://' . $host . (
@@ -1679,7 +1676,7 @@ class App
             return true;
         }
 
-        return \is_array($_COOKIE ?? null) && \array_key_exists($name, $_COOKIE);
+        return WelineEnv::hasInboundCookie($name);
     }
 
     /**

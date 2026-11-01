@@ -74,4 +74,15 @@ final class ContextTest extends TestCase
         self::assertSame('backend', $fiber->getReturn());
         self::assertSame('frontend', Context::current()->area());
     }
+
+    public function testRequestBodyIsInputBodyNotResponseBody(): void
+    {
+        Context::enter(new Context([
+            'input' => ['body' => '{"req":1}'],
+            'response' => ['body' => '<html>resp</html>'],
+        ]));
+
+        self::assertSame('{"req":1}', Context::current()->requestBody());
+        self::assertSame('<html>resp</html>', (string)Context::current()->body());
+    }
 }

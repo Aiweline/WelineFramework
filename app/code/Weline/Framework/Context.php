@@ -383,6 +383,18 @@ class Context
         return (string)$this->get('input.uri', '/');
     }
 
+    /**
+     * 当前路由 URI 的 path 部分（由解析器在 `Url::parser()` 后写成终态）。
+     *
+     * 消费方应当读这里，而不是各自对 `uri()` 做 `explode('?')` / `parse_url()`。
+     */
+    public function path(): string
+    {
+        $path = (string)$this->get('route.path', '');
+
+        return $path !== '' ? $path : '/';
+    }
+
     public function host(): string
     {
         return (string)$this->get('input.host', '');
@@ -463,6 +475,14 @@ class Context
         }
 
         return $this->get('response.body', '');
+    }
+
+    /**
+     * 请求体。与 {@see self::body()}（响应体）区分开，避免调用点误取另一份。
+     */
+    public function requestBody(): string
+    {
+        return (string)$this->get('input.body', '');
     }
 
     public function responseHeader(string $key, ?string $value = null): mixed
