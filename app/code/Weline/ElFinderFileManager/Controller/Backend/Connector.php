@@ -161,7 +161,9 @@ class Connector extends BackendController
             
             // 解析请求参数
             $isPost = $this->request->isPost();
-            $src = $isPost ? array_merge($_GET, $_POST) : $_GET;
+            $getBag = (array)\Weline\Framework\Env\WelineEnv::getGet(null, []);
+            $postBag = (array)\Weline\Framework\Env\WelineEnv::getPost(null, []);
+            $src = $isPost ? array_merge($getBag, $postBag) : $getBag;
             
             // 处理 php://input（支持 max_input_vars 超限和 XDomainRequest）
             $maxInputVars = (!$src || isset($src['targets'])) ? ini_get('max_input_vars') : null;
@@ -212,9 +214,10 @@ class Connector extends BackendController
             // 收集命令参数
             $args = [];
             $hasFiles = false;
+            $filesBag = (array)\Weline\Framework\Env\WelineEnv::getFiles();
             foreach ($elFinder->commandArgsList($cmd) as $name => $req) {
                 if ($name === 'FILES') {
-                    if (isset($_FILES) && !empty($_FILES)) {
+                    if (!empty($filesBag)) {
                         $hasFiles = true;
                     } elseif ($req) {
                         return $this->fetchJson(['error' => $elFinder->error(elFinder::ERROR_INV_PARAMS, $cmd)]);
@@ -233,7 +236,7 @@ class Connector extends BackendController
             
             $args['debug'] = isset($src['debug']) && $src['debug'];
             if ($hasFiles) {
-                $args['FILES'] = $_FILES;
+                $args['FILES'] = $filesBag;
             }
 
             if ($cmd === 'upload' && !empty($args['upload'])) {
