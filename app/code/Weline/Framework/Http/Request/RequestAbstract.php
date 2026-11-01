@@ -44,6 +44,9 @@ abstract class RequestAbstract extends RequestFilter implements RequestInterface
     private string $uri = '';
     private string $origin_uri = '';
 
+    /** @var array<string, string> 本次请求内 uri => path 的拆分结果，避免同一 URI 反复 explode */
+    private array $uriPathMemo = [];
+
     /**
      * @var CachePoolInterface|null
      */
@@ -507,6 +510,7 @@ abstract class RequestAbstract extends RequestFilter implements RequestInterface
         $this->origin_uri = '';
         $this->uri_cache_key = '';
         $this->parse_url = [];
+        $this->uriPathMemo = [];
         return $this;
     }
     
@@ -577,15 +581,13 @@ abstract class RequestAbstract extends RequestFilter implements RequestInterface
     public function getOriginBaseUrl(): string
     {
         $uri = $this->getOriginUri();
-        $url_exp = explode('?', $uri);
-        return $this->getBaseHost() . $this->normalizeBaseUrlPath((string) array_shift($url_exp));
+        return $this->getBaseHost() . $this->normalizeBaseUrlPath($this->pathFromUri($uri));
     }
 
     public function getBaseUrl(): string
     {
         $uri = $this->getUri();
-        $url_exp = explode('?', $uri);
-        return $this->getBaseHost() . $this->normalizeBaseUrlPath((string) array_shift($url_exp));
+        return $this->getBaseHost() . $this->normalizeBaseUrlPath($this->pathFromUri($uri));
     }
 
     public function getFullUrl(): string
@@ -596,8 +598,19 @@ abstract class RequestAbstract extends RequestFilter implements RequestInterface
     public function getBaseUri(): string
     {
         $uri = $this->getUri();
-        $url_exp = explode('?', $uri);
-        return $this->getBaseHost() . $this->normalizeBaseUrlPath((string) array_shift($url_exp));
+        return $this->getBaseHost() . $this->normalizeBaseUrlPath($this->pathFromUri($uri));
+    }
+
+    /**
+     * 同一 URI 在一请求内只切一次 path；语义与历史 `explode('?')[0]` 完全一致。
+     */
+    private function pathFromUri(string $uri): string
+    {
+        if (!isset($this->uriPathMemo[$uri])) {
+            $this->uriPathMemo[$uri] = explode('?', $uri, 2)[0];
+        }
+
+        return $this->uriPathMemo[$uri];
     }
 
     private function normalizeBaseUrlPath(string $path): string
@@ -612,8 +625,7 @@ abstract class RequestAbstract extends RequestFilter implements RequestInterface
     public function getFirstUrlPath(): string
     {
         $uri = $this->getUri();
-        $url_exp = explode('?', $uri);
-        return trim(array_shift($url_exp), '/');
+        return trim($this->pathFromUri($uri), '/');
     }
 
     /**

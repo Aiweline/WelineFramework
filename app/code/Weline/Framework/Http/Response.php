@@ -722,7 +722,7 @@ class Response implements ResponseInterface, RequestLocalInterface
                 }
             }
             if ($uri === '') {
-                $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+                $uri = \Weline\Framework\Http\RequestUri::current();
             }
             $path = (string)(\parse_url($uri, PHP_URL_PATH) ?: $uri);
             $analysis = TitleLocaleProbe::analyze($this->body, $locale, $path);
@@ -763,7 +763,7 @@ class Response implements ResponseInterface, RequestLocalInterface
             }
         }
         if ($uri === '') {
-            $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            $uri = \Weline\Framework\Http\RequestUri::current();
         }
 
         return TitleLocaleProbe::localeFromRequestUri($uri);

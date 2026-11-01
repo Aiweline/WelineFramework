@@ -19,7 +19,7 @@ final class WlsPublicOriginPort
      */
     public static function edgeAdapter(?array $server = null): ?string
     {
-        $server ??= $_SERVER;
+        $server ??= \Weline\Framework\Env\WelineEnv::serverAllOrGlobal();
         $raw = \strtolower(\trim((string)(
             $server['WLS_EDGE_ADAPTER']
             ?? $_ENV['WLS_EDGE_ADAPTER']
@@ -38,7 +38,7 @@ final class WlsPublicOriginPort
      */
     public static function nonDefaultListenPort(?array $server = null): ?string
     {
-        $server ??= $_SERVER;
+        $server ??= \Weline\Framework\Env\WelineEnv::serverAllOrGlobal();
         $raw = \trim((string)(
             $server['WLS_PUBLIC_ORIGIN']
             ?? $_ENV['WLS_PUBLIC_ORIGIN']

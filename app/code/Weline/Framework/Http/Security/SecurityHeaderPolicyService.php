@@ -476,18 +476,9 @@ final class SecurityHeaderPolicyService
      */
     private function allowLocalControlCenterFrame(): bool
     {
-        $uri = (string)WelineEnv::server(
-            'REQUEST_URI',
-            (string)($_SERVER['REQUEST_URI'] ?? ''),
-        );
-        $originUri = (string)WelineEnv::server(
-            'WELINE_ORIGIN_REQUEST_URI',
-            (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? ''),
-        );
-        $query = (string)WelineEnv::server(
-            'QUERY_STRING',
-            (string)($_SERVER['QUERY_STRING'] ?? ''),
-        );
+        $uri = (string)WelineEnv::server('REQUEST_URI', '');
+        $originUri = (string)WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '');
+        $query = (string)WelineEnv::server('QUERY_STRING', '');
         // Match REQUEST_URI and origin separately — never concatenate (origin
         // may be "/" and would break `#login(?:/|\?|$)` anchors).
         $candidates = [$this->joinPathAndQuery($uri, $query)];
@@ -550,20 +541,14 @@ final class SecurityHeaderPolicyService
 
     private function isIframeFetchDest(): bool
     {
-        $dest = \strtolower(\trim((string)WelineEnv::server(
-            'HTTP_SEC_FETCH_DEST',
-            (string)($_SERVER['HTTP_SEC_FETCH_DEST'] ?? ''),
-        )));
+        $dest = \strtolower(\trim((string)WelineEnv::server('HTTP_SEC_FETCH_DEST', '')));
 
         return $dest === 'iframe';
     }
 
     private function isLocalControlCenterParent(): bool
     {
-        $referer = \trim((string)WelineEnv::server(
-            'HTTP_REFERER',
-            (string)($_SERVER['HTTP_REFERER'] ?? ''),
-        ));
+        $referer = \trim((string)WelineEnv::server('HTTP_REFERER', ''));
         if ($referer === '') {
             return false;
         }
@@ -588,10 +573,7 @@ final class SecurityHeaderPolicyService
      */
     private function allowThemeEditorSiblingFrame(): bool
     {
-        $query = (string)WelineEnv::server(
-            'QUERY_STRING',
-            (string)($_SERVER['QUERY_STRING'] ?? ''),
-        );
+        $query = (string)WelineEnv::server('QUERY_STRING', '');
         $editorMode = \trim((string)WelineEnv::getGet('editor_mode', ''));
         $shell = \strtolower(\trim((string)WelineEnv::getGet('shell', '')));
         $parentOrigin = \trim((string)WelineEnv::getGet('editor_parent_origin', ''));
@@ -604,10 +586,7 @@ final class SecurityHeaderPolicyService
             return false;
         }
 
-        $referer = \trim((string)WelineEnv::server(
-            'HTTP_REFERER',
-            (string)($_SERVER['HTTP_REFERER'] ?? ''),
-        ));
+        $referer = \trim((string)WelineEnv::server('HTTP_REFERER', ''));
         if ($parentOrigin !== '') {
             $parentParts = \parse_url($parentOrigin);
             $refererParts = $referer !== '' ? \parse_url($referer) : false;

@@ -3817,6 +3817,12 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         }
         $server[$key] = $value;
         $context->set('input.server', $server);
+
+        // input.uri 由 WelineEnv::setServer() 的 syncContextFromServerValue() 负责；
+        // 这里只补派生字段：REQUEST_URI 变了，route.path 必须同步刷新。
+        if ($key === 'REQUEST_URI') {
+            $context->set('route.path', (string)(\parse_url((string)$value, \PHP_URL_PATH) ?: '/'));
+        }
     }
 
     private static function syncParserServerToCurrentContext(): void
@@ -3833,6 +3839,9 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         $server = \array_merge($server, self::$parserServer);
         $context->set('input.server', $server);
         $context->set('input.uri', (string)(self::$parserServer['REQUEST_URI'] ?? $context->get('input.uri', '/')));
+        // route.path 与 input.uri 同源派生：解析器剥掉区域/货币/语言前缀后路由路径变了，
+        // 这里必须跟着刷新，否则消费方读上下文拿到的永远是入口时的旧路径。
+        $context->set('route.path', (string)(\parse_url((string)$context->get('input.uri', '/'), \PHP_URL_PATH) ?: '/'));
         $context->set('input.host', (string)(self::$parserServer['HTTP_HOST'] ?? self::$parserServer['SERVER_NAME'] ?? $context->get('input.host', '')));
         $context->set('input.scheme', (string)(self::$parserServer['REQUEST_SCHEME'] ?? $context->get('input.scheme', 'http')));
         $context->set('input.origin_request_uri', (string)(self::$parserServer['WELINE_ORIGIN_REQUEST_URI'] ?? self::$parserServer['ORIGIN_REQUEST_URI'] ?? $context->get('input.origin_request_uri', '/')));

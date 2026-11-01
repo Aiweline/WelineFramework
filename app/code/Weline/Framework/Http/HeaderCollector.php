@@ -269,7 +269,7 @@ class HeaderCollector implements HeaderCollectorInterface
         } catch (\Throwable) {
         }
 
-        return \is_array($_COOKIE ?? null) && \array_key_exists($name, $_COOKIE);
+        return \Weline\Framework\Env\WelineEnv::hasInboundCookie($name);
     }
 
     /**

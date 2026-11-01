@@ -416,6 +416,12 @@ class ParameterBag
         if ($this->rawBody !== '') {
             return $this->rawBody;
         }
+        // 上下文里已经存了本次请求体就不要重复读 php://input。
+        $fromContext = \Weline\Framework\Context::getCurrent()?->requestBody() ?? '';
+        if ($fromContext !== '') {
+            $this->rawBody = $fromContext;
+            return $this->rawBody;
+        }
         // FPM 模式回退
         $this->rawBody = file_get_contents('php://input') ?: '';
         return $this->rawBody;

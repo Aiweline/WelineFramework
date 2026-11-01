@@ -182,14 +182,29 @@ final class FpcHtmlDiskStore
             return null;
         }
         $base = self::writeBaseRoot();
+        // 2026-11-01（D11 契约）：页桶指针 `pg/current` 的唯一写入权归发布流程。
+        // 请求期只读：仅当 `pg/current` 缺失时初始化一次，已存在绝不覆盖。
+        // 否则仍在渲染的旧 worker 会把指针拉回自己的 token（A-B-A 抖动），
+        // 前端拿到的 token 与实际桶错配 → HTML 与静态资源不一致。
         $token = self::pageGenerationToken();
-        self::pointHostSlot($base, $resolved['host'], $token);
+        if (!self::currentPageGenExists($base, $resolved['host'])) {
+            self::pointHostSlot($base, $resolved['host'], $token);
+        }
         $slotted = self::withPageGenSlot($rel, $token);
         if ($slotted === null) {
             return null;
         }
 
         return $base . \DIRECTORY_SEPARATOR . $slotted;
+    }
+
+    /** `pg/current` 是否已存在（请求期写入前的唯一判据）。 */
+    private static function currentPageGenExists(string $base, string $host): bool
+    {
+        $link = $base . \DIRECTORY_SEPARATOR . $host . \DIRECTORY_SEPARATOR
+            . self::PAGE_GEN_DIR . \DIRECTORY_SEPARATOR . self::PAGE_GEN_CURRENT;
+
+        return \is_link($link) || \file_exists($link);
     }
 
     public static function htmlPath(string $urlOrPath): ?string
@@ -1587,6 +1602,13 @@ final class FpcHtmlDiskStore
             if (!\is_dir($path) || \is_link($path)) {
                 continue;
             }
+            // 2026-11-01 修正：新 token 桶还没写任何叶时**绝不重指** `pg/current`。
+            // 否则 current 被指向空桶，页面读不到、promote 也会被严格校验拒绝
+            // （实测踩过：current→fb7e0453… 而该目录在所有 host 下 entries=0）。
+            $newDir = $path . \DIRECTORY_SEPARATOR . self::PAGE_GEN_DIR . \DIRECTORY_SEPARATOR . $token;
+            if (!\is_dir($newDir) || \count((array)@\scandir($newDir)) <= 2) {
+                continue;
+            }
             self::pointHostSlot($base, $name, $token);
         }
     }
@@ -1615,6 +1637,21 @@ final class FpcHtmlDiskStore
         }
 
         return \implode(\DIRECTORY_SEPARATOR, $slotted);
+    }
+
+    /**
+     * 发布流程专用：把某个 host 的 `pg/current` 指向 `$token`。
+     *
+     * 2026-11-01（D11）：这是**唯一允许请求之外的写指针入口**，仅供
+     * `PublishStateStore::promoteTarget()` 调用；请求期请走 `pageDirectory()`（只读）。
+     */
+    public static function pointHostGeneration(string $host, string $token): void
+    {
+        $host = \strtolower(\trim($host));
+        if ($host === '' || \preg_match('/^[a-z0-9._:-]+$/D', $host) !== 1) {
+            return;
+        }
+        self::pointHostSlot(self::writeBaseRoot(), $host, \strtolower(\trim($token)));
     }
 
     /**
