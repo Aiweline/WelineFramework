@@ -105,7 +105,6 @@ final class ProductCardRenderer
                 if (!empty($flags['show_rating']) && $products !== []) {
                     $products = self::hydrateReviewAggregates($products);
                 }
-
                 return self::renderNormalizedProductsHtml($products, $flags);
             },
             [
@@ -394,12 +393,101 @@ final class ProductCardRenderer
             ['density' => (string)($flags['density'] ?? '')]
         );
 
-        $html = self::buildCardsBatchHtml($normalized, $flags);
+        $html = self::renderCardBatchWithFragmentCache($normalized, $flags);
         for ($i = 0; $i < self::INITIAL_VIEWPORT_IMAGE_COUNT; ++$i) {
             $html = self::stampImageLoadingAttributes($html, $i);
         }
 
         return $html;
+    }
+
+    /**
+     * Render a card batch, reusing cached fragments per card.
+     *
+     * The single-card path ({@see self::render()}) already consults
+     * StorefrontProductCardFragmentCache, but the batch path included the compiled
+     * card partial directly for every product. On a listing that meant each page
+     * re-ran the full CTA hook chain (add-to-cart + buy-now, four contributor
+     * templates) for every card instead of reusing a cached fragment.
+     *
+     * Strategy: peek every card first. When all cards hit, the batch costs no
+     * template include at all. When any card misses, render the whole batch in one
+     * pass (the shell resolves the compiled partial once, so a single miss is
+     * cheaper than a per-card fetch) and store the freshly rendered fragments.
+     *
+     * @param list<array<string, mixed>> $normalized
+     * @param array<string, mixed> $flags
+     */
+    private static function renderCardBatchWithFragmentCache(array $normalized, array $flags): string
+    {
+        $cardCache = self::cardFragmentCache();
+        if ($cardCache === null) {
+            return self::buildCardsBatchHtml($normalized, $flags);
+        }
+
+        $peeked = [];
+        $allHit = true;
+        foreach ($normalized as $position => $row) {
+            $fragment = $cardCache->peekCardHtml($row, $flags);
+            if ($fragment === null) {
+                $allHit = false;
+                break;
+            }
+            $peeked[$position] = $fragment;
+        }
+
+        if ($allHit && \count($peeked) === \count($normalized)) {
+            TemplateRenderRouteTrace::mark('card_batch_fragment', 'HIT:' . \count($peeked));
+
+            return \implode('', $peeked);
+        }
+
+        TemplateRenderRouteTrace::mark('card_batch_fragment', 'MISS:' . \count($normalized));
+
+        // One batch render, then split per card so later pages hit the fragment
+        // cache without paying the hook chain again.
+        $html = self::buildCardsBatchHtml($normalized, $flags);
+        try {
+            foreach ($normalized as $row) {
+                $productId = (int)($row['product_id'] ?? $row['id'] ?? 0);
+                if ($productId <= 0) {
+                    continue;
+                }
+                $article = self::extractCardArticleHtml($html, $productId);
+                if ($article !== '') {
+                    $cardCache->rememberCardHtml($row, $flags, static fn(): string => $article);
+                }
+            }
+        } catch (\Throwable) {
+            // Fragment seeding is an optimisation; the batch HTML is already built.
+        }
+
+        return $html;
+    }
+
+    /**
+     * Shared fragment cache instance, or null when the Theme module is absent.
+     */
+    private static function cardFragmentCache(): ?\Weline\Theme\Service\StorefrontProductCardFragmentCache
+    {
+        static $cache = null;
+        static $resolved = false;
+        if ($resolved) {
+            return $cache;
+        }
+        $resolved = true;
+        if (!\class_exists(\Weline\Theme\Service\StorefrontProductCardFragmentCache::class)) {
+            return null;
+        }
+        try {
+            $instance = ObjectManager::getInstance(\Weline\Theme\Service\StorefrontProductCardFragmentCache::class);
+
+            return $cache = $instance instanceof \Weline\Theme\Service\StorefrontProductCardFragmentCache
+                ? $instance
+                : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

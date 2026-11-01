@@ -3446,6 +3446,52 @@ class Template extends DataObject implements RequestLocalInterface
     }
 
     /**
+     * Resolve every contributor of the given hooks to its compiled artifact.
+     *
+     * Startup-only: called from Worker preload so the first render of a hook chain
+     * does not pay path resolution plus first-time compilation. On `/products` the
+     * first product card measured 9.38 ms resolving `product-card-add-to-cart.phtml`
+     * and 19.95 ms compiling and streaming it (steady state 0.02 / 0.32 ms); the
+     * add-to-cart + buy-now pair alone accounted for 44 ms of a 79 ms card batch.
+     *
+     * Returns the number of contributor templates warmed. Individual failures are
+     * tolerated — a hook with no contributor for this theme must not abort boot.
+     *
+     * @param list<string> $hookNames
+     */
+    public function warmHookContributorTemplates(array $hookNames): int
+    {
+        $warmed = 0;
+        foreach ($hookNames as $hookName) {
+            if (!\is_string($hookName) || $hookName === '') {
+                continue;
+            }
+            try {
+                // Fills HookReader's file lists (registry + filesystem merge).
+                foreach ($this->resolveHookContributorFiles($hookName) as $hookFile) {
+                    try {
+                        // Resolving to a compiled path is the expensive half: it walks
+                        // the module/theme source map and compiles when missing.
+                        $compiled = $this->fetchTagSource('hooks', (string)$hookFile);
+                        if (\is_string($compiled) && $compiled !== '' && \is_file($compiled)) {
+                            if (\function_exists('opcache_compile_file')) {
+                                @\opcache_compile_file($compiled);
+                            }
+                            ++$warmed;
+                        }
+                    } catch (\Throwable) {
+                        continue;
+                    }
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        return $warmed;
+    }
+
+    /**
      * @return array<string, string> module => logical hook file
      */
     private function resolveHookContributorFiles(string $name): array

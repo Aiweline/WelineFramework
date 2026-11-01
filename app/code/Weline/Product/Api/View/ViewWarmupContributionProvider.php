@@ -20,9 +20,69 @@ use Weline\Websites\Model\Website;
  */
 final class ViewWarmupContributionProvider implements ViewWarmupContributionProviderInterface
 {
+    /**
+     * Product-card surfaces that every storefront listing renders immediately.
+     *
+     * Cold measurement showed the first batch of 24 listing cards costing 79 ms, of
+     * which one card paid 44 ms and the other 23 averaged 0.5 ms. The 44 ms sat in
+     * the card's CTA block: `Template::getHook('...product-card::add-to-cart')` 31.2 ms
+     * plus `...::buy-now` 11.7 ms on their first call (0.2-0.3 ms afterwards), split
+     * into contributor resolution (~5.8 ms) and contributor rendering (~34.3 ms).
+     *
+     * Declaring the hook names warms the HookReader file lists; declaring the card and
+     * hook templates warms their compiled artifacts so the first listing render no
+     * longer pays for template resolution and compilation.
+     *
+     * @return list<string>
+     */
+    private function productCardTemplates(): array
+    {
+        return [
+            'Weline_Product::templates/frontend/partials/product-card.phtml',
+            'Weline_Product::templates/frontend/partials/product-card-shelf.phtml',
+            'Weline_Product::templates/frontend/partials/product-cards-batch.phtml',
+        ];
+    }
+
+    /**
+     * Hook contributors rendered by every product card.
+     *
+     * @return list<string>
+     */
+    private function productCardHooks(): array
+    {
+        return [
+            'Weline_Theme::frontend::partials::product-card::add-to-cart',
+            'Weline_Theme::frontend::partials::product-card::buy-now',
+        ];
+    }
+
+    /**
+     * Hook contributor templates rendered by every product card.
+     *
+     * `hookNames` only warms the HookReader file lists; the contributor templates
+     * themselves are warmed through `tagTemplates` so their compiled artifacts exist
+     * before the first listing render. Sources use the `Module::hooks/<path>` shape
+     * that resolveHookContributorFiles() produces.
+     *
+     * @return array<string, list<string>>
+     */
+    private function productCardHookTemplates(): array
+    {
+        return [
+            'hooks' => [
+                'Weline_Cart::hooks/Weline_Theme/frontend/partials/product-card/add-to-cart.phtml',
+                'Weline_Checkout::hooks/Weline_Theme/frontend/partials/product-card/buy-now.phtml',
+            ],
+        ];
+    }
+
     public function contribution(): ViewWarmupContribution
     {
         return new ViewWarmupContribution(
+            templates: $this->productCardTemplates(),
+            tagTemplates: $this->productCardHookTemplates(),
+            hookNames: $this->productCardHooks(),
             fpcPaths: $this->catalogWarmupPaths(),
         );
     }

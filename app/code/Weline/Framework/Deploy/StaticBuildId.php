@@ -179,9 +179,16 @@ final class StaticBuildId
         if ($buildId === '' || !\str_starts_with($path, '/static/')) {
             return $path;
         }
-        // 内容寻址文件（32~64 位 hex 文件名）URL 与字节天然绑定，不需要构建前缀。
+        // 内容寻址文件（32~64 位 hex 文件名，含 theme-head/、widget-assets/ 的包）：
+        // 文件名即内容哈希，URL 与字节天然绑定，不需要构建前缀（加前缀会让同一内容每次发布换 URL）。
         $basename = \basename((string)\strtok($path, '?'));
         if (\preg_match('/^[0-9a-f]{32,64}\.(?:css|js|mjs|map|json|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|eot|txt|xml|wasm|mp4|webm|mp3|ogg|wav)$/i', $basename) === 1) {
+            return $path;
+        }
+        // 模块静态（/static/{模块}/…）：资源真实落盘在 pub/static/{模块}/，加了构建段就 404，
+        // 也不应让未命中穿透进 WLS。只有设计主题命名空间（{Vendor}/{theme}）才隔离构建段。
+        $firstSegment = \explode('/', \trim((string)\strtok($path, '?'), '/'))[1] ?? '';
+        if ($firstSegment === '' || !self::isDesignNamespaceSegment($firstSegment)) {
             return $path;
         }
         [$urlPath, $query] = \str_contains($path, '?') ? \explode('?', $path, 2) : [$path, null];

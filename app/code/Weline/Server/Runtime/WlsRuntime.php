@@ -440,16 +440,14 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $this->logReadyGateWarmupStep('registry_done', $workerId, $startedAt);
         SchedulerSystem::yield();
 
-        if ($this->shouldRunReadyGateWorkerBootstrapObserverWarmup()) {
-            $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
-            $this->router ??= ObjectManager::getInstance(Router::class);
-            $this->logReadyGateWarmupStep('observer_begin', $workerId, $startedAt);
-            $this->dispatchWorkerBootstrapWarmup();
-            $this->logReadyGateWarmupStep('observer_done', $workerId, $startedAt);
-            SchedulerSystem::yield();
-        } else {
-            $this->logReadyGateWarmupStep('observer_skipped', $workerId, $startedAt);
-        }
+        // Observer warm-up always runs: it is what moves template/hook compilation
+        // off the first request. See dispatchWorkerBootstrapWarmup().
+        $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
+        $this->router ??= ObjectManager::getInstance(Router::class);
+        $this->logReadyGateWarmupStep('observer_begin', $workerId, $startedAt);
+        $this->dispatchWorkerBootstrapWarmup();
+        $this->logReadyGateWarmupStep('observer_done', $workerId, $startedAt);
+        SchedulerSystem::yield();
 
         $this->logReadyGateWarmupStep('backend_begin', $workerId, $startedAt);
         $backendResult = $this->runReadyGateBackendFirstRenderWarmup();
@@ -1068,16 +1066,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync', 'ready_gate'], true);
-    }
-
-    private function shouldRunReadyGateWorkerBootstrapObserverWarmup(): bool
-    {
-        $rawFlag = \getenv('WLS_WORKER_READY_GATE_OBSERVER_WARMUP');
-        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.ready_gate_observer_warmup', '0');
-        }
-
-        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync'], true);
     }
 
     private function logReadyGateWarmupStep(string $step, int $workerId, float $startedAt): void

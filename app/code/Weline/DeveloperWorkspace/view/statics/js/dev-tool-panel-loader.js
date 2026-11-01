@@ -85,6 +85,12 @@
     var tplPerfQueryKey = 'wls_tpl_perf';
     var tplPerfStateKey = 'weline.dev.tpl_perf_overlay';
     var docTraceCaptureKey = 'weline.dev.doc_trace_capture';
+    /**
+     * True when the document currently on screen has no stored lifecycle (trace endpoint
+     * answered without `data.trace`, or the query failed). The panel shows this instead of
+     * reloading the page to capture it.
+     */
+    var traceCurrentDocumentMissing = false;
 
     window.__WELINE_PANEL_CONFIG__ = Object.assign({}, window.__WELINE_PANEL_CONFIG__ || {}, {
         apiBase: apiBase,
@@ -640,8 +646,14 @@
     }
 
     /**
-     * Panel arm only affects future requests. If the current HTML document has no
-     * stored lifecycle, reload once after arming so the default "当前文档" view has data.
+     * Panel arm only affects future requests, so the *current* HTML document may have no
+     * stored lifecycle yet. That is a normal state, not an error: reloading the page to
+     * manufacture one costs a full document fetch and reads as "panel loaded itself, then
+     * refreshed itself" (2026-11-01 report on a storefront page).
+     *
+     * Policy: mark the document as handled and surface the state to the panel — never
+     * auto-reload. `captureDocumentTraceNow()` (explicit operator action) is the only
+     * place that reloads, and it is allowed at most once per document.
      */
     function ensureDocumentTraceCapture() {
         var docId = currentDocumentRequestId();
@@ -655,14 +667,15 @@
             pending = '';
         }
         if (pending === 'done:' + docId || pending === 'reload:' + docId) {
-            if (pending === 'reload:' + docId) {
-                try {
-                    sessionStorage.setItem(docTraceCaptureKey, 'done:' + docId);
-                } catch (error) {
-                    // ignore
-                }
-            }
             return Promise.resolve(true);
+        }
+        // Mark first: a later run in this document must not re-query nor reload.
+        try {
+            if (window.sessionStorage) {
+                sessionStorage.setItem(docTraceCaptureKey, 'done:' + docId);
+            }
+        } catch (error) {
+            // ignore
         }
         return fetch(apiUrl('trace', { id: docId }), {
             credentials: 'same-origin',
@@ -682,29 +695,12 @@
                         payload = null;
                     }
                 }
-                if (payload && Number(payload.code) === 200 && payload.data && payload.data.trace) {
-                    try {
-                        sessionStorage.setItem(docTraceCaptureKey, 'done:' + docId);
-                    } catch (error) {
-                        // ignore
-                    }
-                    return true;
-                }
-                try {
-                    sessionStorage.setItem(docTraceCaptureKey, 'reload:' + docId);
-                } catch (error) {
-                    // ignore
-                }
-                window.location.reload();
-                return false;
+                var hasTrace = !!(payload && Number(payload.code) === 200 && payload.data && payload.data.trace);
+                traceCurrentDocumentMissing = !hasTrace;
+                return hasTrace;
             });
         }).catch(function () {
-            try {
-                sessionStorage.setItem(docTraceCaptureKey, 'reload:' + docId);
-            } catch (error) {
-                // ignore
-            }
-            window.location.reload();
+            traceCurrentDocumentMissing = true;
             return false;
         });
     }
@@ -719,8 +715,20 @@
         }
         return setTraceRecording(true).then(function () {
             var docId = currentDocumentRequestId();
+            // One explicit reload per document: the arm only applies to later requests,
+            // so the reload is what captures this document. Refuse a second one.
+            var already = '';
             try {
-                if (docId && window.sessionStorage) {
+                already = window.sessionStorage ? String(sessionStorage.getItem(docTraceCaptureKey) || '') : '';
+            } catch (error) {
+                already = '';
+            }
+            if (!docId || already === 'done:' + docId) {
+                traceCurrentDocumentMissing = true;
+                return false;
+            }
+            try {
+                if (window.sessionStorage) {
                     sessionStorage.setItem(docTraceCaptureKey, 'reload:' + docId);
                 }
             } catch (error) {
@@ -1018,6 +1026,11 @@
         api.activateTab = activateTab;
         api.setTraceRecording = setTraceRecording;
         api.captureDocumentTrace = captureDocumentTraceNow;
+        // Read-only state for the panel UI: true = the document on screen has no stored
+        // lifecycle. No auto-reload happens; the operator decides via captureDocumentTrace.
+        api.isCurrentDocumentTraceMissing = function () {
+            return traceCurrentDocumentMissing === true;
+        };
         api.setTplPerfOverlay = setTplPerfOverlay;
         api.isTplPerfOverlayPreferred = isTplPerfOverlayPreferred;
         api.report = buildReport;
