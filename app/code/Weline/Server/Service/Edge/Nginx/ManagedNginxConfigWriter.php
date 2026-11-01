@@ -820,7 +820,8 @@ http {
         location @wls_html_origin {
             # Avoid stacking gzip_vary Accept-Encoding on upstream's merged Vary.
             gzip_vary off;
-            error_page 502 504 =503 @wls_origin_unavailable;
+            # worker 不可用（502/504）时先回只读 HTML FPC 兜底，读不到才 503。
+            error_page 502 504 = @wls_html_fpc_stale;
 {$edgeLimitLocation}            proxy_pass http://wls_backend;
             proxy_http_version 1.1;
 {$httpRedirectLocation}
@@ -850,6 +851,28 @@ http {
             proxy_max_temp_file_size 0;
             proxy_cache off;
 {$locationProtocolHeaders}
+        }
+        # worker 不可用（502/504）时的只读 HTML FPC 兜底：命中磁盘 .br 直接返回，读不到才 503。
+        # 复用与正常 FPC 相同的准入条件（\$wls_fpc_html_disk_try 已含 https/非穿章/bypass/客户端支持 br），
+        # 避免给不支持 br 的客户端回 br 二进制。
+        location @wls_html_fpc_stale {
+            error_page 418 = @wls_origin_unavailable;
+            if (\$wls_fpc_html_disk_try = 0) {
+                return 418;
+            }
+            root {$quotedFpcHtmlRoot};
+            try_files \$uri/index.html.br =418;
+            default_type text/html;
+            charset utf-8;
+            gzip off;
+            gzip_vary off;
+            add_header Content-Encoding br always;
+            add_header Vary "Accept-Encoding, Cookie" always;
+            add_header Cache-Control "public, max-age=60" always;
+            add_header X-Weline-Cache-Status hit-stale always;
+            add_header X-Weline-FPC HIT-STALE always;
+            add_header X-Weline-FPC-Source html-disk-fallback always;
+            add_header X-Wls-Origin-Down 1 always;
         }
 {$originUnavailableLocation}
     }
@@ -1435,7 +1458,8 @@ NGINX;
         }
         location @wls_html_origin_distinct_{$originName} {
             gzip_vary off;
-            error_page 502 504 =503 @wls_origin_unavailable;
+            # worker 不可用（502/504）时先回该 origin 的只读 HTML FPC 兜底，读不到才 503。
+            error_page 502 504 = @wls_html_fpc_stale_{$originName};
 {$edgeLimitLocation}            proxy_pass http://wls_backend;
             proxy_http_version 1.1;
             proxy_set_header Upgrade \$wls_business_upstream_upgrade;
@@ -1451,6 +1475,26 @@ NGINX;
             proxy_send_timeout {$sendTimeout}s;
             proxy_buffering on;
             proxy_cache off;
+        }
+        # 该 origin 的只读 HTML FPC 兜底（worker 502/504 时命中磁盘 .br 则返回，读不到才 503）。
+        location @wls_html_fpc_stale_{$originName} {
+            error_page 418 = @wls_origin_unavailable;
+            if (\$wls_fpc_html_disk_try = 0) {
+                return 418;
+            }
+            root {$quotedFpcHtmlRoot};
+            try_files \$uri/index.html.br =418;
+            default_type text/html;
+            charset utf-8;
+            gzip off;
+            gzip_vary off;
+            add_header Content-Encoding br always;
+            add_header Vary "Accept-Encoding, Cookie" always;
+            add_header Cache-Control "public, max-age=60" always;
+            add_header X-Weline-Cache-Status hit-stale always;
+            add_header X-Weline-FPC HIT-STALE always;
+            add_header X-Weline-FPC-Source html-disk-fallback always;
+            add_header X-Wls-Origin-Down 1 always;
         }
 {$originUnavailableLocation}
     }
