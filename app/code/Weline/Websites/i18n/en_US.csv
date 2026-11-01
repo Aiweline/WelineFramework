@@ -3291,8 +3291,6 @@ Weline（本地）,"Weline (local)"
 "① DNS/CDN 切换 ② 站点健康检查（增量） ③ 整点 NS 检测 ④ 整点 HTTPS 同步 ⑤ 404/维护静态页（7 天）","① DNS/CDN 切换 ② 站点健康检查（增量） ③ 整点 NS 检测 ④ 整点 HTTPS 同步 ⑤ 404/维护静态页（7 天）"
 因系统升级意图提前结束计划任务。,"Cron task ended early due to setup upgrade intent."
 健康检查,"Health Check"
-静态错误页,静态错误页
-静态错误页：未到刷新时间，跳过,静态错误页：未到刷新时间，跳过
 "HTTPS 状态同步完成：共 %{1} 个域名，启用 %{2} 个，禁用 %{3} 个，未变化 %{4} 个","HTTPS sync complete: %{1} domains total, %{2} enabled, %{3} disabled, %{4} unchanged"
 "（建站锁定跳过 %{1} 个）","(Skipped %{1} due to site building lock)"
 "HTTPS 状态同步失败：%{1}","HTTPS status sync failed: %{1}"
@@ -3369,6 +3367,8 @@ Weline（本地）,"Weline (local)"
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","Processing completed: %d illegal records"
+静态错误页,静态错误页
+静态错误页：未到刷新时间，跳过,静态错误页：未到刷新时间，跳过
 点击选择货币（可多选）,"Click to select currencies (multiple selection allowed)"
 点击选择货币,"Click to select a currency"
 搜索货币代码、名称或符号,"Search currency code, name or symbol"

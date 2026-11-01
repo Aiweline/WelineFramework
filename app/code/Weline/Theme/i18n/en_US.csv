@@ -601,12 +601,10 @@ id属性不能为空,id属性不能为空
 "theme_scope_workspace.binding_identity_key 回填失败：%{1}","theme_scope_workspace.binding_identity_key backfill failed: %{1}"
 "Weline UI 2.0 语义图标迁移失败：%{1}","Weline UI 2.0 semantic icon migration failed: %{1}"
 "主题异常：Theme 注册默认主题不可用","主题异常：Theme 注册默认主题不可用"
-"404 静态发布已跳过（%{reason}）","404 静态发布已跳过（%{reason}）"
-"404 静态发布已关闭（setup.static_publish=never）","404 静态发布已关闭（setup.static_publish=never）"
-"404 静态产物未变化，跳过后台 404 发布","404 静态产物未变化，跳过后台 404 发布"
-"开始发布前台 404 静态页（website×locale，Fiber 协作）…","Publishing storefront 404 static pages (website×locale, Fiber coop)…"
-"前台 404 静态页发布完成：共 %{count} 个快照","Storefront 404 static publish completed: %{count} snapshots"
-"前台 404 静态页发布失败：%{msg}","Storefront 404 static publish failed: %{msg}"
+"系统更新带了 skip_invalidation：世代版本号已按要求跳过推进","系统更新带了 skip_invalidation：世代版本号已按要求跳过推进"
+系统更新完成，但世代版本号推进失败（站点继续服务旧版）：%{1},系统更新完成，但世代版本号推进失败（站点继续服务旧版）：%{1}
+世代版本号已推进：deploy_build=%{1}，链=%{2},世代版本号已推进：deploy_build=%{1}，链=%{2}
+世代版本号推进异常（站点继续服务旧版）：%{1},世代版本号推进异常（站点继续服务旧版）：%{1}
 静态发布已跳过（%{reason}）,静态发布已跳过（%{reason}）
 静态发布已关闭（setup.static_publish=never）,静态发布已关闭（setup.static_publish=never）
 静态源未变化，跳过生产静态发布,静态源未变化，跳过生产静态发布
@@ -882,13 +880,14 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-分类,Classification
-分类展示图,"Category showcase image"
-查看全部,"View all"
-查看更多,"View more"
+内容标题,"Section title"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
 官方社交媒体,"Official social media"
+面包屑,"bread crumbs"
+分类,Classification
+分类展示图,"Category showcase image"
+查看全部,"View all"
 商品,Products
 查看商品图,"View product image"
 查看规格图,"View spec images"
@@ -922,96 +921,27 @@ FAQ/常见问题,FAQ
 零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
 关闭通知,"Close notification"
-内容标题,"Section title"
+全部商品,"Shop All"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+查看更多,"View more"
+"Page %{1} of %{2}","Page %{1} of %{2}"
 回到顶部,"Back to top"
 站点偏好,"Site preferences"
 法律与政策,"Law and Policy"
-抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
-您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
-请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
-SORRY,SORRY
-前往首页继续购物,"Continue shopping on the home page"
-返回上一页,"Go back"
-推荐产品,"Recommended product"
-7×24,24/7
-全部商品,"Shop All"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+卡片内容,"Card content"
+拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
+卡片底部,"Card Bottom"
+拖入按钮或操作区,"Drag into button or action area"
+加载中,loading
+"WelineFramework Admin","WelineFramework Admin"
 "Search results","Search results"
 搜索,Search
 "Search · 检索","Search · 检索"
 寻衣,寻衣
 Search…,Search…
 搜索筛选,"Search and filter"
-个人中心,"Personal center"
-面包屑,"bread crumbs"
-加载中,loading
-仪表盘部件区域,"Dashboard widget area"
-指标区,"indicator area"
-"关键数值、KPI 与状态概览。若此处空白，请点上方「编辑布局」添加 KPI/统计部件并保存。","Key metrics, KPIs, and status overview. If empty, click “Edit layout” above to add KPI/stats widgets and save."
-"最多 4 个","up to 4"
-主分析区,"Main analysis area"
-趋势、图表与主要观察。若此处空白，请点上方「编辑布局」添加图表/趋势部件并保存。,"Trends, charts, and key insights. If empty, click “Edit layout” above to add chart/trend widgets and save."
-侧栏洞察,"Sidebar Insights"
-状态、短列表与异常提醒。若此处空白，请点上方「编辑布局」添加状态/列表部件并保存。,"Status, short lists, and anomaly alerts. If empty, click “Edit layout” above to add status/list widgets and save."
-明细区,"Detail area"
-表格、排行与可展开列表。,"Tables, rankings and expandable lists."
-默认明细,"Default details"
-视图,view
-默认概览,"Default overview"
-系统共享视图,"System shared view"
-布局,Layout
-"4 个固定区域","4 fixed areas"
-指标、分析、侧栏、明细,"Metrics, Analysis, Sidebar, Details"
-部件,Component
-后台专用,"Backend only"
-由后台统计部件提供,"Provided by background statistics component"
-"WelineFramework Admin","WelineFramework Admin"
-指南,Guide
-问答,Q&A
-服务暂时不可用,"Service temporarily unavailable"
-我们正在处理问题，请稍后再试。,"We are working on the issue; please try again later."
-您可以返回首页继续浏览，或稍后刷新本页。,"You can return home to keep browsing, or refresh this page later."
-ERROR,ERROR
-前往首页,"Go to home"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
-件商品,"items of goods"
-合作品牌,"Partner brands"
-"品牌 %{1}","品牌 %{1}"
-上一组,"Previous group"
-下一组,"Next group"
-距离结束,"Ends in"
-时,Hour
-分,Minute
-秒,Second
-2026春季新品上市,"2026 spring new product launch"
-探索最新时尚潮流,"Explore the latest fashion trends"
-立即选购,"Buy Now"
-限时特惠,"Limited-Time Offer"
-全场满300减50,"Spend 300, Save 50 Storewide"
-查看详情,"View details"
-品质生活,"Quality living"
-精选优质好物,"Curated quality products"
-开始探索,"Start exploring"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
-天,Day(s)
-"Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
-"Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
-订单确认,"Order Confirmation"
-订单提交成功！,"Order submitted successfully!"
-订单号：,"Order number:"
-查看订单,"View Orders"
-登录,"Log in"
-登录页工具,"Login page tools"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
-卡片内容,"Card content"
-拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
-卡片底部,"Card Bottom"
-拖入按钮或操作区,"Drag into button or action area"
 概览,Overview
 详情,Details
 拖入标签页内容,"Drag into tab content"
@@ -1057,6 +987,21 @@ NEW,NEW
 上一页,"Previous page"
 下一页,"Next page"
 末页,"Last page"
+指南,Guide
+抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
+您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
+请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
+SORRY,SORRY
+前往首页继续购物,"Continue shopping on the home page"
+返回上一页,"Go back"
+推荐产品,"Recommended product"
+问答,Q&A
+7×24,24/7
+服务暂时不可用,"Service temporarily unavailable"
+我们正在处理问题，请稍后再试。,"We are working on the issue; please try again later."
+您可以返回首页继续浏览，或稍后刷新本页。,"You can return home to keep browsing, or refresh this page later."
+ERROR,ERROR
+前往首页,"Go to home"
 立即重试,"Retry now"
 "将在 %{seconds} 秒后自动重试...","Will automatically retry in %{seconds} seconds..."
 服务器错误,"Server Error"
@@ -1117,6 +1062,8 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1158,6 +1105,7 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆活动,节庆活动
 日常通勤,"Everyday commute"
+件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1168,10 +1116,18 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
+天,Day(s)
+时,Hour
+分,Minute
+秒,Second
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
 查看地图,"View map"
+合作品牌,"Partner brands"
+"品牌 %{1}","品牌 %{1}"
+上一组,"Previous group"
+下一组,"Next group"
 您可能还喜欢,"You may also like"
 更大容量,"Larger capacity"
 更多功能,"More features"
@@ -1180,6 +1136,7 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
+距离结束,"Ends in"
 精选轮播,"Featured Carousel"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
@@ -1207,13 +1164,46 @@ Logo,Logo
 热门分类,"Popular Categories"
 热卖精选,"Bestsellers picks"
 特色推荐,"Featured Recommendations"
+限时特惠,"Limited-Time Offer"
 博客,Blog
 热卖,"Hot selling."
 新品,"New Product"
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
+2026春季新品上市,"2026 spring new product launch"
+探索最新时尚潮流,"Explore the latest fashion trends"
+立即选购,"Buy Now"
+全场满300减50,"Spend 300, Save 50 Storewide"
+查看详情,"View details"
+品质生活,"Quality living"
+精选优质好物,"Curated quality products"
+开始探索,"Start exploring"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
 打印,Print
+仪表盘部件区域,"Dashboard widget area"
+指标区,"indicator area"
+"关键数值、KPI 与状态概览。若此处空白，请点上方「编辑布局」添加 KPI/统计部件并保存。","Key metrics, KPIs, and status overview. If empty, click “Edit layout” above to add KPI/stats widgets and save."
+"最多 4 个","up to 4"
+主分析区,"Main analysis area"
+趋势、图表与主要观察。若此处空白，请点上方「编辑布局」添加图表/趋势部件并保存。,"Trends, charts, and key insights. If empty, click “Edit layout” above to add chart/trend widgets and save."
+侧栏洞察,"Sidebar Insights"
+状态、短列表与异常提醒。若此处空白，请点上方「编辑布局」添加状态/列表部件并保存。,"Status, short lists, and anomaly alerts. If empty, click “Edit layout” above to add status/list widgets and save."
+明细区,"Detail area"
+表格、排行与可展开列表。,"Tables, rankings and expandable lists."
+默认明细,"Default details"
+视图,view
+默认概览,"Default overview"
+系统共享视图,"System shared view"
+布局,Layout
+"4 个固定区域","4 fixed areas"
+指标、分析、侧栏、明细,"Metrics, Analysis, Sidebar, Details"
+部件,Component
+后台专用,"Backend only"
+由后台统计部件提供,"Provided by background statistics component"
 发送通知失败,"Failed to send notification"
 确认操作,"Confirm action"
 确定,Sure
@@ -1585,10 +1575,6 @@ AI目录加载失败,"AI directory loading failed"
 请先选择前台主题后再打开编辑器,请先选择前台主题后再打开编辑器
 "Theme 布局身份无效。","The Theme layout identity is invalid."
 布局语言代码无效：%{1},"Invalid layout language code: %{1}"
-字体子集预热开始…,"Font subset warm-up begins..."
-"字体子集预热完成：新建 %{built}，跳过 %{skipped}，失败 %{failed}","Font subset warm-up completed: new %{built}, skipped %{skipped}, failed %{failed}"
-"字体子集失败：%{font} [%{lang}] — %{error}","Font subsetting failed: %{font} [%{lang}] — %{error}"
-字体子集预热异常：%{msg},"Font subset warm-up exception: %{msg}"
 "Theme 布局读取失败。","The Theme layout could not be read."
 "Theme 布局写入已迁移到 scoped node_uid，不再支持 layout_id 更新。","Theme layout writes have migrated to scoped node_uid; layout_id updates are no longer supported."
 "Theme 布局节点不存在。","The Theme layout node does not exist."
@@ -1859,10 +1845,6 @@ AI目录加载失败,"AI directory loading failed"
 "固化物重固完成：version=%{version} fingerprints=%{count}","Solidify complete: version=%{version} fingerprints=%{count}"
 固化物重固未完成：%{reason},"Solidify incomplete: %{reason}"
 当前编辑草稿已重置,"Current editing draft has been reset"
-"开始发布前台 404 静态页：%{total} 个 website×locale（Fiber 协作并发 %{c}，非多核；已隔离升级词袋）","Publishing storefront 404 static pages: %{total} website×locale (Fiber coop concurrency %{c}, not multi-core; upgrade lexicon isolated)"
-"前台 404 静态页 [%{done}/%{total}]：%{label}","Storefront 404 static [%{done}/%{total}]: %{label}"
-"前台 404 静态页失败 [%{done}/%{total}]：%{label} — %{err}","Storefront 404 static failed [%{done}/%{total}]: %{label} — %{err}"
-"前台 404 静态页发布完成：成功 %{written}，失败 %{failed}，host_map %{keys} 键","Storefront 404 static publish completed: success %{written}, failed %{failed}, host_map %{keys} keys"
 无效的盘引用,"Invalid disk reference"
 主题盘不存在,"The theme disk does not exist."
 "保存主题盘失败：Meta 写入被拒绝（请检查 config_value 长度与主题上下文）","Failed to save theme disk: Meta write refused (check config_value length with theme context)"
@@ -2338,13 +2320,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 正在压缩备份文件...,"Compressing backup file..."
 当前主题未安装：卸载失败！,"Current theme not installed: uninstall failed!"
 卸载主题,"Uninstall Theme"
-无效语种：%{lang},"Invalid locale: %{lang}"
-"已清除 404 静态指纹 %{count} 个（--force）","Cleared %{count} 404 static fingerprints (--force)"
-"=== 发布前台 404 静态页 ===","=== Publish storefront 404 static pages ==="
-"前台 404 静态页发布完成：%{count} 个快照，耗时 %{sec}s","Storefront 404 static publish completed: %{count} snapshots in %{sec}s"
-"仅发布语种：%{lang}（站 %{code}）","Publish locale only: %{lang} (site %{code})"
-"抽检 %{path}：%{kb} KB，词典袋=%{bag}","Spot-check %{path}: %{kb} KB, lexicon bag=%{bag}"
-"发布前台 404 静态页（website×locale，与 setup:upgrade 后置同源）","Publish storefront 404 static pages (website×locale; same source as setup:upgrade post-step)"
 "已合编 theme=%{id} area=%{area} hash=%{hash} empty=%{empty}","Compiled theme=%{id} area=%{area} hash=%{hash} empty=%{empty}"
 "主题整盘合编结束，共 %{n} 次","The theme compilation is completed, a total of %{n} times"
 "Weline UI bundle 声明无效","Weline UI bundle declaration is invalid"
@@ -2366,6 +2341,36 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 "主题规范校验（head 预算 / 首屏图 / 字体 / SEO 单一出口）！","主题规范校验（head 预算 / 首屏图 / 字体 / SEO 单一出口）！"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+"404 静态发布已跳过（%{reason}）","404 静态发布已跳过（%{reason}）"
+"404 静态发布已关闭（setup.static_publish=never）","404 静态发布已关闭（setup.static_publish=never）"
+"404 静态产物未变化，跳过后台 404 发布","404 静态产物未变化，跳过后台 404 发布"
+"开始发布前台 404 静态页（website×locale，Fiber 协作）…","Publishing storefront 404 static pages (website×locale, Fiber coop)…"
+"前台 404 静态页发布完成：共 %{count} 个快照","Storefront 404 static publish completed: %{count} snapshots"
+"前台 404 静态页发布失败：%{msg}","Storefront 404 static publish failed: %{msg}"
+个人中心,"Personal center"
+"Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
+"Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
+订单确认,"Order Confirmation"
+订单提交成功！,"Order submitted successfully!"
+订单号：,"Order number:"
+查看订单,"View Orders"
+登录,"Log in"
+登录页工具,"Login page tools"
+字体子集预热开始…,"Font subset warm-up begins..."
+"字体子集预热完成：新建 %{built}，跳过 %{skipped}，失败 %{failed}","Font subset warm-up completed: new %{built}, skipped %{skipped}, failed %{failed}"
+"字体子集失败：%{font} [%{lang}] — %{error}","Font subsetting failed: %{font} [%{lang}] — %{error}"
+字体子集预热异常：%{msg},"Font subset warm-up exception: %{msg}"
+"开始发布前台 404 静态页：%{total} 个 website×locale（Fiber 协作并发 %{c}，非多核；已隔离升级词袋）","Publishing storefront 404 static pages: %{total} website×locale (Fiber coop concurrency %{c}, not multi-core; upgrade lexicon isolated)"
+"前台 404 静态页 [%{done}/%{total}]：%{label}","Storefront 404 static [%{done}/%{total}]: %{label}"
+"前台 404 静态页失败 [%{done}/%{total}]：%{label} — %{err}","Storefront 404 static failed [%{done}/%{total}]: %{label} — %{err}"
+"前台 404 静态页发布完成：成功 %{written}，失败 %{failed}，host_map %{keys} 键","Storefront 404 static publish completed: success %{written}, failed %{failed}, host_map %{keys} keys"
+无效语种：%{lang},"Invalid locale: %{lang}"
+"已清除 404 静态指纹 %{count} 个（--force）","Cleared %{count} 404 static fingerprints (--force)"
+"=== 发布前台 404 静态页 ===","=== Publish storefront 404 static pages ==="
+"前台 404 静态页发布完成：%{count} 个快照，耗时 %{sec}s","Storefront 404 static publish completed: %{count} snapshots in %{sec}s"
+"仅发布语种：%{lang}（站 %{code}）","Publish locale only: %{lang} (site %{code})"
+"抽检 %{path}：%{kb} KB，词典袋=%{bag}","Spot-check %{path}: %{kb} KB, lexicon bag=%{bag}"
+"发布前台 404 静态页（website×locale，与 setup:upgrade 后置同源）","Publish storefront 404 static pages (website×locale; same source as setup:upgrade post-step)"
 尺码指南,"Size Guide"
 旅行攻略,旅行攻略
 "构建完成且校验通过，可用 theme:update promote %{1} 切换","构建完成且校验通过，可用 theme:update promote %{1} 切换"
@@ -2435,7 +2440,6 @@ Scope,Scope
 "更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿；-f 另清店面 FPC/CDN）","更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿；-f 另清店面 FPC/CDN）"
 Pagination,Pagination
 Previous,Previous
-"Page %{1} of %{2}","Page %{1} of %{2}"
 Next,Next
 圆领袍,"Round-Collar Robes"
 发簪与发冠,"Hairpins & Crowns"

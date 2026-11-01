@@ -379,6 +379,8 @@ ACL分发,ACL分发
 "渲染 403/404/429/500/503 等状态页前触发；观察者可写入 data[""html""] 整页覆盖，或改写 page_title/page_lead/page_hint。","渲染 403/404/429/500/503 等状态页前触发；观察者可写入 data[""html""] 整页覆盖，或改写 page_title/page_lead/page_hint。"
 错误页资源贡献,错误页资源贡献
 "内置错误页组装样式前触发。中立字段 font_face_css 可由其他模块写入 @font-face CSS；核心不硬绑主题字体实现。","内置错误页组装样式前触发。中立字段 font_face_css 可由其他模块写入 @font-face CSS；核心不硬绑主题字体实现。"
+"店面 404 页面渲染","店面 404 页面渲染"
+"前台 404 特殊 FPC 未命中时触发；观察者用主题 not_found 布局渲染并写入 data[""html""]，Framework 缓存并直接返回。payload 含 status_code/area/website_code/lang/request_*。","前台 404 特殊 FPC 未命中时触发；观察者用主题 not_found 布局渲染并写入 data[""html""]，Framework 缓存并直接返回。payload 含 status_code/area/website_code/lang/request_*。"
 静态资源发布变换,静态资源发布变换
 "deploy:upgrade 写入 pub/static 目标文件前触发。中立字段：source_path、target_path、extension、content（可写）、transformed。核心不包含 minify 语义。","deploy:upgrade 写入 pub/static 目标文件前触发。中立字段：source_path、target_path、extension、content（可写）、transformed。核心不包含 minify 语义。"
 静态资源升级后,静态资源升级后
@@ -573,6 +575,7 @@ WelineFramework,WelineFramework
 "模块 %{1} 没有 installing 标志，跳过安装。模块数据：%{2}","模块 %{1} 没有 installing 标志，跳过安装。模块数据：%{2}"
 "- 路由扫描进度：已收集 %{1} 个模块（内存缓冲，提交时一次写文件/ACL）...","- 路由扫描进度：已收集 %{1} 个模块（内存缓冲，提交时一次写文件/ACL）..."
 路由更新：,路由更新：
+"路由直接注册未使批量缓冲增长：模块 %1 路由 %2 类型 %3","路由直接注册未使批量缓冲增长：模块 %1 路由 %2 类型 %3"
 "路由扫描跳过非路由符号（非致命）：模块 %1 类 %2 — %3","路由扫描跳过非路由符号（非致命）：模块 %1 类 %2 — %3"
 "路由扫描静默跳过（已记录）：模块 %1 类 %2 — %3","路由扫描静默跳过（已记录）：模块 %1 类 %2 — %3"
 "模块列表更新后注册表刷新失败: %{1}","模块列表更新后注册表刷新失败: %{1}"
@@ -2335,6 +2338,7 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 设置静态文件是否末尾添加随机字符，以保证浏览器不缓存文件而得到实时响应修改。接受值：0或1,设置静态文件是否末尾添加随机字符，以保证浏览器不缓存文件而得到实时响应修改。接受值：0或1
 "静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）","静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）"
 "已 bump global/storefront/deploy（日常 Upgrade 优先 bump）","已 bump global/storefront/deploy（日常 Upgrade 优先 bump）"
+系统更新完成，但世代版本号推进失败（站点继续服务旧版）：%{1},系统更新完成，但世代版本号推进失败（站点继续服务旧版）：%{1}
 主题命名空间无法归一化，已跳过主题域静态发布（扁平树不受影响）：,主题命名空间无法归一化，已跳过主题域静态发布（扁平树不受影响）：
 前端核心脚本已合并：%{1},前端核心脚本已合并：%{1}
 静态资源构建号：%{1},静态资源构建号：%{1}
