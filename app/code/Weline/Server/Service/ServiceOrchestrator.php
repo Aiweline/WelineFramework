@@ -27597,7 +27597,7 @@ class ServiceOrchestrator
             }
         }
 
-        WlsLogger::warning_(
+        WlsLogger::error_(
             '[Orchestrator] TLS serving quarantine auto-cleared'
             . ' reason=no_live_tls_target_after_fresh_scan'
             . ' requeued=' . $requeued
@@ -32016,7 +32016,7 @@ class ServiceOrchestrator
                     // 瞬时 manifest 栅栏不一致：保留 worker 与旧代证书，不 commit fence，下轮重试。
                     $baseResult['failed_workers'] = $preflightFailures;
                     $baseResult['deferred'] = true;
-                    WlsLogger::warning_(
+                    WlsLogger::error_(
                         '[Orchestrator] SSL_CERT_RELOAD preflight deferred (retryable)'
                         . ' failures=' . \json_encode($preflightFailures)
                     );
@@ -32056,7 +32056,7 @@ class ServiceOrchestrator
                 // 绝不能再把健康 worker 一起 fail-stop，延迟到下一轮重试。
                 $baseResult['failed_workers'] = $preflightFailures;
                 $baseResult['deferred'] = true;
-                WlsLogger::warning_(
+                WlsLogger::error_(
                     '[Orchestrator] SSL_CERT_RELOAD preflight deferred (retryable)'
                     . ' failures=' . \json_encode($preflightFailures)
                 );
@@ -32109,7 +32109,7 @@ class ServiceOrchestrator
             )) {
                 // 二次 manifest 校验瞬时不一致：保留 worker，不 fence，下轮重试。
                 $baseResult['deferred'] = true;
-                WlsLogger::warning_(
+                WlsLogger::error_(
                     '[Orchestrator] SSL_CERT_RELOAD preflight deferred (retryable)'
                     . ' failures=' . \json_encode($baseResult['failed_workers'])
                 );
@@ -32320,7 +32320,9 @@ class ServiceOrchestrator
             // 只有确认性失败才进入 containment（否则一次 ACK 抖动就会永久停摆）。
             if ($this->sslCertReloadFailureIsDeferrable($failures, $mutationException !== null)) {
                 $deferred = true;
-                WlsLogger::warning_(
+                // 用 error_ 而非 warning_：wls.log.verbose 默认 false 时 fileEnabled=false，
+                // WARNING 级别会被静默丢弃，运维看不到「因可延迟失败跳过 containment」这一关键决策。
+                WlsLogger::error_(
                     '[Orchestrator] SSL_CERT_RELOAD deferred (retryable failures, workers preserved)'
                     . ' operation=' . $operationId
                     . ' failures=' . \json_encode(\array_slice(\array_values($failures), 0, 4))
