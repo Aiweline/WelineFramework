@@ -1331,8 +1331,15 @@ final class ManagedNginxProcessManager
         return [
             '/bin/sh',
             '-c',
-            'for i in $(seq 3 255); do '
-                . 'eval "exec $i>&-" 2>/dev/null || true; '
+            // Probe /proc/self/fd and close only the descriptors that are really
+            // open. Blindly closing 3..255 makes dash tear down its own I/O
+            // plumbing: the child still ran, but every byte it wrote vanished, so
+            // `nginx -t` reported code 0/1 with EMPTY output and the managed edge
+            // gate rejected an otherwise valid config — `server:start` could never
+            // publish on such hosts.
+            'for f in /proc/self/fd/*; do '
+                . 'n=${f##*/}; case $n in 0|1|2) continue;; esac; '
+                . 'eval "exec $n>&-" 2>/dev/null || true; '
                 . 'done; exec "$@"',
             'wls-fd-close',
             ...$command,
