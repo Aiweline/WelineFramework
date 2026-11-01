@@ -30709,6 +30709,70 @@ class ServiceOrchestrator
     }
 
     /**
+     * 判定一次 SSL_CERT_RELOAD 失败属于「可延迟重试」还是「必须安全隔离」。
+     *
+     * 背景（线上事故根因）：证书重载要求每个 worker 在约 13–15s 内 ACK；worker 在渲染
+     * 20s+ 的请求时无法及时 ACK，被判 ack_timeout。旧逻辑把这种**忙/未就绪**当成
+     * 「可能正在服务未授权 TLS 材料」，直接 fail-stop（含 revoke 凭据）并把 Master 置为
+     * tlsServingQuarantined=true；而该标志全文件没有置 false 的路径 → 只能人工重启，
+     * 表现为 worker 池每 3–11 分钟归零且永不自愈。
+     *
+     * 这些失败码的语义都是「暂时性/可重试」：worker 忙、IPC 抖动、population 过渡、
+     * manifest 栅栏瞬时不一致。此时正确动作是保留 worker、旧代证书继续服务（renewal
+     * 场景旧证书仍有效），下一轮 tick 重试——与
+     * CertificateMaterialUpdateCoordinator::nativeTlsReloadFailureIsDeferrable 的语义一致。
+     *
+     * 只有**确认性**的失败（manifest 已被改动、身份不符、commit 失败）才需要 containment。
+     *
+     * @param array<int,array<string,mixed>> $failures
+     */
+    private function sslCertReloadFailureIsDeferrable(
+        array $failures,
+        bool $hasMutationException,
+    ): bool {
+        if ($hasMutationException) {
+            // 已向部分 worker 发出 reload 消息，TLS 状态未知，必须 containment。
+            return false;
+        }
+        if ($failures === []) {
+            return false;
+        }
+        $deferrableCodes = [
+            'ack_timeout',
+            'ipc_disconnected',
+            'send_failed',
+            'tls_worker_population_changed',
+            'tls_worker_transition_in_progress',
+            'tls_worker_process_identity_unverified',
+            'tls_worker_fail_stop_unverified',
+            'exact_tls_reload_capability_missing',
+            'ready_tls_worker_without_ipc',
+            'no_eligible_tls_workers',
+            'control_operation_aborted',
+            'control_plane_busy',
+            'ssl_cert_reload_already_in_progress',
+            'manifest_preflight_failed',
+            'reload_ack_incomplete',
+            'worker_ack_incomplete',
+        ];
+        foreach ($failures as $failure) {
+            if (!\is_array($failure)) {
+                return false;
+            }
+            $code = (string)($failure['code'] ?? '');
+            if ($code === '') {
+                return false;
+            }
+            if (!\in_array($code, $deferrableCodes, true)) {
+                // 任一非可延迟失败 → 整批必须 containment（保守优先）。
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * A failed exact reload is a security containment event.  The immutable
      * pointer has already advanced, so every process which cannot prove that
      * exact generation must stop accepting TLS before the operation returns.
@@ -31157,6 +31221,8 @@ class ServiceOrchestrator
                 $reason,
                 false,
                 $timeout,
+                // security quarantine 是「证书已吊销/必须立刻停用」的路径，凭据必须吊销。
+                true,
             );
         } catch (\Throwable $throwable) {
             $quarantineOutcomes = [[
@@ -31314,6 +31380,7 @@ class ServiceOrchestrator
         string $reason,
         bool $queueReplacement,
         float $timeoutSeconds,
+        bool $revokeCredentials = false,
     ): array {
         $prepared = [];
         $requests = [];
@@ -31359,7 +31426,15 @@ class ServiceOrchestrator
                 ], true)) {
                     $this->fenceWorkerFromDispatcherAfterIpcDisconnect($instance);
                 }
-                $this->revokeInstanceCredential($instance, 'tls_reload_fail_stop');
+                // 默认**不撤销凭据**：revoke 属「进程退役」语义，而这里只需让进程停止服务。
+                // 线上事故：reload 因 ack_timeout 失败 → fail-stop 先 revoke 凭据 →
+                // 子进程 guard 自检 matches===[] 立即退出 → 其 pid-file lease 随退出被删 →
+                // master 随后 terminate 读不到 pid record → 判 unverified → containment
+                // failures 非空 → tlsServingQuarantined=true（全文件无置 false 的路径）→
+                // worker 池永久 0，只能人工重启。仅 security containment 才需要吊销凭据。
+                if ($revokeCredentials) {
+                    $this->revokeInstanceCredential($instance, 'tls_reload_fail_stop');
+                }
                 if ($clientId !== null && $this->controlServer?->clientExists($clientId)) {
                     $this->controlServer->sendTo($clientId, ControlMessage::shutdown());
                 }
@@ -31808,6 +31883,24 @@ class ServiceOrchestrator
                         512,
                     ),
                 ];
+                if ($this->sslCertReloadFailureIsDeferrable($preflightFailures, false)) {
+                    // 瞬时 manifest 栅栏不一致：保留 worker 与旧代证书，不 commit fence，下轮重试。
+                    $baseResult['failed_workers'] = $preflightFailures;
+                    $baseResult['deferred'] = true;
+                    WlsLogger::warning_(
+                        '[Orchestrator] SSL_CERT_RELOAD preflight deferred (retryable)'
+                        . ' failures=' . \json_encode($preflightFailures)
+                    );
+                    return [
+                        'success' => false,
+                        ...$baseResult,
+                        'containment' => null,
+                        'elapsed_ms' => \round(
+                            (self::monotonicSeconds() - $startedAt) * 1000,
+                            3,
+                        ),
+                    ];
+                }
                 $containment = $this->containFailedSslCertReload(
                     [],
                     $expectedManifestGeneration,
@@ -31827,6 +31920,22 @@ class ServiceOrchestrator
                         (self::monotonicSeconds() - $startedAt) * 1000,
                         3,
                     ),
+                ];
+            }
+            if ($this->sslCertReloadFailureIsDeferrable($preflightFailures, false)) {
+                // 有 live target 暂未 READY（例如上一轮 containment 后的补位 worker 仍 STARTING）：
+                // 绝不能再把健康 worker 一起 fail-stop，延迟到下一轮重试。
+                $baseResult['failed_workers'] = $preflightFailures;
+                $baseResult['deferred'] = true;
+                WlsLogger::warning_(
+                    '[Orchestrator] SSL_CERT_RELOAD preflight deferred (retryable)'
+                    . ' failures=' . \json_encode($preflightFailures)
+                );
+                return [
+                    'success' => false,
+                    ...$baseResult,
+                    'containment' => null,
+                    'elapsed_ms' => \round((self::monotonicSeconds() - $startedAt) * 1000, 3),
                 ];
             }
             $containment = $this->containFailedSslCertReload(
@@ -31865,6 +31974,23 @@ class ServiceOrchestrator
                 'code' => 'manifest_preflight_failed',
                 'error' => GatewayBoundedText::singleLine($throwable->getMessage(), 512),
             ];
+            if ($this->sslCertReloadFailureIsDeferrable(
+                \is_array($baseResult['failed_workers'] ?? null) ? $baseResult['failed_workers'] : [],
+                false,
+            )) {
+                // 二次 manifest 校验瞬时不一致：保留 worker，不 fence，下轮重试。
+                $baseResult['deferred'] = true;
+                WlsLogger::warning_(
+                    '[Orchestrator] SSL_CERT_RELOAD preflight deferred (retryable)'
+                    . ' failures=' . \json_encode($baseResult['failed_workers'])
+                );
+                return [
+                    'success' => false,
+                    ...$baseResult,
+                    'containment' => null,
+                    'elapsed_ms' => \round((self::monotonicSeconds() - $startedAt) * 1000, 3),
+                ];
+            }
             $containment = $this->containFailedSslCertReload(
                 [],
                 $expectedManifestGeneration,
@@ -32048,21 +32174,34 @@ class ServiceOrchestrator
             }
         }
         $containment = null;
+        $deferred = false;
         if (!$success) {
-            $containment = $this->containFailedSslCertReload(
-                $acked,
-                $expectedManifestGeneration,
-                $expectedManifestDigest,
-                $expectedTlsRouteCount,
-                'tls_reload_ack_or_commit_failed',
-            );
-            foreach ($containment['failures'] as $index => $containmentFailure) {
-                $failures['containment:' . $index] = $containmentFailure;
+            // 关键分类：忙/未就绪/瞬时不一致 → 延迟重试，保留 worker 与旧代证书；
+            // 只有确认性失败才进入 containment（否则一次 ACK 抖动就会永久停摆）。
+            if ($this->sslCertReloadFailureIsDeferrable($failures, $mutationException !== null)) {
+                $deferred = true;
+                WlsLogger::warning_(
+                    '[Orchestrator] SSL_CERT_RELOAD deferred (retryable failures, workers preserved)'
+                    . ' operation=' . $operationId
+                    . ' failures=' . \json_encode(\array_slice(\array_values($failures), 0, 4))
+                );
+            } else {
+                $containment = $this->containFailedSslCertReload(
+                    $acked,
+                    $expectedManifestGeneration,
+                    $expectedManifestDigest,
+                    $expectedTlsRouteCount,
+                    'tls_reload_ack_or_commit_failed',
+                );
+                foreach ($containment['failures'] as $index => $containmentFailure) {
+                    $failures['containment:' . $index] = $containmentFailure;
+                }
             }
         }
         $result = [
             'success' => $success,
             ...$baseResult,
+            'deferred' => $deferred,
             'acked_workers' => \array_values($acked),
             'failed_workers' => \array_values($failures),
             'containment' => $containment,
