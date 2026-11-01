@@ -27526,6 +27526,74 @@ class ServiceOrchestrator
                 );
             }
         }
+
+        // quarantine 自动解除（P0-3）：tlsServingQuarantined 一旦置 true，全文件没有置 false
+        // 的路径，只能人工重启；单次 ACK 抖动就会让 worker 池永久停摆。这里在确认
+        // 「无任何 live TLS target」后自动解除并重排 FAILED 槽。
+        $this->maybeClearSslServingQuarantine();
+    }
+
+    /**
+     * 自动解除 TLS serving quarantine。
+     *
+     * 安全前提：quarantine 的语义是「可能仍有进程在服务未授权 TLS 材料」。当一次**新鲜
+     * OS population 扫描**证明没有任何 live TLS target（pid 已退出 / 无监听）时，该前提
+     * 已不成立 → 清内存态 quarantine，并重排 desired 范围内 STATE_FAILED 的 TLS 槽。
+     *
+     * 只清内存不够：coordinator 会读持久化的 `gateway.tls_serving_quarantine` 判定该实例
+     * 仍处于 quarantine，因此必须同时重新发布 serving manifest fence（其内部会
+     * `unset($gateway['tls_serving_quarantine'])`）。
+     */
+    private function maybeClearSslServingQuarantine(): void
+    {
+        if (!$this->tlsServingQuarantined) {
+            return;
+        }
+        if ($this->isStopFlowActive() || $this->shuttingDown) {
+            return;
+        }
+        if ($this->activeControlOperation !== null) {
+            return;
+        }
+        try {
+            foreach ($this->registry->getAllInstances() as $instance) {
+                if ($this->isLiveSslCertReloadTarget($instance)) {
+                    // 仍有 live TLS target → 保持 quarantine（安全优先）。
+                    return;
+                }
+            }
+        } catch (\Throwable) {
+            // 扫描失败时保持 quarantine，下一个 tick 再试。
+            return;
+        }
+
+        $this->tlsServingQuarantined = false;
+        try {
+            if ($this->context !== null) {
+                ServingManifestRuntimeFence::publishForContext($this->context);
+            }
+        } catch (\Throwable) {
+            // 持久化清除失败不阻断内存态解除；coordinator 侧会在下次成功发布时清掉。
+        }
+
+        $requeued = 0;
+        foreach ([ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE] as $role) {
+            $desired = (int)($this->desiredState[$role] ?? 0);
+            for ($slot = 1; $slot <= $desired; $slot++) {
+                $instance = $this->registry->getInstance($role, $slot);
+                if ($instance === null || $instance->state !== ServiceInstance::STATE_FAILED) {
+                    continue;
+                }
+                $this->scheduleResurrectionWithDelay($instance, 0.0, false, false);
+                $requeued++;
+            }
+        }
+
+        WlsLogger::warning_(
+            '[Orchestrator] TLS serving quarantine auto-cleared'
+            . ' reason=no_live_tls_target_after_fresh_scan'
+            . ' requeued=' . $requeued
+        );
     }
 
     private function countRoleSlotsReadyHealthy(string $role): int
