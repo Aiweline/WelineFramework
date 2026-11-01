@@ -60,6 +60,36 @@ class DetailTextifiedAssetPurgerTest extends TestCore
                 return [];
             }
 
+            public function registerExistingObject(
+                string $diskCode,
+                string $objectKey,
+                string $originalName,
+                string $mimeType,
+                string $localeCode,
+                FileAccessContext $access,
+                array $localeMetadata,
+                string $visibility = self::VISIBILITY_PUBLIC,
+                array $metadata = [],
+                ?int $width = null,
+                ?int $height = null,
+            ): array {
+                return [];
+            }
+
+            public function replaceContent(
+                string $diskCode,
+                string $objectKey,
+                mixed $source,
+                string $originalName,
+                string $mimeType,
+                string $localeCode,
+                FileAccessContext $access,
+                ?int $width = null,
+                ?int $height = null,
+            ): array {
+                return [];
+            }
+
             public function saveMetadata(
                 string $assetId,
                 string $diskCode,

@@ -1481,10 +1481,15 @@
     }
 
     /**
-     * Cookie vs page bake stamp: page stamp is authority for this HTML document.
-     * Mismatch → sync cookie to page (no toast/reload). True publish advance is
-     * detected when ScopeBootstrap/QueryBin server id ≠ page id.
-     * @returns {boolean} true when a mismatch was healed by cookie sync
+     * Cookie vs page bake stamp：页面戳只代表本 HTML 文档，**不是**前进方向。
+     *
+     * 2026-11-01（Task 4 · R1 单调）：此前这里在 cookie 比页面**新**时也会
+     * `syncStorefrontGenerationCookieToPage(pageId)`，把新签章**降级成旧值** —— 多 tab
+     * 或多代次交替出现时互相拉扯，永远追不上新版本。现在只保留"补空"方向：
+     * 仅当 cookie **缺失**时才写页面值；cookie 已存在一律不动，进度由
+     * `WelineGenerationAnchor.ensureScopeAnchorAligned()` 统一判定。
+     *
+     * @returns {boolean} true when a mismatch was healed by cookie fill
      */
     function checkStorefrontGenerationIdentity() {
         const cookieId = readStorefrontGenerationCookie();
@@ -1492,14 +1497,14 @@
         if (pageId === '') {
             return false;
         }
-        if (cookieId === '' || cookieId === pageId) {
-            if (cookieId === '' && pageId !== '') {
-                syncStorefrontGenerationCookieToPage(pageId);
-            }
-            return false;
+        if (cookieId === '') {
+            // 仅补空，不覆盖已有签章（防降级）
+            syncStorefrontGenerationCookieToPage(pageId);
+            return true;
         }
-        syncStorefrontGenerationCookieToPage(pageId);
-        return true;
+
+        // cookie 已存在：不再回写页面值（R1）。差异交给世代锚点对齐处理。
+        return false;
     }
 
     // 挂载到全局
@@ -2001,6 +2006,37 @@
             checkStorefrontGenerationIdentity();
         } catch (_identityError) {
             // Identity check must never break ModuleLoader boot.
+        }
+        // Task 4（2026-11-01）：统一锚点对齐。页面锚点 = generation_uid，
+        // 与服务端窗口不符时重签；需要换桶才导航（R2），一致即写终态（R3）。
+        // anchor 脚本是本文件之后的 defer：defer 执行时 readyState 已非 loading，
+        // whenDomReady 会同步回调，此刻 window.WelineGenerationAnchor 还没定义。
+        // 所以先试一次，拿不到就等 load 再对齐（否则整块被静默跳过、自动跟随永不生效）。
+        const alignGenerationAnchor = () => {
+            try {
+                const anchor = window.WelineGenerationAnchor;
+                if (!anchor || typeof anchor.ensureScopeAnchorAligned !== 'function') {
+                    return false;
+                }
+                anchor.ensureScopeAnchorAligned().then((result) => {
+                    if (result && result.aligned === false && result.token) {
+                        anchor.navigateToPageToken(result.token);
+                    }
+                }).catch(() => {
+                    // 对齐失败不影响页面可用性
+                });
+                return true;
+            } catch (_anchorError) {
+                // 锚点对齐必须 never break boot
+                return false;
+            }
+        };
+        if (!alignGenerationAnchor()) {
+            if (document.readyState === 'complete') {
+                window.setTimeout(alignGenerationAnchor, 0);
+            } else {
+                window.addEventListener('load', alignGenerationAnchor, { once: true });
+            }
         }
     });
 

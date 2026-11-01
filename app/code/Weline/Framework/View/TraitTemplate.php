@@ -333,31 +333,13 @@ trait TraitTemplate
         }
         
         # 静态资源版本号处理：只作用于 URL，不能污染 Windows/UNC 模板文件路径。
-        if ($dataIsUrl && $rand_version_with_system) {
+        # 2026-11-01 用户指定：静态 URL 不再追加 ?v=（预览 Token 除外），
+        # 失效交给「按构建号隔离的静态段 + theme:update 重建 + FPC/CDN 清理」。
+        if ($dataIsUrl && $rand_version_with_system && ($version = $allowPreviewVersion ? $this->getPreviewStaticResourceVersion() : null)) {
             // 先移除已存在的版本号参数（防止重复添加）
-            $data = preg_replace('/[?&]v=[^&]*/', '', $data);
-            // 清理可能残留的 ? 或 &
-            $data = rtrim($data, '?&');
-            
-            // 优先级：预览 Token（可选）> DEV 内容指纹 > 当前主题版本范围戳（复合键 map）。
-            // 运营发布只 bump 该 scope+theme+themeVersionId；禁止再用全局单键 bust 全站。
-            // 编译期静态镜像（theme:css/js tryStaticMirror）必须传 allowPreviewVersion=false，
-            // 否则会把 ?v=preview_xxxx 烘进按 theme_id 分片的 com 产物，预览结束后仍污染店面 URL。
-            $version = $allowPreviewVersion ? $this->getPreviewStaticResourceVersion() : null;
-            // Staging bake must not stamp ?v=dev_* into prod trees (DEV constant still true).
-            if (!$version && defined('DEV') && DEV && !$this->useProductionStaticPublicUrls()) {
-                $version = $this->getDevelopmentStaticResourceVersion($source, $data);
-            }
-            if (!$version) {
-                $version = $this->getConfiguredStaticResourceVersion();
-            }
-            if ($version) {
-                $data .= (str_contains($data, '?') ? '&' : '?') . 'v=' . $version;
-            } elseif (Env::dev('static_rand_version')) {
-                // 回退到随机版本号
-                $version = random_int(10000, 100000);
-                $data .= (str_contains($data, '?') ? '&' : '?') . 'v=' . $version;
-            }
+            $data = preg_replace('/[?&]v=[^&]*/', '', (string)$data);
+            $data = rtrim((string)$data, '?&');
+            $data .= (str_contains($data, '?') ? '&' : '?') . 'v=' . $version;
         }
         
         // 静态资源不缓存带版本号的 URL（版本号需要动态计算）
@@ -429,6 +411,9 @@ trait TraitTemplate
      * 开发环境使用资源内容指纹，避免固定 URL 在浏览器短缓存期内继续执行旧 UI。
      *
      * 生产环境仍由 theme_static_version / theme.static_version 或发布清单统一控制，不在请求期计算文件哈希。
+     *
+     * 2026-11-01 用户指定：静态 URL 不再追加 ?v= 后缀，本方法保留但不再参与 URL 拼装
+     * （失效交给「按构建号隔离的静态段 + theme:update 重建 + FPC/CDN 清理」）。
      */
     private function getDevelopmentStaticResourceVersion(string $source, string $url): ?string
     {
@@ -583,9 +568,7 @@ trait TraitTemplate
             }
         }
         $url = rtrim($this->getUrlPath($publish_dir), '/') . '/' . basename($publish_target);
-        if ($rand_version_with_system && Env::dev('static_rand_version')) {
-            $url .= '?v=' . random_int(10000, 100000);
-        }
+        // 2026-11-01 用户指定：不再追加随机 ?v=，静态失效交给构建段隔离 + theme:update 重建 + FPC/CDN 清理。
         return str_replace('//', '/', str_replace('\\', '/', $url));
     }
 
@@ -882,6 +865,25 @@ trait TraitTemplate
         ) ? 'backend' : 'frontend';
         $baseKey = 'area:' . $area;
 
+        // Request-scoped memo.
+        //
+        // The dispatch below is the first-call cost driver: the Theme observer
+        // resolves the active theme, the explicit request context and the preview
+        // token. Measured on a cold worker, one first dispatch cost 45.04 ms while
+        // the next cost 0.12 ms (375x) — and the storefront asks this question once
+        // per template it fetches, dozens of times per request.
+        //
+        // The answer depends on (filename, area) plus request-stable theme state, so
+        // memoizing per (filename, area) inside one request is safe: theme switches,
+        // preview tokens and editor context are all fixed for the life of a request,
+        // and RequestContext is reset at every request boundary.
+        $memoKey = 'view.theme_cache_suffix.v1|' . $area . '|' . $filename;
+        if (\Weline\Framework\Runtime\RequestContext::isInitialized()
+            && \Weline\Framework\Runtime\RequestContext::has($memoKey)
+        ) {
+            return (string)\Weline\Framework\Runtime\RequestContext::get($memoKey, $baseKey);
+        }
+
         // 交由外部模块（如 Theme）通过事件回填主题/预览相关后缀，Framework 自身不感知具体实现。
         $eventData = new DataObject([
             'filename' => $filename,
@@ -891,7 +893,12 @@ trait TraitTemplate
         $this->eventsManager->dispatch('Weline_Framework_View::resolve_theme_cache_suffix', $eventData);
         $suffix = trim((string)$eventData->getData('suffix'));
 
-        return $suffix === '' ? $baseKey : ($baseKey . '|' . $suffix);
+        $resolved = $suffix === '' ? $baseKey : ($baseKey . '|' . $suffix);
+        if (\Weline\Framework\Runtime\RequestContext::isInitialized()) {
+            \Weline\Framework\Runtime\RequestContext::set($memoKey, $resolved);
+        }
+
+        return $resolved;
     }
 
     private function viewEnvironmentCacheSuffix(string $scope, array $dimensions = []): string

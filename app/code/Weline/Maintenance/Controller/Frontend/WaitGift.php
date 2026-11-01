@@ -35,7 +35,7 @@ class WaitGift extends FrontendController
             'guest_token' => (string)($body['guest_token'] ?? ''),
             'customer_id' => (string)($body['customer_id'] ?? ''),
             'selling_mode' => (string)($body['selling_mode'] ?? $body['cart_type'] ?? ''),
-            'cookies' => $_COOKIE ?? [],
+            'cookies' => \Weline\Framework\Env\WelineEnv::inboundCookieBag(),
             'ip' => (string)$this->request->getClientIp(),
             'user_agent' => (string)\Weline\Framework\Env\WelineEnv::server('HTTP_USER_AGENT', ''),
         ]);
@@ -104,7 +104,7 @@ class WaitGift extends FrontendController
             ? ['success' => false, 'error' => 'token_required', 'message' => (string)\__('缺少等待凭证')]
             : $service->redeem($token, [
                 'selling_mode' => (string)($body['selling_mode'] ?? $body['cart_type'] ?? ''),
-                'cookies' => $_COOKIE ?? [],
+                'cookies' => \Weline\Framework\Env\WelineEnv::inboundCookieBag(),
             ]);
 
         throw new ResponseTerminateException(
@@ -120,7 +120,7 @@ class WaitGift extends FrontendController
         $wave = $waves->readWave();
         $service = new WaitGiftService($waves);
         $enabled = (bool)(($wave['wait_gift_enabled'] ?? false));
-        $sellingMode = $service->resolveSellingMode(['cookies' => $_COOKIE ?? []]);
+        $sellingMode = $service->resolveSellingMode(['cookies' => \Weline\Framework\Env\WelineEnv::inboundCookieBag()]);
         $toc = $sellingMode !== 'tob';
         $payload = [
             'success' => true,

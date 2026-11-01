@@ -20,6 +20,10 @@ final class DirectoryRootsForbidBpLiteralContractTest extends TestCase
             '/Framework/App/DirectoryList.php',
             '/Framework/Test/Unit/App/DirectoryListTest.php',
             '/Framework/Test/Unit/App/DirectoryRootsForbidBpLiteralContractTest.php',
+            // 这两个是安装密钥缺失时的 hash 种子，不是文件系统根目录：
+            // 换成 VAR_DIR 会改变派生密钥，已签发的扩展 token / 配对全部失效。
+            '/Ai/Controller/Backend/Extension/Pairing.php',
+            '/Ai/Service/Extension/ExtensionTokenService.php',
         ];
         $patterns = [
             "/BP\\s*\\.\\s*['\"]var['\"]/",

@@ -1273,7 +1273,7 @@ class MailBrandContextService
      */
     private function resolveMatchingRequestOrigin(int $websiteId): string
     {
-        $httpHost = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+        $httpHost = trim((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', ''));
         if ($httpHost === '') {
             return '';
         }
@@ -1307,12 +1307,13 @@ class MailBrandContextService
         }
 
         $https = false;
-        $fwd = strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+        $fwd = strtolower((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_X_FORWARDED_PROTO', ''));
+        $httpsFlag = strtolower((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTPS', ''));
         if ($fwd === 'https' || str_starts_with($fwd, 'https,')) {
             $https = true;
-        } elseif (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off') {
+        } elseif ($httpsFlag !== '' && $httpsFlag !== 'off') {
             $https = true;
-        } elseif ((string)($_SERVER['SERVER_PORT'] ?? '') === '443') {
+        } elseif ((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('SERVER_PORT', '') === '443') {
             $https = true;
         }
 
@@ -1345,7 +1346,7 @@ class MailBrandContextService
      */
     private function resolveDevPublicHttpsPort(): int
     {
-        $reqHost = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+        $reqHost = trim((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', ''));
         if ($reqHost !== '' && str_contains($reqHost, ':')) {
             $port = (int)explode(':', $reqHost, 2)[1];
             if ($port > 0) {

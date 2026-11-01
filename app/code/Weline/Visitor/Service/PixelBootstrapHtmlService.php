@@ -406,7 +406,7 @@ HTML;
     {
         $websiteUrl = (string)WelineEnv::server('WELINE_WEBSITE_URL', '');
         if ($websiteUrl === '') {
-            $websiteUrl = (string)($_SERVER['WELINE_WEBSITE_URL'] ?? '');
+            $websiteUrl = (string)WelineEnv::serverOrGlobal('WELINE_WEBSITE_URL', '');
         }
         try {
             if ($websiteUrl !== '' && \str_contains($websiteUrl, '%')) {
@@ -419,8 +419,8 @@ HTML;
         }
 
         return [
-            'website_id' => (string)WelineEnv::server('WELINE_WEBSITE_ID', (string)($_SERVER['WELINE_WEBSITE_ID'] ?? '')),
-            'website_code' => (string)WelineEnv::server('WELINE_WEBSITE_CODE', (string)($_SERVER['WELINE_WEBSITE_CODE'] ?? '')),
+            'website_id' => (string)WelineEnv::serverOrGlobal('WELINE_WEBSITE_ID', ''),
+            'website_code' => (string)WelineEnv::serverOrGlobal('WELINE_WEBSITE_CODE', ''),
             'website_url' => $websiteUrl,
             'language' => WelineEnv::getLang(),
             'currency' => WelineEnv::getCurrency(),

@@ -384,8 +384,10 @@ final class DevRelay extends BackendController
      */
     private function jsonBody(): array
     {
-        $raw = file_get_contents('php://input');
-        if (!\is_string($raw) || $raw === '') {
+        // WLS 下 php://input 为空，必须读 Request 注入的 raw body；
+        // Request::getRawBody() 在 FPM 内部已回退到 php://input。
+        $raw = $this->request->getRawBody();
+        if ($raw === '') {
             return [];
         }
         $decoded = json_decode($raw, true);

@@ -161,7 +161,11 @@ class SeoWebsiteDirectory
             return $requestBaseUrl;
         }
 
-        return rtrim((string)($_SERVER['WELINE_WEBSITE_URL'] ?? w_env('website_url', '') ?: w_env('website.url', '')), '/');
+        return rtrim((string)(
+            w_env('website_url', '')
+            ?: w_env('website.url', '')
+            ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_WEBSITE_URL', '')
+        ), '/');
     }
 
     /**
@@ -494,7 +498,11 @@ class SeoWebsiteDirectory
     public function requestPublicBaseUrlForWebsite(array $website): string
     {
         $origin = $this->originFromRequestHost();
-        $uri = (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? $_SERVER['ORIGIN_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '');
+        $uri = (string)(
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_ORIGIN_REQUEST_URI', '')
+            ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('ORIGIN_REQUEST_URI', '')
+            ?: \Weline\Framework\Http\RequestUri::current()
+        );
         $request = $this->urlParts($origin . '/' . ltrim((string)(parse_url($uri, PHP_URL_PATH) ?: '/'), '/'));
         $matched = '';
         $longest = -1;
@@ -625,7 +633,10 @@ class SeoWebsiteDirectory
     {
         $fromRequestHost = $this->originFromRequestHost();
 
-        $websiteUrl = (string)($_SERVER['WELINE_WEBSITE_URL'] ?? w_env('website_url', ''));
+        $websiteUrl = (string)(
+            w_env('website_url', '')
+            ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_WEBSITE_URL', '')
+        );
         if ($websiteUrl !== '' && preg_match('/^https?:\/\//i', $websiteUrl)) {
             $parts = parse_url($websiteUrl);
             if (is_array($parts) && !empty($parts['host'])) {
@@ -640,7 +651,10 @@ class SeoWebsiteDirectory
             }
         }
 
-        $fullUrl = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? w_env('full_request_uri', ''));
+        $fullUrl = (string)(
+            w_env('full_request_uri', '')
+            ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_FULL_REQUEST_URI', '')
+        );
         if ($fullUrl !== '' && preg_match('/^https?:\/\//i', $fullUrl)) {
             $parts = parse_url($fullUrl);
             if (is_array($parts) && !empty($parts['host'])) {
@@ -657,10 +671,10 @@ class SeoWebsiteDirectory
 
     private function originFromRequestHost(): string
     {
-        $scheme = (string)($_SERVER['REQUEST_SCHEME'] ?? w_env('request.scheme', ''));
+        $scheme = (string)(w_env('request.scheme', '') ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('REQUEST_SCHEME', ''));
         if ($scheme === '') {
-            $https = (string)($_SERVER['HTTPS'] ?? w_env('server.https', ''));
-            $forwardedProto = (string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '');
+            $https = (string)(w_env('server.https', '') ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTPS', ''));
+            $forwardedProto = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_X_FORWARDED_PROTO', '');
             $scheme = $https !== '' && strtolower($https) !== 'off' ? 'https' : 'http';
             if ($forwardedProto !== '') {
                 $scheme = strtolower(explode(',', $forwardedProto)[0]) === 'https' ? 'https' : $scheme;
@@ -675,10 +689,10 @@ class SeoWebsiteDirectory
     private function currentHost(bool $stripPort = true): string
     {
         $host = (string)(
-            $_SERVER['HTTP_HOST']
-            ?? $_SERVER['SERVER_NAME']
-            ?? w_env('server.http_host', '')
+            w_env('server.http_host', '')
             ?: w_env('request.host', '')
+            ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '')
+            ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('SERVER_NAME', '')
         );
         if ($host === '') {
             return '';
@@ -694,11 +708,11 @@ class SeoWebsiteDirectory
         }
 
         $port = (string)(
-            $_SERVER['HTTP_X_FORWARDED_PORT']
-            ?? $_SERVER['SERVER_PORT']
-            ?? w_env('server.server_port', '')
-            ?? w_env('server.port', '')
+            w_env('server.server_port', '')
+            ?: w_env('server.port', '')
             ?: w_env('request.port', '')
+            ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_X_FORWARDED_PORT', '')
+            ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('SERVER_PORT', '')
         );
         if ($port === '' || !ctype_digit($port)) {
             return $host;

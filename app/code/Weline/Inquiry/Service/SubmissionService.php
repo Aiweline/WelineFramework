@@ -35,7 +35,7 @@ final class SubmissionService
         $submission = $this->submission->clear()->setData([
             Submission::schema_fields_FORM_ID => (int)$form['form_id'], Submission::schema_fields_WEBSITE_ID => $this->resolveSubmissionWebsiteId($params), Submission::schema_fields_VERSION_ID => (int)$version['version_id'], Submission::schema_fields_LOCALE => (string)$resolved['locale'], Submission::schema_fields_IDEMPOTENCY_KEY => $idempotencyKey,
             Submission::schema_fields_PAYLOAD_JSON => json_encode($clean, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), Submission::schema_fields_SCHEMA_SNAPSHOT_JSON => json_encode(['schema' => $resolved['schema'], 'copy' => $resolved['copy']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-            Submission::schema_fields_SOURCE_FINGERPRINT => hash('sha256', (string)($_SERVER['REMOTE_ADDR'] ?? '')), Submission::schema_fields_CREATED_AT => date('Y-m-d H:i:s'),
+            Submission::schema_fields_SOURCE_FINGERPRINT => hash('sha256', (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('REMOTE_ADDR', '')), Submission::schema_fields_CREATED_AT => date('Y-m-d H:i:s'),
         ]);
         $submission->save();
         $this->saveAttachments((int)$submission->getId(), $values['_attachments'] ?? []);

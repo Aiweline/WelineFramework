@@ -522,30 +522,18 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
 
     private function isRequestAlreadySynced(string $decodedUri, ?int $websiteId, ?string $urlId): bool
     {
-        $current = (string)(
-            $_SERVER['REQUEST_URI']
-            ?? WelineEnv::server('REQUEST_URI', '')
-            ?? ''
-        );
+        $current = (string)WelineEnv::serverOrGlobal('REQUEST_URI', '');
         if ($current === '' || $current !== $decodedUri) {
             return false;
         }
         if ($websiteId !== null && $websiteId > 0) {
-            $bound = (int)(
-                $_SERVER['WELINE_URL_REWRITE_WEBSITE_ID']
-                ?? WelineEnv::server('WELINE_URL_REWRITE_WEBSITE_ID', 0)
-                ?? 0
-            );
+            $bound = (int)WelineEnv::serverOrGlobal('WELINE_URL_REWRITE_WEBSITE_ID', 0);
             if ($bound !== $websiteId) {
                 return false;
             }
         }
         if ($urlId !== null && $urlId !== '') {
-            $boundUrlId = (string)(
-                $_SERVER['WELINE_URL_REWRITE_URL_ID']
-                ?? WelineEnv::server('WELINE_URL_REWRITE_URL_ID', '')
-                ?? ''
-            );
+            $boundUrlId = (string)WelineEnv::serverOrGlobal('WELINE_URL_REWRITE_URL_ID', '');
             if ($boundUrlId !== $urlId) {
                 return false;
             }
@@ -566,10 +554,8 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         // facing pretty path is already known — PageBuilder locale resolution
         // reads ORIGIN for /en_US/… segments.
         $existingOrigin = (string)(
-            $_SERVER['WELINE_ORIGIN_REQUEST_URI']
-            ?? WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
-            ?? $_SERVER['ORIGIN_REQUEST_URI']
-            ?? ''
+            WelineEnv::serverOrGlobal('WELINE_ORIGIN_REQUEST_URI', '')
+            ?: WelineEnv::serverOrGlobal('ORIGIN_REQUEST_URI', '')
         );
         $originIsInternal = \str_contains(\strtolower($originRequestUri), 'pagebuilder/frontend/page')
             || \Weline\Framework\Http\Fpc\FpcEngineIdentity::isGuideControllerUri($originRequestUri);
@@ -605,7 +591,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         WelineEnv::setServer('REQUEST_URI', $decodedUri, 'RouterRewrite decoded uri');
         WelineEnv::setServer('QUERY_STRING', $queryString, 'RouterRewrite decoded uri');
         WelineEnv::setServer('WELINE_ORIGIN_REQUEST_URI', $originRequestUri, 'RouterRewrite decoded uri');
-        $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $originRequestUri;
+        WelineEnv::mirrorServerToGlobal('WELINE_ORIGIN_REQUEST_URI', $originRequestUri);
         $originLocalization = State::resolveLocalizationFromPathSegments(
             \array_values(\array_filter(
                 \explode('/', \trim($originRequestUri, '/')),

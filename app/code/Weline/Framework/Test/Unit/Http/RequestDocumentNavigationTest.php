@@ -6,6 +6,7 @@ namespace Weline\Framework\Test\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Request\RequestAbstract;
 
 final class RequestDocumentNavigationTest extends TestCase
@@ -92,7 +93,6 @@ final class RequestDocumentNavigationTest extends TestCase
         $_SERVER = $server;
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
 
-        return new class extends RequestAbstract {
-        };
+        return new Request();
     }
 }

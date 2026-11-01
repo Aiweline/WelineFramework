@@ -23,11 +23,14 @@ final class MemDiag
 
     public static function armFromRequest(?string $requestUri = null): void
     {
-        $uri = $requestUri ?? (string)($_SERVER['REQUEST_URI'] ?? '');
+        $uri = $requestUri ?? \Weline\Framework\Http\RequestUri::current();
         $on = false;
-        if (isset($_GET[self::QUERY_KEY]) && (string)$_GET[self::QUERY_KEY] !== '0') {
+        $queryFlag = \Weline\Framework\Env\WelineEnv::getGet(self::QUERY_KEY, null);
+        if ($queryFlag !== null && (string)$queryFlag !== '0') {
             $on = true;
-        } elseif (isset($_COOKIE[self::QUERY_KEY]) && (string)$_COOKIE[self::QUERY_KEY] !== '0') {
+        } elseif (\Weline\Framework\Env\WelineEnv::hasInboundCookie(self::QUERY_KEY)
+            && \Weline\Framework\Env\WelineEnv::inboundCookie(self::QUERY_KEY) !== '0'
+        ) {
             $on = true;
         } elseif ($uri !== '' && \str_contains($uri, self::QUERY_KEY . '=')) {
             $on = !\str_contains($uri, self::QUERY_KEY . '=0');
@@ -51,9 +54,9 @@ final class MemDiag
             return;
         }
         self::$request = [
-            'uri' => (string)($meta['uri'] ?? ($_SERVER['REQUEST_URI'] ?? '')),
+            'uri' => (string)($meta['uri'] ?? \Weline\Framework\Http\RequestUri::current()),
             'pid' => (int)($meta['pid'] ?? (\function_exists('getmypid') ? \getmypid() : 0)),
-            'worker_id' => (string)($meta['worker_id'] ?? ($_SERVER['WLS_WORKER_ID'] ?? '')),
+            'worker_id' => (string)($meta['worker_id'] ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_WORKER_ID', '')),
             'request_count' => (int)($meta['request_count'] ?? 0),
             't0' => \microtime(true),
             'used0' => \memory_get_usage(false),
@@ -128,7 +131,7 @@ final class MemDiag
             'seq' => ++self::$seq,
             'event' => $name,
             'pid' => \function_exists('getmypid') ? (int)\getmypid() : 0,
-            'worker_id' => (string)($_SERVER['WLS_WORKER_ID'] ?? ''),
+            'worker_id' => (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_WORKER_ID', ''),
             'used' => \memory_get_usage(false),
             'real' => \memory_get_usage(true),
             'peak' => \memory_get_peak_usage(true),

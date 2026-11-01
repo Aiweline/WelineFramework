@@ -327,11 +327,11 @@ class PageHeadContextResolver
 
     private function requestPath($template): string
     {
-        $fullUri = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+        $fullUri = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_FULL_REQUEST_URI', '');
         if ($fullUri !== '' && preg_match('/^https?:\/\//i', $fullUri)) {
             return (string)(parse_url($fullUri, PHP_URL_PATH) ?: '');
         }
-        $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $uri = \Weline\Framework\Http\RequestUri::current();
         if ($uri !== '') {
             return (string)(parse_url($uri, PHP_URL_PATH) ?: $uri);
         }
@@ -422,7 +422,7 @@ class PageHeadContextResolver
         } catch (\Throwable) {
         }
 
-        $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $uri = \Weline\Framework\Http\RequestUri::current();
         if ($uri === '') {
             return false;
         }
@@ -442,8 +442,8 @@ class PageHeadContextResolver
             $this->readTemplate($template, 'current_page'),
             $this->read($seo, ['current_page', 'page']),
             $this->read($meta, ['current_page', 'page']),
-            $_GET['p'] ?? null,
-            $_GET['page'] ?? null,
+            \Weline\Framework\Env\WelineEnv::getGet('p', null),
+            \Weline\Framework\Env\WelineEnv::getGet('page', null),
         ]);
 
         if (is_numeric($value)) {

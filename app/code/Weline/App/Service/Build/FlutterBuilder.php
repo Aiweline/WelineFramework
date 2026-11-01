@@ -212,7 +212,7 @@ class FlutterBuilder
             . ' 2>&1';
         // 镜像注入：cn 环境走国内镜像；env 在父环境基础上追加（proc_open 传自定义数组会整体替换，丢 PATH/HOME 导致 flutter 崩）
         $env = [];
-        foreach ($_SERVER as $k => $v) {
+        foreach (\Weline\Framework\Env\WelineEnv::serverAllOrGlobal() as $k => $v) {
             if (is_string($v) && $k !== 'argv' && $k !== 'argc') {
                 $env[$k] = $v;
             }

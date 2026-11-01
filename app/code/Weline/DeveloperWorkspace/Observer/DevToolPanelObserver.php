@@ -378,7 +378,7 @@ class DevToolPanelObserver implements ObserverInterface
 
     private function resolveApiBase(): string
     {
-        $restBackendPrefix = (string)($_SERVER['WELINE_REST_BACKEND_PREFIX'] ?? '');
+        $restBackendPrefix = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_REST_BACKEND_PREFIX', '');
         if ($restBackendPrefix === '') {
             $restBackendPrefix = (string)(Env::getAreaRoutePrefix('rest_backend') ?? '');
         }

@@ -797,13 +797,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $this->setupOperationId = $operationContext->begin();
                 $this->upgradeSession = new UpgradeSession(
                     $this->setupOperationId,
-                    BP . 'var' . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'runs',
+                    VAR_DIR . 'setup' . DIRECTORY_SEPARATOR . 'runs',
                     isset($args['keep-maintenance']),
                     isset($args['from-core-update']) ? 'core_update' : 'cli',
                 );
                 $this->upgradeSession->begin();
                 if (isset($args['resume']) && is_string($args['resume']) && trim($args['resume']) !== '') {
-                    $resumeDir = BP . 'var' . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'runs'
+                    $resumeDir = VAR_DIR . 'setup' . DIRECTORY_SEPARATOR . 'runs'
                         . DIRECTORY_SEPARATOR . trim($args['resume']);
                     $loaded = UpgradeSession::load($resumeDir);
                     if ($loaded !== null) {
@@ -907,7 +907,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $sessionExit = $this->upgradeSession->closeout($this->maintenanceClosed);
         $this->upgradeSession = null;
         if ($exitCode === 0 && $sessionExit === 0) {
-            $stateDir = BP . 'var' . DIRECTORY_SEPARATOR . 'setup';
+            $stateDir = VAR_DIR . 'setup';
             if (!is_dir($stateDir)) {
                 @mkdir($stateDir, 0775, true);
             }
@@ -941,7 +941,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
     private function readSetupState(): array
     {
-        $path = BP . 'var' . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'state.json';
+        $path = VAR_DIR . 'setup' . DIRECTORY_SEPARATOR . 'state.json';
         if (!is_file($path)) {
             return [];
         }
@@ -1698,7 +1698,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
     private function buildOptimizePipeline(array $args): StagePipeline
     {
-        $session = $this->upgradeSession ?? new UpgradeSession('optimize-' . getmypid(), BP . 'var' . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'runs');
+        $session = $this->upgradeSession ?? new UpgradeSession('optimize-' . getmypid(), VAR_DIR . 'setup' . DIRECTORY_SEPARATOR . 'runs');
         $pipeline = new StagePipeline($session);
         $make = function (string $key, array $requires, bool $shouldRun, callable $run): UpgradeStageInterface {
             return new class($key, $requires, $shouldRun, $run) implements UpgradeStageInterface {

@@ -162,7 +162,7 @@ final class Detail extends FrontendController
             $name !== '' ? $name : $seoTitle,
             $canonicalUrl,
             $preferredCategoryId,
-            (string)($_SERVER['HTTP_REFERER'] ?? ''),
+            (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_REFERER', ''),
         );
         $visibleCrumbs = $this->breadcrumbs->toVisibleItems($crumbBundle['primary']);
         ProductStorefrontBreadcrumbBuilder::remember($crumbBundle);

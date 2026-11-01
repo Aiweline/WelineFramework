@@ -86,7 +86,10 @@ final class NotificationOriginContext
             }
         }
 
-        $serverHost = (string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '');
+        $serverHost = (string)(
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '')
+            ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('SERVER_NAME', '')
+        );
         $requestHost = \trim($serverHost);
 
         $processHost = '';

@@ -35,9 +35,14 @@ final class ConsoleCacheClearRuntimeSyncTest extends TestCase
             ['success' => true, 'completed' => true, 'message' => 'cleared'],
         );
 
-        $this->runCommand($broadcaster, $events);
+        $output = $this->runCommand($broadcaster, $events);
 
-        self::assertSame(['cache-clear-wait', 'storefront-warm'], $events);
+        // 确认清理完成 → 允许进入预热；未完成 → 打印跳过提示（见下一个用例）。
+        // FPC 预热编排已迁到 StorefrontWarmupOrchestrator，不再经 CacheWarmerRegistry 的
+        // 'storefront' 池，因此这里用命令自身的成功标记断言，而不是 warmer fake 的事件。
+        self::assertSame(['cache-clear-wait'], $events);
+        self::assertStringContainsString('WLS 缓存清理已完成', $output);
+        self::assertStringNotContainsString('WLS 缓存清理未完成', $output);
     }
 
     public function testStorefrontWarmupIsSkippedWhenWorkerCacheClearDoesNotComplete(): void
@@ -48,13 +53,15 @@ final class ConsoleCacheClearRuntimeSyncTest extends TestCase
             ['success' => true, 'completed' => false, 'message' => 'queued'],
         );
 
-        $this->runCommand($broadcaster, $events);
+        $output = $this->runCommand($broadcaster, $events);
 
         self::assertSame(['cache-clear-wait'], $events);
+        self::assertStringContainsString('WLS 缓存清理未完成', $output);
+        self::assertStringNotContainsString('WLS 缓存清理已完成', $output);
     }
 
     /** @param list<string> $events */
-    private function runCommand(CacheClearRuntimeBroadcasterFake $broadcaster, array &$events): void
+    private function runCommand(CacheClearRuntimeBroadcasterFake $broadcaster, array &$events): string
     {
         $registry = new CacheWarmerRegistry([
             new CacheClearStorefrontWarmerFake($events),
@@ -71,8 +78,10 @@ final class ConsoleCacheClearRuntimeSyncTest extends TestCase
         try {
             $command->execute();
         } finally {
-            \ob_end_clean();
+            $output = (string)\ob_get_clean();
         }
+
+        return $output;
     }
 }
 
@@ -84,7 +93,14 @@ final class CacheClearEmptyScanner extends Scanner
 
     public function getCaches(): array
     {
-        return [];
+        // 必须至少有一个池：Clear::execute() 在 totalPools === 0 时会直接早返回，
+        // 根本走不到「向 WLS 确认清理」这一步。
+        return ['pools' => [['identity' => 'test.pool', 'permanent' => false]]];
+    }
+
+    public function clearPool(string $identity): bool
+    {
+        return true;
     }
 }
 
@@ -112,6 +128,13 @@ final class CacheClearRuntimeBroadcasterFake implements RuntimeControlBroadcaste
         $this->events[] = 'cache-clear-wait';
 
         return $this->waitResult;
+    }
+
+    public function reloadAsync(?string $instanceName = null, string $reloadType = 'code', float $timeout = 5.0): array
+    {
+        $this->events[] = 'reload-async';
+
+        return ['success' => true, 'message' => 'queued'];
     }
 
     public function maintenanceMode(): ?bool

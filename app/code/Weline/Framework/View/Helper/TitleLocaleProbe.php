@@ -59,13 +59,10 @@ final class TitleLocaleProbe
             }
         }
         if ($uri === '') {
-            $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            $uri = \Weline\Framework\Http\RequestUri::current();
         }
         try {
-            $qs = (string)(WelineEnv::server('QUERY_STRING', '') ?? '');
-            if ($qs === '') {
-                $qs = (string)($_SERVER['QUERY_STRING'] ?? '');
-            }
+            $qs = \Weline\Framework\Env\WelineEnv::serverOrGlobal('QUERY_STRING', '');
             if ($qs !== '' && $uri !== '' && !\str_contains($uri, '?')) {
                 $uri .= '?' . $qs;
             } elseif ($uri === '' && $qs !== '') {
@@ -158,7 +155,7 @@ final class TitleLocaleProbe
             try {
                 $uri = (string)(WelineEnv::server('REQUEST_URI', '') ?? '');
             } catch (\Throwable) {
-                $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+                $uri = \Weline\Framework\Http\RequestUri::current();
             }
         }
         if (self::detectEmitFlag($uri)) {
@@ -261,17 +258,18 @@ final class TitleLocaleProbe
         if ($uri !== '' && \str_contains($uri, self::QUERY_KEY . '=')) {
             return !\str_contains($uri, self::QUERY_KEY . '=0');
         }
-        if (isset($_GET[self::QUERY_KEY]) && (string)$_GET[self::QUERY_KEY] !== '0') {
+        $queryFlag = WelineEnv::getGet(self::QUERY_KEY, null);
+        if ($queryFlag !== null && (string)$queryFlag !== '0') {
             return true;
         }
-        if (isset($_COOKIE[self::QUERY_KEY]) && (string)$_COOKIE[self::QUERY_KEY] !== '0') {
+        if (WelineEnv::hasInboundCookie(self::QUERY_KEY) && WelineEnv::inboundCookie(self::QUERY_KEY) !== '0') {
             return true;
         }
-        $serverUri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $serverUri = \Weline\Framework\Http\RequestUri::current();
         if ($serverUri !== '' && \str_contains($serverUri, self::QUERY_KEY . '=')) {
             return !\str_contains($serverUri, self::QUERY_KEY . '=0');
         }
-        $serverQs = (string)($_SERVER['QUERY_STRING'] ?? '');
+        $serverQs = WelineEnv::serverOrGlobal('QUERY_STRING', '');
         if ($serverQs !== '' && \str_contains($serverQs, self::QUERY_KEY . '=')) {
             return !\str_contains($serverQs, self::QUERY_KEY . '=0');
         }

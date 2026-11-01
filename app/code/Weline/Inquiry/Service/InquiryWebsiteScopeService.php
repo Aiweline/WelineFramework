@@ -112,6 +112,9 @@ final class InquiryWebsiteScopeService
 
     private function currentHost(): string
     {
-        return (string)($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '');
+        return (string)(
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '')
+            ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('SERVER_NAME', '')
+        );
     }
 }

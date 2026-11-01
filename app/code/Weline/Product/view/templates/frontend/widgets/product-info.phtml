@@ -1205,7 +1205,7 @@ if ($productBreadcrumbs === []) {
                         data-currency="<?= $escape((string)($offer['currency'] ?? 'CNY')) ?>"
                         data-reference-price-minor="<?= (int)$minor ?>"
                         data-campaign-label="<?= $escape($campaignLabel) ?>"
-                        data-product-url="<?= $escape((string)($_SERVER['REQUEST_URI'] ?? '')) ?>"
+                        data-product-url="<?= $escape(\Weline\Framework\Http\RequestUri::current()) ?>"
                         data-selection-label="">
                     <lang>提交询价</lang>
                 </button>

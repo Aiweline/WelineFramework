@@ -81,7 +81,7 @@ if ($excludeProductId <= 0 && is_array($currentProduct)) {
     $excludeProductId = (int)$currentProduct->getId();
 }
 if ($excludeProductId <= 0) {
-    $requestUri = (string)(WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+    $requestUri = (string)(WelineEnv::server('REQUEST_URI', '') ?: \Weline\Framework\Http\RequestUri::current());
     $requestPath = (string)(parse_url($requestUri, PHP_URL_PATH) ?: '');
     $pathParts = array_values(array_filter(
         explode('/', trim($requestPath, '/')),

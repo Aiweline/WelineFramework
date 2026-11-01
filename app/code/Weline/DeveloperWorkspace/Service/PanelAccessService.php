@@ -485,12 +485,12 @@ class PanelAccessService
 
     private function isSecureRequest(): bool
     {
-        $https = \strtolower((string)($_SERVER['HTTPS'] ?? ''));
+        $https = \strtolower((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTPS', ''));
         if ($https === 'on' || $https === '1') {
             return true;
         }
 
-        $forwardedProto = \strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+        $forwardedProto = \strtolower((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_X_FORWARDED_PROTO', ''));
 
         return $forwardedProto === 'https';
     }

@@ -128,6 +128,11 @@ final class CheckoutSessionAccessServiceTest extends TestCase
             {
                 return null;
             }
+
+            public function findSubmittedTokenByOrderUuid(string $orderUuid): ?string
+            {
+                return null;
+            }
         };
     }
 }

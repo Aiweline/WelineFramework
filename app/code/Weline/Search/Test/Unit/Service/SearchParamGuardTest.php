@@ -46,6 +46,7 @@ final class SearchParamGuardTest extends TestCase
             public function code(): string { return 'product'; }
             public function label(): string { return 'product'; }
             public function sortOrder(): int { return 10; }
+            public function areas(): array { return ['frontend']; }
             public function expression(SearchRequest $request): \Weline\Search\Service\SearchExpression {
                 return \Weline\Search\Service\SearchExpression::of($request);
             }

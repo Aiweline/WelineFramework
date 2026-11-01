@@ -11,7 +11,7 @@ final class CliJson
         if (isset($args['json']) || isset($args['j']) || isset($args['--json'])) {
             return true;
         }
-        foreach (($_SERVER['argv'] ?? []) as $arg) {
+        foreach ((array)\Weline\Framework\Env\WelineEnv::serverOrGlobal('argv', []) as $arg) {
             if (!\is_string($arg)) {
                 continue;
             }

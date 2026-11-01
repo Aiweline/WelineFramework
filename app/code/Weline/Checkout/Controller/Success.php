@@ -42,8 +42,8 @@ class Success extends FrontendController
         }
         if (!isset($params['outcome']) || trim((string) $params['outcome']) === '') {
             $fromGet = trim((string) $this->request->getParam('outcome', ''));
-            if ($fromGet === '' && isset($_GET['outcome'])) {
-                $fromGet = trim((string) $_GET['outcome']);
+            if ($fromGet === '') {
+                $fromGet = trim((string) \Weline\Framework\Env\WelineEnv::getGet('outcome', ''));
             }
             if ($fromGet !== '') {
                 $params['outcome'] = $fromGet;

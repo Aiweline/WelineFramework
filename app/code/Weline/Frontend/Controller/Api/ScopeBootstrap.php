@@ -97,11 +97,44 @@ class ScopeBootstrap extends FrontendRestController
         }
 
         $generation = StorefrontGenerationIdentity::current();
+        // 2026-11-01（Task 3）：统一世代锚点。前端只比较 generation_uid；
+        // 3 版窗口来自 GenerationRegistry（每站自己的 3 版），不再由本控制器各自聚合。
+        $generationUid = '';
+        $acceptableUids = [];
+        $pageToken = '';
+        try {
+            if (\class_exists(\Weline\Framework\Deploy\GenerationRegistry::class)) {
+                $generationUid = (string)\Weline\Framework\Deploy\GenerationRegistry::generationUid();
+                $pageToken = (string)\Weline\Framework\Deploy\GenerationRegistry::pageToken();
+                foreach (\Weline\Framework\Deploy\GenerationRegistry::supported() as $item) {
+                    $uid = \trim((string)($item['generation_uid'] ?? ''));
+                    if ($uid !== '' && !\in_array($uid, $acceptableUids, true)) {
+                        $acceptableUids[] = $uid;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            $generationUid = '';
+        }
+        if ($generationUid === '') {
+            $generationUid = (string)($generation['theme_published_version_id'] ?? '');
+        }
+        if ($pageToken === '') {
+            $pageToken = \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::pageGenerationToken();
+        }
         $response->setHttpResponseCode(200);
         $response->setBody(\json_encode([
             'ok' => true,
             'expires_at' => $result['expires_at'],
             'mode' => $result['mode'],
+            // 统一世代锚点：`{deploy_build}~{theme_generation}`
+            'generation_uid' => $generationUid,
+            // 该站自己的 3 版窗口（首位=current），供前端判断是否需要跟进
+            'acceptable_generation_uids' => \array_slice(
+                $acceptableUids,
+                0,
+                \Weline\Framework\Deploy\PublishStateStore::MAX_SUPPORTED
+            ),
             // Storefront generation authority = Scope-published theme version (not system deploy).
             'theme_published_version_id' => $generation['theme_published_version_id'],
             'theme_published_version' => $generation['theme_published_version'],
@@ -109,7 +142,7 @@ class ScopeBootstrap extends FrontendRestController
             // generations keep working during the post-publish warmup window — the client
             // must NOT auto-reload when the page stamp is in this list (max 3, current first).
             'acceptable_theme_published_version_ids' => $this->acceptableStorefrontGenerationIds(),
-            'page_generation_token' => \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::pageGenerationToken(),
+            'page_generation_token' => $pageToken,
             // Warm client locale tip cache (hole-punch may detect mismatch without QueryBin tip).
             'tips' => FrontendScopeReloadTip::catalogForCurrentLocale(),
             'tips_locale' => FrontendScopeReloadTip::currentLocale(),

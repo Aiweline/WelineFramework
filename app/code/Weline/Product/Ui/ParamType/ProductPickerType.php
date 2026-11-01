@@ -198,7 +198,9 @@ HTML;
             } catch (\Throwable) {
                 $locale = '';
             }
-            if ($locale === '' && !empty($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
+            if ($locale === ''
+                && (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_ACCEPT_LANGUAGE', '') !== ''
+            ) {
                 // Keep empty: service falls back to zh/en before arbitrary locales.
                 $locale = '';
             }

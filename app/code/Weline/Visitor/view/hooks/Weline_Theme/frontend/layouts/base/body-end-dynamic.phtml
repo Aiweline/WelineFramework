@@ -14,8 +14,8 @@ $__request_path_parsed = parse_url($__request_path_raw, PHP_URL_PATH);
 $__request_path = strtolower((string)(is_string($__request_path_parsed) && $__request_path_parsed !== '' ? $__request_path_parsed : $__request_path_raw));
 $__wpp_q_early = (string)($this->request->getGet('weline_pixel_picker') ?? '');
 $__wpp_token_early = (string)($this->request->getGet('token') ?? '');
-$__wpp_cookie_on = (string)($_COOKIE['weline_pixel_picker'] ?? '') === '1';
-$__wpp_cookie_token = \trim((string)($_COOKIE['weline_pixel_picker_token'] ?? ''));
+$__wpp_cookie_on = \Weline\Framework\Env\WelineEnv::inboundCookie('weline_pixel_picker') === '1';
+$__wpp_cookie_token = \trim(\Weline\Framework\Env\WelineEnv::inboundCookie('weline_pixel_picker_token'));
 $__wpp_url_on = ($__wpp_q_early === '1' && $__wpp_token_early !== '');
 $__wpp_cookie_active = ($__wpp_cookie_on && $__wpp_cookie_token !== '');
 $__wpp_js_disk = (\defined('BP') ? BP : \dirname(__DIR__, 8)) . '/app/code/Weline/Visitor/view/statics/js/pixel-event-picker.js';
@@ -194,7 +194,7 @@ $__visitor_tracking_config = [
     ],
 ];
 try {
-    $__website_id_for_runtime = (int)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', (string)($_SERVER['WELINE_WEBSITE_ID'] ?? '0'));
+    $__website_id_for_runtime = (int)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_WEBSITE_ID', '0');
     $__runtime_scope = $__website_id_for_runtime > 0 ? ('website.' . $__website_id_for_runtime) : null;
     $__visitor_tracking_config = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\VisitorTrackingConfig::class)
         ->getRuntimeConfig($__runtime_scope);
@@ -227,9 +227,9 @@ if ($__visitor_tracking_json === false) {
 }
 
 $__pixel_env = [
-    'website_id' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', (string)($_SERVER['WELINE_WEBSITE_ID'] ?? '')),
-    'website_code' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_CODE', (string)($_SERVER['WELINE_WEBSITE_CODE'] ?? '')),
-    'website_url' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_URL', (string)($_SERVER['WELINE_WEBSITE_URL'] ?? '')),
+    'website_id' => (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_WEBSITE_ID', ''),
+    'website_code' => (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_WEBSITE_CODE', ''),
+    'website_url' => (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_WEBSITE_URL', ''),
     'store_code' => 'default',
     'channel_code' => 'default',
     'language' => \Weline\Framework\Env\WelineEnv::getLang(),
@@ -522,7 +522,8 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
 $__wpp_q = (string)($this->request->getGet('weline_pixel_picker') ?? '');
 $__wpp_token = (string)($this->request->getGet('token') ?? '');
 $__wpp_want = ($__wpp_q === '1' && $__wpp_token !== '')
-    || ((string)($_COOKIE['weline_pixel_picker'] ?? '') === '1' && \trim((string)($_COOKIE['weline_pixel_picker_token'] ?? '')) !== '');
+    || (\Weline\Framework\Env\WelineEnv::inboundCookie('weline_pixel_picker') === '1'
+        && \trim(\Weline\Framework\Env\WelineEnv::inboundCookie('weline_pixel_picker_token')) !== '');
 ?>
 <script data-wpp-bootstrap="1">
 (function () {

@@ -633,7 +633,8 @@ final class StorefrontWarmupHttpClient
 
         $raw = \getenv('WLS_PORT');
         if (!\is_string($raw) || $raw === '' || !\ctype_digit($raw)) {
-            $raw = $_SERVER['WLS_PORT'] ?? $_SERVER['SERVER_PORT'] ?? '';
+            $raw = \Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_PORT', null)
+                ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal('SERVER_PORT', '');
         }
         if (!\is_int($raw) && !(\is_string($raw) && $raw !== '' && \ctype_digit($raw))) {
             return false;

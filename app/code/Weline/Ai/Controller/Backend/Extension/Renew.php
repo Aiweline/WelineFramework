@@ -20,7 +20,9 @@ class Renew extends BackendController
         if (!$session->isLoggedIn()) {
             return $this->errorJson('backend_session_required', 401);
         }
-        $token = (string)($_SERVER['HTTP_X_AI_EXT_TOKEN'] ?? $this->request->getHeader('X-Ai-Ext-Token') ?? '');
+        $token = (string)(\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_X_AI_EXT_TOKEN', '')
+            ?: $this->request->getHeader('X-Ai-Ext-Token')
+            ?: '');
         if ($token === '') {
             return $this->errorJson('invalid_token', 403);
         }
@@ -28,7 +30,6 @@ class Renew extends BackendController
         $tokenService = new ExtensionTokenService(ExtensionTokenService::defaultSecret());
         $payload = $tokenService->verify($token);
         if ($payload === false) {
-            @file_put_contents('/tmp/renewdbg.txt', 'secret='.substr(ExtensionTokenService::defaultSecret(),0,8).' cookie='.($_COOKIE['WELINE_SESSID_8800_w0'] ?? '-')."\n", FILE_APPEND);
             return $this->errorJson('invalid_token', 403);
         }
         $grant = ObjectManager::getInstance(AiExtensionGrant::class);
@@ -39,7 +40,6 @@ class Renew extends BackendController
         $sessionId = (string)$session->getSession()->getId();
         $newToken = $tokenService->renew($token, $sessionId, time());
         if ($newToken === false) {
-            @file_put_contents('/tmp/renewdbg.txt', 'renew-false sess='.($session->getSession()->getId() ?: '-')."\n", FILE_APPEND);
             return $this->errorJson('invalid_token', 403);
         }
         $grant->setData(AiExtensionGrant::schema_fields_LAST_RENEW_AT, date('Y-m-d H:i:s'))->save();

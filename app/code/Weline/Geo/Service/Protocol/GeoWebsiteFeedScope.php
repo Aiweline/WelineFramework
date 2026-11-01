@@ -102,9 +102,19 @@ final class GeoWebsiteFeedScope
     {
         // Avoid touching FeedGeneratorService::FEED_DIR here: that constant
         // evaluates PUB at class-load time and breaks lightweight unit boots.
-        $root = defined('BP')
-            ? rtrim(BP . '/pub/geo-feeds', '/')
-            : rtrim(sys_get_temp_dir() . '/geo-feeds', '/');
+        // 目录根一律走可重定位入口（PUB / DirectoryList），不再手拼根目录字面量。
+        $pubRoot = '';
+        if (\defined('PUB')) {
+            $pubRoot = \rtrim((string)\constant('PUB'), '/\\');
+        } elseif (\defined('BP')) {
+            $pubRoot = \rtrim(
+                \Weline\Framework\App\DirectoryList::bootstrapFromEnvFile((string)\constant('BP'))->getPub(),
+                '/\\'
+            );
+        }
+        $root = $pubRoot !== ''
+            ? $pubRoot . '/geo-feeds'
+            : \rtrim(\sys_get_temp_dir() . '/geo-feeds', '/');
 
         return $root . '/w' . max(0, $websiteId);
     }

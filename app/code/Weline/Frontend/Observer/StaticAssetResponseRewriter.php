@@ -103,7 +103,7 @@ final class StaticAssetResponseRewriter implements ObserverInterface
                 if (\function_exists('w_log_warning')) {
                     w_log_warning('[theme-head-css] ' . \implode('; ', \array_column($warnings, 'reason'))
                         . ' leaves=' . \implode(',', \array_column($warnings, 'leaf'))
-                        . ' uri=' . (string)($_SERVER['REQUEST_URI'] ?? ''));
+                        . ' uri=' . \Weline\Framework\Http\RequestUri::current());
                 }
             } catch (\Throwable) {
             }
@@ -114,7 +114,7 @@ final class StaticAssetResponseRewriter implements ObserverInterface
         $duplicated = \implode(',', \array_column($hard, 'leaf'));
         try {
             w_log_error('[theme-head-css] duplicate leaf delivered: ' . $duplicated
-                . ' uri=' . (string)($_SERVER['REQUEST_URI'] ?? ''));
+                . ' uri=' . \Weline\Framework\Http\RequestUri::current());
         } catch (\Throwable) {
         }
         $marker = '<!-- weline-head-css-duplicate: '

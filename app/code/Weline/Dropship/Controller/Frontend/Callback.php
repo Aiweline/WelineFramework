@@ -37,7 +37,7 @@ class Callback extends FrontendController
         }
         $headers = function_exists('getallheaders') ? (array)getallheaders() : [];
         if ($headers === []) {
-            foreach ($_SERVER as $k => $v) {
+            foreach (\Weline\Framework\Env\WelineEnv::serverAllOrGlobal() as $k => $v) {
                 if (!\is_string($k) || !str_starts_with($k, 'HTTP_') || !\is_scalar($v)) {
                     continue;
                 }

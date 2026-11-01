@@ -215,7 +215,7 @@ class ShippingAddress extends FrontendController
             return true;
         }
 
-        $accept = (string)($_SERVER['HTTP_ACCEPT'] ?? '');
+        $accept = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_ACCEPT', '');
         return str_contains($accept, 'application/json');
     }
 }

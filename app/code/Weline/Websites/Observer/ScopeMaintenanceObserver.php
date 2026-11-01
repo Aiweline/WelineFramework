@@ -36,7 +36,7 @@ final class ScopeMaintenanceObserver implements ObserverInterface
             $request = ObjectManager::getInstance(Request::class);
             $token = \trim((string)$request->getParam('maintenance_preview_token', ''));
             if ($token === '') {
-                $token = \trim((string)($_SERVER['HTTP_X_WELINE_MAINTENANCE_PREVIEW'] ?? ''));
+                $token = \trim((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_X_WELINE_MAINTENANCE_PREVIEW', ''));
             }
             /** @var MaintenancePreviewTokenService $tokens */
             $tokens = ObjectManager::getInstance(MaintenancePreviewTokenService::class);

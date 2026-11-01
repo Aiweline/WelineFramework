@@ -179,7 +179,7 @@ final class BackendUserConfigStore
         }
 
         foreach (['REQUEST_METHOD', 'REQUEST_URI', 'HTTP_HOST', 'SERVER_NAME', 'WELINE_AREA', 'WELINE_AREA_ROUTE'] as $key) {
-            if ((string)($_SERVER[$key] ?? '') !== '') {
+            if ((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal($key, '') !== '') {
                 return false;
             }
             if (\class_exists(\Weline\Framework\Env\WelineEnv::class)
@@ -193,16 +193,6 @@ final class BackendUserConfigStore
 
     private function resolveSessionIdFromCookie(): string
     {
-        $cookieHeader = '';
-        if (\class_exists(\Weline\Framework\Env\WelineEnv::class)) {
-            $cookieHeader = (string)(
-                \Weline\Framework\Env\WelineEnv::server('HTTP_COOKIE', '')
-                ?: \Weline\Framework\Env\WelineEnv::get('server.http_cookie', '')
-            );
-        }
-        if ($cookieHeader !== '' && \preg_match('/(?:^|;\s*)WELINE_SESSID=([^;]+)/', $cookieHeader, $matches)) {
-            return \trim((string)\urldecode($matches[1]));
-        }
-        return \trim((string)($_COOKIE['WELINE_SESSID'] ?? ''));
+        return \Weline\Framework\Session\SessionIdResolver::fromCurrentRequest();
     }
 }

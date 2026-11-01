@@ -217,13 +217,13 @@ class Build extends CommandAbstract
         $probe = (new EnvProbe())->probe();
         if (!empty($probe['java']['home']) && (getenv('JAVA_HOME') ?: '') === '') {
             putenv('JAVA_HOME=' . $probe['java']['home']);
-            $_SERVER['JAVA_HOME'] = $probe['java']['home'];
+            \Weline\Framework\Env\WelineEnv::mirrorServerToGlobal('JAVA_HOME', $probe['java']['home']);
         }
         if (!empty($probe['android_sdk']['path']) && (getenv('ANDROID_HOME') ?: '') === '') {
             putenv('ANDROID_HOME=' . $probe['android_sdk']['path']);
             putenv('ANDROID_SDK_ROOT=' . $probe['android_sdk']['path']);
-            $_SERVER['ANDROID_HOME'] = $probe['android_sdk']['path'];
-            $_SERVER['ANDROID_SDK_ROOT'] = $probe['android_sdk']['path'];
+            \Weline\Framework\Env\WelineEnv::mirrorServerToGlobal('ANDROID_HOME', $probe['android_sdk']['path']);
+            \Weline\Framework\Env\WelineEnv::mirrorServerToGlobal('ANDROID_SDK_ROOT', $probe['android_sdk']['path']);
         }
 
         try {

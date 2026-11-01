@@ -33,7 +33,7 @@ class InternationalSeoContextService
             $this->readTemplate($template, 'lang_local'),
             $this->readTemplate($template, 'lang'),
             $this->env('user.lang'),
-            $_SERVER['WELINE_USER_LANG'] ?? '',
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_USER_LANG', ''),
             self::DEFAULT_LOCALE,
         ]));
         $defaultLocale = $this->normalizeLocale($this->firstNonEmpty([
@@ -41,7 +41,7 @@ class InternationalSeoContextService
             $this->read($seo, ['default_locale', 'website_locale', 'x_default_locale']),
             $this->websiteDefaultLocale($template, $context),
             $this->env('website.language'),
-            $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? '',
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_WEBSITE_LANGUAGE', ''),
             self::DEFAULT_LOCALE,
         ]));
         $websiteLocaleCodes = $this->websiteLocaleCodes($template, $context, $seo);
@@ -199,7 +199,7 @@ class InternationalSeoContextService
             $context['website_id'] ?? null,
             $this->read($context['website'] ?? [], ['website_id', 'id']),
             WelineEnv::server('WELINE_WEBSITE_ID', ''),
-            $_SERVER['WELINE_WEBSITE_ID'] ?? '',
+            WelineEnv::serverOrGlobal('WELINE_WEBSITE_ID', ''),
         ];
 
         foreach ($values as $value) {
@@ -335,7 +335,7 @@ class InternationalSeoContextService
             }
         }
         if ($path === '') {
-            $path = (string)($_SERVER['REQUEST_URI'] ?? '/');
+            $path = \Weline\Framework\Http\RequestUri::current();
             $questionPos = strpos($path, '?');
             if ($questionPos !== false) {
                 $path = substr($path, 0, $questionPos);
@@ -375,7 +375,7 @@ class InternationalSeoContextService
         }
 
         $configured = rtrim($this->firstNonEmpty([
-            $_SERVER['WELINE_WEBSITE_URL'] ?? '',
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_WEBSITE_URL', ''),
             $this->env('website.url'),
             $this->env('website_url'),
         ]), '/');
@@ -383,13 +383,16 @@ class InternationalSeoContextService
             return $configured;
         }
 
-        $host = (string)($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '');
+        $host = (string)(
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '')
+            ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('SERVER_NAME', '')
+        );
         if ($host === '') {
             return '';
         }
-        $scheme = (string)($_SERVER['REQUEST_SCHEME'] ?? '');
+        $scheme = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('REQUEST_SCHEME', '');
         if ($scheme === '') {
-            $https = strtolower((string)($_SERVER['HTTPS'] ?? ''));
+            $https = strtolower((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTPS', ''));
             $scheme = $https !== '' && $https !== 'off' ? 'https' : 'http';
         }
         return $scheme . '://' . $host;

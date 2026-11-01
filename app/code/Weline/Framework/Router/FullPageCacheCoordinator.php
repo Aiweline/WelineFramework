@@ -6480,7 +6480,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
         $candidates = [
             (string)WelineEnv::server('HTTP_HOST', ''),
-            (string)($_SERVER['HTTP_HOST'] ?? ''),
+            (string)WelineEnv::serverOrGlobal('HTTP_HOST', ''),
         ];
         $rawParts = \parse_url($this->getRawFullUri());
         if (\is_array($rawParts)) {
@@ -6658,17 +6658,17 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $originPath = \Weline\Framework\Http\Fpc\FpcEngineIdentity::preferVisitorUri(
             (string)(
                 WelineEnv::server('WELINE_VISITOR_REQUEST_URI', '')
-                ?: ($_SERVER['WELINE_VISITOR_REQUEST_URI'] ?? '')
+                ?: WelineEnv::serverOrGlobal('WELINE_VISITOR_REQUEST_URI', '')
             ),
             (string)(
                 WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
-                ?: ($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? '')
+                ?: WelineEnv::serverOrGlobal('WELINE_ORIGIN_REQUEST_URI', '')
                 ?: WelineEnv::server('ORIGIN_REQUEST_URI', '')
-                ?: ($_SERVER['ORIGIN_REQUEST_URI'] ?? '')
+                ?: WelineEnv::serverOrGlobal('ORIGIN_REQUEST_URI', '')
             ),
             (string)(
                 WelineEnv::server('REQUEST_URI', '')
-                ?: ($_SERVER['REQUEST_URI'] ?? '')
+                ?: WelineEnv::serverOrGlobal('REQUEST_URI', '')
             ),
         );
         $value = '';
@@ -6692,7 +6692,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             if ($scheme === '') {
                 $scheme = \strtolower((string)(
                     WelineEnv::server('REQUEST_SCHEME', '')
-                    ?: ($_SERVER['REQUEST_SCHEME'] ?? '')
+                    ?: WelineEnv::serverOrGlobal('REQUEST_SCHEME', '')
                     ?: 'https'
                 ));
                 if ($scheme !== 'http' && $scheme !== 'https') {
@@ -6702,7 +6702,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             if ($host === '') {
                 $host = \strtolower((string)(
                     WelineEnv::server('HTTP_HOST', '')
-                    ?: ($_SERVER['HTTP_HOST'] ?? '')
+                    ?: WelineEnv::serverOrGlobal('HTTP_HOST', '')
                 ));
             }
             if ($host !== '') {

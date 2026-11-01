@@ -29,11 +29,14 @@ final class FpcDiag
 
     public static function armFromRequest(?string $requestUri = null): void
     {
-        $uri = $requestUri ?? (string)($_SERVER['REQUEST_URI'] ?? '');
+        $uri = $requestUri ?? \Weline\Framework\Http\RequestUri::current();
         $on = false;
-        if (isset($_GET[self::QUERY_KEY]) && (string)$_GET[self::QUERY_KEY] !== '0') {
+        $queryFlag = \Weline\Framework\Env\WelineEnv::getGet(self::QUERY_KEY, null);
+        if ($queryFlag !== null && (string)$queryFlag !== '0') {
             $on = true;
-        } elseif (isset($_COOKIE[self::QUERY_KEY]) && (string)$_COOKIE[self::QUERY_KEY] !== '0') {
+        } elseif (\Weline\Framework\Env\WelineEnv::hasInboundCookie(self::QUERY_KEY)
+            && \Weline\Framework\Env\WelineEnv::inboundCookie(self::QUERY_KEY) !== '0'
+        ) {
             $on = true;
         } elseif ($uri !== '' && \str_contains($uri, self::QUERY_KEY . '=')) {
             $on = !\str_contains($uri, self::QUERY_KEY . '=0');
@@ -76,8 +79,8 @@ final class FpcDiag
             'seq' => ++self::$seq,
             'event' => $name,
             'pid' => \function_exists('getmypid') ? (int)\getmypid() : 0,
-            'worker_id' => (string)($_SERVER['WLS_WORKER_ID'] ?? ''),
-            'uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
+            'worker_id' => (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_WORKER_ID', ''),
+            'uri' => \Weline\Framework\Http\RequestUri::current(),
             'data' => $data,
         ];
         $line = \json_encode($payload, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);

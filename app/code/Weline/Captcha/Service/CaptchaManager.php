@@ -24,7 +24,7 @@ final class CaptchaManager implements CaptchaManagerInterface
 
     public function renderChallenge(array $context): string
     {
-        $server = \is_array($context['server'] ?? null) ? $context['server'] : ($_SERVER ?? []);
+        $server = \is_array($context['server'] ?? null) ? $context['server'] : \Weline\Framework\Env\WelineEnv::serverAllOrGlobal();
         $options = [];
         $prefer = \strtolower(\trim((string)($context['prefer'] ?? '')));
         if ($prefer !== '') {
@@ -37,7 +37,7 @@ final class CaptchaManager implements CaptchaManagerInterface
     public function verifySubmission(array $submission, string $intent, string $hostname, ?string $ip = null): bool
     {
         $this->lastFailureDetail = '';
-        $server = \is_array($submission['_server'] ?? null) ? $submission['_server'] : ($_SERVER ?? []);
+        $server = \is_array($submission['_server'] ?? null) ? $submission['_server'] : \Weline\Framework\Env\WelineEnv::serverAllOrGlobal();
         $preferred = $this->router->resolve($server);
         $submittedProvider = \strtolower(\trim((string)($submission['captcha_provider'] ?? '')));
 

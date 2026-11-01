@@ -658,7 +658,7 @@ class Index extends BackendController
             return $this->fetchJson(['code' => 405, 'msg' => (string)__('无效的请求方法'), 'data' => null]);
         }
         $accountId = max(0, (int)$this->request->getParam('account', 0));
-        $file = $_FILES['file'] ?? null;
+        $file = \Weline\Framework\Env\WelineEnv::getFiles('file');
         if ($accountId <= 0 || !is_array($file) || (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             return $this->fetchJson(['code' => 400, 'msg' => (string)__('请选择附件'), 'data' => null]);
         }

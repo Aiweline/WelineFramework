@@ -6,7 +6,7 @@ namespace Weline\Framework\Test\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Env\WelineEnv;
-use Weline\Framework\Http\Request\RequestAbstract;
+use Weline\Framework\Http\Request;
 
 final class RequestBaseUrlNormalizationTest extends TestCase
 {
@@ -41,8 +41,7 @@ final class RequestBaseUrlNormalizationTest extends TestCase
 
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $_SERVER);
 
-        $request = new class extends RequestAbstract {
-        };
+        $request = new Request();
 
         self::assertSame('https://127.0.0.1:9982/weshop', $request->getBaseUrl());
         self::assertSame('https://127.0.0.1:9982/weshop', $request->getOriginBaseUrl());
@@ -64,8 +63,7 @@ final class RequestBaseUrlNormalizationTest extends TestCase
 
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $_SERVER);
 
-        $request = new class extends RequestAbstract {
-        };
+        $request = new Request();
 
         self::assertSame('https://www.yonocashgames.com', $request->getBaseHost());
     }
@@ -88,8 +86,7 @@ final class RequestBaseUrlNormalizationTest extends TestCase
         $_SERVER = $server;
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
 
-        $request = new class extends RequestAbstract {
-        };
+        $request = new Request();
 
         self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
     }
@@ -109,8 +106,7 @@ final class RequestBaseUrlNormalizationTest extends TestCase
         $_SERVER = $server;
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
 
-        $request = new class extends RequestAbstract {
-        };
+        $request = new Request();
 
         self::assertSame('https://shop.example.test', $request->getBaseHost());
     }
@@ -134,8 +130,7 @@ final class RequestBaseUrlNormalizationTest extends TestCase
         $_SERVER = $server;
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
 
-        $request = new class extends RequestAbstract {
-        };
+        $request = new Request();
 
         self::assertSame('http://127.0.0.1:9502', $request->getBaseHost());
     }
@@ -157,8 +152,7 @@ final class RequestBaseUrlNormalizationTest extends TestCase
         $_SERVER = $server;
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
 
-        $request = new class extends RequestAbstract {
-        };
+        $request = new Request();
 
         self::assertSame(
             'https://ai-test.example.test.weline.com:27152/aisite_accept_ok',
@@ -183,8 +177,7 @@ final class RequestBaseUrlNormalizationTest extends TestCase
         $_SERVER = $server;
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
 
-        $request = new class extends RequestAbstract {
-        };
+        $request = new Request();
 
         self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
     }
@@ -205,8 +198,7 @@ final class RequestBaseUrlNormalizationTest extends TestCase
         $_SERVER = $server;
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
 
-        $request = new class extends RequestAbstract {
-        };
+        $request = new Request();
 
         self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
     }
@@ -229,8 +221,7 @@ final class RequestBaseUrlNormalizationTest extends TestCase
         $_SERVER = $server;
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
 
-        $request = new class extends RequestAbstract {
-        };
+        $request = new Request();
 
         self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
     }
@@ -251,8 +242,7 @@ final class RequestBaseUrlNormalizationTest extends TestCase
         $_SERVER = $server;
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
 
-        $request = new class extends RequestAbstract {
-        };
+        $request = new Request();
 
         self::assertSame('https://pf14955e2.test.weline.com', $request->getBaseHost());
     }
@@ -275,8 +265,7 @@ final class RequestBaseUrlNormalizationTest extends TestCase
         $_SERVER = $server;
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
 
-        $request = new class extends RequestAbstract {
-        };
+        $request = new Request();
 
         self::assertSame('https://p05113ef3.test.weline.com:9555', $request->getBaseHost());
     }
@@ -299,8 +288,7 @@ final class RequestBaseUrlNormalizationTest extends TestCase
         $_SERVER = $server;
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
 
-        $request = new class extends RequestAbstract {
-        };
+        $request = new Request();
 
         self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
     }

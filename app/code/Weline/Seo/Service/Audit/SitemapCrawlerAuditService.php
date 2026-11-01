@@ -531,7 +531,7 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
             return $this->origin($startUrl);
         }
 
-        $current = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+        $current = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_FULL_REQUEST_URI', '');
         if ($current !== '' && \preg_match('/^https?:\/\//i', $current)) {
             return $this->origin($current);
         }
@@ -541,8 +541,9 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
             return $this->origin($base);
         }
 
-        $host = (string)($_SERVER['HTTP_HOST'] ?? '');
-        $scheme = (!empty($_SERVER['HTTPS']) && \strtolower((string)$_SERVER['HTTPS']) !== 'off') ? 'https' : 'http';
+        $host = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '');
+        $httpsValue = \strtolower((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTPS', ''));
+        $scheme = ($httpsValue !== '' && $httpsValue !== 'off') ? 'https' : 'http';
 
         return $host !== '' ? $scheme . '://' . $host : '';
     }

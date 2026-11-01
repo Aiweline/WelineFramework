@@ -2444,7 +2444,7 @@ class Template extends DataObject implements RequestLocalInterface
         }
         try {
             $requestId = RequestContext::getId() ?? '';
-            $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            $uri = \Weline\Framework\Http\RequestUri::current();
             \w_log_warning(
                 '[WLS] template_fiber_hog'
                 . ' elapsed_ms=' . \round($elapsedMs, 2)
@@ -3680,6 +3680,13 @@ class Template extends DataObject implements RequestLocalInterface
                         if ($requestCacheKey !== null) {
                             RequestContext::set($requestCacheKey, $cachedAggregateHtml['html']);
                         }
+                        // Re-hydrate the cached "intentionally empty" verdict so
+                        // getHookResult() can decide <else/> fallback from the HIT
+                        // instead of forcing a fresh render.
+                        RequestContext::set(
+                            'view.hook.handled_empty.' . $name,
+                            (bool)($cachedAggregateHtml['handled_empty'] ?? false)
+                        );
                         if ($traceAccountSidebarHook) {
                             $this->logAccountSidebarTemplateTrace('hook_aggregate_cache_hit', [
                                 'hook' => $name,
@@ -3693,13 +3700,21 @@ class Template extends DataObject implements RequestLocalInterface
 
                     $runtimeCachedAggregate = $this->readRuntimeHookCache($aggregateCacheKey, $aggregateTtl);
                     if ($runtimeCachedAggregate['status'] !== 'miss') {
-                        $this->rememberStaticHookAggregate($aggregateCacheKey, (string)$runtimeCachedAggregate['html'], $aggregateTtl, (string)$runtimeCachedAggregate['status']);
+                        $runtimeHandledEmpty = (bool)($runtimeCachedAggregate['handled_empty'] ?? false);
+                        $this->rememberStaticHookAggregate(
+                            $aggregateCacheKey,
+                            (string)$runtimeCachedAggregate['html'],
+                            $aggregateTtl,
+                            (string)$runtimeCachedAggregate['status'],
+                            $runtimeHandledEmpty
+                        );
                         if ($runtimeCachedAggregate['status'] === 'stale' && ($aggregatePolicy['allow_async_refresh'] ?? false)) {
                             $this->queueStaticHookAggregateRefresh($name, $aggregateCacheKey, $aggregateTtl);
                         }
                         if ($requestCacheKey !== null) {
                             RequestContext::set($requestCacheKey, $runtimeCachedAggregate['html']);
                         }
+                        RequestContext::set('view.hook.handled_empty.' . $name, $runtimeHandledEmpty);
                         if ($traceAccountSidebarHook) {
                             $this->logAccountSidebarTemplateTrace('hook_runtime_aggregate_cache_hit', [
                                 'hook' => $name,
@@ -3932,8 +3947,15 @@ class Template extends DataObject implements RequestLocalInterface
             // Store even when all contributors render empty: complete body-end
             // stubs still need an aggregate HIT to avoid re-walking N empty files.
             $aggregateTtl = $this->staticHookAggregateCacheTtl();
-            $this->rememberStaticHookAggregate($aggregateCacheKey, $hooker_content, $aggregateTtl);
-            self::runtimeHookCacheSet($aggregateCacheKey, $hooker_content, $aggregateTtl);
+            // Persist the "intentionally empty" verdict alongside the HTML so a later
+            // cache HIT can answer <else/> fallback without re-rendering the hook.
+            $aggregateHandledEmpty = (bool)RequestContext::get('view.hook.handled_empty.' . $name);
+            $this->rememberStaticHookAggregate($aggregateCacheKey, $hooker_content, $aggregateTtl, 'fresh', $aggregateHandledEmpty);
+            self::runtimeHookCacheSet(
+                $aggregateCacheKey,
+                ['html' => $hooker_content, 'handled_empty' => $aggregateHandledEmpty],
+                $aggregateTtl
+            );
         }
 
         if ($traceAccountSidebarHook) {
@@ -3984,9 +4006,17 @@ class Template extends DataObject implements RequestLocalInterface
         }
 
         try {
-            // Opt-in fallback needs a fresh semantic render: an older request-cache entry
-            // cannot prove whether an empty result was explicitly handled.
-            $html = $this->getHook($name, $forceRefresh || $preferFallbackOnEmpty);
+            // The <else/> fallback needs to know whether an empty result was
+            // intentionally produced. That verdict is now stored WITH the cached
+            // aggregate (see rememberStaticHookAggregate), and getHook re-hydrates it
+            // on every cache HIT, so a HIT can answer the question without a render.
+            //
+            // Forcing a render here made every fallback-capable hook (the storefront
+            // header calls several) re-render on every single request and ignore all
+            // caches: measured 114 of 155 header hook calls had force=true, and the
+            // six header hooks cost ~48 ms of the header's 53 ms every request.
+            // Those hooks are theme-version scoped, not request scoped.
+            $html = $this->getHook($name, $forceRefresh);
             $handledEmpty = (bool)RequestContext::get($handledEmptyKey);
         } finally {
             RequestContext::remove($handledEmptyKey);
@@ -4050,24 +4080,24 @@ class Template extends DataObject implements RequestLocalInterface
         }
     }
 
-    private function rememberStaticHookAggregate(string $cacheKey, string $html, int $ttl, string $status = 'fresh'): void
+    private function rememberStaticHookAggregate(string $cacheKey, string $html, int $ttl, string $status = 'fresh', bool $handledEmpty = false): void
     {
         if (\count(self::$staticHookAggregateOutputCache) > 64) {
             self::$staticHookAggregateOutputCache = [];
         }
 
-        self::$staticHookAggregateOutputCache[$cacheKey] = $this->makeStaticSwrEntry($html, $ttl, $status);
+        self::$staticHookAggregateOutputCache[$cacheKey] = $this->makeStaticSwrEntry($html, $ttl, $status, $handledEmpty);
     }
 
     /**
-     * @return array{status: string, html: ?string}
+     * @return array{status: string, html: ?string, handled_empty: bool}
      */
     private function readStaticHookAggregateCache(string $cacheKey, int $ttl): array
     {
         $entry = $this->normalizeStaticSwrEntry(self::$staticHookAggregateOutputCache[$cacheKey] ?? null, $ttl);
         if ($entry === null) {
             unset(self::$staticHookAggregateOutputCache[$cacheKey]);
-            return ['status' => 'miss', 'html' => null];
+            return ['status' => 'miss', 'html' => null, 'handled_empty' => false];
         }
         self::$staticHookAggregateOutputCache[$cacheKey] = $entry;
 
@@ -4095,13 +4125,13 @@ class Template extends DataObject implements RequestLocalInterface
     }
 
     /**
-     * @return array{status: string, html: ?string}
+     * @return array{status: string, html: ?string, handled_empty: bool}
      */
     private function readRuntimeHookCache(string $cacheKey, int $ttl): array
     {
         $entry = $this->normalizeStaticSwrEntry(self::runtimeHookCacheGet($cacheKey), $ttl);
         if ($entry === null) {
-            return ['status' => 'miss', 'html' => null];
+            return ['status' => 'miss', 'html' => null, 'handled_empty' => false];
         }
 
         return $this->staticSwrEntryStatus($entry);
@@ -4118,6 +4148,7 @@ class Template extends DataObject implements RequestLocalInterface
                 'fresh_until' => $now + \max(1, $ttl),
                 'stale_until' => $now + \max(1, $ttl) + $this->staticHookStaleTtl($ttl),
                 'html' => $entry,
+                'handled_empty' => false,
             ];
         }
 
@@ -4126,6 +4157,13 @@ class Template extends DataObject implements RequestLocalInterface
         }
 
         $html = $entry['html'] ?? $entry['value'] ?? null;
+        $handledEmpty = (bool)($entry['handled_empty'] ?? false);
+        // Shared (theme_runtime) entries wrap the payload as value => [...], so the
+        // "intentionally empty" verdict has to be unwrapped here as well.
+        if (\is_array($html)) {
+            $handledEmpty = (bool)($html['handled_empty'] ?? false);
+            $html = $html['html'] ?? null;
+        }
         if (!\is_string($html)) {
             return null;
         }
@@ -4143,32 +4181,34 @@ class Template extends DataObject implements RequestLocalInterface
             'fresh_until' => $freshUntil,
             'stale_until' => $staleUntil,
             'html' => $html,
+            'handled_empty' => $handledEmpty,
         ];
     }
 
     /**
-     * @param array{fresh_until: float, stale_until: float, html: string} $entry
-     * @return array{status: string, html: ?string}
+     * @param array{fresh_until: float, stale_until: float, html: string, handled_empty?: bool} $entry
+     * @return array{status: string, html: ?string, handled_empty: bool}
      */
     private function staticSwrEntryStatus(array $entry): array
     {
         $html = (string)($entry['html'] ?? '');
+        $handledEmpty = (bool)($entry['handled_empty'] ?? false);
 
         $now = \microtime(true);
         if ((float)$entry['fresh_until'] >= $now) {
-            return ['status' => 'fresh', 'html' => $html];
+            return ['status' => 'fresh', 'html' => $html, 'handled_empty' => $handledEmpty];
         }
         if ((float)$entry['stale_until'] >= $now) {
-            return ['status' => 'stale', 'html' => $html];
+            return ['status' => 'stale', 'html' => $html, 'handled_empty' => $handledEmpty];
         }
 
-        return ['status' => 'miss', 'html' => null];
+        return ['status' => 'miss', 'html' => null, 'handled_empty' => false];
     }
 
     /**
-     * @return array{fresh_until: float, stale_until: float, html: string}
+     * @return array{fresh_until: float, stale_until: float, html: string, handled_empty: bool}
      */
-    private function makeStaticSwrEntry(string $html, int $ttl, string $status = 'fresh'): array
+    private function makeStaticSwrEntry(string $html, int $ttl, string $status = 'fresh', bool $handledEmpty = false): array
     {
         $ttl = \max(1, $ttl);
         $now = \microtime(true);
@@ -4178,6 +4218,9 @@ class Template extends DataObject implements RequestLocalInterface
             'fresh_until' => $freshUntil,
             'stale_until' => $freshUntil + $this->staticHookStaleTtl($ttl),
             'html' => $html,
+            // Carried with the HTML so a cached aggregate can answer the
+            // <else/> fallback question without re-rendering the hook.
+            'handled_empty' => $handledEmpty,
         ];
     }
 

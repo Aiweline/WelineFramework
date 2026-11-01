@@ -159,7 +159,7 @@ final class ContinuePayUrlBuilder
             return $url;
         }
         $port = 0;
-        $reqHost = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+        $reqHost = trim((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', ''));
         if ($reqHost !== '' && str_contains($reqHost, ':')) {
             $port = (int)explode(':', $reqHost, 2)[1];
         }

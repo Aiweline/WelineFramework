@@ -59,7 +59,7 @@ class DestinationCountryReader
             // Cookie::set 经 CookieScope 写限定名；须用 Cookie::get，禁止裸 $_COOKIE。
             $raw = Cookie::get(self::COOKIE_LOCATION, '');
             if (!is_string($raw) || trim($raw) === '') {
-                $legacy = $_COOKIE[self::COOKIE_LOCATION] ?? '';
+                $legacy = \Weline\Framework\Env\WelineEnv::inboundCookie(self::COOKIE_LOCATION);
                 $raw = is_string($legacy) ? $legacy : '';
             }
             if (!is_string($raw) || trim($raw) === '') {

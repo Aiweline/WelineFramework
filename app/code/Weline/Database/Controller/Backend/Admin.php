@@ -398,8 +398,9 @@ class Admin extends BackendPageController
         }
 
         foreach (['sql_file', 'file'] as $key) {
-            if (isset($_FILES[$key]) && is_array($_FILES[$key])) {
-                return $_FILES[$key];
+            $candidate = \Weline\Framework\Env\WelineEnv::getFiles($key);
+            if (\is_array($candidate)) {
+                return $candidate;
             }
         }
 

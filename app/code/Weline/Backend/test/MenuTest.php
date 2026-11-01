@@ -21,9 +21,9 @@ class MenuTest extends TestCore
     {
         /**@var Menu $menu */
         $menu = ObjectManager::getInstance(Menu::class);
-//        foreach ($menu->getMenuTree() as $item) {
-//            p($item->getData());
-//        }
-        p($menu->getMenuTree());
+        // 原为调试输出 p($menu->getMenuTree())：会直接打印并中断 runner，
+        // 导致 `--module=Weline_Backend` 一个用例都执行不到。改成真实断言。
+        $tree = $menu->getMenuTree();
+        self::assertTrue($tree === null || \is_array($tree), 'getMenuTree() 应返回数组或 null');
     }
 }

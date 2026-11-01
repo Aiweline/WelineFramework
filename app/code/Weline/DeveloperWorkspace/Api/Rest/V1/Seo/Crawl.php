@@ -267,14 +267,15 @@ class Crawl extends DevToolRestController
 
     private function currentRequestUrl(): string
     {
-        $candidate = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+        $candidate = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_FULL_REQUEST_URI', '');
         if ($candidate !== '' && \preg_match('/^https?:\/\//i', $candidate)) {
             return $candidate;
         }
 
-        $scheme = (!empty($_SERVER['HTTPS']) && \strtolower((string)$_SERVER['HTTPS']) !== 'off') ? 'https' : 'http';
-        $host = (string)($_SERVER['HTTP_HOST'] ?? '');
-        $uri = (string)($_SERVER['REQUEST_URI'] ?? '/');
+        $httpsValue = \strtolower((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTPS', ''));
+        $scheme = ($httpsValue !== '' && $httpsValue !== 'off') ? 'https' : 'http';
+        $host = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '');
+        $uri = \Weline\Framework\Http\RequestUri::current();
 
         return $host !== '' ? $scheme . '://' . $host . $uri : '';
     }

@@ -71,7 +71,7 @@ class TrackingCallback extends FrontendController
     private function collectHeaders(): array
     {
         $headers = [];
-        foreach ($_SERVER as $key => $value) {
+        foreach (\Weline\Framework\Env\WelineEnv::serverAllOrGlobal() as $key => $value) {
             if (!is_string($key) || !str_starts_with($key, 'HTTP_')) {
                 continue;
             }

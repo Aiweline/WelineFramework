@@ -2020,12 +2020,11 @@ class DataTable extends BackendRestController
             $allowedTypes = $this->request->getParam('allowed_types', 'jpg,jpeg,png,gif,webp');
             $uploadPath = $this->request->getParam('upload_path', '/uploads/datatable/images/');
 
-            if (empty($_FILES) || !isset($_FILES['file'])) {
+            $file = \Weline\Framework\Env\WelineEnv::getFiles('file');
+            if (!\is_array($file)) {
                 return $this->error('没有上传文件');
             }
 
-            $file = $_FILES['file'];
-            
             // 验证文件上传
             $uploadResult = $this->validateAndProcessImageUpload($file, $maxSize, $allowedTypes, $uploadPath);
             

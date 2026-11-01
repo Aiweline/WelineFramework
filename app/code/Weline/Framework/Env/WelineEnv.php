@@ -200,6 +200,97 @@ class WelineEnv
         return \is_array($server) ? $server : [];
     }
 
+    /**
+     * Context 优先、超全局兜底的 server 读取。
+     *
+     * 与 {@see self::server()} 的区别：key 在 Context 里**缺失**时才回落超全局；
+     * 存在但为空串仍以 Context 为准。用于 `WLS_WORKER_ID`、`WLS_PORT` 这类
+     * 没有进 Context 映射表的进程/传输键，保证改造前后取值一致。
+     */
+    public static function serverOrGlobal(?string $key = null, mixed $default = null): mixed
+    {
+        if ($key === null) {
+            return self::serverAllOrGlobal();
+        }
+
+        $context = self::currentRequestContext();
+        if ($context !== null && $context->has('input.server.' . $key)) {
+            return $context->server($key, $default);
+        }
+
+        return \is_array($_SERVER ?? null) ? ($_SERVER[$key] ?? $default) : $default;
+    }
+
+    /**
+     * 该 server 键是否**存在**（哪怕值是 0 / 空串）。
+     *
+     * 与 {@see self::serverOrGlobal()} 配套：有些调用点要区分"键存在且为 0"与"键不存在"，
+     * 例如站点 id 显式为 0（全局作用域）时不得回落到 cookie。
+     */
+    public static function hasServerOrGlobal(string $key): bool
+    {
+        $context = self::currentRequestContext();
+        if ($context !== null && $context->has('input.server.' . $key)) {
+            return true;
+        }
+
+        return \is_array($_SERVER ?? null) && \array_key_exists($key, $_SERVER);
+    }
+
+    /**
+     * 整张 server 表：以超全局为底，Context 快照覆盖在上面（Context 的键优先）。
+     *
+     * 用 array_replace 而不是二选一：Context 只保证"本次请求见过的键"，
+     * 直接返回 Context 会丢掉它没见过的进程键（WLS_WORKER_ID 等）。
+     */
+    public static function serverAllOrGlobal(): array
+    {
+        $server = \is_array($_SERVER ?? null) ? $_SERVER : [];
+
+        $context = self::currentRequestContext();
+        if ($context !== null) {
+            $contextServer = $context->server();
+            if (\is_array($contextServer) && $contextServer !== []) {
+                $server = \array_replace($server, $contextServer);
+            }
+        }
+
+        return $server;
+    }
+
+    /** 入站 cookie 整表：同样以超全局为底，Context 覆盖（Context 的键优先）。 */
+    public static function inboundCookieBag(): array
+    {
+        $bag = \is_array($_COOKIE ?? null) ? $_COOKIE : [];
+
+        $context = self::currentRequestContext();
+        if ($context !== null) {
+            $contextBag = $context->cookie();
+            if (\is_array($contextBag) && $contextBag !== []) {
+                $bag = \array_replace($bag, $contextBag);
+            }
+        }
+
+        return $bag;
+    }
+
+    /**
+     * 把一次 server 覆盖镜像到进程超全局（FPM 下给仍直读 `$_SERVER` 的旧代码用）。
+     *
+     * 与 {@see self::setServer()} 配合：setServer 写 Context，本方法只补超全局镜像。
+     * 超全局写入口集中在这里，便于后续把所有读取点收敛到门面后一次性删除。
+     */
+    public static function mirrorServerToGlobal(string $key, mixed $value): void
+    {
+        $_SERVER[$key] = $value;
+    }
+
+    /** 同上，针对 query 超全局（`setGet()` 只写 Context，这里补镜像）。 */
+    public static function mirrorGetToGlobal(string $key, mixed $value): void
+    {
+        $_GET[$key] = $value;
+    }
+
     public static function setServer(string $key, mixed $value, string $reason = ''): void
     {
         $context = Context::current();
@@ -322,6 +413,60 @@ class WelineEnv
         }
 
         return $_COOKIE[$key] ?? $default;
+    }
+
+    /**
+     * 入站 cookie 里是否存在这个**原始线名**（不做 CookieScope 限定）。
+     *
+     * 供热路径文件使用：它们禁止直接读 `$_COOKIE`，超全局只允许留在这一个门面里。
+     */
+    public static function hasInboundCookie(string $name): bool
+    {
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $bag = $context->cookie();
+            if (\is_array($bag) && \array_key_exists($name, $bag)) {
+                return true;
+            }
+        }
+
+        return \is_array($_COOKIE ?? null) && \array_key_exists($name, $_COOKIE);
+    }
+
+    /**
+     * 原始线名的入站 cookie 值（不做 CookieScope 限定）。
+     *
+     * 会话 id 这类"协议名固定、不走作用域后缀"的键用它；超全局只留在这个门面里。
+     */
+    public static function inboundCookie(string $name, string $default = ''): string
+    {
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $bag = $context->cookie();
+            if (\is_array($bag) && \array_key_exists($name, $bag)) {
+                return (string)$bag[$name];
+            }
+        }
+
+        return \is_array($_COOKIE ?? null) && \array_key_exists($name, $_COOKIE)
+            ? (string)$_COOKIE[$name]
+            : $default;
+    }
+
+    /**
+     * 入站 Cookie 头原文：Context 的 server 快照优先，缺失时才回落超全局。
+     */
+    public static function inboundCookieHeader(): string
+    {
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $header = (string)$context->server('HTTP_COOKIE', '');
+            if ($header !== '') {
+                return $header;
+            }
+        }
+
+        return (string)($_SERVER['HTTP_COOKIE'] ?? '');
     }
 
     public static function getFiles(?string $key = null): mixed

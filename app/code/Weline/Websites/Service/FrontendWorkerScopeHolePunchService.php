@@ -254,7 +254,7 @@ final class FrontendWorkerScopeHolePunchService
                 return 'https';
             }
         }
-        $scheme = \strtolower(\trim((string)($_SERVER['REQUEST_SCHEME'] ?? '')));
+        $scheme = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('REQUEST_SCHEME', '')));
 
         return \in_array($scheme, ['http', 'https'], true) ? $scheme : 'https';
     }
@@ -266,7 +266,7 @@ final class FrontendWorkerScopeHolePunchService
             return $host;
         }
 
-        return \strtolower(\trim((string)($_SERVER['HTTP_HOST'] ?? '')));
+        return \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '')));
     }
 
     /**
@@ -275,7 +275,7 @@ final class FrontendWorkerScopeHolePunchService
      */
     private function expireLegacyScopeBootstrapCookies(Response $response): void
     {
-        $cookieHeader = (string)($_SERVER['HTTP_COOKIE'] ?? '');
+        $cookieHeader = \Weline\Framework\Env\WelineEnv::inboundCookieHeader();
         if ($cookieHeader === '' || \strlen($cookieHeader) > 65536) {
             return;
         }
@@ -325,7 +325,7 @@ final class FrontendWorkerScopeHolePunchService
      */
     private function readExistingScopeCookie(): string
     {
-        $cookieHeader = (string)($_SERVER['HTTP_COOKIE'] ?? '');
+        $cookieHeader = \Weline\Framework\Env\WelineEnv::inboundCookieHeader();
         if ($cookieHeader === '' || \strlen($cookieHeader) > 65536) {
             return '';
         }

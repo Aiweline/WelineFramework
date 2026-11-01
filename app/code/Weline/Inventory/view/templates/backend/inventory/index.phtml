@@ -9,7 +9,7 @@ $codeLabelRows = $section === 'warehouses' && isset($code_label_rows) && is_arra
 $columnLabels = isset($column_labels) && is_array($column_labels) ? $column_labels : [];
 $readableSections = ['stocks', 'adjustments'];
 $isReadableSection = in_array($section, $readableSections, true);
-$warehouseTab = strtolower(trim((string)($_GET['wh_tab'] ?? 'tree')));
+$warehouseTab = strtolower(trim((string)(\Weline\Framework\Env\WelineEnv::getGet('wh_tab', 'tree'))));
 if (!in_array($warehouseTab, ['tree', 'labels'], true)) {
     $warehouseTab = 'tree';
 }

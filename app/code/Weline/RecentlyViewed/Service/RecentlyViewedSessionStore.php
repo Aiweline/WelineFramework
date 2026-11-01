@@ -119,7 +119,7 @@ class RecentlyViewedSessionStore
      */
     private function readRawCookieFromSuperglobal(): string
     {
-        $cookies = is_array($_COOKIE ?? null) ? $_COOKIE : [];
+        $cookies = \Weline\Framework\Env\WelineEnv::inboundCookieBag();
         $wireName = CookieScope::qualifyName(self::COOKIE_NAME);
         if ($wireName === '' || !isset($cookies[$wireName]) || !is_scalar($cookies[$wireName])) {
             return '';

@@ -103,18 +103,7 @@ class BackendUserConfig extends Model
 
     private function resolveSessionIdFromCookie(): string
     {
-        $cookieHeader = '';
-        if (\class_exists(\Weline\Framework\Env\WelineEnv::class)) {
-            $cookieHeader = (string)(
-                \Weline\Framework\Env\WelineEnv::server('HTTP_COOKIE', '')
-                ?: \Weline\Framework\Env\WelineEnv::get('server.http_cookie', '')
-            );
-        }
-        if ($cookieHeader !== '' && \preg_match('/(?:^|;\s*)WELINE_SESSID=([^;]+)/', $cookieHeader, $matches)) {
-            return \trim((string)\urldecode($matches[1]));
-        }
-
-        return \trim((string)($_COOKIE['WELINE_SESSID'] ?? ''));
+        return \Weline\Framework\Session\SessionIdResolver::fromCurrentRequest();
     }
 
     private function isCommandLineConfigContext(): bool
@@ -137,7 +126,7 @@ class BackendUserConfig extends Model
         ];
 
         foreach ($serverKeys as $key) {
-            $serverValue = (string)($_SERVER[$key] ?? '');
+            $serverValue = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal($key, '');
             if ($serverValue !== '') {
                 return false;
             }

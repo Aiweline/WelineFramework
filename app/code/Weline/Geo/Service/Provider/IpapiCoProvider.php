@@ -145,8 +145,9 @@ class IpapiCoProvider implements GeoProviderInterface
         $ipKeys = ['HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_CLIENT_IP', 'REMOTE_ADDR'];
         
         foreach ($ipKeys as $key) {
-            if (!empty($_SERVER[$key])) {
-                $ip = $_SERVER[$key];
+            $candidate = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal($key, '');
+            if ($candidate !== '') {
+                $ip = $candidate;
                 if (strpos($ip, ',') !== false) {
                     $ip = explode(',', $ip)[0];
                 }
@@ -157,7 +158,7 @@ class IpapiCoProvider implements GeoProviderInterface
             }
         }
 
-        return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        return (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('REMOTE_ADDR', '127.0.0.1');
     }
 
     /**

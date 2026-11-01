@@ -543,7 +543,7 @@ final class ProductQuoteRequestService implements ProductQuoteRequestSubmitInter
             $request = ObjectManager::getInstance(Request::class);
             $ip = trim((string)$request->clientIP());
         } catch (\Throwable) {
-            $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+            $ip = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('REMOTE_ADDR', '');
         }
 
         return $ip === '' ? '' : hash('sha256', $ip);

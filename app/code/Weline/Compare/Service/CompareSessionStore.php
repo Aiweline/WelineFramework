@@ -50,7 +50,7 @@ class CompareSessionStore
 
     private function readRawCookieFromSuperglobal(): string
     {
-        $cookies = is_array($_COOKIE ?? null) ? $_COOKIE : [];
+        $cookies = \Weline\Framework\Env\WelineEnv::inboundCookieBag();
         $prefix = self::COOKIE_NAME;
         foreach ($cookies as $name => $value) {
             if (!is_string($name) || !is_scalar($value)) {

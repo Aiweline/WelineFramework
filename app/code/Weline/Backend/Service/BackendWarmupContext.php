@@ -27,7 +27,9 @@ final class BackendWarmupContext
             $value = $request->getServer(self::INTERNAL_SERVER_FLAG);
         }
         if ($value === null || $value === '') {
-            $value = $_SERVER[self::INTERNAL_SERVER_FLAG] ?? $_ENV[self::INTERNAL_SERVER_FLAG] ?? \getenv(self::INTERNAL_SERVER_FLAG);
+            $value = \Weline\Framework\Env\WelineEnv::serverOrGlobal(self::INTERNAL_SERVER_FLAG, null)
+                ?? $_ENV[self::INTERNAL_SERVER_FLAG]
+                ?? \getenv(self::INTERNAL_SERVER_FLAG);
         }
 
         return \in_array(\strtolower(\trim((string)$value)), ['1', 'true', 'yes', 'on', 'warmup'], true);

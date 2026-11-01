@@ -65,8 +65,8 @@ final class Search implements TaglibInterface
             }
             $types = $registry->listTypes(area: $area);
             $lockedType = trim((string)($attributes['type'] ?? ''));
-            $requestType = trim((string)($_GET['type'] ?? ''));
-            $requestCategoryId = (int)($_GET['category_id'] ?? 0);
+            $requestType = trim((string)\Weline\Framework\Env\WelineEnv::getGet('type', ''));
+            $requestCategoryId = (int)\Weline\Framework\Env\WelineEnv::getGet('category_id', 0);
             $selectedType = $lockedType !== '' ? $lockedType : ($requestType !== '' ? $requestType : 'all');
             $showType = ($attributes['show-type'] ?? 'true') !== 'false';
             if ($lockedType !== '' && $lockedType !== 'all') {

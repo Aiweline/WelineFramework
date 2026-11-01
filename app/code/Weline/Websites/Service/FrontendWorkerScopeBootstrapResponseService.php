@@ -505,7 +505,7 @@ final class FrontendWorkerScopeBootstrapResponseService
     private function expireStaleScopeBootstrapCookies(Response $response, string $keepCookieName): void
     {
         $prefix = FrontendWorkerSessionService::SCOPE_BOOTSTRAP_COOKIE_PREFIX;
-        $rawHeader = (string)($_SERVER['HTTP_COOKIE'] ?? '');
+        $rawHeader = \Weline\Framework\Env\WelineEnv::inboundCookieHeader();
         if ($rawHeader === '' || \strlen($rawHeader) > 65536) {
             return;
         }

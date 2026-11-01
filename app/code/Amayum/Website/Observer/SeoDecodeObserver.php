@@ -56,18 +56,18 @@ final class SeoDecodeObserver implements ObserverInterface
     {
         $currentId = $payloadWebsiteId;
         if ($currentId <= 0) {
-            $currentId = (int)($_SERVER['WELINE_WEBSITE_ID'] ?? 0);
+            $currentId = (int)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_WEBSITE_ID', 0);
         }
 
         // Cheap, DB-free checks first: this observer runs on EVERY storefront's
         // seo_decode, so resolving the Amayum website id up front would put a
         // full website lookup (cold DB connect + ORM + query, ~142 ms first hit)
         // on the first request of every site just to learn "not Amayum".
-        $host = \strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
+        $host = \strtolower((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', ''));
         $hostLooksAmayum = $host !== ''
             && \preg_match('/(^|\.)amayum\.com(:\d+)?$/', $host) === 1;
         if ($currentId <= 0) {
-            $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            $uri = \Weline\Framework\Http\RequestUri::current();
             $uriLooksAmayum = \str_contains($uri, '/~site/amayum/')
                 || \str_ends_with($uri, '/~site/amayum');
 

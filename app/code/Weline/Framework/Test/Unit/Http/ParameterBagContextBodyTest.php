@@ -31,4 +31,14 @@ final class ParameterBagContextBodyTest extends TestCase
         self::assertSame('bar', $parameterBag->getBody('foo'));
         self::assertSame(2, $parameterBag->getBody('count'));
     }
+
+    public function testGetRawBodyReadsContextBeforePhpInput(): void
+    {
+        Context::enter(new Context([
+            'input' => ['body' => '{"a":1}'],
+        ]));
+
+        // 未注入 rawBody、未 initFromGlobals：必须先从当前上下文取，别再读 php://input。
+        self::assertSame('{"a":1}', (new ParameterBag())->getRawBody());
+    }
 }

@@ -295,7 +295,7 @@ final class WaitGiftService
 
         $cookies = $context['cookies'] ?? null;
         if (!\is_array($cookies)) {
-            $cookies = $_COOKIE ?? [];
+            $cookies = \Weline\Framework\Env\WelineEnv::inboundCookieBag();
         }
         if (!\is_array($cookies)) {
             return 'toc';

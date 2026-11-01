@@ -69,7 +69,7 @@ final class SiteDetectionPreloadProvider extends AbstractWorkerPreloadProvider
             $hosts[$configured] = true;
         }
         foreach (['WLS_HOST', 'HTTP_HOST', 'SERVER_NAME'] as $serverKey) {
-            $value = \strtolower(\trim((string)($_SERVER[$serverKey] ?? '')));
+            $value = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal($serverKey, '')));
             if ($value !== '') {
                 $hosts[$value] = true;
             }

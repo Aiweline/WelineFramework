@@ -12,10 +12,12 @@ $currency = (string) ($bill['currency_code'] ?? 'USD');
 // 可用支付方式由 Provider 列表决定（QuickPay 控制器下发）。列表为空时保持空串，
 // 由前端提示「暂无可用支付方式」，壳不得编造 code 兜底。
 $preferredMethod = strtolower(trim((string) ($this->getData('preferred_payment_method') ?? '')));
-$host = (string) ($_SERVER['HTTP_HOST'] ?? '');
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-if (isset($_SERVER['REQUEST_SCHEME']) && is_string($_SERVER['REQUEST_SCHEME']) && $_SERVER['REQUEST_SCHEME'] !== '') {
-    $scheme = $_SERVER['REQUEST_SCHEME'];
+$host = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '');
+$httpsFlag = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTPS', '');
+$scheme = ($httpsFlag !== '' && $httpsFlag !== 'off') ? 'https' : 'http';
+$requestScheme = \Weline\Framework\Env\WelineEnv::serverOrGlobal('REQUEST_SCHEME', '');
+if (\is_string($requestScheme) && $requestScheme !== '') {
+    $scheme = $requestScheme;
 }
 $absoluteShare = $shareUrl;
 if ($shareUrl !== '' && !str_starts_with($shareUrl, 'http') && $host !== '') {

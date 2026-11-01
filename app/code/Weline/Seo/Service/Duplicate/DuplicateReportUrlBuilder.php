@@ -135,9 +135,10 @@ final class DuplicateReportUrlBuilder
 
     private function resolveOrigin(): string
     {
-        $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
-        $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            || ((string)($_SERVER['SERVER_PORT'] ?? '') === '443');
+        $host = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', 'localhost');
+        $httpsValue = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTPS', '');
+        $https = ($httpsValue !== '' && $httpsValue !== 'off')
+            || ((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('SERVER_PORT', '') === '443');
         $scheme = $https ? 'https' : 'http';
 
         return $scheme . '://' . $host;

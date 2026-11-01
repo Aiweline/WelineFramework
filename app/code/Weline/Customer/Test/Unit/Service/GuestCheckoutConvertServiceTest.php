@@ -151,6 +151,11 @@ final class GuestCheckoutConvertServiceTest extends TestCase
             {
                 return null;
             }
+
+            public function findSubmittedTokenByOrderUuid(string $orderUuid): ?string
+            {
+                return null;
+            }
         };
 
         return new GuestCheckoutConvertService(

@@ -20,6 +20,7 @@ final class SuperglobalUsageGuardTest extends TestCase
         'app/code/Weline/Framework/Http/Cookie.php',
         'app/code/Weline/Framework/Http/Response.php',
         'app/code/Weline/Framework/Http/Url.php',
+        'app/code/Weline/Framework/Http/RequestUri.php',
         'app/code/Weline/Framework/Http/WlsRequest.php',
         'app/code/Weline/Framework/Http/Request/FileBag.php',
         'app/code/Weline/Framework/Http/Request/ParameterBag.php',
@@ -38,6 +39,26 @@ final class SuperglobalUsageGuardTest extends TestCase
         'app/code/Weline/Framework/System/File/Uploader.php',
         'app/code/Weline/Framework/View/Taglib/Generator/CodeGenerator.php',
         'app/code/Weline/Framework/event.php',
+
+        // —— 进程 / CLI 入口：读的是进程环境，不是请求态 ——
+        'app/code/Weline/Framework/Runtime/Runtime.php',
+        'app/code/Weline/Framework/Runtime/Resumable/Runner/spawn.php',
+        'app/code/Weline/Framework/System/Process/Processer.php',
+        'app/code/Weline/Framework/System/Process/bin/posix_detached_spawn.php',
+        'app/code/Weline/Framework/Console/PhpCliRuntimePreflight.php',
+        'app/code/Weline/Framework/View/TemplateCompileService.php',
+        'app/code/Weline/Framework/Deploy/DeployStagingSession.php',
+        'app/code/Weline/Framework/Deploy/HostProcessPoolPolicy.php',
+        'app/code/Weline/Framework/Database/Migration/Service/MigrationCloneService.php',
+
+        // —— 同请求会写 $_SERVER / $_COOKIE，Context 袋不会跟着变（换读门面会读到旧值）——
+        'app/code/Weline/Framework/Runtime/PostResponseTaskQueue.php',
+        'app/code/Weline/Framework/Runtime/RequestLifecycleTrace.php',
+        'app/code/Weline/Framework/Runtime/PanelTraceCookie.php',
+
+        // —— 诊断 / 失效签名必须同时比较 Context 与超全局（防 under-invalidation）——
+        'app/code/Weline/Framework/Runtime/InternalHomepagePrime.php',
+        'app/code/Weline/Framework/Router/FullPageCacheCoordinator.php',
     ];
 
     public function testFrameworkProductionCodeDoesNotAddNewDirectSuperglobalUsageOutsideAllowlist(): void

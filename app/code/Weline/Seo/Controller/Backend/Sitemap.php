@@ -676,9 +676,10 @@ class Sitemap extends BackendController
      */
     private function getPostData(): array
     {
-        // 优先使用 $_POST
-        if (!empty($_POST)) {
-            return $_POST;
+        // 优先使用请求袋里的 POST 数据
+        $postBag = \Weline\Framework\Env\WelineEnv::getPost(null, []);
+        if (\is_array($postBag) && $postBag !== []) {
+            return $postBag;
         }
         
         // 尝试从原始输入解析

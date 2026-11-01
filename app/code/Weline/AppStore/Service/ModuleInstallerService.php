@@ -1294,7 +1294,7 @@ class ModuleInstallerService
     {
         $candidates = [
             getenv('WLS_INSTANCE') ?: '',
-            $_SERVER['WLS_INSTANCE'] ?? '',
+            (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_INSTANCE', ''),
             $_ENV['WLS_INSTANCE'] ?? '',
         ];
 
@@ -1423,7 +1423,7 @@ class ModuleInstallerService
             return $boundDomain;
         }
 
-        $serverDomain = $this->normalizeDomain((string)($_SERVER['HTTP_HOST'] ?? ''));
+        $serverDomain = $this->normalizeDomain((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', ''));
         if ($serverDomain !== '') {
             return $serverDomain;
         }

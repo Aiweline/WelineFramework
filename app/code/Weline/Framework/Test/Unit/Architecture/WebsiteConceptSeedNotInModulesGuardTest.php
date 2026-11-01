@@ -126,8 +126,10 @@ final class WebsiteConceptSeedNotInModulesGuardTest extends TestCase
             }
             $rel = \substr($path, \strlen($root) + 1);
             // Only production i18n + shipped view surfaces (not design-time prototypes).
+            // `view/tpl/` 是构建产物（模块 .gitignore 已忽略），扫它只会把编译副本当违规。
             $inI18n = \str_contains($path, '/i18n/') && \str_ends_with($path, '.csv');
             $inView = \str_contains($path, '/view/')
+                && !\str_contains($path, '/view/tpl/')
                 && !\str_contains($path, '/view/prototypes/')
                 && !\str_contains($path, '/_prototype/');
             $isBrandSeed = \str_contains($path, 'WebsiteBrandIdentitySeedService.php')

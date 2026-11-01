@@ -358,7 +358,7 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                     'currency' => $currency,
                     'notesValue' => $notesValue,
                 ];
-                $opsTab = strtolower(trim((string)($_GET['tab'] ?? 'shipment')));
+                $opsTab = strtolower(trim((string)(\Weline\Framework\Env\WelineEnv::getGet('tab', 'shipment'))));
                 if (!in_array($opsTab, ['shipment', 'refund', 'comms', 'customer'], true)) {
                     $opsTab = 'shipment';
                 }

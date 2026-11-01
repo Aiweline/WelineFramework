@@ -88,11 +88,16 @@ final readonly class StorefrontCacheKeyContext
                 // request-local start time. This keeps set/get stable inside
                 // that scope without introducing static process state. WLS is
                 // deliberately excluded because its process serves many tasks.
+                // Context 优先、超全局兜底；保持原 `??` 语义（键存在即用，不看真假）。
+                $requestTime = WelineEnv::serverOrGlobal('REQUEST_TIME_FLOAT', null);
+                if ($requestTime === null) {
+                    $requestTime = WelineEnv::serverOrGlobal('REQUEST_TIME', '');
+                }
                 $seed = implode('|', [
                     Runtime::getMode(),
                     (string)getmypid(),
-                    (string)($_SERVER['REQUEST_TIME_FLOAT'] ?? $_SERVER['REQUEST_TIME'] ?? ''),
-                    (string)($_SERVER['SCRIPT_FILENAME'] ?? ''),
+                    (string)$requestTime,
+                    (string)WelineEnv::serverOrGlobal('SCRIPT_FILENAME', ''),
                 ]);
             }
             self::reportFence($failureCode, null, $seed !== '');

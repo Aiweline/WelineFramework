@@ -3,7 +3,7 @@
  * @hook-priority 120
  * @hook-sort-order 10
  */
-$isBackend = str_contains(strtolower((string)($_SERVER['REQUEST_URI'] ?? '')), '/admin');
+$isBackend = str_contains(strtolower(\Weline\Framework\Http\RequestUri::current()), '/admin');
 if ($isBackend) {
     return;
 }

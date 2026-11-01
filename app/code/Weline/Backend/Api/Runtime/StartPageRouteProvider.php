@@ -63,7 +63,7 @@ final class StartPageRouteProvider implements StartPageRouteProviderInterface
             $websiteCode = trim((string)$request->getServer('WELINE_WEBSITE_CODE'));
         }
         if ($websiteCode === '') {
-            $websiteCode = trim((string)($_SERVER['WELINE_WEBSITE_CODE'] ?? ''));
+            $websiteCode = trim((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_WEBSITE_CODE', ''));
         }
         return $websiteCode !== '' ? $reader->normalizeScope($websiteCode) : $reader->globalScope();
     }

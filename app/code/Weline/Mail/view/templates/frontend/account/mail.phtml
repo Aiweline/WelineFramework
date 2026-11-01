@@ -26,7 +26,7 @@ if ($activeAccounts === []) {
     return;
 }
 
-$selectedMailbox = strtolower(trim((string)($this->request->getGet('mail_account', '') ?? ($_GET['mail_account'] ?? ''))));
+$selectedMailbox = strtolower(trim((string)($this->request->getGet('mail_account', '') ?? \Weline\Framework\Env\WelineEnv::getGet('mail_account', ''))));
 $allowedMailbox = false;
 foreach ($activeAccounts as $activeAccount) {
     if (strtolower((string)$activeAccount->getData('email')) === $selectedMailbox) {
@@ -45,7 +45,7 @@ $inboxError = null;
 $mailEngine = ObjectManager::getInstance(StalwartEngineAdapter::class);
 try {
     $inboxMessages = $mailEngine->listInboxMessages($selectedMailbox, 50);
-    $messageId = trim((string)($this->request->getGet('mail_message', '') ?? ($_GET['mail_message'] ?? '')));
+    $messageId = trim((string)($this->request->getGet('mail_message', '') ?? \Weline\Framework\Env\WelineEnv::getGet('mail_message', '')));
     if ($messageId !== '') {
         $selectedMessage = $mailEngine->getInboxMessage($selectedMailbox, $messageId);
     }
@@ -182,7 +182,7 @@ if ($customerId <= 0) {
 $mailService = ObjectManager::getInstance(MailCustomerAccountService::class);
 /** @var MailFakeMailboxService $mailboxService */
 $mailboxService = ObjectManager::getInstance(MailFakeMailboxService::class);
-$fakeFlag = (string)($this->request->getGet('mail_fake', '') ?? ($_GET['mail_fake'] ?? ''));
+$fakeFlag = (string)($this->request->getGet('mail_fake', '') ?? \Weline\Framework\Env\WelineEnv::getGet('mail_fake', ''));
 $fakeMode = $fakeFlag === '1';
 $enabled = $mailService->isServiceEnabled($fakeMode);
 $domains = $mailService->getActiveDomains();

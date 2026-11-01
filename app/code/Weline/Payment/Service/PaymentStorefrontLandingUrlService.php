@@ -140,7 +140,7 @@ class PaymentStorefrontLandingUrlService
 
             $httpHost = trim((string) ($request->getHeader('Host') ?? ''));
             if ($httpHost === '') {
-                $httpHost = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
+                $httpHost = trim((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', ''));
             }
             if ($httpHost === '') {
                 return '';
@@ -150,7 +150,7 @@ class PaymentStorefrontLandingUrlService
             try {
                 $scheme = $request->isSecure() ? 'https' : 'http';
             } catch (\Throwable) {
-                $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
+                $https = strtolower((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTPS', ''));
                 $scheme = ($https !== '' && $https !== 'off') ? 'https' : 'http';
             }
 
@@ -199,7 +199,7 @@ class PaymentStorefrontLandingUrlService
             }
         }
         foreach (['HTTP_REFERER', 'HTTP_ORIGIN'] as $key) {
-            $value = trim((string) ($_SERVER[$key] ?? ''));
+            $value = trim((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal($key, ''));
             if ($value !== '') {
                 $candidates[] = $value;
             }
@@ -264,7 +264,7 @@ class PaymentStorefrontLandingUrlService
             try {
                 $uriPath = (string) parse_url((string) $request->getUri(), PHP_URL_PATH);
             } catch (\Throwable) {
-                $uriPath = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+                $uriPath = \Weline\Framework\Http\RequestUri::current();
                 $uriPath = (string) (parse_url($uriPath, PHP_URL_PATH) ?: '/');
             }
             if ($uriPath === '') {

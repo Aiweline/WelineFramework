@@ -116,7 +116,7 @@ final class WebsiteEntryUrlService
         if (!\is_array($parts) || empty($parts['host']) || isset($parts['port'])) {
             return $url;
         }
-        $httpHost = (string)($_SERVER['HTTP_HOST'] ?? '');
+        $httpHost = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '');
         if ($httpHost === '' || !\preg_match('/:(\d+)\z/', $httpHost, $m)) {
             return $url;
         }
@@ -125,8 +125,9 @@ final class WebsiteEntryUrlService
             return $url;
         }
         $scheme = (string)($parts['scheme'] ?? 'http');
-        $httpsOn = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
-        $forwarded = \strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+        $httpsValue = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTPS', '');
+        $httpsOn = $httpsValue !== '' && $httpsValue !== 'off';
+        $forwarded = \strtolower((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_X_FORWARDED_PROTO', ''));
         if ($httpsOn || $forwarded === 'https') {
             $scheme = 'https';
         }

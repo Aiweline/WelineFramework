@@ -712,7 +712,7 @@ class Installed extends BackendController
             return $requestHost;
         }
 
-        $serverHost = $this->normalizeDomain((string)($_SERVER['HTTP_HOST'] ?? ''));
+        $serverHost = $this->normalizeDomain((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', ''));
         if ($serverHost !== '' && !$this->isLoopbackDomain($serverHost)) {
             return $serverHost;
         }

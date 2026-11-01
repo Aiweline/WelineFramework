@@ -117,9 +117,9 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             return;
         }
 
-        if ((string)($_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? '') === '1'
-            || (string)($_SERVER['WLS_INTERNAL_BACKEND_WARMUP'] ?? '') === '1'
-            || (string)($_SERVER['WLS_INTERNAL_WARMUP'] ?? '') === '1'
+        if ((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_INTERNAL_DYNAMIC_WARMUP', '') === '1'
+            || (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_INTERNAL_BACKEND_WARMUP', '') === '1'
+            || (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_INTERNAL_WARMUP', '') === '1'
         ) {
             return;
         }
@@ -253,7 +253,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
                 'guest_token' => (string)($body['guest_token'] ?? ''),
                 'customer_id' => (string)($body['customer_id'] ?? ''),
                 'selling_mode' => (string)($body['selling_mode'] ?? $body['cart_type'] ?? ''),
-                'cookies' => $_COOKIE ?? [],
+                'cookies' => \Weline\Framework\Env\WelineEnv::inboundCookieBag(),
                 'ip' => (string)\Weline\Framework\Env\WelineEnv::server('REMOTE_ADDR', ''),
                 'user_agent' => (string)\Weline\Framework\Env\WelineEnv::server('HTTP_USER_AGENT', ''),
             ]),
@@ -263,7 +263,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
                 $this->readWaitGiftCookie(WaitGiftService::COOKIE_WAIT, (string)($body['token'] ?? '')),
                 [
                     'selling_mode' => (string)($body['selling_mode'] ?? $body['cart_type'] ?? ''),
-                    'cookies' => $_COOKIE ?? [],
+                    'cookies' => \Weline\Framework\Env\WelineEnv::inboundCookieBag(),
                 ]
             ),
             default => [
@@ -318,7 +318,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         $maint = (\defined('WLS_MAINTENANCE_WORKER') && WLS_MAINTENANCE_WORKER)
             || (bool)Env::system('maintenance');
         $enabled = (bool)($wave['wait_gift_enabled'] ?? false);
-        $sellingMode = $service->resolveSellingMode(['cookies' => $_COOKIE ?? []]);
+        $sellingMode = $service->resolveSellingMode(['cookies' => \Weline\Framework\Env\WelineEnv::inboundCookieBag()]);
         $toc = $sellingMode !== 'tob';
 
         return [
@@ -547,7 +547,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
 
         // 从URL参数检查
         if (in_array('url', $methods)) {
-            $urlKey = $_GET[$keyName] ?? null;
+            $urlKey = \Weline\Framework\Env\WelineEnv::getGet($keyName, null);
             if ($urlKey === $keyValue) {
                 return true;
             }

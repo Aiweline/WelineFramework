@@ -91,7 +91,7 @@ class DeployCoreUpdateService
             }
 
             $chain = self::buildCommandChain($deployRoot, $branch);
-            $logFile = BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'core_update.log';
+            $logFile = VAR_DIR . 'log' . DIRECTORY_SEPARATOR . 'core_update.log';
             $text = '';
             foreach ($chain as $step => $command) {
                 $output = [];

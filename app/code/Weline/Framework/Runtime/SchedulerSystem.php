@@ -697,7 +697,7 @@ class SchedulerSystem
         if (!$fiber instanceof \Fiber) {
             return;
         }
-        $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $uri = \Weline\Framework\Http\RequestUri::current();
         if ($uri === '' || !\str_contains($uri, 'shell=theme-editor')) {
             return;
         }

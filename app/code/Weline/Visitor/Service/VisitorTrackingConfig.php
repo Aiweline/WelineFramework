@@ -821,7 +821,7 @@ class VisitorTrackingConfig
     /** 访客国家码：优先复用 Captcha 的可信头解析，其次常见 CDN 头；无法判定返回 ''（fail-closed 由调用方处理）。 */
     public function getRequestRegion(): string
     {
-        $server = \is_array($_SERVER ?? null) ? $_SERVER : [];
+        $server = \Weline\Framework\Env\WelineEnv::serverAllOrGlobal();
         try {
             if (\class_exists(\Weline\Captcha\Service\ClientGeoResolver::class)) {
                 $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(

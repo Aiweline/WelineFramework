@@ -217,9 +217,8 @@ class LocalDescription extends LocalModel
 
     private static function resolveWebsiteId(): int
     {
-        $fromServer = max(0, (int)($_SERVER['WELINE_WEBSITE_ID'] ?? 0));
-        if ($fromServer > 0 || isset($_SERVER['WELINE_WEBSITE_ID'])) {
-            return $fromServer;
+        if (\Weline\Framework\Env\WelineEnv::hasServerOrGlobal('WELINE_WEBSITE_ID')) {
+            return max(0, (int)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_WEBSITE_ID', 0));
         }
         $fromCookie = Cookie::get('WELINE_WEBSITE_ID', null);
         if ($fromCookie !== null && $fromCookie !== '') {

@@ -31,7 +31,7 @@ final class FrontendStartPageRouteProvider implements FrontendStartPageRouteProv
             $websiteCode = \trim((string)$request->getServer('WELINE_WEBSITE_CODE'));
         }
         if ($websiteCode === '') {
-            $websiteCode = \trim((string)($_SERVER['WELINE_WEBSITE_CODE'] ?? ''));
+            $websiteCode = \trim((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_WEBSITE_CODE', ''));
         }
         // 站点未识别时不得回落到 global scope：该键按站点存放，全局作用域里若
         // 残留某个站点的值（实测 amayum.default.default），会把「别的站点首页
@@ -75,9 +75,9 @@ final class FrontendStartPageRouteProvider implements FrontendStartPageRouteProv
     {
         foreach ([
             (string)$request->getServer('HTTP_HOST'),
-            (string)($_SERVER['HTTP_HOST'] ?? ''),
+            (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', ''),
             (string)$request->getServer('SERVER_NAME'),
-            (string)($_SERVER['SERVER_NAME'] ?? ''),
+            (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('SERVER_NAME', ''),
         ] as $candidate) {
             $candidate = \trim($candidate);
             if ($candidate === '') {

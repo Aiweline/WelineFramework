@@ -149,8 +149,9 @@ class Mail extends FrontendController
             return is_scalar($value) ? (string)$value : json_encode($value, JSON_UNESCAPED_UNICODE);
         }
 
-        if (array_key_exists($key, $_POST)) {
-            $postValue = $_POST[$key];
+        $postBag = \Weline\Framework\Env\WelineEnv::getPost(null, []);
+        if (\is_array($postBag) && array_key_exists($key, $postBag)) {
+            $postValue = $postBag[$key];
             return is_scalar($postValue) ? (string)$postValue : json_encode($postValue, JSON_UNESCAPED_UNICODE);
         }
 

@@ -22,12 +22,11 @@ class Import extends BackendRestController
     {
         try {
             // 检查文件上传
-            if (empty($_FILES) || !isset($_FILES['file'])) {
+            $file = \Weline\Framework\Env\WelineEnv::getFiles('file');
+            if (!\is_array($file)) {
                 throw DataTableException::uploadFailed('没有上传文件');
             }
 
-            $file = $_FILES['file'];
-            
             // 验证文件上传错误
             if ($file['error'] !== UPLOAD_ERR_OK) {
                 throw DataTableException::uploadFailed($this->getUploadErrorMessage($file['error']));

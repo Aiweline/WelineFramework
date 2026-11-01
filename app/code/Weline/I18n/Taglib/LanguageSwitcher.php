@@ -1790,7 +1790,7 @@ class LanguageSwitcher implements TaglibInterface
             $request instanceof Request ? (string)($request->getServer('WELINE_WEBSITE_URL') ?? '') : '',
             (string)WelineEnv::server('WELINE_WEBSITE_URL', ''),
             (string)WelineEnv::get('website_url', ''),
-            (string)($_SERVER['WELINE_WEBSITE_URL'] ?? ''),
+            (string)WelineEnv::serverOrGlobal('WELINE_WEBSITE_URL', ''),
         ];
         $hasRequestWebsiteUrl = false;
         foreach ($requestBound as $boundUrl) {
@@ -1847,7 +1847,8 @@ class LanguageSwitcher implements TaglibInterface
             ? (string)($request->getServer('WELINE_ORIGIN_REQUEST_URI')
                 ?: $request->getServer('REQUEST_URI')
                 ?: '')
-            : (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '');
+            : (string)(WelineEnv::serverOrGlobal('WELINE_ORIGIN_REQUEST_URI', '')
+                ?: WelineEnv::serverOrGlobal('REQUEST_URI', ''));
         $uriPath = (string)(parse_url($uri, PHP_URL_PATH) ?: '');
         $segments = array_values(array_filter(
             explode('/', trim(str_replace('\\', '/', $uriPath), '/')),
@@ -1996,7 +1997,8 @@ class LanguageSwitcher implements TaglibInterface
         try {
             $origin = (string)(WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
                 ?: WelineEnv::server('REQUEST_URI', '')
-                ?: ($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? ''));
+                ?: WelineEnv::serverOrGlobal('WELINE_ORIGIN_REQUEST_URI', '')
+                ?: WelineEnv::serverOrGlobal('REQUEST_URI', ''));
             $parsed = $mountClass::parseFromUri($origin);
             if ($parsed !== null && $mountClass::isPreviewToken((string)$parsed['token'])) {
                 return (string)$parsed['token'];

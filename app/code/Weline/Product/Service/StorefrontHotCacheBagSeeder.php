@@ -467,7 +467,7 @@ final class StorefrontHotCacheBagSeeder
         }
         if ($stage === '') {
             try {
-                $stage = \strtolower(\trim((string)($_SERVER['WLS_PRIME_HOT_CACHE_BAGS_STAGE'] ?? '')));
+                $stage = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_PRIME_HOT_CACHE_BAGS_STAGE', '')));
             } catch (\Throwable) {
                 $stage = '';
             }

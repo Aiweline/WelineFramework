@@ -3,7 +3,7 @@
  * @hook-priority 130
  * @hook-sort-order 20
  */
-$uri = strtolower((string) ($_SERVER['REQUEST_URI'] ?? ''));
+$uri = strtolower(\Weline\Framework\Http\RequestUri::current());
 if (str_contains($uri, '/admin')) {
     return;
 }

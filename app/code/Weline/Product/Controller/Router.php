@@ -146,11 +146,17 @@ final class Router implements RouterInterface
         } catch (\Throwable) {
         }
 
-        if ($slug === '' && isset($_GET['slug']) && is_scalar($_GET['slug'])) {
-            $slug = strtolower(trim((string)$_GET['slug']));
+        if ($slug === '') {
+            $slugParam = \Weline\Framework\Env\WelineEnv::getGet('slug', null);
+            if (\is_scalar($slugParam)) {
+                $slug = strtolower(trim((string)$slugParam));
+            }
         }
-        if ($productId <= 0 && isset($_GET['id']) && is_scalar($_GET['id'])) {
-            $productId = (int)$_GET['id'];
+        if ($productId <= 0) {
+            $idParam = \Weline\Framework\Env\WelineEnv::getGet('id', null);
+            if (\is_scalar($idParam)) {
+                $productId = (int)$idParam;
+            }
         }
 
         if ($slug === '' || $productId <= 0) {

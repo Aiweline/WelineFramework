@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
+use Weline\Framework\Deploy\GenerationRegistry;
+
 /** 使用方完成范围与权限校验后，安装到当前请求的不可变主题输入。 */
 final readonly class ThemeApplicationContext
 {
@@ -58,6 +60,16 @@ final readonly class ThemeApplicationContext
             throw new \LogicException('theme_application_context_already_fixed');
         }
         RequestContext::set(self::REQUEST_KEY_PREFIX . $this->area . '.' . $this->purpose, $this);
+        // 2026-11-01（Step 0b）：站点/主题信息此刻刚就绪，是最早的预热点。
+        // 首屏 header 渲染前就必须能读到 generation_uid，否则会退化成"现场拼接"（曾是全站 token 塌缩的根因）。
+        // 用 reset + preload：上下文可能切换（同进程多站点/多主题），必须按新环境重算。
+        // 失败不得影响请求（内部 try/catch 记 warning）。
+        try {
+            GenerationRegistry::reset();
+            GenerationRegistry::preload();
+        } catch (\Throwable) {
+            // 预热异常已在 GenerationRegistry 内部记录；这里再兜一层，绝不让请求失败
+        }
     }
 
     public static function current(string $area, string $purpose = 'runtime'): ?self

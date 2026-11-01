@@ -22,6 +22,15 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
     private readonly mixed $modelFactory;
 
     /**
+     * Per-request read memo for loadRows(): a single page render may read the same
+     * (entity_id, attribute_code) dozens of times. Registered with StateManager so
+     * the runtime clears it at every request boundary; write paths clear it eagerly.
+     *
+     * @var array<string, list<array<string, mixed>>>
+     */
+    private static array $loadRowsMemo = [];
+
+    /**
      * @param (\Closure(int): AttributeValue)|null $modelFactory
      */
     public function __construct(
@@ -32,6 +41,9 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
     ) {
         parent::__construct($provisioner);
         $this->modelFactory = $modelFactory;
+        if (\class_exists(\Weline\Framework\Runtime\StateManager::class, false)) {
+            \Weline\Framework\Runtime\StateManager::registerStaticReset(self::class, 'loadRowsMemo', []);
+        }
     }
 
     /** Run one product attribute batch through the existing committed catalog change. */
@@ -219,6 +231,7 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
     ): void {
         $this->assertWebsite($websiteId);
         $this->assertStoreId($storeId);
+        self::$loadRowsMemo = [];
         $model = $this->findRow($websiteId, $storeId, $entityType, $entityId, $attributeCode, $locale);
         if ($model !== null) {
             $model->delete();
@@ -232,6 +245,7 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         if ($entityType === '' || $entityId <= 0) {
             return;
         }
+        self::$loadRowsMemo = [];
         $model = $this->newModel($websiteId);
         $model->clear()
             ->where(AttributeValue::schema_fields_ENTITY_TYPE, $entityType)
@@ -811,11 +825,11 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
                     return $uri;
                 }
             } catch (\Throwable) {
-                // Fall through to $_SERVER.
+                // Fall through to the shared URI reader.
             }
         }
 
-        return (string)($_SERVER['REQUEST_URI'] ?? '');
+        return \Weline\Framework\Http\RequestUri::current();
     }
 
     /** Live storefront HTTP request: coerce locales=null; CLI/backend keep unfiltered. */
@@ -857,6 +871,7 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
     ): void {
         $this->assertWebsite($websiteId);
         $this->assertStoreId($storeId);
+        self::$loadRowsMemo = [];
         $existing = $this->findRow($websiteId, $storeId, $entityType, $entityId, $attributeCode, $locale);
         if ($existing !== null) {
             foreach ($fields as $k => $v) {
@@ -904,6 +919,10 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         int $entityId,
         string $attributeCode,
     ): array {
+        $memoKey = $websiteId . '|' . $entityType . '|' . $entityId . '|' . $attributeCode;
+        if (\array_key_exists($memoKey, self::$loadRowsMemo)) {
+            return self::$loadRowsMemo[$memoKey];
+        }
         $model = $this->newModel($websiteId);
         $raw = $model->clear()
             ->where(AttributeValue::schema_fields_ENTITY_TYPE, $entityType)
@@ -925,7 +944,7 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
                 'is_required' => (int)($item[AttributeValue::schema_fields_IS_REQUIRED] ?? 0) === 1,
             ];
         }
-        return $rows;
+        return self::$loadRowsMemo[$memoKey] = $rows;
     }
 
     /** @param array<string, mixed> $row */

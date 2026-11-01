@@ -272,7 +272,7 @@ final class SearchQueryResultTipCacheWarmer implements CacheWarmerInterface
         $candidates = [];
         foreach ([
             (string)(\getenv('WLS_PUBLIC_ORIGIN') ?: ''),
-            (string)($_SERVER['WLS_PUBLIC_ORIGIN'] ?? ''),
+            (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_PUBLIC_ORIGIN', ''),
             (string)($_ENV['WLS_PUBLIC_ORIGIN'] ?? ''),
         ] as $raw) {
             $raw = \trim($raw);
@@ -323,11 +323,11 @@ final class SearchQueryResultTipCacheWarmer implements CacheWarmerInterface
             }
         }
         if (!Runtime::isPersistent()) {
-            $_SERVER['HTTP_HOST'] = $host;
-            $_SERVER['SERVER_NAME'] = \explode(':', $host, 2)[0];
-            $_SERVER['REQUEST_SCHEME'] = $scheme;
-            $_SERVER['HTTPS'] = $scheme === 'https' ? 'on' : 'off';
-            $_SERVER['WELINE_WEBSITE_URL'] = $websiteUrl;
+            \Weline\Framework\Env\WelineEnv::mirrorServerToGlobal('HTTP_HOST', $host);
+            \Weline\Framework\Env\WelineEnv::mirrorServerToGlobal('SERVER_NAME', \explode(':', $host, 2)[0]);
+            \Weline\Framework\Env\WelineEnv::mirrorServerToGlobal('REQUEST_SCHEME', $scheme);
+            \Weline\Framework\Env\WelineEnv::mirrorServerToGlobal('HTTPS', $scheme === 'https' ? 'on' : 'off');
+            \Weline\Framework\Env\WelineEnv::mirrorServerToGlobal('WELINE_WEBSITE_URL', $websiteUrl);
         }
 
         return 'host=' . $host;

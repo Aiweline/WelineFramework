@@ -51,7 +51,7 @@ $templateIcons = [
     'seo' => 'search',
 ];
 
-$variant = strtoupper(trim((string)($_GET['variant'] ?? 'B')));
+$variant = strtoupper(trim((string)(\Weline\Framework\Env\WelineEnv::getGet('variant', 'B'))));
 if (!in_array($variant, ['A', 'B', 'C'], true)) {
     $variant = 'B';
 }

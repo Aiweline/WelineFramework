@@ -136,8 +136,8 @@ class EnvProbe
     {
         $home = (string)(getenv('HOME') ?: '');
         $candidates = array_filter([
-            $_SERVER['ANDROID_HOME'] ?? getenv('ANDROID_HOME') ?: null,
-            $_SERVER['ANDROID_SDK_ROOT'] ?? getenv('ANDROID_SDK_ROOT') ?: null,
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('ANDROID_HOME', null) ?? getenv('ANDROID_HOME') ?: null,
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('ANDROID_SDK_ROOT', null) ?? getenv('ANDROID_SDK_ROOT') ?: null,
             $home !== '' ? $home . '/Library/Android/sdk' : null,
             // Homebrew cask android-commandlinetools 的默认根
             $this->brewPrefix('android-commandlinetools'),

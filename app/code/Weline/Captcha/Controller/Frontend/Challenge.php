@@ -43,7 +43,7 @@ class Challenge extends FrontendController
             'intent' => $intent,
             'required' => true,
             'prefer' => $prefer,
-            'server' => $_SERVER ?? [],
+            'server' => \Weline\Framework\Env\WelineEnv::serverAllOrGlobal(),
         ]);
 
         // PcController exposes fetchJson (not json).

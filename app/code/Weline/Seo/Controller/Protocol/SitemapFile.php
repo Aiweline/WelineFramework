@@ -40,9 +40,9 @@ class SitemapFile extends FrontendController
             (string)$this->request->getData('seo_sitemap_file'),
             (string)$this->request->getServer('WELINE_ORIGIN_REQUEST_URI'),
             (string)$this->request->getServer('ORIGIN_REQUEST_URI'),
-            (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? ''),
+            (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_ORIGIN_REQUEST_URI', ''),
             (string)$this->request->getUri(),
-            (string)($_SERVER['REQUEST_URI'] ?? ''),
+            \Weline\Framework\Http\RequestUri::current(),
         ];
         foreach ($candidates as $candidate) {
             $candidate = trim($candidate);

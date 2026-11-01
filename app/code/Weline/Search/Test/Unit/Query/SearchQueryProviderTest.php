@@ -74,6 +74,7 @@ final class SearchQueryProviderTest extends TestCase
             public function code(): string { return 'product'; }
             public function label(): string { return 'product'; }
             public function sortOrder(): int { return 10; }
+            public function areas(): array { return ['frontend']; }
             public function expression(SearchRequest $request): SearchExpression {
                 return SearchExpression::of($request);
             }
@@ -115,7 +116,9 @@ final class SearchQueryProviderTest extends TestCase
                     public function select(): static { return $this; }
                     public function fetchArray(): array { return []; }
                 },
-                $this->createMock(StorefrontScopeHotCache::class),
+                // StorefrontScopeHotCache 是 final 类，PHPUnit 无法 mock；用真实实例
+                // （构造参数全为可空，无 CacheManager 时不走缓存，等价于"直通"）。
+                new StorefrontScopeHotCache(),
             ),
             new SearchParamGuard(),
         );

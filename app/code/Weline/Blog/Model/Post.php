@@ -12,6 +12,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '博客结构化文章')]
 #[Index(name: 'idx_blog_post_website_slug', columns: ['website_id', 'slug'], type: 'UNIQUE')]
 #[Index(name: 'idx_blog_post_website_status_published', columns: ['website_id', 'status', 'published_at'])]
+#[Index(name: 'idx_blog_post_scope_published', columns: ['website_id', 'status', 'locale', 'category_id', 'published_at'])]
 class Post extends Model
 {
     use \Weline\Blog\Model\PublishesContentChanges;

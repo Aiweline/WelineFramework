@@ -32,7 +32,7 @@ final class InlineEditSession
         }
         $cookieHeader = '';
         try {
-            $cookieHeader = (string)($_SERVER['HTTP_COOKIE'] ?? '');
+            $cookieHeader = \Weline\Framework\Env\WelineEnv::inboundCookieHeader();
         } catch (\Throwable) {
             $cookieHeader = '';
         }
@@ -54,7 +54,7 @@ final class InlineEditSession
             }
         }
         $q = [];
-        $qs = (string)($_SERVER['QUERY_STRING'] ?? '');
+        $qs = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('QUERY_STRING', '');
         if ($qs !== '') {
             \parse_str($qs, $q);
         }
@@ -79,7 +79,7 @@ final class InlineEditSession
         }
         $area = '';
         try {
-            $area = (string)($_SERVER['WELINE_AREA'] ?? '');
+            $area = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_AREA', '');
         } catch (\Throwable) {
             $area = '';
         }
@@ -89,7 +89,7 @@ final class InlineEditSession
         // Path fail-closed: custom admin frontName /api backend prefixes.
         $uri = '';
         try {
-            $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            $uri = \Weline\Framework\Http\RequestUri::current();
         } catch (\Throwable) {
             $uri = '';
         }
@@ -140,7 +140,7 @@ final class InlineEditSession
             $expires = \time() + self::COOKIE_TTL_SECONDS;
             $secure = true;
             try {
-                $https = (string)($_SERVER['HTTPS'] ?? '');
+                $https = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTPS', '');
                 $secure = $https !== '' && \strtolower($https) !== 'off';
             } catch (\Throwable) {
                 $secure = true;

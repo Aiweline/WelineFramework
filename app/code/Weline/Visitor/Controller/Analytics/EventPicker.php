@@ -235,7 +235,7 @@ class EventPicker extends FrontendController
         try {
             $ip = (string)($this->request->getClientIp() ?? '');
         } catch (\Throwable) {
-            $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+            $ip = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('REMOTE_ADDR', '');
         }
         $bucket = \md5($ip . '|' . $websiteId . '|' . $storageScope);
         $now = \time();

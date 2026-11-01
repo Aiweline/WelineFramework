@@ -230,8 +230,9 @@ final class HelpPayQueryProvider implements QueryProviderInterface
     private function withOrigin(array $params): array
     {
         if (empty($params['public_origin'])) {
-            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-            $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
+            $https = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTPS', '');
+            $scheme = ($https !== '' && $https !== 'off') ? 'https' : 'http';
+            $host = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '');
             if ($host !== '') {
                 $params['public_origin'] = $scheme . '://' . $host;
             }
