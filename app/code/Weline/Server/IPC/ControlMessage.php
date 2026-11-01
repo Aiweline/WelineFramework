@@ -840,6 +840,7 @@ class ControlMessage
         int $expectedTlsRouteCount = -1,
         int $expectedRetiredContextCount = -1,
         string $expectedRetiredContextDigest = '',
+        bool $containOnFailure = false,
     ): string {
         $payload = [
             'type' => self::TYPE_SSL_CERT_RELOAD,
@@ -851,6 +852,9 @@ class ControlMessage
             'expected_retired_context_digest' => \strtolower(\trim(
                 $expectedRetiredContextDigest,
             )),
+            // 吊销/退役类事务必须强制安全隔离：即使失败码属「可延迟」，也不能 defer，
+            // 否则旧证书会继续对外服务。普通续期保持 false（可延迟重试）。
+            'contain_on_failure' => $containOnFailure,
         ];
         if (!empty($domains)) {
             $payload['domains'] = \array_values(\array_unique($domains));

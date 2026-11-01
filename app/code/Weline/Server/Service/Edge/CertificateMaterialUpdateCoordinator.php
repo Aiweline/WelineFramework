@@ -448,6 +448,8 @@ final class CertificateMaterialUpdateCoordinator
                                     $manifestDigest,
                                     $tlsRouteCount,
                                     \min(8.0, $remaining),
+                                    // 吊销/退役事务：失败必须 containment，不得 defer。
+                                    $revocationCommitted,
                                 );
                                 $this->assertNativeReloadReceipt(
                                     $native,

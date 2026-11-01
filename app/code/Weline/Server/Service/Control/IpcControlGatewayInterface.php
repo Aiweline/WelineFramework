@@ -82,6 +82,7 @@ interface IpcControlGatewayInterface
         string $expectedManifestDigest,
         int $expectedTlsRouteCount,
         float $timeout = 8.0,
+        bool $containOnFailure = false,
     ): array;
 
     /**

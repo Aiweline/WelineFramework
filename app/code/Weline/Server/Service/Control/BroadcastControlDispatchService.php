@@ -292,6 +292,7 @@ class BroadcastControlDispatchService
         string $expectedManifestDigest,
         int $expectedTlsRouteCount,
         float $timeout = 8.0,
+        bool $containOnFailure = false,
     ): array {
         $instanceName = \trim($instanceName);
         if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $instanceName) !== 1) {
@@ -338,6 +339,7 @@ class BroadcastControlDispatchService
                 $expectedManifestDigest,
                 $expectedTlsRouteCount,
                 $timeout,
+                $containOnFailure,
             ),
         );
         $instanceResult = \is_array(

@@ -272,6 +272,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
         string $expectedManifestDigest,
         int $expectedTlsRouteCount,
         float $timeout = 8.0,
+        bool $containOnFailure = false,
     ): array {
         $operationId = \substr(\strtolower(\trim($operationId)), 0, 128);
         $expectedManifestDigest = \substr(
@@ -330,6 +331,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
                 'expected_manifest_generation' => $expectedManifestGeneration,
                 'expected_manifest_digest' => $expectedManifestDigest,
                 'expected_tls_route_count' => $expectedTlsRouteCount,
+                'contain_on_failure' => $containOnFailure,
                 'ack_timeout_sec' => $ackTimeout,
             ],
             $readTimeout,

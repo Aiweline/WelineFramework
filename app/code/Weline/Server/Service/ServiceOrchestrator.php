@@ -449,6 +449,12 @@ class ServiceOrchestrator
     /** Security containment gate: quarantined TLS/H3 slots must not resurrect. */
     private bool $tlsServingQuarantined = false;
 
+    /**
+     * 当前 SSL_CERT_RELOAD 事务是否要求「失败必须 containment」。
+     * 吊销/退役类事务置 true：即使失败码属可延迟类，也不得 defer（否则旧证书继续服务）。
+     */
+    private bool $sslCertReloadContainOnFailure = false;
+
     /** Dedicated namespace operation lane: one active plus one merged pending. */
     private NamespaceInvalidationOperationQueue $namespaceInvalidationOperations;
 
@@ -2047,6 +2053,8 @@ class ServiceOrchestrator
                         isset($payload['ack_timeout_sec'])
                             ? (float)$payload['ack_timeout_sec']
                             : null,
+                        // 吊销/退役事务由调用方显式要求「失败必须 containment」。
+                        ($payload['contain_on_failure'] ?? false) === true,
                     );
                 } catch (\Throwable $throwable) {
                     $result = $this->buildSslCertReloadFailureResult(
@@ -30817,6 +30825,10 @@ class ServiceOrchestrator
         array $failures,
         bool $hasMutationException,
     ): bool {
+        if ($this->sslCertReloadContainOnFailure) {
+            // 吊销/退役类事务强制安全隔离：不得 defer，否则旧证书继续对外服务。
+            return false;
+        }
         if ($hasMutationException) {
             // 已向部分 worker 发出 reload 消息，TLS 状态未知，必须 containment。
             return false;
@@ -31809,8 +31821,42 @@ class ServiceOrchestrator
         string $expectedManifestDigest,
         int $expectedTlsRouteCount,
         ?float $timeoutSec = null,
+        bool $containOnFailure = false,
     ): array {
         $startedAt = self::monotonicSeconds();
+        // 全程标志：sslCertReloadFailureIsDeferrable() 在多个分支被调用，统一从这里控制。
+        $previousContainOnFailure = $this->sslCertReloadContainOnFailure;
+        $this->sslCertReloadContainOnFailure = $containOnFailure;
+        try {
+            return $this->broadcastSslCertReloadBody(
+                $domains,
+                $operationId,
+                $expectedManifestGeneration,
+                $expectedManifestDigest,
+                $expectedTlsRouteCount,
+                $timeoutSec,
+                $containOnFailure,
+                $startedAt,
+            );
+        } finally {
+            $this->sslCertReloadContainOnFailure = $previousContainOnFailure;
+        }
+    }
+
+    /**
+     * @param list<string> $domains
+     * @return array<string,mixed>
+     */
+    private function broadcastSslCertReloadBody(
+        array $domains,
+        string $operationId,
+        int $expectedManifestGeneration,
+        string $expectedManifestDigest,
+        int $expectedTlsRouteCount,
+        ?float $timeoutSec,
+        bool $containOnFailure,
+        float $startedAt,
+    ): array {
         $operationId = \substr(\strtolower(\trim($operationId)), 0, 128);
         $expectedManifestDigest = \substr(
             \strtolower(\trim($expectedManifestDigest)),
@@ -32130,6 +32176,7 @@ class ServiceOrchestrator
                 $expectedTlsRouteCount,
                 (int)$retirement['count'],
                 (string)$retirement['digest'],
+                $containOnFailure,
             );
             foreach (\array_keys($expected) as $clientId) {
                 if (!$this->controlServer->sendTo((int)$clientId, $message)) {
