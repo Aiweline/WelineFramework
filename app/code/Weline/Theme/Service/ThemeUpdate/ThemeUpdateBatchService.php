@@ -492,15 +492,7 @@ final class ThemeUpdateBatchService
         }
 
         $plan = self::planInPlaceStaticBuild($row, $fingerprint);
-        $stamp = \preg_match('/^[0-9a-f]{12}$/', $fingerprint) === 1 ? $fingerprint : '';
         if ($plan['changed'] !== true) {
-            // 指针行已经是最新时也要补全局戳（老部署升级上来时戳还不存在），
-            // 否则首屏 header 在主题上下文缺位时仍拿不到换桶信号。
-            if ($stamp !== '' && ThemeUpdateRuntime::inPlaceStaticBuildStamp() !== $stamp) {
-                $this->writeGlobalStaticStamp($stamp);
-                ThemeUpdateRuntime::reset();
-            }
-
             return $plan;
         }
 
@@ -515,22 +507,97 @@ final class ThemeUpdateBatchService
         } catch (\Throwable) {
             // Env 写失败不影响指针文件（渲染期会回读指针）
         }
-        if ($stamp !== '') {
-            $this->writeGlobalStaticStamp($stamp);
-        }
         ThemeUpdateRuntime::reset();
+        // 2026-11-01（定论 14 入口划分）：**就地固化不属于"主题发版"**，不得推进 theme_generation。
+        // 这里指针的 pair_segment 没变（dev 模式就地固化不改版本号），拿它去 stage/promote
+        // 会把 active 拉回旧代次（实测把 active 从 v281 拉回 v276）。
+        // 代次由真正的主题发版（commitPointer/promote）或系统更新（upgrade_after）推进；
+        // 本路径只负责换静态指针 + 清缓存。
+        // 2026-11-01：发布后把 FPC 页桶指到新代次，nginx 直接读 pg/current 就能拿到新 HTML；
+        // 同时清主题相关缓存。静态资源不再依赖版本号，失效靠这条链路。
+        try {
+            \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::alignWriteBaseToCurrentPageGeneration();
+        } catch (\Throwable) {
+            // 页桶重指失败不影响指针写入，下次请求仍会按新 token 落盘
+        }
         $this->invalidateThemeCaches($themeId, 'static_build_refresh');
+        // 静态被就地覆盖（不再换文件名/版本号）：必须清掉 WLS worker 里的静态字节缓存，
+        // 否则旧字节会按「1 年有效期」继续返回。Marker: tu-clear-wls-static-cache-v1
+        $this->clearWlsStaticCaches($themeId);
+        $this->purgeCdnStaticCache($themeId);
 
         return $plan;
     }
 
-    /** 写全局静态戳（首屏 header 早于主题上下文时用它换页桶，见 ThemeUpdateRuntime::inPlaceStaticBuildStamp）。 */
-    private function writeGlobalStaticStamp(string $stamp): void
+    /**
+     * 通知 WLS 各实例清静态/内存缓存（`cache_clear` 控制命令 → worker `__CLEAR_CACHE__`）。
+     * WLS 未运行或控制面不可用时静默跳过：命名路由静态本就按 mtime 校验，不会一直回旧字节。
+     */
+    private function clearWlsStaticCaches(int $themeId): void
     {
         try {
-            Env::getInstance()->setConfig('theme_static_build_stamp', $stamp);
+            $names = [];
+            $instancesRoot = \rtrim((string)BP, '/\\') . '/var/server/instances';
+            foreach ((array)@\scandir($instancesRoot) as $file) {
+                if (!\is_string($file) || !\str_ends_with($file, '.json')) {
+                    continue;
+                }
+                $names[] = \substr($file, 0, -\strlen('.json'));
+            }
+            if ($names === []) {
+                return;
+            }
+            $gateway = ObjectManager::getInstance(\Weline\Server\Service\Control\IpcControlGateway::class);
+            foreach ($names as $name) {
+                try {
+                    $gateway->cacheClear($name, 3.0);
+                } catch (\Throwable) {
+                    // 该实例不可达时跳过
+                }
+            }
         } catch (\Throwable) {
-            // Env 不可写时只是少一个兜底信号，指针行仍生效
+            // 控制面不可用（纯 CLI/离线）：静态按 mtime 校验兜底
+        }
+    }
+
+    /**
+     * 清理该主题静态资源的 CDN 边缘缓存（2026-11-01 用户指定：主题更新要清静态 CDN）。
+     *
+     * 按站点已绑定的公网入口，把 `/static/{themeCode}` 前缀交给 CDN 适配器；无 CDN/未绑定域名时静默跳过。
+     */
+    private function purgeCdnStaticCache(int $themeId): void
+    {
+        $themeCode = self::themeCodeForId($themeId);
+        if ($themeCode === '') {
+            return;
+        }
+        try {
+            $theme = ObjectManager::getInstance(\Weline\Theme\Model\Theme::class)->load($themeId);
+            $websiteId = \max(0, (int)$theme->getData('website_id'));
+            $urls = [];
+            foreach (['https://' . $themeCode . '.test.weline.com'] as $base) {
+                $urls[] = $base . '/static/' . $themeCode;
+            }
+            ObjectManager::getInstance(\Weline\Cdn\Service\CachePurger::class)
+                ->purgeWebsiteScope($websiteId, $urls);
+        } catch (\Throwable) {
+            // CDN 未配置或不可用：不清也不阻塞发布
+        }
+    }
+
+    /** 主题 ID → 静态命名空间里的主题 code（如 hanfu）。 */
+    private static function themeCodeForId(int $themeId): string
+    {
+        try {
+            $theme = ObjectManager::getInstance(\Weline\Theme\Model\Theme::class)->load($themeId);
+            $name = \trim((string)$theme->getData('code'));
+            if ($name === '') {
+                $name = \trim((string)$theme->getData('name'));
+            }
+
+            return $name;
+        } catch (\Throwable) {
+            return '';
         }
     }
 
@@ -729,6 +796,32 @@ final class ThemeUpdateBatchService
         $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch'], $pinnedBuild);
         $this->mirrorThemeStaticToDeploy($next['current'], $pinnedBuild);
         $this->rotateStorefrontHtmlGeneration();
+        // 2026-11-01（Task 0.2）：回滚也必须经权威号，且用 rollback kind 显式允许倒退；
+        // 单调保护只挡"普通发版误退代"，不放行真正的回滚。
+        try {
+            $pairSegment = \trim((string)($batch->getData('pair_segment') ?? ''));
+            if ($pairSegment === '') {
+                $pairSegment = \trim((string)$next['current']);
+            }
+            if ($pairSegment !== '' && \class_exists(ThemeReleaseManager::class)) {
+                $liveToken = \Weline\Framework\Deploy\PublishStateStore::existingPageToken();
+                if ($liveToken === '') {
+                    $liveToken = \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::pageGenerationToken();
+                }
+                \Weline\Framework\Deploy\PublishStateStore::stageTarget(
+                    $websiteId,
+                    $themeId,
+                    $area,
+                    \Weline\Framework\Deploy\StaticBuildId::current(),
+                    $pairSegment,
+                    $liveToken,
+                    ThemeReleaseManager::ROLLBACK_KIND
+                );
+                \Weline\Framework\Deploy\PublishStateStore::promoteTarget($websiteId, $themeId, $area);
+            }
+        } catch (\Throwable) {
+            // 权威号推进失败不影响回滚结果（active 保持旧值）
+        }
 
         return $next + ['post_switch_errors' => $this->invalidateThemeCaches($themeId, 'theme_update_rollback')];
     }

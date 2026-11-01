@@ -188,7 +188,7 @@ final class WidgetAssetOptimizer
             $isRuntimePack = false;
             $publishedProbe = '';
             if (str_starts_with($url, '/')) {
-                $publishedProbe = (string)@file_get_contents(BP . 'pub' . strtok($url, '?'));
+                $publishedProbe = (string)@file_get_contents(PUB . strtok($url, '?'));
             }
             if ($publishedProbe !== '') {
                 $definesWidgetRuntime = str_contains($publishedProbe, 'WelineWidgetInstanceStyles')

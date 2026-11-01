@@ -74,6 +74,6 @@ final class StorefrontOriginSegment
             }
         }
 
-        return \strtolower(\trim((string)($_SERVER['HTTP_HOST'] ?? '')));
+        return \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '')));
     }
 }

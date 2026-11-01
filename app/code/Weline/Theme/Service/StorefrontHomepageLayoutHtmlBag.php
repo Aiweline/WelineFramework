@@ -421,10 +421,10 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
             $candidates[] = (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '');
         } catch (\Throwable) {
         }
-        $candidates[] = (string)($_SERVER['WELINE_VISITOR_REQUEST_URI'] ?? '');
-        $candidates[] = (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? '');
-        $candidates[] = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
-        $candidates[] = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $candidates[] = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_VISITOR_REQUEST_URI', '');
+        $candidates[] = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_ORIGIN_REQUEST_URI', '');
+        $candidates[] = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_FULL_REQUEST_URI', '');
+        $candidates[] = \Weline\Framework\Http\RequestUri::current();
 
         foreach ($candidates as $uri) {
             $uri = \trim($uri);

@@ -337,11 +337,11 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
             }
         }
         if (!Runtime::isPersistent()) {
-            $_SERVER['HTTP_HOST'] = $host;
-            $_SERVER['SERVER_NAME'] = \explode(':', $host, 2)[0];
-            $_SERVER['REQUEST_SCHEME'] = $scheme;
-            $_SERVER['HTTPS'] = $scheme === 'https' ? 'on' : 'off';
-            $_SERVER['WELINE_WEBSITE_URL'] = $websiteUrl;
+            WelineEnv::mirrorServerToGlobal('HTTP_HOST', $host);
+            WelineEnv::mirrorServerToGlobal('SERVER_NAME', \explode(':', $host, 2)[0]);
+            WelineEnv::mirrorServerToGlobal('REQUEST_SCHEME', $scheme);
+            WelineEnv::mirrorServerToGlobal('HTTPS', $scheme === 'https' ? 'on' : 'off');
+            WelineEnv::mirrorServerToGlobal('WELINE_WEBSITE_URL', $websiteUrl);
         }
 
         return 'host=' . $host . ';website_url=' . $websiteUrl;
@@ -356,7 +356,7 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
 
         foreach ([
             (string)(\getenv('WLS_PUBLIC_ORIGIN') ?: ''),
-            (string)($_SERVER['WLS_PUBLIC_ORIGIN'] ?? ''),
+            (string)WelineEnv::serverOrGlobal('WLS_PUBLIC_ORIGIN', ''),
             (string)($_ENV['WLS_PUBLIC_ORIGIN'] ?? ''),
         ] as $raw) {
             $raw = \trim($raw);
@@ -467,8 +467,8 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
             return [];
         }
         $instance = (string)(
-            $_SERVER['WLS_INSTANCE_NAME']
-            ?? $_SERVER['WLS_INSTANCE']
+            WelineEnv::serverOrGlobal('WLS_INSTANCE_NAME', null)
+            ?? WelineEnv::serverOrGlobal('WLS_INSTANCE', null)
             ?? $_ENV['WLS_INSTANCE_NAME']
             ?? $_ENV['WLS_INSTANCE']
             ?? \getenv('WLS_INSTANCE')
@@ -517,8 +517,8 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
         } catch (\Throwable) {
         }
         if (!Runtime::isPersistent()) {
-            $_SERVER['REQUEST_URI'] = $uri;
-            $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $uri;
+            WelineEnv::mirrorServerToGlobal('REQUEST_URI', $uri);
+            WelineEnv::mirrorServerToGlobal('WELINE_ORIGIN_REQUEST_URI', $uri);
         }
         try {
             $ctx = Context::getCurrent();

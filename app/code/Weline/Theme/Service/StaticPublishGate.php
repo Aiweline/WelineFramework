@@ -29,7 +29,7 @@ final class StaticPublishGate
             return self::OPTION_SKIP;
         }
 
-        $argv = $_SERVER['argv'] ?? ($GLOBALS['argv'] ?? []);
+        $argv = \Weline\Framework\Env\WelineEnv::serverOrGlobal('argv', null) ?? ($GLOBALS['argv'] ?? []);
         foreach ((array) $argv as $arg) {
             $arg = (string) $arg;
             if ($arg === self::OPTION_SKIP || str_starts_with($arg, self::OPTION_SKIP . '=')) {

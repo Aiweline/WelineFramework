@@ -558,7 +558,7 @@ final class ThemeLayoutEntitySolidifyCompilePipeline
         $root = rtrim(str_replace('\\', '/', $root), '/');
         putenv(DeployStagingSession::ENV_ROOT . '=' . $root);
         $_ENV[DeployStagingSession::ENV_ROOT] = $root;
-        $_SERVER[DeployStagingSession::ENV_ROOT] = $root;
+        \Weline\Framework\Env\WelineEnv::mirrorServerToGlobal(DeployStagingSession::ENV_ROOT, $root);
     }
 
     /**
@@ -879,7 +879,7 @@ final class ThemeLayoutEntitySolidifyCompilePipeline
 
     private function isInsideWlsWorker(): bool
     {
-        $id = trim((string)(getenv('WLS_WORKER_ID') ?: ($_ENV['WLS_WORKER_ID'] ?? $_SERVER['WLS_WORKER_ID'] ?? '')));
+        $id = trim((string)(getenv('WLS_WORKER_ID') ?: ($_ENV['WLS_WORKER_ID'] ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_WORKER_ID', ''))));
 
         return $id !== '';
     }

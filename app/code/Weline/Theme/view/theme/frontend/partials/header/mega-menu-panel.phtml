@@ -62,7 +62,7 @@ $escAttr = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UT
 $sourceUrl = HeaderNavFragment::localizeHref((string)($item['url'] ?? '#'));
 
 $resolveLocale = static function (): string {
-    $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+    $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: \Weline\Framework\Http\RequestUri::current());
     $pathLocale = WidgetI18n::localeFromRequestUri($requestUri);
     if ($pathLocale !== null) {
         return $pathLocale;

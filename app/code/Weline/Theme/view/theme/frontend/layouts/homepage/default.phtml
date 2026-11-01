@@ -40,7 +40,7 @@ if (!$isEditorPreview) {
 // Never let meta.content (wrap residue / WLS meta leak) suppress hero/featured/videos.
 $shouldRenderMetaContent = false;
 
-$requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+$requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: \Weline\Framework\Http\RequestUri::current());
 $currentLocale = trim(\Weline\Framework\Env\WelineEnv::getLangLocal());
 if ($currentLocale === ''
     && preg_match('#/([a-z]{2}(?:_[A-Za-z]{2,4}){1,2})(?:/|$)#', $requestUri, $localeMatch) === 1

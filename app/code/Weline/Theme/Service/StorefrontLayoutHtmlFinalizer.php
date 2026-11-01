@@ -31,7 +31,6 @@ final class StorefrontLayoutHtmlFinalizer
         if ($area !== 'frontend' || $html === '') {
             return $html;
         }
-        $__t0 = \microtime(true);
 
         try {
             $themeId = $this->resolveFrontendThemeId();
@@ -41,10 +40,8 @@ final class StorefrontLayoutHtmlFinalizer
             }
         } catch (\Throwable) {
         }
-        $__t1 = \microtime(true);
 
         $html = SlotBoundaryMarkers::strip($html);
-        $__t2 = \microtime(true);
 
         try {
             /** @var RequiredDefaultInjectionRuntimeSafetyNet $requiredNet */
@@ -53,10 +50,8 @@ final class StorefrontLayoutHtmlFinalizer
             $html = $requiredNet->ensure($html);
         } catch (\Throwable) {
         }
-        $__t3 = \microtime(true);
 
         $html = ThemePdpBudgetPhases::stampSectionAttributes($html);
-        $__t4 = \microtime(true);
 
         if (empty($options['skip_dev_diagnostics'])) {
             try {
@@ -65,29 +60,18 @@ final class StorefrontLayoutHtmlFinalizer
             } catch (\Throwable) {
             }
         }
-        $__t5 = \microtime(true);
 
         try {
             TemplateRenderRouteTrace::mark('layout_finalizer', 'fpc_dev_auto_pierce_client');
             $html = FpcDevAutoPierceClientScript::injectIntoHtml($html);
         } catch (\Throwable) {
         }
-        $__t6 = \microtime(true);
 
         try {
             TemplateRenderRouteTrace::mark('layout_finalizer', 'ad_attribution_linker_client');
             $html = AdAttributionLinkerClientScript::injectIntoHtml($html);
         } catch (\Throwable) {
         }
-        $__t7 = \microtime(true);
-
-        \Weline\Framework\Runtime\TraceGate::measurePhase('hcf.fill_nested', fn() => ($__t1 - $__t0) * 1000);
-        \Weline\Framework\Runtime\TraceGate::measurePhase('hcf.strip', fn() => ($__t2 - $__t1) * 1000);
-        \Weline\Framework\Runtime\TraceGate::measurePhase('hcf.safety_net', fn() => ($__t3 - $__t2) * 1000);
-        \Weline\Framework\Runtime\TraceGate::measurePhase('hcf.stamp', fn() => ($__t4 - $__t3) * 1000);
-        \Weline\Framework\Runtime\TraceGate::measurePhase('hcf.devdiag', fn() => ($__t5 - $__t4) * 1000);
-        \Weline\Framework\Runtime\TraceGate::measurePhase('hcf.fpcpierce', fn() => ($__t6 - $__t5) * 1000);
-        \Weline\Framework\Runtime\TraceGate::measurePhase('hcf.adattr', fn() => ($__t7 - $__t6) * 1000);
 
         return $html;
     }

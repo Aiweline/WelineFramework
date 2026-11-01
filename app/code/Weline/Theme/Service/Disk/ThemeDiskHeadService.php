@@ -106,7 +106,7 @@ class ThemeDiskHeadService
      */
     private function shouldRefreshProcessCache(string $area): bool
     {
-        $query = (string)($_SERVER['QUERY_STRING'] ?? '');
+        $query = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('QUERY_STRING', '');
         if ($query === '' && function_exists('w_env_request_uri')) {
             $requestUri = (string)w_env_request_uri();
             $query = (string)(parse_url($requestUri, PHP_URL_QUERY) ?: '');

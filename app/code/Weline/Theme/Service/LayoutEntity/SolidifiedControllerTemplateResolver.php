@@ -10,13 +10,17 @@ use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\Framework\View\Template;
 use Weline\Theme\Api\DefaultThemeInterface;
+use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Model\WelineTheme;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Layout\LayoutIdentity;
+use Weline\Theme\Api\Scoped\ThemeContentScope;
+use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewTokenService;
+use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeScopeVersionService;
 use Weline\Theme\Service\ThemeVersionPreviewResolver;
 /** Select ordinary template sources; execution always belongs to Template. */
@@ -48,12 +52,41 @@ final class SolidifiedControllerTemplateResolver
         }
         $path = $this->resolveForIdentity($identity, $layoutType, $layoutIdentity->layoutOption, $layoutIdentity->targetType, $layoutIdentity->targetId);
         if ($path !== null) { return $path; }
-        // Ordinary storefront requests select existing sources only. Keep the
-        // captured public partials while the controller falls back to its source.
-        if (!$authorizedPreview) { return null; }
-
         // Authorized editor/Token previews may rebuild their exact V/R (including
         // formal Tokens). Candidates stay in memory and never replace the draft.
+        $rebuildInMemoryOnly = $authorizedPreview;
+        if (!$authorizedPreview) {
+            // Storefront request hit a missing solidified artifact: solidify it through
+            // the same unified entry the editor pipeline uses, then read.
+            //
+            // Why: the runtime must only ever "read if present, build if absent".
+            // Refusing to build here meant the page fell back to source slots that are
+            // deliberately empty shells, and RequiredDefaultInjectionRuntimeSafetyNet
+            // then re-rendered all 11 chrome widgets on EVERY request (measured
+            // +74,084 bytes / ~150 ms per request on /best-sellers). The artifacts were
+            // never written back, so the cost never amortised.
+            //
+            // Fail-open: a bake problem must not 500 the storefront — fall through to
+            // the source-slot path exactly as before.
+            if (!$this->solidifyMissingArtifact($layoutType, $layoutIdentity)) {
+                return null;
+            }
+            $path = $this->resolveForIdentity(
+                $identity,
+                $layoutType,
+                $layoutIdentity->layoutOption,
+                $layoutIdentity->targetType,
+                $layoutIdentity->targetId,
+            );
+            if ($path !== null) { return $path; }
+            // The bake ran but this identity still has no candidate: keep the previous
+            // behaviour instead of inventing a page from partial output.
+            $rebuildInMemoryOnly = false;
+        }
+        if (!$rebuildInMemoryOnly) {
+            return null;
+        }
+
         $candidates = ObjectManager::getInstance(ThemeLayoutEntityBakeCoordinator::class)->candidateForIdentity(
             $identity, $layoutType, $layoutIdentity->layoutOption, $layoutIdentity->targetType, $layoutIdentity->targetId,
         );
@@ -61,6 +94,88 @@ final class SolidifiedControllerTemplateResolver
         $snapshot = ThemeLayoutSourceSnapshot::fromCandidates($identity, $page, $candidates);
         $snapshot->install(Template::getInstance());
         return $snapshot->pagePath();
+    }
+
+    /**
+     * Build the missing solidified artifact through the unified bake entry.
+     *
+     * Returns true when the artifacts were published. A `false` return means the
+     * caller must keep the legacy source-slot path (fail-open).
+     */
+    private function solidifyMissingArtifact(string $layoutType, LayoutIdentity $layoutIdentity): bool
+    {
+        try {
+            $coordinator = ObjectManager::getInstance(ThemeLayoutEntityBakeCoordinator::class);
+            // Same entry the editor/publish pipeline uses: it merges required
+            // default_injections into the node map (RequiredDefaultInjectionBakeMerger)
+            // and publishes page+chrome artifacts, so a later request only reads.
+            //
+            // Target the PUBLISHED version, not the current one: the storefront read
+            // path resolves `getPublished()`, so baking `getCurrent()` can write a row
+            // this request will never read (theme 3: current=v1901, published=v2867).
+            $report = $coordinator->solidifyPublishedScopeVersion($this->bakeContext($layoutType, $layoutIdentity));
+            $ok = (bool)($report['ok'] ?? false);
+            if (!$ok) {
+                $this->logBakeFailure('solidify_reported_not_ok: ' . (string)($report['reason'] ?? ''));
+
+                return false;
+            }
+
+            return true;
+        } catch (\Throwable $throwable) {
+            $this->logBakeFailure($throwable::class . ': ' . $throwable->getMessage());
+
+            return false;
+        }
+    }
+
+    /**
+     * Editor context for an on-demand storefront bake.
+     *
+     * The bake identity is (theme, scope, store mode, area); those come from the
+     * request's resolved Website scope, never from a hardcoded default — a bake for
+     * the wrong scope would publish into another site's artifacts.
+     */
+    private function bakeContext(string $layoutType, LayoutIdentity $layoutIdentity): ThemeEditorContext
+    {
+        /** @var ThemeContextService $themeContext */
+        $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+        $theme = $themeContext->resolveTheme('frontend', null, false);
+        $themeId = \is_object($theme) && \method_exists($theme, 'getId') ? (int)$theme->getId() : 0;
+
+        /** @var ScopeHierarchyInterface $scopes */
+        $scopes = ObjectManager::getInstance(ScopeHierarchyInterface::class);
+        $identity = RequestContext::scopeIdentity();
+        if (!$identity instanceof ScopeIdentity) {
+            $identity = ScopeIdentity::global();
+        }
+        $scope = $scopes->contextFromIdentity($identity);
+
+        return new ThemeEditorContext(
+            scope: ThemeContentScope::fromStoredOwner($scope->storageScope, $scope->storeMode, 'default'),
+            area: 'frontend',
+            resourceType: ThemeEditorContext::RESOURCE_LAYOUT,
+            themeId: $themeId,
+            layoutType: \trim($layoutType) !== '' ? \trim($layoutType) : ThemeLayout::PAGE_TYPE_HOME,
+            layoutOption: \trim((string)$layoutIdentity->layoutOption) !== ''
+                ? \trim((string)$layoutIdentity->layoutOption)
+                : 'default',
+        );
+    }
+
+    /**
+     * A failed on-demand bake is an operational signal, not a request failure:
+     * the page still renders from source slots, but the per-request cost stays.
+     */
+    private function logBakeFailure(string $reason): void
+    {
+        if (!\function_exists('w_log_warning')) {
+            return;
+        }
+        try {
+            \w_log_warning('[ThemeSolidify] on-demand bake failed: ' . $reason);
+        } catch (\Throwable) {
+        }
     }
 
     public function resolveForIdentity(ThemeVersionIdentity $identity, string $layoutType, string $layoutOption = 'default', string $targetType = 'global', ?int $targetId = null): ?string

@@ -27,6 +27,11 @@ return [
         // component/widget catalogue before the first request builds it.
         'worker_preload_provider.Weline_Theme' =>
             \Weline\Theme\Service\Preload\ThemeCataloguePreloadProvider::class,
+        // Storefront chrome render built before READY: `theme.partials.fetch.head`
+        // is keyed by request path, so the first request in a Worker otherwise
+        // pays 113-306 ms to build it (measured on /best-sellers).
+        'worker_preload_provider.Weline_Theme_StorefrontRender' =>
+            \Weline\Theme\Service\Preload\StorefrontRenderWarmupPreloadProvider::class,
         \Weline\Theme\Api\DefaultThemeInterface::class => \Weline\Theme\Service\RegisteredDefaultTheme::class,
         \Weline\Framework\Runtime\DefaultThemeConfigProviderInterface::class => \Weline\Theme\Service\RegisteredDefaultTheme::class,
         'schedule_window_utc_migration.Weline_Theme'

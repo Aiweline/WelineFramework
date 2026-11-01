@@ -307,7 +307,7 @@ class Router implements RouterInterface
                 ?: \Weline\Framework\Env\WelineEnv::get('website_id', 0)
             );
         } catch (\Throwable) {
-            $websiteId = (int)($_SERVER['WELINE_WEBSITE_ID'] ?? 0);
+            $websiteId = (int)\Weline\Framework\Env\WelineEnv::serverOrGlobal('WELINE_WEBSITE_ID', 0);
         }
         if ($websiteId <= 0) {
             return false;

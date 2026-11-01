@@ -125,24 +125,6 @@ final class ThemeUpdateRuntime
             self::currentArea(),
         );
 
-        // 静态发布代次也要进缓存键：dev 就地增量发布时 epoch 不变，只推进 static_build，
-        // 不拼进来的话 assetVersion / 资源 ?v= 永远不动（2026-11-01 掉样式事故）。
-        // 只有「指针上的代次与部署号不同」时才追加：旧指针 static_build == 部署号，
-        // 此时格式与历史完全一致，不制造无意义换键。
-        $pinnedBuild = self::pinnedStaticBuild();
-        if ($pinnedBuild !== ''
-            && $pinnedBuild !== StaticBuildId::current()
-            && !\str_contains($base, $pinnedBuild)
-        ) {
-            $base .= '~' . $pinnedBuild;
-        }
-
-        // 显式 forceBatch（测试/预览）时不吃全局戳：调用方已钉死代次。
-        $stamp = self::$forced === null ? self::inPlaceStaticBuildStamp() : '';
-        if ($stamp !== '' && !\str_contains($base, $stamp)) {
-            $base .= '~s' . $stamp;
-        }
-
         return $epoch > 0 ? $base . '~e' . $epoch : $base;
     }
 
@@ -195,12 +177,28 @@ final class ThemeUpdateRuntime
     }
 
     /**
-     * 页面世代键：主题 code + 发布版本号 + TU epoch + 静态构建号。
-     * TU epoch 让 promote/rollback 即使版本号与部署号不变也换 token；
-     * 无 TU 指针（epoch=0）时保持旧的 `pair~build` 形状。
+     * 页面世代键：**委托 `GenerationRegistry`（唯一权威读口，Task 0）**。
+     *
+     * 2026-11-01：此前这里现场拼 `{pair}~e{epoch}~{build}`，一旦 `pairSegment()`
+     * 在首屏/CLI 返回空，就会退化成"部署号 + 当前请求主题"，多站塌成同一个 token。
+     * 现在统一读 `publish_state.active.generation_uid`；无状态文件时 Registry 内部回退旧口径。
+     *
+     * 显式 `forceBatch()`（测试/预览）时仍按钉死的代次计算，不走 Registry。
      */
     public static function pageGeneration(): string
     {
+        if (self::$forced === null
+            && \class_exists(\Weline\Framework\Deploy\GenerationRegistry::class)
+        ) {
+            try {
+                $managed = \Weline\Framework\Deploy\GenerationRegistry::generationUid();
+                if ($managed !== '') {
+                    return $managed;
+                }
+            } catch (\Throwable) {
+                // Registry 不可用：回落旧口径
+            }
+        }
         $pair = self::pairSegment();
         $build = self::staticBuildSegment();
         $identity = self::generationIdentity();
@@ -222,33 +220,7 @@ final class ThemeUpdateRuntime
             $token = $epoch > 0 ? 'e' . $epoch : '';
         }
 
-        // 就地发布的全局静态戳：首屏 header 可能早于主题上下文渲染，这时
-        // resolve() 拿不到指针行（多主题 map → singleAreaEntry 返回 null），
-        // 只能靠这个与主题无关的戳让页桶/资源版本随发布前进（2026-11-01 事故）。
-        // 显式 forceBatch（测试/预览）时不吃全局戳：调用方已钉死代次。
-        $stamp = self::$forced === null ? self::inPlaceStaticBuildStamp() : '';
-        if ($stamp !== '' && !\str_contains($token, $stamp)) {
-            $token .= '~s' . $stamp;
-        }
-
         return $token;
-    }
-
-    /**
-     * 就地发布（dev 增量）写下的全局静态戳：12 位 hex，没有则 ''。
-     *
-     * 与主题无关：它只回答「上次静态发布是什么时候/什么内容」，用于在
-     * 主题上下文缺失时仍然能换 FPC 页桶与资源 ?v=。
-     */
-    public static function inPlaceStaticBuildStamp(): string
-    {
-        try {
-            $value = \strtolower(\trim((string)(Env::getInstance()->getConfig('theme_static_build_stamp', '') ?? '')));
-        } catch (\Throwable) {
-            return '';
-        }
-
-        return \preg_match('/^[0-9a-f]{12}$/', $value) === 1 ? $value : '';
     }
 
     /**

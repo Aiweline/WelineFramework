@@ -25,6 +25,16 @@ final class TemplateCachePolicyProvider implements TemplateCachePolicyProviderIn
                 'header-account' => ['context' => 'static'],
                 'header-account-links' => ['context' => 'static'],
                 'header-orders' => ['context' => 'header_action'],
+                // Theme-version scoped header chrome: output is fixed by (theme version,
+                // lang, currency) and never by the shopper. The language list is the
+                // configured locale set; the currency list is the allowed currency set;
+                // the wishlist icon always SSR's an EMPTY badge and lets the client fill
+                // the count (see its partial: "never paints shopper-specific totals").
+                // They are rendered on every request, so leaving them out of the
+                // aggregate bag made the header pay their full render each time.
+                'header-language-switcher' => ['context' => 'static'],
+                'header-currency-switcher' => ['context' => 'static'],
+                'header-wishlist-icon' => ['context' => 'static'],
                 // Empty compatibility stubs share one bag (context=body_end).
                 // Guest-neutral Compare/Consent/B2B/Geo live in footer storefront-tail-chrome;
                 // session/path-sensitive I18n/Visitor live on body-end-dynamic (no aggregate).

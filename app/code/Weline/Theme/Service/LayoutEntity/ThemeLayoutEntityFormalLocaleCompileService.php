@@ -89,7 +89,20 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         } else {
             $pages = $this->extractPublishedPageLayouts($candidates);
         }
+        // Chrome partials are compiled artifacts too: they carry the injected
+        // chrome widget render points. Without a page in this candidate set the
+        // previous guard returned early and every partial stayed uncompiled, so
+        // the runtime compiled the SOURCE partial instead — which carries none of
+        // the injected widgets, leaving every chrome slot an empty shell that
+        // RequiredDefaultInjectionRuntimeSafetyNet had to re-render per request.
+        // Compile them on their own terms when there is no page to seed from.
         if ($pages === []) {
+            $partials = $this->extractPublishedChromePartials($candidates);
+            if ($partials === []) {
+                return;
+            }
+            $this->compilePartialArtifacts($partials, $options);
+
             return;
         }
         $locales = $this->resolveDefaultWebsiteLocales();

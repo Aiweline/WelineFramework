@@ -778,8 +778,8 @@ final class ThemeRuntimeCacheCleaner
     private function currentRuntimeInstanceName(): ?string
     {
         foreach ([
-            $_SERVER['WLS_INSTANCE_NAME'] ?? null,
-            $_SERVER['WLS_INSTANCE'] ?? null,
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_INSTANCE_NAME', null),
+            \Weline\Framework\Env\WelineEnv::serverOrGlobal('WLS_INSTANCE', null),
             $_ENV['WLS_INSTANCE_NAME'] ?? null,
             $_ENV['WLS_INSTANCE'] ?? null,
             \getenv('WLS_INSTANCE_NAME') ?: null,

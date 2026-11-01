@@ -386,7 +386,7 @@ final class MenuTreeNormalizer
         } catch (\Throwable) {
             $lang = '';
         }
-        $requestUri = (string) (\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+        $requestUri = (string)\Weline\Framework\Env\WelineEnv::serverOrGlobal('REQUEST_URI', '');
         $pathLocale = WidgetI18n::localeFromRequestUri($requestUri);
         if ($pathLocale !== null) {
             return $pathLocale;

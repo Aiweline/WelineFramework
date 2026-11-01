@@ -395,7 +395,8 @@ class SiteBrand
     private function requestLooksLikeNonDefaultStorefrontHost(): bool
     {
         try {
-            $host = strtolower(trim((string)(\Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '') ?: ($_SERVER['HTTP_HOST'] ?? ''))));
+            $host = strtolower(trim((string)(\Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '')
+                ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', ''))));
             $host = preg_replace('/:\\d+$/', '', $host) ?? $host;
             if ($host === '') {
                 return false;

@@ -863,13 +863,16 @@ HTML;
 HTML;
     }
 
+    /**
+     * 2026-11-01 用户指定：静态 URL 不再追加 ?v= 版本后缀。
+     * 失效改为「静态按构建号隔离 + theme:update 重建 + FPC/CDN 清理」，
+     * 版本后缀会让同一份文件每次发布都换 URL，反而把 CDN 命中率打碎。
+     */
     private function appendStaticAssetVersion(string $url, string $version): string
     {
-        if ($url === '' || $version === '0') {
-            return $url;
-        }
+        unset($version);
 
-        return \str_contains($url, '?') ? $url . '&v=' . $version : $url . '?v=' . $version;
+        return $url;
     }
 
     private function uiStaticAssetVersion(string $relative): string

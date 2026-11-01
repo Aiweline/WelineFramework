@@ -188,7 +188,7 @@ final class HeaderCommerceData
         if ($host === '') {
             $host = \strtolower(\trim((string)(
                 \Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '')
-                ?: ($_SERVER['HTTP_HOST'] ?? '')
+                ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '')
             )));
         }
 

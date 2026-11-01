@@ -3360,7 +3360,7 @@ class SlotRendererService
                     'type' => (string)$widgetType,
                 ];
                 $html = TraceGate::measurePhase(
-                    'theme.slots.widget.component_render',
+                    'theme.slots.widget.component_render.' . $widgetCode,
                     fn(): string => (string)$this->componentRenderer->render($definition, $renderConfig, $this->pass()->renderTheme, [
                         'area' => $renderArea,
                         // Editor iframe may keep PDP shells without product identity.

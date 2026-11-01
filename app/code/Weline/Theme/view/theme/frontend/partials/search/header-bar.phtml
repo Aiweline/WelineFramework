@@ -36,11 +36,11 @@ if (!$stableFragment) {
     } catch (\Throwable) {
         // fall through to $_GET
     }
-    if ($requestType === '' && isset($_GET['type'])) {
-        $requestType = trim((string)$_GET['type']);
+    if ($requestType === '') {
+        $requestType = trim((string)\Weline\Framework\Env\WelineEnv::getGet('type', ''));
     }
-    if ($requestCategoryId <= 0 && isset($_GET['category_id'])) {
-        $requestCategoryId = (int)$_GET['category_id'];
+    if ($requestCategoryId <= 0) {
+        $requestCategoryId = (int)\Weline\Framework\Env\WelineEnv::getGet('category_id', 0);
     }
 }
 

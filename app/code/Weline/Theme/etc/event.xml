@@ -273,6 +273,19 @@
                   sort="900"/>
     </event>
 
+    <!--
+        2026-11-01（Task 0.1 · 定论 15）：系统更新完成必须推进世代版本号。
+        Upgrade.php:83 在静态树发布后派发；观察者只改 deploy_build，主题代次原样保留。
+        失败保留旧 active（站点继续服务旧版），并置 generation_promote_failed 供 s:up 判退出码。
+    -->
+    <event name="Weline_Framework_Deploy::upgrade_after">
+        <observer name="Weline_Theme::theme_generation_after_system_upgrade"
+                  instance="Weline\Theme\Observer\ThemeGenerationAfterSystemUpgrade"
+                  disabled="false"
+                  shared="true"
+                  sort="900"/>
+    </event>
+
     <!-- Layout→storefront path via module_name + getModuleInfo router (after slug samples). -->
 
     <!--

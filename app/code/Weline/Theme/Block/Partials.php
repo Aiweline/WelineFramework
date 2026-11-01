@@ -28,6 +28,7 @@ use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeDirectoryResolver;
 use Weline\Theme\Service\FooterNestedChromeSourceFingerprint;
@@ -1582,6 +1583,24 @@ class Partials extends Block
         $option = $this->resolveConfiguredPartialsOption($area, $type, $defaultOption, $theme);
         $candidates = \trim($option) === 'default' ? ['default'] : [$option, 'default'];
         foreach ($candidates as $candidate) {
+            // Prefer the active theme's SOLIDIFIED chrome partial.
+            //
+            // The layout entity pins the parent theme's chrome, so this override
+            // rebases to the active theme. Returning the live SOURCE file made the
+            // compiler build a `src_` isolated artifact from raw markup — which
+            // carries none of the injected chrome widgets, because slot binding
+            // only exists in the solidified artifact. Measured on hanfu:
+            //   solidified theme/partials/footer/default.phtml  24,052 B / 10 render points
+            //   compiled from source src_default_*/com_default   14,150 B /  0 render points
+            // With no render points the chrome slots stayed empty shells and
+            // RequiredDefaultInjectionRuntimeSafetyNet re-rendered 11 widgets on
+            // every request. The solidified artifact is exactly "the compiled
+            // thing": read it, do not rebuild it from source.
+            $solidified = $this->resolveSolidifiedChromePartial((int)$theme->getId(), $area, $type, (string)$candidate);
+            if ($solidified !== null) {
+                return $solidified;
+            }
+
             $live = $this->resolveForcedPartialsOption($area, $type, (string)$candidate);
             if ($live === null) {
                 continue;
@@ -1596,6 +1615,97 @@ class Partials extends Block
         }
 
         return null;
+    }
+
+    /**
+     * Absolute path of the active theme's solidified chrome partial, if it exists.
+     *
+     * Reads the PUBLISHED version because that is the version the storefront
+     * read path resolves; a draft/current row would serve another generation.
+     * Returns null when the theme has no solidified artifact for this slot, so
+     * the caller falls back to the live source (previous behaviour).
+     */
+    private function resolveSolidifiedChromePartial(
+        int $themeId,
+        string $area,
+        string $type,
+        string $option
+    ): ?string {
+        $type = \strtolower(\trim($type));
+        if ($themeId < 1 || $type === '' || $option === '') {
+            return null;
+        }
+        try {
+            $area = \strtolower(\trim($area));
+            $snapshot = ThemeLayoutSourceSnapshot::current();
+            $identity = $this->chromeIdentityForTheme($snapshot?->identity, $themeId, $area);
+            if ($identity === null) {
+                return null;
+            }
+            $paths = ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths::class
+            );
+            $path = $paths->partialPhtml($identity, $type, $option);
+            if (!\is_file($path)) {
+                return null;
+            }
+            // A RAW (no weline-source) artifact predates slot binding; the live
+            // source is no worse and keeps the previous behaviour.
+            $bytes = @\file_get_contents($path);
+            if (!\is_string($bytes) || !\is_array(ThemeLayoutSourceSnapshot::metadata($bytes))) {
+                return null;
+            }
+
+            return $path;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Bake identity whose chrome belongs to `$themeId`.
+     *
+     * The snapshot identity is the LAYOUT owner (a page layout may be inherited
+     * from a parent theme), while chrome is owned by the active theme — the whole
+     * point of this override. When the identities agree the snapshot's own
+     * version is authoritative; otherwise resolve the active theme's own
+     * published scope version, which is the artifact the storefront serves.
+     */
+    private function chromeIdentityForTheme(
+        ?ThemeVersionIdentity $snapshotIdentity,
+        int $themeId,
+        string $area
+    ): ?ThemeVersionIdentity {
+        if ($snapshotIdentity instanceof ThemeVersionIdentity
+            && (int)$snapshotIdentity->themeId === $themeId
+            && \strtolower((string)$snapshotIdentity->area) === $area
+        ) {
+            return $snapshotIdentity;
+        }
+
+        // Active theme differs from the layout owner: use its published version.
+        $scope = $snapshotIdentity?->canonicalScope;
+        $storeMode = $snapshotIdentity?->storeMode;
+        if (!\is_string($scope) || \trim($scope) === '' || !\is_string($storeMode) || \trim($storeMode) === '') {
+            $scope = 'default.default.default';
+            $storeMode = 'normal';
+        }
+        /** @var \Weline\Theme\Service\ThemeScopeVersionService $versions */
+        $versions = ObjectManager::getInstance(\Weline\Theme\Service\ThemeScopeVersionService::class);
+        $version = $versions->getPublished($themeId, \trim($scope), \trim($storeMode), $area);
+        if (!$version instanceof \Weline\Theme\Model\ThemeScopeVersion || $version->getVersionId() < 1) {
+            return null;
+        }
+
+        return ThemeVersionIdentity::fromArray([
+            'theme_id' => $themeId,
+            'canonical_scope' => \trim($scope),
+            'store_mode' => \trim($storeMode),
+            'area' => $area,
+            'theme_version_id' => $version->getVersionId(),
+            'mode' => ThemeVersionIdentity::MODE_FORMAL,
+            'content_revision' => \max(1, (int)$version->getContentRevision()),
+        ]);
     }
 
     /**
@@ -2620,7 +2730,7 @@ class Partials extends Block
     public function getPartialsPath(string $area, string $type, string $defaultOption = 'default'): ?string
     {
         $snapshot = ThemeLayoutSourceSnapshot::current();
-        if ($snapshot !== null && $snapshot->identity->area === strtolower($area)) {
+                if ($snapshot !== null && $snapshot->identity->area === strtolower($area)) {
             $selected = $snapshot->selectedPartialPath($type, $defaultOption);
             if ($selected !== null) {
                 $normalizedArea = \strtolower(\trim($area));
@@ -3040,9 +3150,44 @@ class Partials extends Block
             return $theme->getId() ? $theme : null;
         }
 
+        // The layout that is currently rendering already pinned the theme it was
+        // baked for. During a storefront request that is the authoritative source:
+        // ThemeContextService may still answer with the module package default
+        // (theme 1) when the application context has not been installed yet, and
+        // chrome would then be rebound to the WRONG theme's artifacts.
+        $bound = $this->themeFromBoundTemplateData($area);
+        if ($bound !== null) {
+            return $bound;
+        }
+
         return ObjectManager::getInstance(ThemeContextService::class)->resolveTheme($area);
     }
-    
+
+    /**
+     * Theme the current render assigned into Template data ('theme' bag), if usable.
+     */
+    private function themeFromBoundTemplateData(string $area): ?WelineTheme
+    {
+        try {
+            $bag = Template::getInstance()->getData('theme');
+            if (!\is_array($bag)) {
+                return null;
+            }
+            $theme = $bag['theme'] ?? null;
+            if (!$theme instanceof WelineTheme || (int)$theme->getId() < 1) {
+                return null;
+            }
+            $bagArea = \strtolower(\trim((string)($bag['area'] ?? $area)));
+            if ($bagArea !== '' && $bagArea !== \strtolower(\trim($area))) {
+                return null;
+            }
+
+            return $theme;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     /**
      * Overlay Scope-stored partials param.* values onto file defaults.
      * Enables website-scoped logoHeight etc. when getFileParams definitions are empty.

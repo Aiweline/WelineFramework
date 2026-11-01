@@ -425,7 +425,7 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
             if ($host === '') {
                 $host = \strtolower(\trim((string)(
                     \Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '')
-                    ?: ($_SERVER['HTTP_HOST'] ?? '')
+                    ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '')
                 )));
             }
             $origin = ($scheme !== '' ? $scheme : 'http') . '-' . ($host !== '' ? $host : 'unknown');
@@ -440,7 +440,7 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
                 \Weline\Framework\Env\WelineEnv::get('http_weline_original_host', '')
                 ?: \Weline\Framework\Env\WelineEnv::get('server.http_host', '')
                 ?: \Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '')
-                ?: ($_SERVER['HTTP_HOST'] ?? '')
+                ?: \Weline\Framework\Env\WelineEnv::serverOrGlobal('HTTP_HOST', '')
             )));
         } catch (\Throwable) {
             $visitorHost = '';

@@ -64,8 +64,8 @@ class NormalizeVisitorUriLivePreviewPath implements ObserverInterface
 
         // Make token visible to PreviewTokenService without polluting formal query identity.
         try {
-            $_GET[PreviewTokenService::TOKEN_KEY] = $token;
             WelineEnv::setGet(PreviewTokenService::TOKEN_KEY, $token);
+            WelineEnv::mirrorGetToGlobal(PreviewTokenService::TOKEN_KEY, $token);
         } catch (\Throwable) {
         }
     }

@@ -550,6 +550,35 @@ final class ThemeLayoutEntityBakeCoordinator
         return $this->solidifyScopeVersion($context, $current->getVersionId());
     }
 
+    /**
+     * Solidify the PUBLISHED version of this scope.
+     *
+     * The storefront reads `getPublished()` while the editor pipeline solidifies
+     * `getCurrent()`. On owners where those two point at different rows, an
+     * on-demand bake driven by `getCurrent()` writes artifacts the storefront
+     * never reads — measured: theme 3 `default.default.default` had
+     * `getCurrent()=v1901` (30 page layouts, incl. best_sellers) but
+     * `getPublished()=v2867` (28 layouts, **no** best_sellers). Solidifying from
+     * `getCurrent()` re-baked v1901 and left the artifact the request actually
+     * needs still missing.
+     *
+     * Request-time fill must therefore target the version the read path uses.
+     */
+    public function solidifyPublishedScopeVersion(ThemeEditorContext $context): array
+    {
+        $published = $this->scopeVersions->getPublished(
+            $context->themeId,
+            $context->scope->storageScope,
+            $context->scope->storeMode,
+            $context->area,
+        );
+        if (!$published instanceof ThemeScopeVersion || $published->getVersionId() < 1) {
+            return ['ok' => false, 'reason' => 'theme_scope_version_unresolved'];
+        }
+
+        return $this->solidifyScopeVersion($context, $published->getVersionId());
+    }
+
     public function bakePublishArtifactsForVersion(ThemeEditorContext $context, int $themeVersionId, array $options = []): array
     {
         $options['force_formal'] = true;

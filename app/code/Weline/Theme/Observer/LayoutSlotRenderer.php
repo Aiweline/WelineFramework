@@ -200,26 +200,18 @@ class LayoutSlotRenderer implements ObserverInterface
                     } catch (\Throwable) {
                     }
                 } else {
-                    $_p = static function (string $n, float $ms): void {
-                        \Weline\Framework\Runtime\TraceGate::measurePhase($n, static fn() => $ms);
-                    };
                     /** @var \Weline\Theme\Service\StorefrontLayoutHtmlFinalizer $finalizer */
                     $finalizer = ObjectManager::getInstance(
                         \Weline\Theme\Service\StorefrontLayoutHtmlFinalizer::class
                     );
-                    $_t0 = \microtime(true);
                     $html = $finalizer->finalizeHardCut($html, 'frontend');
-                    $_p('hcfx.call_finalizer', (\microtime(true) - $_t0) * 1000);
                 }
 
                 try {
-                    $_t1 = \microtime(true);
                     /** @var PreviewBootstrapAssetInjector $injector */
                     $injector = ObjectManager::getInstance(PreviewBootstrapAssetInjector::class);
-                    $html = $injector->inject($html);
-                    \Weline\Framework\Runtime\TraceGate::measurePhase('hcfx.preview_bootstrap', static fn() => (\microtime(true) - $_t1) * 1000);
 
-                    return $html;
+                    return $injector->inject($html);
                 } catch (\Throwable) {
                     return $html;
                 }
