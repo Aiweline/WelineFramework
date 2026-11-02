@@ -143,6 +143,35 @@ final class ThemeLayoutOriginWatchService
             }
         }
 
+        // Theme assets are only half of the static tree. `deploy:upgrade` additionally
+        // merges weline-core.js, stamps a build id and heals an incomplete generation;
+        // without that a theme-only update left pub/static on the old generation, so the
+        // page loaded a stale core and every `data-weline-load` widget script
+        // (store music, currency, cart …) stopped loading.
+        //
+        // Gated on real static changes on purpose: StaticBuildPublisher hashes the whole
+        // static tree to derive the build id (measured 124.6s on this repo), while
+        // WelineCoreBundle::publish and the integrity heal are ~1ms each. Running the
+        // whole compile on a no-op update would turn a 1–3s theme update into a 2-minute
+        // one for zero benefit.
+        $staticChanged = (int)($report['static_published'] ?? 0) > 0
+            || (int)($report['changed'] ?? 0) > 0;
+        if ($staticChanged) {
+            try {
+                $runtimeCompile = ObjectManager::getInstance(
+                    \Weline\Theme\Service\ThemeUpdate\ThemeStaticRuntimeCompileService::class
+                )->compile();
+                $report['static_runtime'] = $runtimeCompile;
+                foreach ((array)($runtimeCompile['errors'] ?? []) as $runtimeError) {
+                    $report['messages'][] = 'static_runtime:' . (string)$runtimeError;
+                }
+            } catch (\Throwable $e) {
+                $report['messages'][] = 'static_runtime_error:' . $e->getMessage();
+            }
+        } elseif (($report['static_published'] ?? 0) === 0 && ($report['changed'] ?? 0) === 0) {
+            $report['static_runtime'] = ['skipped' => 'no_static_change'];
+        }
+
         return $report;
     }
 
