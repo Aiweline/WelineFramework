@@ -25,9 +25,11 @@ use Weline\Framework\Deploy\WelineCoreBundle;
 final class ThemeStaticRuntimeCompileService
 {
     /**
-     * @return array{static_root:string,core_bundle:?string,core_changed:bool,build:string,healed:list<string>,errors:list<string>}
+     * @param bool $forceBuild Run the build-id publish even when the core bundle was
+     *                         already current (caller knows theme statics changed).
+     * @return array{static_root:string,core_bundle:?string,core_changed:bool,build:string,healed:list<string>,errors:list<string>,skipped:string}
      */
-    public function compile(): array
+    public function compile(bool $forceBuild = false): array
     {
         $report = [
             'static_root' => '',
@@ -36,6 +38,7 @@ final class ThemeStaticRuntimeCompileService
             'build' => '',
             'healed' => [],
             'errors' => [],
+            'skipped' => '',
         ];
 
         try {
@@ -52,12 +55,23 @@ final class ThemeStaticRuntimeCompileService
         }
 
         // 1) Merge the four boot files into weline-core.js (header loads this in PROD).
+        //    ~1ms and self-detecting, so it always runs: a `core:update` that replaced the
+        //    runtime sources changes nothing in the theme, and a theme-change-only gate
+        //    would leave the stale bundle in place forever.
         try {
             $bundle = WelineCoreBundle::publish($report['static_root']);
             $report['core_bundle'] = \is_string($bundle['path'] ?? null) ? $bundle['path'] : null;
             $report['core_changed'] = (bool)($bundle['changed'] ?? false);
         } catch (\Throwable $error) {
             $report['errors'][] = 'core_bundle: ' . $error->getMessage();
+        }
+
+        // Deriving the build id hashes the whole static tree (measured 124.6s on this
+        // repo), so only pay it when something actually changed.
+        if (!$forceBuild && !$report['core_changed']) {
+            $report['skipped'] = 'no_static_change';
+
+            return $report;
         }
 
         // 2) Stamp a new static build generation so versioned URLs resolve.

@@ -149,27 +149,23 @@ final class ThemeLayoutOriginWatchService
         // page loaded a stale core and every `data-weline-load` widget script
         // (store music, currency, cart …) stopped loading.
         //
-        // Gated on real static changes on purpose: StaticBuildPublisher hashes the whole
-        // static tree to derive the build id (measured 124.6s on this repo), while
-        // WelineCoreBundle::publish and the integrity heal are ~1ms each. Running the
-        // whole compile on a no-op update would turn a 1–3s theme update into a 2-minute
-        // one for zero benefit.
+        // Always invoked: the core-bundle merge is ~1ms and self-detects whether the four
+        // boot sources changed — which is exactly the `core:update` case, where no theme
+        // file changes but the runtime sources do. The expensive part (build id = whole
+        // tree hash, measured 124.6s here) only runs when this update really changed
+        // static bytes, otherwise a 1–3s theme update would become a 2-minute one.
         $staticChanged = (int)($report['static_published'] ?? 0) > 0
             || (int)($report['changed'] ?? 0) > 0;
-        if ($staticChanged) {
-            try {
-                $runtimeCompile = ObjectManager::getInstance(
-                    \Weline\Theme\Service\ThemeUpdate\ThemeStaticRuntimeCompileService::class
-                )->compile();
-                $report['static_runtime'] = $runtimeCompile;
-                foreach ((array)($runtimeCompile['errors'] ?? []) as $runtimeError) {
-                    $report['messages'][] = 'static_runtime:' . (string)$runtimeError;
-                }
-            } catch (\Throwable $e) {
-                $report['messages'][] = 'static_runtime_error:' . $e->getMessage();
+        try {
+            $runtimeCompile = ObjectManager::getInstance(
+                \Weline\Theme\Service\ThemeUpdate\ThemeStaticRuntimeCompileService::class
+            )->compile($staticChanged);
+            $report['static_runtime'] = $runtimeCompile;
+            foreach ((array)($runtimeCompile['errors'] ?? []) as $runtimeError) {
+                $report['messages'][] = 'static_runtime:' . (string)$runtimeError;
             }
-        } elseif (($report['static_published'] ?? 0) === 0 && ($report['changed'] ?? 0) === 0) {
-            $report['static_runtime'] = ['skipped' => 'no_static_change'];
+        } catch (\Throwable $e) {
+            $report['messages'][] = 'static_runtime_error:' . $e->getMessage();
         }
 
         return $report;
