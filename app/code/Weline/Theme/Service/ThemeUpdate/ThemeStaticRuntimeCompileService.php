@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Weline\Theme\Service\ThemeUpdate;
 
 use Weline\Framework\Deploy\DeployStagingSession;
-use Weline\Framework\Deploy\StaticBuildPublisher;
 use Weline\Framework\Deploy\StaticIntegrityGuard;
 use Weline\Framework\Deploy\WelineCoreBundle;
 
@@ -74,12 +73,17 @@ final class ThemeStaticRuntimeCompileService
             return $report;
         }
 
-        // 2) Stamp a new static build generation so versioned URLs resolve.
-        try {
-            $report['build'] = StaticBuildPublisher::publish($report['static_root']);
-        } catch (\Throwable $error) {
-            $report['errors'][] = 'build: ' . $error->getMessage();
-        }
+        // NOTE: no new build id here, deliberately.
+        //
+        // The static namespace (`/static/{buildId}/…`) is baked into the compiled template
+        // artifacts (generated/complicate/**), so minting a fresh id during a theme update
+        // desyncs them: the tree moves to the new id while every compiled page still asks
+        // for the old one — exactly the state playinginchina ended up in
+        // (templates said 61f92dd0a5cc, .build.json said 7fe6ada1d9aa, and the page kept
+        // loading the old namespace). Theme update therefore mirrors into the CURRENT
+        // build namespace (ThemeUpdateBatchService resolves it via StaticBuildId::current()
+        // when nothing is pinned) and only heals it. Minting a new generation stays the job
+        // of `deploy:upgrade`, which recompiles templates in the same run.
 
         // 3) Self-heal an incomplete generation (staging publishes only changed files,
         //    which would otherwise 404 the rest of the tree).
