@@ -6,8 +6,9 @@ window.WelineModulesConfig.modules = window.WelineModulesConfig.modules || {};
 
 Object.assign(window.WelineModulesConfig.modules, {
     b2bSellingMode: {
+        // checkout-tob is owned by b2bCheckoutTob; do not double-fetch it here.
+        // Mini-cart boot loads b2bSellingMode only; checkout pages load b2bCheckoutTob.
         paths: [
-            'Weline_B2B::js/checkout-tob.js?v=20261010-shell-toc-wins1',
             'Weline_B2B::js/selling-mode.js?v=20261014-extras-boot-preserve1'
         ],
         globalVar: 'WelineB2BSellingMode',

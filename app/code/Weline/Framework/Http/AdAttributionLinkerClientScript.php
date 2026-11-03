@@ -63,7 +63,9 @@ final class AdAttributionLinkerClientScript
 
         $esc = static fn (string $value): string => \htmlspecialchars($value, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
 
-        return '<script src="' . $esc($src) . '" '
+        // defer: linker only needs DOMContentLoaded-level readiness; marker attr
+        // keeps the tag discoverable if anything inspects it later.
+        return '<script defer src="' . $esc($src) . '" '
             . self::MARKER_ATTR . '="1" '
             . 'data-no-extract="true"></script>';
     }

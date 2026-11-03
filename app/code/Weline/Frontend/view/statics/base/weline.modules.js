@@ -480,8 +480,8 @@
             description: "博客分类侧栏两级树展开"
         },
         b2bSellingMode: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-shell-toc-wins1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261014-extras-boot-preserve1"],
-            paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-shell-toc-wins1", "Weline_B2B::js/selling-mode.js?v=20261014-extras-boot-preserve1"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261014-extras-boot-preserve1"],
+            paths: ["Weline_B2B::js/selling-mode.js?v=20261014-extras-boot-preserve1"],
             globalVar: "WelineB2BSellingMode",
             description: "B2B ToC/ToB selling mode + mini-cart/cart dual-type injection"
         },

@@ -96,9 +96,10 @@ final class FpcDevAutoPierceClientScript
             }
         }
 
-        // No defer: end-of-body placement already has full DOM; defer made
-        // document.currentScript null and raced Bag/widget hydrate.
-        return '<script ' . $attrs . '></script>';
+        // defer is safe: fpc-dev-auto-pierce.js falls back from currentScript to
+        // the marker selector. End-of-body + defer still yields a full DOM and
+        // avoids a parser-blocking fetch on the critical path (PSI).
+        return '<script defer ' . $attrs . '></script>';
     }
 
     private static function publicScriptUrl(): string

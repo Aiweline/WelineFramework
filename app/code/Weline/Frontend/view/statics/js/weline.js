@@ -290,6 +290,8 @@
             this.scriptInflight = 0;
             /** @type {Array<() => void>} */
             this.scriptWaitQueue = [];
+            /** @type {Map<string, Promise<void>>} absolute script URL → settled load promise (dedupe) */
+            this.scriptUrlLoads = new Map();
         }
 
         /**
@@ -359,7 +361,8 @@
                         return modulePath;
                     }
                     const staticRoot = String(runtimeConfig.staticBaseUrl || '/static').replace(/\/+$/, '');
-                    return `${staticRoot}/${vendorName}/${moduleNamePart}/${filePath}${querySuffix}`;
+                    const prodFilePath = this.preferMinJsPath(filePath);
+                    return `${staticRoot}/${vendorName}/${moduleNamePart}/${prodFilePath}${querySuffix}`;
                 }
                 return modulePath;
             }
@@ -391,7 +394,32 @@
                 return `/${normalizedModuleName}/view/statics/${filePath}${querySuffix}`;
             }
             const staticRoot = String(runtimeConfig.staticBaseUrl || '/static').replace(/\/+$/, '');
-            return `${staticRoot}/${normalizedModuleName}/${filePath}${querySuffix}`;
+            // PROD: prefer companion *.min.js when the registry still points at pretty sources.
+            // appendScript falls back to the non-min URL on 404 so modules without a min stay safe.
+            const prodFilePath = this.preferMinJsPath(filePath);
+            return `${staticRoot}/${normalizedModuleName}/${prodFilePath}${querySuffix}`;
+        }
+
+        /**
+         * Map foo.js → foo.min.js (leave .min.js / non-js alone).
+         */
+        preferMinJsPath(filePath) {
+            const path = String(filePath || '');
+            if (!/\.js$/i.test(path) || /\.min\.js$/i.test(path)) {
+                return path;
+            }
+            return path.replace(/\.js$/i, '.min.js');
+        }
+
+        /**
+         * Pretty counterpart of a .min.js URL/path (for 404 fallback).
+         */
+        prettyJsPath(filePath) {
+            const path = String(filePath || '');
+            if (!/\.min\.js$/i.test(path)) {
+                return path;
+            }
+            return path.replace(/\.min\.js$/i, '.js');
         }
 
         ensureModulesConfig() {
@@ -520,81 +548,111 @@
                     return module;
                 }
 
-                const appendScript = (scriptPath, validateGlobal) => new Promise((resolve, reject) => {
-                    const run = () => {
-                        this.scriptInflight += 1;
-                        const script = document.createElement('script');
-                        script.src = this.getScriptUrl(scriptPath);
-                        script.async = true;
-                        // ESM 登记（type:"module"）必须带 script.type，否则 import.meta / export 会 SyntaxError
-                        const scriptType = moduleConfig && (moduleConfig.type || moduleConfig.scriptType);
-                        if (scriptType === 'module') {
-                            script.type = 'module';
-                        }
-                        // 同源不强制 CORS；跨域再设 anonymous（module 脚本跨域同样需要）
-                        try {
-                            const resolved = new URL(script.src, window.location.href);
-                            if (resolved.origin !== window.location.origin) {
-                                script.crossOrigin = 'anonymous';
+                const appendScript = (scriptPath, validateGlobal) => {
+                    const primarySrc = this.getScriptUrl(scriptPath);
+                    if (this.scriptUrlLoads.has(primarySrc)) {
+                        return this.scriptUrlLoads.get(primarySrc).then(() => {
+                            if (validateGlobal && globalVarName && !this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
+                                throw new Error('[Weline] ' + __('模块 %{1} 加载失败：未找到 %{2}', { 1: moduleName, 2: globalVarName }));
                             }
-                        } catch (_error) {
-                        }
+                        });
+                    }
 
-                        const loadTimeoutMs = 10000;
-                        let settled = false;
-                        const releaseSlot = () => {
-                            this.scriptInflight = Math.max(0, this.scriptInflight - 1);
-                            const next = this.scriptWaitQueue.shift();
-                            if (typeof next === 'function') {
-                                next();
+                    const loadOne = (src, allowPrettyFallback) => new Promise((resolve, reject) => {
+                        const run = () => {
+                            this.scriptInflight += 1;
+                            const script = document.createElement('script');
+                            script.src = src;
+                            script.async = true;
+                            // ESM 登记（type:"module"）必须带 script.type，否则 import.meta / export 会 SyntaxError
+                            const scriptType = moduleConfig && (moduleConfig.type || moduleConfig.scriptType);
+                            if (scriptType === 'module') {
+                                script.type = 'module';
                             }
-                        };
-                        const settle = (fn) => {
-                            if (settled) {
-                                return;
-                            }
-                            settled = true;
-                            window.clearTimeout(timeoutId);
-                            releaseSlot();
-                            fn();
-                        };
-                        const timeoutId = window.setTimeout(() => {
+                            // 同源不强制 CORS；跨域再设 anonymous（module 脚本跨域同样需要）
                             try {
-                                script.onload = null;
-                                script.onerror = null;
-                                if (script.parentNode) {
-                                    script.parentNode.removeChild(script);
+                                const resolved = new URL(script.src, window.location.href);
+                                if (resolved.origin !== window.location.origin) {
+                                    script.crossOrigin = 'anonymous';
                                 }
-                            } catch (_cleanupError) {
+                            } catch (_error) {
                             }
-                            settle(() => reject(new Error(
-                                '[Weline] ' + __('模块 %{1} 加载超时：%{2}', { 1: moduleName, 2: scriptPath })
-                            )));
-                        }, loadTimeoutMs);
 
-                        script.onload = () => {
-                            settle(() => {
-                                if (validateGlobal && globalVarName && !this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
-                                    reject(new Error('[Weline] ' + __('模块 %{1} 加载失败：未找到 %{2}', { 1: moduleName, 2: globalVarName })));
+                            const loadTimeoutMs = 10000;
+                            let settled = false;
+                            const releaseSlot = () => {
+                                this.scriptInflight = Math.max(0, this.scriptInflight - 1);
+                                const next = this.scriptWaitQueue.shift();
+                                if (typeof next === 'function') {
+                                    next();
+                                }
+                            };
+                            const settle = (fn) => {
+                                if (settled) {
                                     return;
                                 }
-                                resolve();
-                            });
-                        };
-                        script.onerror = () => {
-                            settle(() => reject(new Error(
-                                '[Weline] ' + __('模块 %{1} 加载失败：无法加载 %{2}', { 1: moduleName, 2: scriptPath })
-                            )));
-                        };
-                        document.head.appendChild(script);
-                    };
+                                settled = true;
+                                window.clearTimeout(timeoutId);
+                                releaseSlot();
+                                fn();
+                            };
+                            const timeoutId = window.setTimeout(() => {
+                                try {
+                                    script.onload = null;
+                                    script.onerror = null;
+                                    if (script.parentNode) {
+                                        script.parentNode.removeChild(script);
+                                    }
+                                } catch (_cleanupError) {
+                                }
+                                settle(() => reject(new Error(
+                                    '[Weline] ' + __('模块 %{1} 加载超时：%{2}', { 1: moduleName, 2: scriptPath })
+                                )));
+                            }, loadTimeoutMs);
 
-                    if (this.scriptInflight >= this.maxConcurrentScripts) {
-                        this.scriptWaitQueue.push(run);
-                        return;
-                    }
-                    run();
-                });
+                            script.onload = () => {
+                                settle(() => {
+                                    if (validateGlobal && globalVarName && !this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
+                                        reject(new Error('[Weline] ' + __('模块 %{1} 加载失败：未找到 %{2}', { 1: moduleName, 2: globalVarName })));
+                                        return;
+                                    }
+                                    resolve();
+                                });
+                            };
+                            script.onerror = () => {
+                                settle(() => {
+                                    // PROD .min.js miss → one retry on the pretty sibling, then fail.
+                                    if (allowPrettyFallback && /\.min\.js(\?|$)/i.test(src)) {
+                                        const pretty = this.getScriptUrl(this.prettyJsPath(scriptPath));
+                                        if (pretty && pretty !== src) {
+                                            loadOne(pretty, false).then(resolve, reject);
+                                            return;
+                                        }
+                                    }
+                                    reject(new Error(
+                                        '[Weline] ' + __('模块 %{1} 加载失败：无法加载 %{2}', { 1: moduleName, 2: scriptPath })
+                                    ));
+                                });
+                            };
+                            document.head.appendChild(script);
+                        };
+
+                        if (this.scriptInflight >= this.maxConcurrentScripts) {
+                            this.scriptWaitQueue.push(run);
+                            return;
+                        }
+                        run();
+                    });
+
+                    const promise = loadOne(primarySrc, true);
+                    // Cache the raw promise so concurrent callers share one fetch;
+                    // on failure drop the entry so a later module can retry.
+                    this.scriptUrlLoads.set(primarySrc, promise);
+                    promise.catch(() => {
+                        this.scriptUrlLoads.delete(primarySrc);
+                    });
+                    return promise;
+                };
 
                 for (let index = 0; index < paths.length; index += 1) {
                     await appendScript(paths[index], index === paths.length - 1);
