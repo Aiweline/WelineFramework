@@ -2361,12 +2361,23 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
             return;
         }
+        $edgeOn = \class_exists(\Weline\Maintenance\Helper\MaintenanceEdgeFlag::class)
+            && \Weline\Maintenance\Helper\MaintenanceEdgeFlag::isOn();
         $shouldClearMaintenance = $maintenanceEnabled
-            || (bool)Env::getInstance()->getConfig('system.maintenance', false);
+            || (bool)Env::getInstance()->getConfig('system.maintenance', false)
+            || $edgeOn;
         if ($shouldClearMaintenance) {
             try {
                 $envOk = Env::getInstance()->setConfig('system.maintenance', false);
+                // 升级路径此前只改 env + WLS，不清理边缘标志与开启现场；
+                // 进程被 kill 后会出现「env 已关 / edge 仍在」或 status 残留。
+                $this->clearMaintenanceSideChannels();
                 $wlsOk = $this->syncWlsMaintenanceMode(false);
+                if (!$wlsOk) {
+                    // Worker 偶发未 ACK：退避一次再同步，避免假关。
+                    \usleep(250_000);
+                    $wlsOk = $this->syncWlsMaintenanceMode(false);
+                }
                 if ($envOk && $wlsOk) {
                     $this->maintenanceClosed = true;
                     $this->printing->note(__('维护模式已关闭。'));
@@ -2386,6 +2397,26 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $this->closeoutFailed = true;
                 $this->maintenanceClosed = false;
             }
+        }
+    }
+
+    /**
+     * Best-effort clear of Maintenance-owned side channels (edge flag + session marker).
+     * Soft-depends on Weline_Maintenance so Framework stays bootable without it.
+     */
+    private function clearMaintenanceSideChannels(): void
+    {
+        try {
+            if (\class_exists(\Weline\Maintenance\Helper\MaintenanceEdgeFlag::class)) {
+                \Weline\Maintenance\Helper\MaintenanceEdgeFlag::disable();
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            if (\class_exists(\Weline\Maintenance\Helper\MaintenanceSessionMarker::class)) {
+                (new \Weline\Maintenance\Helper\MaintenanceSessionMarker())->clear();
+            }
+        } catch (\Throwable) {
         }
     }
     

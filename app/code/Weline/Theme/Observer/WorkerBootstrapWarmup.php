@@ -337,8 +337,11 @@ class WorkerBootstrapWarmup implements ObserverInterface
         }
 
         $paths = $this->resolveFpcWarmupPaths();
-        $maxPaths = (int)(\Weline\Framework\App\Env::get('wls.worker.fpc_warmup_max_paths', 96) ?: 96);
-        $maxPaths = \max(1, \min($maxPaths, 384));
+        // READY 路径上的 process FPC hydrate 必须有硬上限：历史「Worker 即死」
+        // 常见于 contribution/env 把路径铺到上百条 + 多 host，OOM/超时后 Master
+        // 回收。异步 theme:fpc-prewarm 负责分类/PDP 长尾。
+        $maxPaths = (int)(\Weline\Framework\App\Env::get('wls.worker.fpc_warmup_max_paths', 24) ?: 24);
+        $maxPaths = \max(1, \min($maxPaths, 64));
         $paths = \array_slice($paths, 0, $maxPaths);
 
         $hosts = $this->resolveFpcWarmupHosts();

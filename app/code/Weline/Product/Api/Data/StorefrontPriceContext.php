@@ -23,9 +23,19 @@ final readonly class StorefrontPriceContext
         public string|int|null $customerId = null,
         /** toc|tob — empty means unspecified retail path */
         public string $sellingMode = '',
+        /**
+         * PDP needs overlapping campaign choices for the picker UI.
+         * Listing/catalog bags only need the winning unit adjustment — building
+         * choices for every SKU (Observed 334×/request) is pure overhead.
+         */
+        public bool $includeEligibleCampaignChoices = true,
     ) {
     }
 
+    /**
+     * Listing / catalog soft bags: price the winning deal only.
+     * Does not enumerate eligible campaign choices (PDP-only UI data).
+     */
     public static function fromCatalogMinor(
         int $productId,
         int $catalogPriceMinor,
@@ -35,6 +45,7 @@ final readonly class StorefrontPriceContext
             productId: max(0, $productId),
             catalogPriceMinor: max(0, $catalogPriceMinor),
             currency: strtoupper(trim($currency)) ?: 'CNY',
+            includeEligibleCampaignChoices: false,
         );
     }
 

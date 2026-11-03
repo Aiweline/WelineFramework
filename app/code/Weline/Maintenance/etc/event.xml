@@ -31,4 +31,12 @@
                   shared="true"
                   sort="120"/>
     </event>
+    <!-- 启动时收掉「升级被 kill 后的残留维护」，避免店面/后台长期 503 -->
+    <event name="Weline_Server::start_after">
+        <observer name="Weline_Maintenance::clear_stale_maintenance_on_server_start"
+                  instance="Weline\Maintenance\Observer\ClearStaleMaintenanceOnServerStart"
+                  disabled="false"
+                  shared="true"
+                  sort="50"/>
+    </event>
 </config>

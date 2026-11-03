@@ -42,9 +42,9 @@ class FpcPrewarm implements CommandInterface
     {
         return [
             'usage' => [
-                'php bin/w theme:fpc-prewarm [--site=host] [--paths=/,/products] [--concurrency=2]',
+                'php bin/w theme:fpc-prewarm [--site=host] [--paths=/,/products] [--limit=8] [--products=6] [--extra-locales=3] [--max=32] [--concurrency=2]',
             ],
-            'note' => __('不带 --site 时使用当前站点绑定域名；请求打到 127.0.0.1 并带 Host 头'),
+            'note' => __('不带 --site 时用绑定域名；不带 --paths 时自动发现首页/列表/Top 分类/热度 PDP。请求打 127.0.0.1 并带 Host 头'),
         ];
     }
 
@@ -82,9 +82,11 @@ class FpcPrewarm implements CommandInterface
                 (int)($merged['limit'] ?? 8),
                 $locales,
                 !empty($merged['all-locales']),
+                (int)($merged['products'] ?? StorefrontFpcPrewarmer::DEFAULT_PRODUCT_LIMIT),
             );
             // 上限护栏：铺满语种会到上百条，实测连续冷渲染会把 Worker 打到 503。
-            $max = (int)($merged['max'] ?? 20);
+            // 含分类 + PDP 后默认抬到 32，仍受 concurrency 背压保护。
+            $max = (int)($merged['max'] ?? 32);
             if ($max > 0 && \count($paths) > $max) {
                 $paths = \array_slice($paths, 0, $max);
             }

@@ -100,6 +100,9 @@ final class ViewWarmupContributionProvider implements ViewWarmupContributionProv
             $paths[$path] = $path;
         }
 
+        // PDP 热度路径不在 Worker bootstrap 贡献里展开：bestSellerCards 会打目录构建，
+        // 拖垮 READY。详情页预热交给 theme:fpc-prewarm / StorefrontFpcPrewarmer。
+
         $localeProductCount = 0;
         foreach ($defaults['languages'] as $code) {
             $code = \trim((string)$code);
@@ -124,9 +127,10 @@ final class ViewWarmupContributionProvider implements ViewWarmupContributionProv
             }
         }
 
-        // products + category surfaces from nav tree + a few locale /products homes.
+        // products + category surfaces + a few locale /products homes.
         // Critical FPC still only seals `/`+`/products`; category paths feed
-        // deferred `category_surface_prime` (own budget, out of UC wall clock).
+        // deferred surface prime. Hot PDP paths belong to theme:fpc-prewarm,
+        // not Worker bootstrap (bestSellerCards would rebuild the catalog).
         return \array_slice(\array_values($paths), 0, 16);
     }
 

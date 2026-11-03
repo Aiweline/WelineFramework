@@ -168,6 +168,39 @@ final class ColdStartArchitectureContractTest extends TestCase
                 self::assertStringContainsString('drainPendingJobs(', $src,
                     '预热前必须 drainPendingJobs（固化 pending 时预热无效）');
             },
+
+            // C12：列表定价（fromCatalogMinor）禁止枚举 eligible campaign choices。
+            // Observed /products 穿章对 334 SKU 各调一次 listEligible + measurePhase
+            // （promotion_theme_deal 38–100ms）；网格不渲染选择器，PDP 才需要。
+            'listing price context skips eligible campaign choices' => function (): void {
+                $ctx = $this->source('app/code/Weline/Product/Api/Data/StorefrontPriceContext.php');
+                self::assertStringContainsString('includeEligibleCampaignChoices: false',
+                    $ctx,
+                    'fromCatalogMinor 必须关闭 includeEligibleCampaignChoices');
+                $assembler = $this->source('app/code/Weline/Product/Service/Storefront/StorefrontOfferPriceAssembler.php');
+                self::assertStringContainsString('includeEligibleCampaignChoices',
+                    $assembler,
+                    'Assembler 必须尊重 includeEligibleCampaignChoices 门闩');
+                self::assertStringContainsString('listEligibleCampaignChoices',
+                    $assembler,
+                    'Assembler 仍须保留 PDP 的 listEligibleCampaignChoices 分支');
+            },
+
+            // C13：Worker READY 路径上的 process FPC hydrate 路径数必须有硬上限，
+            // 长尾分类/PDP 走异步 theme:fpc-prewarm，避免 bootstrap OOM/超时。
+            'worker bootstrap fpc warmup path cap is bounded' => function (): void {
+                $src = $this->source('app/code/Weline/Theme/Observer/WorkerBootstrapWarmup.php');
+                self::assertStringContainsString(
+                    "fpc_warmup_max_paths', 24)",
+                    $src,
+                    'READY 路径 FPC hydrate 默认上限须 ≤24（长尾交给异步预热）',
+                );
+                self::assertStringContainsString(
+                    'min($maxPaths, 64)',
+                    $src,
+                    'READY 路径 FPC hydrate 硬顶须 ≤64',
+                );
+            },
         ];
     }
 }

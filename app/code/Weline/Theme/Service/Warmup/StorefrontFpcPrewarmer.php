@@ -15,13 +15,22 @@ final class StorefrontFpcPrewarmer
     /** @var list<string> */
     public const DEFAULT_PATHS = ['/', '/products'];
 
+    /** 默认顺带预热的热度 PDP 条数（再按语种展开前）。 */
+    public const DEFAULT_PRODUCT_LIMIT = 6;
+
     /**
-     * 自动生成预热路径：首页 + 商品列表 + Top N 一级分类，并铺到站点已启用的每个语种。
+     * 自动生成预热路径：首页 + 商品列表 + Top N 一级分类 + Top M 热度 PDP，
+     * 并按需铺到站点已启用的语种。
      *
      * @return list<string>
      */
-    public function discoverPaths(int $websiteId = 0, int $limitCategories = 8, array $locales = [], bool $allLocales = false): array
-    {
+    public function discoverPaths(
+        int $websiteId = 0,
+        int $limitCategories = 8,
+        array $locales = [],
+        bool $allLocales = false,
+        int $limitProducts = self::DEFAULT_PRODUCT_LIMIT,
+    ): array {
         $base = ['/', '/products'];
         try {
             /** @var \Weline\Product\Service\StorefrontCategoryTreeIndex $index */
@@ -47,6 +56,10 @@ final class StorefrontFpcPrewarmer
             // 分类取不到就只预热首页与列表页。
         }
 
+        foreach ($this->discoverProductDetailPaths(max(0, $websiteId), max(0, $limitProducts)) as $productPath) {
+            $base[] = $productPath;
+        }
+
         $locales = $this->normalizeLocales($locales, $websiteId, $allLocales);
         if ($locales === []) {
             return \array_values(\array_unique($base));
@@ -67,6 +80,49 @@ final class StorefrontFpcPrewarmer
         }
 
         return \array_values(\array_unique($paths === [] ? $base : $paths));
+    }
+
+    /**
+     * 热度 Top N 商品详情路径（/product/{slug}）。失败则跳过，不影响分类预热。
+     *
+     * @return list<string>
+     */
+    private function discoverProductDetailPaths(int $websiteId, int $limit): array
+    {
+        if ($limit <= 0) {
+            return [];
+        }
+        try {
+            /** @var \Weline\Product\Service\StorefrontProductWidgetCatalog $catalog */
+            $catalog = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Product\Service\StorefrontProductWidgetCatalog::class
+            );
+            $cards = $catalog->bestSellerCards($limit);
+        } catch (\Throwable) {
+            return [];
+        }
+        if (!\is_array($cards) || $cards === []) {
+            return [];
+        }
+
+        $paths = [];
+        foreach ($cards as $card) {
+            if (!\is_array($card)) {
+                continue;
+            }
+            $slug = \strtolower(\trim((string)($card['slug'] ?? '')));
+            $productId = \max(0, (int)($card['product_id'] ?? $card['id'] ?? 0));
+            $path = $slug !== '' ? '/product/' . $slug : ($productId > 0 ? '/product/' . $productId : '');
+            if ($path === '') {
+                continue;
+            }
+            $paths[$path] = $path;
+            if (\count($paths) >= $limit) {
+                break;
+            }
+        }
+
+        return \array_values($paths);
     }
 
     /**

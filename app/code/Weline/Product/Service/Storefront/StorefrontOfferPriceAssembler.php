@@ -36,11 +36,19 @@ final class StorefrontOfferPriceAssembler implements StorefrontOfferPriceAssembl
 
         $candidates = [];
         $eligibleCampaigns = [];
+        $traceEachAdjustment = TraceGate::isArmed()
+            && !empty($context->selection['trace_price_adjustments']);
         foreach ($this->resolvedProviders ??= $this->providers->all() as $provider) {
             $providerCode = strtolower(trim($provider->getCode()));
             $providerLabel = preg_replace('/[^a-z0-9_.-]+/', '_', $providerCode) ?: 'unknown';
             try {
-                if (method_exists($provider, 'listEligibleCampaignChoices')) {
+                // Listing bags (fromCatalogMinor) skip campaign-choice enumeration:
+                // Observed /products pierce paid 334× listEligible + measurePhase (~38–100ms)
+                // for UI data the grid never renders. PDP keeps includeEligibleCampaignChoices.
+                if (
+                    $context->includeEligibleCampaignChoices
+                    && method_exists($provider, 'listEligibleCampaignChoices')
+                ) {
                     $choices = $provider->listEligibleCampaignChoices($context);
                     if (is_array($choices)) {
                         foreach ($choices as $choice) {
@@ -64,11 +72,15 @@ final class StorefrontOfferPriceAssembler implements StorefrontOfferPriceAssembl
                         }
                     }
                 }
-                $adjustments = TraceGate::measurePhase(
-                    'product.price.adjustment.' . $providerLabel,
-                    fn(): array => $provider->collectAdjustments($context),
-                    ['provider' => $providerCode, 'product_id' => $context->productId],
-                );
+                // Per-SKU measurePhase under an armed panel was itself a cold tax
+                // (334 inclusive phases). Default: collect only; opt-in via selection.
+                $adjustments = $traceEachAdjustment
+                    ? TraceGate::measurePhase(
+                        'product.price.adjustment.' . $providerLabel,
+                        fn(): array => $provider->collectAdjustments($context),
+                        ['provider' => $providerCode, 'product_id' => $context->productId],
+                    )
+                    : $provider->collectAdjustments($context);
                 foreach ($adjustments as $adjustment) {
                     if (!$adjustment instanceof StorefrontPriceAdjustment) {
                         continue;

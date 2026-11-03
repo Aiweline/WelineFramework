@@ -7,7 +7,6 @@ namespace Weline\Theme\Observer;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Service\Warmup\StorefrontFpcPrewarmer;
 
 /**
@@ -18,7 +17,8 @@ use Weline\Theme\Service\Warmup\StorefrontFpcPrewarmer;
  * 首屏 233–1350 ms）；预热一次后首访 25–42 ms。这里把两步固化进启动流程，
  * 不再依赖命令行参数或 sleep 兜底。
  *
- * 开关：`theme_fpc_prewarm.on_start`（默认 true）；路径上限 `theme_fpc_prewarm.limit`（默认 5）。
+ * 开关：`theme_fpc_prewarm.on_start`（默认 true）；路径上限 `theme_fpc_prewarm.limit`（默认 8）。
+ * 另支持 `theme_fpc_prewarm.products`（热度 PDP）、`extra_locales`、`max`。
  * 失败只记日志，不影响服务启动。
  */
 class PrewarmStorefrontOnServerStart implements ObserverInterface
@@ -38,13 +38,29 @@ class PrewarmStorefrontOnServerStart implements ObserverInterface
                 return;
             }
             $delay = (int)(Env::get('theme_fpc_prewarm.start_delay', 10) ?: 10);
-            $limit = (int)(Env::get('theme_fpc_prewarm.limit', 5) ?: 5);
+            $limit = (int)(Env::get('theme_fpc_prewarm.limit', 8) ?: 8);
+            $products = (int)(Env::get(
+                'theme_fpc_prewarm.products',
+                StorefrontFpcPrewarmer::DEFAULT_PRODUCT_LIMIT
+            ) ?: StorefrontFpcPrewarmer::DEFAULT_PRODUCT_LIMIT);
+            $extraLocales = (int)(Env::get('theme_fpc_prewarm.extra_locales', 3) ?: 3);
+            $max = (int)(Env::get('theme_fpc_prewarm.max', 32) ?: 32);
             $cmd = 'sleep ' . \max(0, $delay) . ' && ' . \escapeshellarg(PHP_BINARY)
                 . ' ' . \escapeshellarg(BP . 'bin/w') . ' theme:fpc-prewarm'
                 . ' --site=' . \escapeshellarg($host)
-                . ' --limit=' . $limit;
+                . ' --limit=' . $limit
+                . ' --products=' . \max(0, $products)
+                . ' --extra-locales=' . \max(0, $extraLocales)
+                . ' --max=' . \max(1, $max);
             \exec($cmd . ' > /dev/null 2>&1 &');
-            $this->log('queued host=' . $host . ' delay=' . $delay . 's limit=' . $limit);
+            $this->log(
+                'queued host=' . $host
+                . ' delay=' . $delay . 's'
+                . ' limit=' . $limit
+                . ' products=' . $products
+                . ' extra_locales=' . $extraLocales
+                . ' max=' . $max
+            );
         } catch (\Throwable $e) {
             $this->log('failed: ' . $e->getMessage());
         }
