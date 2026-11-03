@@ -79,6 +79,8 @@ class IndustryProtocolDocumentsTest extends TestCase
         self::assertStringContainsString('https://shop.example/llms.txt', $html);
         self::assertStringContainsString('Shop &amp; Co', $html);
         self::assertStringContainsString('rel="ard"', $html);
+        self::assertStringContainsString('type="application/ai-catalog+json"', $html);
+        self::assertStringNotContainsString('type="application/ai-registry+json"', $html);
         self::assertStringContainsString('https://shop.example/.well-known/ard.json', $html);
         self::assertStringContainsString('rel="ai-catalog"', $html);
         self::assertStringContainsString('https://shop.example/.well-known/ai-catalog.json', $html);

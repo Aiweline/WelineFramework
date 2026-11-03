@@ -37,15 +37,19 @@ class Llms extends FrontendController
     private function agentCatalog(): Response
     {
         $baseUrl = $this->requestBaseUrl();
-        $manifest = json_decode(
-            IndustryProtocolDocuments::aiCatalogJson($this->renderer->agentCatalogEntries(), $baseUrl),
-            true
-        );
+        $body = IndustryProtocolDocuments::aiCatalogJson($this->renderer->agentCatalogEntries(), $baseUrl);
 
-        // Edge-cache the manifest so the Lighthouse ARD fetch (and other agents)
-        // get a sub-second response instead of a cold feed render.
-        $response = Response::json(is_array($manifest) ? $manifest : ['specVersion' => '1.0', 'entries' => []], 200);
+        // ARD media type is application/ai-catalog+json (not generic application/json).
+        // Validators that follow the link MIME reject a plain JSON content-type as
+        // "schema invalid / cannot load" even when the body itself validates.
+        $response = Response::text($body, 200, 'application/ai-catalog+json; charset=utf-8');
+        // Edge-cache the manifest so ARD/Lighthouse fetches stay sub-second and avoid
+        // cold feed renders that trip worker memory_pressure 503. CDN-* headers are
+        // required for Cloudflare; Cache-Control alone still BYPASS when Set-Cookie
+        // previously polluted the response (see StorefrontGenerationOutbound).
         $response->setHeader('Cache-Control', 'public, max-age=300, must-revalidate');
+        $response->setHeader('CDN-Cache-Control', 'public, max-age=300');
+        $response->setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=300');
 
         return $response;
     }

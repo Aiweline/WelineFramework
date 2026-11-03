@@ -32,6 +32,13 @@ final class StorefrontGenerationOutbound
                 return;
             }
 
+            // Industry discovery docs (.well-known/ard.json, ai-catalog, …) must stay
+            // Set-Cookie-free: ARD/Lighthouse validators treat identity cookies as a
+            // non-cacheable agent response and report "could not be loaded".
+            if (self::isIndustryProtocolPath()) {
+                return;
+            }
+
             // Shareable FPC HIT/STALE (and armed suppress) must never mint identity Cookie.
             // Defense for Worker emission after StateManager::reset cleared RequestContext.
             if (self::forbidsIdentityCookie($response)) {
@@ -117,6 +124,32 @@ final class StorefrontGenerationOutbound
         }
 
         return false;
+    }
+
+    /**
+     * Industry protocol documents that agents fetch as discovery manifests.
+     * Cookie minting here breaks ARD validators and Cloudflare edge caching.
+     */
+    private static function isIndustryProtocolPath(): bool
+    {
+        try {
+            $request = ObjectManager::getInstance(Request::class);
+            if (!($request instanceof Request)) {
+                return false;
+            }
+            $path = \strtolower(\trim((string)(\parse_url($request->getUrlPath(), \PHP_URL_PATH) ?: ''), '/'));
+            return $path === '.well-known/ard.json'
+                || $path === '.well-known/ai-catalog.json'
+                || $path === '.well-known/tdmrep.json'
+                || $path === '.well-known/trust.txt'
+                || $path === 'ai.txt'
+                || $path === 'license.xml'
+                || $path === 'trust.txt'
+                || $path === 'llms.txt'
+                || $path === 'llms-full.txt';
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private static function ensureVaryCookie(Response $response): void

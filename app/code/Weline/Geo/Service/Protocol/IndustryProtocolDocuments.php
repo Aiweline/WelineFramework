@@ -147,9 +147,13 @@ final class IndustryProtocolDocuments
             $lines[] = '<link rel="alternate" type="text/plain" title="' . $title . ' llms-full.txt" href="' . self::escape($baseUrl . '/llms-full.txt') . '">';
         }
         if ($baseUrl !== '') {
-            // ARD v0.91 (agenticresourcediscovery.org): rel="ard" is the normative
-            // link relation; rel="ai-catalog" is the predecessor consumers MAY honour.
-            $lines[] = '<link rel="ard" type="application/ai-registry+json" href="' . self::escape($baseUrl . '/.well-known/ard.json') . '">';
+            // ARD v0.91 (agenticresourcediscovery.org):
+            // - rel="ard" is the normative link; type MUST be application/ai-catalog+json
+            //   for a hosted entry manifest (application/ai-registry+json is ONLY for
+            //   search-registry service cards — validators treat that MIME as a registry
+            //   document and reject our catalog body as "schema invalid / cannot load").
+            // - rel="ai-catalog" is the predecessor consumers MAY honour.
+            $lines[] = '<link rel="ard" type="application/ai-catalog+json" href="' . self::escape($baseUrl . '/.well-known/ard.json') . '">';
             $lines[] = '<link rel="ai-catalog" type="application/ai-catalog+json" href="' . self::escape($baseUrl . '/.well-known/ai-catalog.json') . '">';
         }
 
