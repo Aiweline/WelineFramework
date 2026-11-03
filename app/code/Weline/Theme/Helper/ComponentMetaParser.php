@@ -15,6 +15,12 @@ use Weline\Meta\Api\ParamDefinitionNormalizerInterface;
 
 class ComponentMetaParser
 {
+    /** 每个进程最多缓存多少个文件的 meta 解析结果（键含 mtime/size，文件改动自动失效）。 */
+    private const PARSE_MEMO_LIMIT = 256;
+
+    /** @var array<string, array<string, mixed>> */
+    private static array $parseMemo = [];
+
     /**
      * 解析组件文件的 Meta 信息
      * 
@@ -32,7 +38,21 @@ class ComponentMetaParser
             ];
         }
         
-        return self::parseContent((string)file_get_contents($filePath), $filePath);
+        // 布局/部件 meta 是「文件 + 头注释」的纯函数：同进程内按 mtime+size 复用，
+        // 文件一改（theme:update 重写）键就变，不会读到旧解析结果。
+        $stat = @\stat($filePath);
+        $memoKey = $filePath . '|' . (int)($stat['mtime'] ?? 0) . '|' . (int)($stat['size'] ?? 0);
+        if (isset(self::$parseMemo[$memoKey])) {
+            return self::$parseMemo[$memoKey];
+        }
+
+        $parsed = self::parseContent((string)file_get_contents($filePath), $filePath);
+        if (\count(self::$parseMemo) >= self::PARSE_MEMO_LIMIT) {
+            self::$parseMemo = [];
+        }
+        self::$parseMemo[$memoKey] = $parsed;
+
+        return $parsed;
     }
 
     /** Parse the source bytes already captured for this request or generation. */

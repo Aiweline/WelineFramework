@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Memory;
 
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Service\WorkerResponseMemoryGuard;
 
 /**
@@ -27,7 +28,8 @@ final class WorkerHostPressureApplier
         if ($staggerMs > 0) {
             $sleepUs = \min(500000, \max(0, $staggerMs) * 1000);
             if ($sleepUs > 0) {
-                \usleep($sleepUs);
+                // 调度器在线时让出 Fiber：stagger 不得在 Worker 内硬阻塞其他在飞请求。
+                SchedulerSystem::usleep($sleepUs);
             }
         }
         self::reclaimForLevel($level);

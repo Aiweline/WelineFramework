@@ -236,88 +236,35 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
         throw $e;
     }
 };
-?>
-<section class="header-cart header-action-item <?= $esc($wc) ?><?= $isEmpty ? ' is-empty' : '' ?>"
-         weline-code="<?= $esc($scope->code) ?>"
-         data-uid="<?= $esc($scope->uid) ?>"
-         data-js-ns="<?= $esc($scope->jsNs) ?>"
-         data-w-mini-cart="1"
-         data-editor-interactive
-         data-weline-load="miniCartIcon,miniCartExtras,storefrontMoneySummary"
-         data-demo-chrome="<?= $isDemoChrome ? '1' : '0' ?>"
-         data-preview-mode="0"
-         data-cart-count="<?= $cartQuantity ?>"
-         data-cart-subtotal="<?= $esc($cartSubtotalAttr) ?>"
-         data-i18n-empty="<?= $esc(__('购物车是空的')) ?>"
-         data-i18n-sibling-browse="<?= $esc(__('浏览%1 %2件商品')) ?>"
-         data-i18n-toc-cart="<?= $esc(__('零售车')) ?>"
-         data-i18n-tob-cart="<?= $esc(__('批发车')) ?>"
-         data-i18n-continue="<?= $esc(__('继续购物')) ?>"
-         data-i18n-remove="<?= $esc(__('移除')) ?>"
-         data-i18n-subtotal="<?= $esc(__('小计')) ?>"
-         data-i18n-checkout="<?= $esc(__('去结算')) ?>"
-         data-i18n-checkout-loading="<?= $esc(__('正在前往结算...')) ?>"
-         data-i18n-view-cart="<?= $esc(__('查看购物车')) ?>"
-         data-i18n-note="<?= $esc(__('税费与运费将在结算时计算')) ?>"
-         data-i18n-note-shipping="<?= $esc(__('运费将在结算时计算')) ?>"
-         data-i18n-tax="<?= $esc(__('税费')) ?>"
-         data-i18n-qty="<?= $esc(__('数量')) ?>"
-         data-i18n-decrease="<?= $esc(__('减少数量')) ?>"
-         data-i18n-increase="<?= $esc(__('增加数量')) ?>"
-         data-i18n-loading="<?= $esc(__('正在加载购物车...')) ?>"
-         data-i18n-updating="<?= $esc(__('正在更新购物车...')) ?>"
-         data-i18n-swatch-preview="<?= $esc(__('查看规格图')) ?>"
-         data-i18n-image-preview="<?= $esc(__('查看商品图')) ?>"
-         data-i18n-swatch-preview-close="<?= $esc(__('关闭')) ?>"
-         data-i18n-goods-subtotal="<?= $esc(__('商品小计')) ?>"
-         data-i18n-deposit-payable="<?= $esc(__('本次应付定金')) ?>"
-         data-i18n-order-total="<?= $esc(__('本单共计')) ?>"
-         data-i18n-discount-coupon="<?= $esc(__('优惠券')) ?>"
-         data-i18n-discount-stack="<?= $esc(__('叠加优惠')) ?>"
-         data-i18n-discount-automatic="<?= $esc(__('自动优惠')) ?>"
-         data-i18n-fs-remaining="<?= $esc(__('还差 %1 包邮')) ?>"
-         data-i18n-fs-qualified="<?= $esc(__('已享包邮')) ?>"
-         data-i18n-footer-collapse="<?= $esc(__('收起明细')) ?>"
-         data-i18n-footer-expand="<?= $esc(__('展开明细')) ?>"
-         data-fs-threshold-usd="49"
-         data-placeholder-image="<?= $esc($placeholder) ?>">
-    <a href="@url{'cart'}"
-       class="cart-link"
-       aria-label="<?= __('购物车') ?>"
-       aria-expanded="false"
-       aria-controls="mini-cart-drawer"
-       data-mini-cart-trigger>
-        <span class="cart-icon-wrapper">
-            <span class="header-cart-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                    <path d="M3 4h1.5l1.2 6.2a2 2 0 0 0 2 1.8h9.1a2 2 0 0 0 1.95-1.55L20 7H6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                    <circle cx="9" cy="19" r="1.4" fill="currentColor" stroke="none"/>
-                    <circle cx="17" cy="19" r="1.4" fill="currentColor" stroke="none"/>
-                </svg>
-            </span>
-            <?php if ($showQuantity): ?>
-                <span class="cart-count" data-cart-count-badge <?= $cartQuantity > 0 ? '' : 'hidden' ?>>
-                    <?= $cartQuantity > 99 ? '99+' : $cartQuantity ?>
-                </span>
-            <?php endif; ?>
-        </span>
-        <?php if ($showSubtotal): ?>
-            <span class="cart-info">
-                <span class="cart-label"><?= __('购物车') ?></span>
-                <span class="cart-meta" data-mini-cart-meta>
-                    <span class="cart-type-caption" data-mini-cart-type-caption><?= __('零售') ?></span>
-                    <span class="cart-meta__sep" aria-hidden="true"> · </span>
-                    <span class="cart-subtotal" data-cart-subtotal-text><?= $esc($cartSubtotalVisible) ?></span>
-                </span>
-            </span>
-        <?php else: ?>
-            <span class="cart-info">
-                <span class="cart-label"><?= __('购物车') ?></span>
-                <span class="cart-type-caption" data-mini-cart-type-caption><?= __('零售') ?></span>
-            </span>
-        <?php endif; ?>
-    </a>
 
+// 异步挂载：页面模式只出挂载点；壳模式（异步端点）只出抽屉标记，绝不随页面立即下发抽屉 HTML。
+$shellMode = (bool)($this->getData('shell_mode') ?? false);
+$shellVersion = '';
+try {
+    if (class_exists(\Weline\Framework\Deploy\GenerationRegistry::class)) {
+        $shellVersion = (string)\Weline\Framework\Deploy\GenerationRegistry::generationUid();
+    }
+} catch (\Throwable) {
+}
+if ($shellVersion === '') {
+    try {
+        if (class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)) {
+            $shellVersion = (string)\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pageGeneration();
+        }
+    } catch (\Throwable) {
+    }
+}
+if ($shellVersion === '') {
+    $shellVersion = (string)w_env('deploy_version', 'dev');
+}
+try {
+    if (class_exists(\Weline\Theme\Service\NestedChromeSourceFingerprint::class)) {
+        $shellVersion .= '-' . substr((string)\Weline\Theme\Service\NestedChromeSourceFingerprint::compute(), 0, 12);
+    }
+} catch (\Throwable) {
+}
+if ($shellMode) {
+    ?>
     <div class="mini-cart-drawer__overlay"
          id="mini-cart-overlay"
          data-mini-cart-overlay
@@ -417,5 +364,95 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
             </div>
         </footer>
     </aside>
+    <?php
+    return;
+}
+?>
+<section class="header-cart header-action-item <?= $esc($wc) ?><?= $isEmpty ? ' is-empty' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-w-mini-cart="1"
+         data-editor-interactive
+         data-weline-load="miniCartIcon,miniCartExtras,storefrontMoneySummary"
+         data-demo-chrome="<?= $isDemoChrome ? '1' : '0' ?>"
+         data-preview-mode="0"
+         data-cart-count="<?= $cartQuantity ?>"
+         data-cart-subtotal="<?= $esc($cartSubtotalAttr) ?>"
+         data-i18n-empty="<?= $esc(__('购物车是空的')) ?>"
+         data-i18n-sibling-browse="<?= $esc(__('浏览%1 %2件商品')) ?>"
+         data-i18n-toc-cart="<?= $esc(__('零售车')) ?>"
+         data-i18n-tob-cart="<?= $esc(__('批发车')) ?>"
+         data-i18n-continue="<?= $esc(__('继续购物')) ?>"
+         data-i18n-remove="<?= $esc(__('移除')) ?>"
+         data-i18n-subtotal="<?= $esc(__('小计')) ?>"
+         data-i18n-checkout="<?= $esc(__('去结算')) ?>"
+         data-i18n-checkout-loading="<?= $esc(__('正在前往结算...')) ?>"
+         data-i18n-view-cart="<?= $esc(__('查看购物车')) ?>"
+         data-i18n-note="<?= $esc(__('税费与运费将在结算时计算')) ?>"
+         data-i18n-note-shipping="<?= $esc(__('运费将在结算时计算')) ?>"
+         data-i18n-tax="<?= $esc(__('税费')) ?>"
+         data-i18n-qty="<?= $esc(__('数量')) ?>"
+         data-i18n-decrease="<?= $esc(__('减少数量')) ?>"
+         data-i18n-increase="<?= $esc(__('增加数量')) ?>"
+         data-i18n-loading="<?= $esc(__('正在加载购物车...')) ?>"
+         data-i18n-updating="<?= $esc(__('正在更新购物车...')) ?>"
+         data-i18n-swatch-preview="<?= $esc(__('查看规格图')) ?>"
+         data-i18n-image-preview="<?= $esc(__('查看商品图')) ?>"
+         data-i18n-swatch-preview-close="<?= $esc(__('关闭')) ?>"
+         data-i18n-goods-subtotal="<?= $esc(__('商品小计')) ?>"
+         data-i18n-deposit-payable="<?= $esc(__('本次应付定金')) ?>"
+         data-i18n-order-total="<?= $esc(__('本单共计')) ?>"
+         data-i18n-discount-coupon="<?= $esc(__('优惠券')) ?>"
+         data-i18n-discount-stack="<?= $esc(__('叠加优惠')) ?>"
+         data-i18n-discount-automatic="<?= $esc(__('自动优惠')) ?>"
+         data-i18n-fs-remaining="<?= $esc(__('还差 %1 包邮')) ?>"
+         data-i18n-fs-qualified="<?= $esc(__('已享包邮')) ?>"
+         data-i18n-footer-collapse="<?= $esc(__('收起明细')) ?>"
+         data-i18n-footer-expand="<?= $esc(__('展开明细')) ?>"
+         data-fs-threshold-usd="49"
+         data-placeholder-image="<?= $esc($placeholder) ?>">
+    <?php /* 默认部件同样走声明式异步水合：抽屉壳由 JS 点击时取回，这里只声明打开意图。 */ ?>
+    <a href="@url{'cart'}"
+       class="cart-link"
+       aria-label="<?= __('购物车') ?>"
+       aria-expanded="false"
+       aria-controls="mini-cart-drawer"
+       data-mini-cart-open="toggle">
+        <span class="cart-icon-wrapper">
+            <span class="header-cart-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <path d="M3 4h1.5l1.2 6.2a2 2 0 0 0 2 1.8h9.1a2 2 0 0 0 1.95-1.55L20 7H6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="9" cy="19" r="1.4" fill="currentColor" stroke="none"/>
+                    <circle cx="17" cy="19" r="1.4" fill="currentColor" stroke="none"/>
+                </svg>
+            </span>
+            <?php if ($showQuantity): ?>
+                <span class="cart-count" data-cart-count-badge <?= $cartQuantity > 0 ? '' : 'hidden' ?>>
+                    <?= $cartQuantity > 99 ? '99+' : $cartQuantity ?>
+                </span>
+            <?php endif; ?>
+        </span>
+        <?php if ($showSubtotal): ?>
+            <span class="cart-info">
+                <span class="cart-label"><?= __('购物车') ?></span>
+                <span class="cart-meta" data-mini-cart-meta>
+                    <span class="cart-type-caption" data-mini-cart-type-caption><?= __('零售') ?></span>
+                    <span class="cart-meta__sep" aria-hidden="true"> · </span>
+                    <span class="cart-subtotal" data-cart-subtotal-text><?= $esc($cartSubtotalVisible) ?></span>
+                </span>
+            </span>
+        <?php else: ?>
+            <span class="cart-info">
+                <span class="cart-label"><?= __('购物车') ?></span>
+                <span class="cart-type-caption" data-mini-cart-type-caption><?= __('零售') ?></span>
+            </span>
+        <?php endif; ?>
+    </a>
+
+    <div class="mini-cart-shell-host"
+         data-mini-cart-shell-host
+         data-mini-cart-shell-version="<?= $esc($shellVersion) ?>"
+         hidden></div>
 </section>
 

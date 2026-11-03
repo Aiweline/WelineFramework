@@ -5,6 +5,7 @@ return [
     'version' => '1.0.93',
     'requires' => [
         'Weline_SystemConfig',
+        'Weline_FileManager',
         'Weline_Product',
         'Weline_Order',
         'Weline_Inventory',

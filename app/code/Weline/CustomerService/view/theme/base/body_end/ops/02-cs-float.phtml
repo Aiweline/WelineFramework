@@ -1,0 +1,336 @@
+<?php
+/**
+ * 悬浮客服浮层 · 全局区 body_end/ops 片段（本身就是一个部件）。
+ *
+ * base 也是部件：这里保留完整 `@widget.*` 元数据与可配置参数，运营可在面板里
+ * 关掉它、改文案/颜色；只是**声明方式**改成路径推导（丢文件进 base 目录即生效），
+ * 不再依赖主题槽。
+ *
+ * 部件代码直接放在本文件里，不再引用 `templates/frontend/widgets/*`。
+ * 默认注入参数清空：位置由全局区决定，避免与主题槽双写。
+ *
+ * @widget.code {customer-service-float}
+ * @widget.cache {3600}
+ * @widget.share {true}
+ * @widget.name {悬浮客服}
+ * @widget.description {右下角客服聊天浮层；账号页跳过；由全局区 body_end/ops 供位。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {[]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {}
+ * @widget.supports {["customer-service-float","layout-storefront-float-end","content"]}
+ * @widget.default_injections {[]}
+ * @global-region.float-slot {end}
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+?>
+<css>Weline_CustomerService::css/customer-service.css</css>
+<?php
+/*
+ * 必须引启动器 customer-service-float.js，不能直引 customer-service.js：
+ *   - customer-service.js 只导出 window.CustomerServiceWidget，**自己从不 init()**；
+ *   - 按钮点击监听（[data-cs-toggle-chat] → toggleChat）在 init() 里绑定；
+ *   - 启动器负责建立 window.customerServiceConfig、懒加载 customer-service.js、
+ *     再调用 init()，并在脚本未就绪时兜住首次点击。
+ * 直引结果：按钮在 DOM 里可见，但监听器从未绑定 → 点击无任何反应（2026-11-03 实测）。
+ */
+?>
+<js defer>Weline_CustomerService::js/customer-service-float.js</js>
+<?php
+
+use Weline\CustomerService\Service\BindCaptchaGuard;
+use Weline\CustomerService\Service\CustomerServiceSettings;
+use Weline\CustomerService\Service\WidgetTranslationService;
+use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\WidgetI18n;
+
+$requestPathRaw = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
+$requestPathParsed = parse_url($requestPathRaw, PHP_URL_PATH);
+$requestPath = strtolower((string)(is_string($requestPathParsed) && $requestPathParsed !== '' ? $requestPathParsed : $requestPathRaw));
+$isAccountRoute = $requestPath === '/customer/account'
+    || $requestPath === 'customer/account'
+    || str_contains($requestPath, '/customer/account/');
+// Account routes skip the float on publish AND preview (same business rule).
+// FORBIDDEN: preview-only / visual_editor / workspace-preview early-return
+// (preview_storefront_delivery_parity — preview must run the same widget path).
+if ($isAccountRoute) {
+    return;
+}
+
+/** @var CustomerServiceSettings $customerServiceSettings */
+$customerServiceSettings = ObjectManager::getInstance(CustomerServiceSettings::class);
+if (!$customerServiceSettings->isServiceEnabled()) {
+    return;
+}
+
+// Guest-safe SSR: login state is applied client-side on chat open / Account hydrate.
+$isLoggedIn = false;
+$customerId = null;
+$showGuestBindPrompt = true;
+
+/** @var BindCaptchaGuard $bindCaptchaGuard */
+$bindCaptchaGuard = ObjectManager::getInstance(BindCaptchaGuard::class);
+// 一次性人机验证禁止 SSR 进页面/FPC；弹窗打开时再拉 captcha-challenge。
+$bindCaptchaEnabled = $bindCaptchaGuard->isEnabled();
+$bindCaptchaHtml = '';
+
+/** @var WidgetTranslationService $widgetTranslationService */
+$widgetTranslationService = ObjectManager::getInstance(WidgetTranslationService::class);
+$supportedLocales = $widgetTranslationService->getSupportedLocales();
+$defaultCustomerLocale = $customerServiceSettings->defaultCustomerLocale();
+// Locale authority is RequestContext (via State / WidgetI18n::storefrontLocale). Do not re-parse URI.
+$currentLocale = WidgetI18n::storefrontLocale() ?: (\Weline\Framework\Env\WelineEnv::getLangLocal() ?: $defaultCustomerLocale);
+// P10: keep body-end config slim — dictionaries load on first chat open via Query.
+// Prefer {} over [] so clients treat it as a locale map, not a list.
+$widgetTranslations = new \stdClass();
+// Batch-prefetch SSR chrome copy before per-string label() — collapses
+// Dictionary::getEntry N+1 on non-default locales (cold-chaos: ~29q on ar_SA).
+WidgetI18n::prefetchLabels([
+    '客服服务',
+    '检测中...',
+    '修改邮箱身份',
+    '设置',
+    '收起',
+    '我的语言',
+    '显示模式',
+    '仅显示译文',
+    '原文+译文',
+    '仅显示原文',
+    '欢迎使用客服服务！',
+    '请输入您的问题，我们的客服将尽快为您解答。',
+    '验证邮箱',
+    '聊天工具',
+    '表情',
+    '图片',
+    '文件',
+    '截图',
+    '输入消息...',
+    '接收客服回复与优惠通知',
+    '留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。',
+    '仅用于本次客服咨询相关通知，不是简报订阅。',
+    '接收通知的邮箱',
+    '请输入用于接收客服通知的邮箱',
+    '稍后再说',
+    '发送验证邮件',
+]);
+$cs = static fn (string $source): string => WidgetI18n::label($source);
+
+$customerServiceModule = Env::getInstance()->getModuleList()['Weline_CustomerService'] ?? [];
+$customerServiceStaticDir = rtrim((string)($customerServiceModule['base_path'] ?? ''), DIRECTORY_SEPARATOR)
+    . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR . 'statics';
+// CSS via @widget.source only — forbid bare <link> dual-emit.
+$customerServiceJsVersion = (string) ((int) (@filemtime($customerServiceStaticDir . DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR . 'customer-service.js') ?: time()));
+$html2canvasPath = $customerServiceStaticDir . DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'html2canvas.min.js';
+$html2canvasVersion = (string) ((int) (@filemtime($html2canvasPath) ?: time()));
+$modernScreenshotPath = $customerServiceStaticDir . DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'modern-screenshot.js';
+$modernScreenshotVersion = (string) ((int) (@filemtime($modernScreenshotPath) ?: time()));
+$html2canvasHref = (string)$this->fetchTagSource('statics', 'Weline_CustomerService::js/vendor/html2canvas.min.js');
+$modernScreenshotHref = (string)$this->fetchTagSource('statics', 'Weline_CustomerService::js/vendor/modern-screenshot.js');
+// Fallback <script src> must use the same public URL semantics as @static (prod → /static/...).
+$customerServiceJsHref = (string)$this->fetchTagSource('statics', 'Weline_CustomerService::js/customer-service.js');
+$customerServiceJsHref = preg_replace('/[?&]v=[^&]*/', '', $customerServiceJsHref) ?: $customerServiceJsHref;
+$customerServiceJsHref = rtrim($customerServiceJsHref, '?&');
+?>
+<div id="customer-service-widget" class="customer-service-widget customer-service-widget--classic" data-editor-interactive
+     data-weline-load="customerServiceFloat"
+     data-cs-chat-url="@frontend-url{'customerservice/frontend/chat'}"
+     data-cs-bind-url="@frontend-url{'customerservice/frontend/bind'}"
+     data-cs-captcha-url="@frontend-url{'customerservice/frontend/bind/captcha-challenge'}">
+    <div id="cs-chat-button" class="cs-chat-button" data-cs-toggle-chat>
+        <svg class="cs-icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+            <path d="M7 9h10v2H7zm0-3h10v2H7zm0 6h7v2H7z"/>
+        </svg>
+        <span class="cs-presence-dot" id="cs-presence-dot" hidden aria-hidden="true"></span>
+        <span class="cs-badge cs-float-hidden" id="cs-unread-badge">0</span>
+    </div>
+
+    <?php
+    // Chat window stays in chrome bag HTML (theme.storefront_chrome HIT).
+    // Do not wrap in HTML template tags: Theme Taglib compile breaks on short-echo
+    // WidgetI18n labels inside deferred template content (PHP comment must not contain
+    // a question-mark greater-than sequence — it terminates the PHP block).
+    ?>
+    <div id="cs-chat-window" class="cs-chat-window w-panel cs-float-hidden" data-cs-shell="chrome-bag">
+        <div class="cs-chat-header w-panel-header">
+            <div class="cs-chat-title">
+                <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                    <path d="M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z"/>
+                </svg>
+                <div class="cs-chat-title-copy">
+                    <span id="cs-title-text"><?= $cs('客服服务') ?></span>
+                    <span id="cs-status-label" class="cs-status-label cs-status-offline"><?= $cs('检测中...') ?></span>
+                    <button type="button" id="cs-identity-chip" class="cs-identity-chip" hidden data-cs-edit-identity title="<?= $cs('修改邮箱身份') ?>">
+                        <img id="cs-identity-avatar" class="cs-identity-avatar" alt="" width="18" height="18" data-layout-exempt="1" hidden>
+                        <span id="cs-identity-label" class="cs-identity-label"></span>
+                    </button>
+                </div>
+            </div>
+            <div class="cs-chat-actions">
+                <button type="button" class="w-button cs-btn-icon" data-tone="quiet" data-icon-only="true" data-size="sm" id="cs-settings-btn" data-cs-toggle-settings title="<?= $cs('设置') ?>">
+                    <svg class="cs-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                        <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                    </svg>
+                </button>
+                <button type="button" class="w-button cs-btn-icon" data-tone="quiet" data-icon-only="true" data-size="sm" id="cs-minimize-btn" data-cs-toggle-chat title="<?= $cs('收起') ?>">
+                    <svg class="cs-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                        <path d="M6 19h12v2H6z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="cs-settings-panel w-panel-body cs-settings-panel--compact cs-float-hidden" id="cs-settings-panel">
+            <div class="cs-settings-item">
+                <label for="cs-locale-select">
+                    <svg class="cs-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
+                    </svg>
+                    <span id="cs-locale-label-text"><?= $cs('我的语言') ?></span>
+                </label>
+                <select id="cs-locale-select" class="w-select" data-size="sm">
+                    <?php foreach ($supportedLocales as $locale): ?>
+                        <option value="<?= htmlspecialchars((string)$locale['code']) ?>"><?= htmlspecialchars((string)$locale['nativeLabel']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="cs-settings-item">
+                <label for="cs-display-mode">
+                    <svg class="cs-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                    </svg>
+                    <span id="cs-display-mode-label-text"><?= $cs('显示模式') ?></span>
+                </label>
+                <select id="cs-display-mode" class="w-select" data-size="sm">
+                    <option value="translated"><?= $cs('仅显示译文') ?></option>
+                    <option value="both"><?= $cs('原文+译文') ?></option>
+                    <option value="original"><?= $cs('仅显示原文') ?></option>
+                </select>
+            </div>
+        </div>
+
+        <div class="cs-chat-body w-panel-body" id="cs-chat-messages">
+            <div class="cs-welcome-message">
+                <p id="cs-welcome-title"><?= $cs('欢迎使用客服服务！') ?></p>
+                <p id="cs-welcome-copy"><?= $cs('请输入您的问题，我们的客服将尽快为您解答。') ?></p>
+            </div>
+        </div>
+
+        <div class="cs-chat-footer w-panel-footer">
+            <div id="cs-guest-send-gate" class="cs-guest-send-gate" hidden>
+                <p class="cs-guest-send-gate__text" id="cs-guest-send-gate-text"></p>
+                <button type="button" class="w-button cs-guest-send-gate__action" data-tone="primary" data-size="sm" data-cs-open-bind-email>
+                    <?= $cs('验证邮箱') ?>
+                </button>
+            </div>
+            <div class="cs-composer-toolbar" role="toolbar" aria-label="<?= $cs('聊天工具') ?>">
+                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="emoji" title="<?= $cs('表情') ?>"><?= $cs('表情') ?></button>
+                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="image" title="<?= $cs('图片') ?>"><?= $cs('图片') ?></button>
+                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="file" title="<?= $cs('文件') ?>"><?= $cs('文件') ?></button>
+                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="screenshot" title="<?= $cs('截图') ?>"><?= $cs('截图') ?></button>
+                <input type="file" id="cs-frontend-image-input" accept="image/jpeg,image/png,image/gif,image/webp" hidden />
+                <input type="file" id="cs-frontend-file-input" accept=".pdf,.txt,.zip,.doc,.docx,.xls,.xlsx,application/pdf,text/plain,application/zip" hidden />
+            </div>
+            <div class="cs-composer-panel" id="cs-frontend-emoji-panel" hidden></div>
+            <div class="cs-input-area">
+                <textarea
+                    id="cs-message-input"
+                    class="w-textarea cs-message-input"
+                    placeholder="<?= $cs('输入消息...') ?>"
+                    rows="2"></textarea>
+                <button type="button" class="w-button cs-send-button" data-icon-only="true" aria-label="<?= $cs('发送') ?>" data-cs-send-message>
+                    <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php
+// 用户发送客服消息后再创建真实弹窗节点，避免首屏承担未使用的交互 DOM。
+$bindModalHtml = <<<'BIND_MODAL_HTML'
+<div id="cs-bind-modal" class="cs-modal w-modal cs-float-hidden" data-editor-interactive>
+    <div class="w-modal-dialog w-modal-sm">
+        <div class="cs-modal-content w-modal-content">
+            <div class="cs-modal-header w-modal-header">
+                <h3 class="w-modal-title">{{title}}</h3>
+                <button type="button" class="w-button cs-modal-close w-modal-close" data-tone="quiet" data-icon-only="true" data-size="sm" data-cs-bind-close>
+                    <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="cs-modal-body w-modal-body">
+                <form id="cs-bind-form" method="post" class="cs-bind-form w-form" data-weline-form="1" data-weline-form-intent="customerservice_bind_email">
+                    <p class="cs-modal-copy">{{copy}}</p>
+                    <p class="cs-modal-note">{{note}}</p>
+                    <div class="cs-w-field">
+                        <label for="cs-bind-email">{{email_label}}</label>
+                        <input type="email" id="cs-bind-email" name="email" class="w-input cs-form-input" placeholder="{{email_placeholder}}" required autocomplete="email">
+                    </div>
+                    <div data-weline-form-captcha-slot>{{captcha_slot}}</div>
+                    <div class="cs-modal-footer w-modal-footer">
+                        <button type="button" class="w-button cs-btn cs-btn-secondary" data-tone="neutral" data-variant="outline" data-cs-bind-close>
+                            {{later}}
+                        </button>
+                        <button type="submit" class="w-button cs-btn cs-btn-primary" data-cs-bind-send>
+                            {{send}}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+BIND_MODAL_HTML;
+$bindModalHtml = strtr($bindModalHtml, [
+    '{{title}}' => $cs('接收客服回复与优惠通知'),
+    '{{copy}}' => $cs('留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。'),
+    '{{note}}' => $cs('仅用于本次客服咨询相关通知，不是简报订阅。'),
+    '{{email_label}}' => $cs('接收通知的邮箱'),
+    '{{email_placeholder}}' => $cs('请输入用于接收客服通知的邮箱'),
+    '{{later}}' => $cs('稍后再说'),
+    '{{send}}' => $cs('发送验证邮件'),
+    '{{captcha_slot}}' => $bindCaptchaHtml,
+]);
+?>
+<script type="application/json" id="cs-bind-modal-template">
+<?= json_encode($bindModalHtml, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+</script>
+
+<?php
+$csFloatConfig = [
+    'bindCaptchaEnabled' => (bool)$bindCaptchaEnabled,
+    'html2canvasUrl' => $html2canvasHref === ''
+        ? ''
+        : ($html2canvasHref . (str_contains($html2canvasHref, '?') ? '&' : '?') . 'v=' . rawurlencode($html2canvasVersion)),
+    'modernScreenshotUrl' => $modernScreenshotHref === ''
+        ? ''
+        : ($modernScreenshotHref . (str_contains($modernScreenshotHref, '?') ? '&' : '?') . 'v=' . rawurlencode($modernScreenshotVersion)),
+    'customerId' => $customerId ? (int)$customerId : null,
+    'isLoggedIn' => (bool)$isLoggedIn,
+    'showGuestBindPrompt' => (bool)$showGuestBindPrompt,
+    'defaultCustomerLocale' => (string)$defaultCustomerLocale,
+    'storefrontLocale' => (string)$currentLocale,
+    'supportedLocales' => $supportedLocales,
+    'widgetTranslations' => $widgetTranslations,
+    'jsVersion' => (string)$customerServiceJsVersion,
+    'jsHref' => (string)$customerServiceJsHref,
+    'postLoadDelayMs' => 3000,
+];
+?>
+<script type="application/json" id="cs-float-config"><?= json_encode($csFloatConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+   <style>
+        /* 这些节点默认隐藏，由 customer-service.js 在打开时移除 class。
+           用 ID+class 提高特异性：部件 CSS 在 body-end 注入，等特异性会输给 .cs-chat-window{display:flex}。 */
+        #customer-service-widget .cs-chat-window.cs-float-hidden,
+        #customer-service-widget .cs-settings-panel.cs-float-hidden,
+        #customer-service-widget .cs-badge.cs-float-hidden,
+        #cs-bind-modal.cs-float-hidden { display: none; }
+    </style>

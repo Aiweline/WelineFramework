@@ -49,6 +49,14 @@ final class WidgetImageContentContractValidator implements LayoutContentValidato
                     continue;
                 }
                 $config = is_array($widget['config'] ?? null) ? $widget['config'] : [];
+                // 没有 module/code 的放置行不可能对应任何部件定义，写入侧按 module+code 落库
+                // 也会直接忽略它。历史布局里残留这种行时，抛错会把整个编辑器锁死
+                // （实测：一份旧草稿就能让保存/发布全部失败），因此跳过并留痕。
+                $ghost = trim((string)($widget['widget_module'] ?? '')) === ''
+                    && trim((string)($widget['widget_code'] ?? '')) === '';
+                if ($ghost) {
+                    continue;
+                }
                 $this->assertNoDynamicImageMarkup($config, 0, $nodes);
                 $definitions = $this->definitions($widget, $context);
                 foreach ($definitions as $key => $definition) {

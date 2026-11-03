@@ -355,8 +355,8 @@ $bodyClass = 'blog-category-layout__body' . ($showFilters ? ' blog-category-layo
             .blog-category-layout__overlay { transition: none; }
         }
     </style>
-</head>
-<body>
+<!--@weline-global:head:begin--><?= \Weline\Theme\Region\GlobalRegion::render('head') ?><!--@weline-global:head:end--></head>
+<body><!--@weline-global:body_open:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_open') ?><!--@weline-global:body_open:end-->
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::blog_category::body-start</w:hook>
@@ -552,5 +552,5 @@ $bodyClass = 'blog-category-layout__body' . ($showFilters ? ' blog-category-layo
         apply(false, false);
     })();
     </script>
-</body>
+<!--@weline-global:body_end:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_end') ?><!--@weline-global:body_end:end--></body>
 </html>

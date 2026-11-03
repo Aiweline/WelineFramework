@@ -10,7 +10,7 @@ use Weline\Social\Model\SocialCreativeDraft;
 use Weline\Social\Model\SocialMediaAsset;
 use Weline\Social\Model\SocialPublishBatch;
 use Weline\Social\Model\SocialPublishTarget;
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Api\ConfigReader as SystemConfig;
 
 /**
  * 社媒日更自动运营：时段执行、通道路由、审片闸门与运行状态。

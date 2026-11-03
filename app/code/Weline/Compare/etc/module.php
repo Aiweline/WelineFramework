@@ -17,5 +17,6 @@ return [
     ],
     'provides' => [
         'template_cache_policy.Weline_Compare' => \Weline\Compare\Api\View\TemplateCachePolicyProvider::class,
+        'theme.public_route.compare' => \Weline\Compare\Controller\Router::class,
     ],
 ];

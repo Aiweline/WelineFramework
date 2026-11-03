@@ -19,8 +19,18 @@ use Weline\Websites\Data\WebsiteData;
  */
 final class StorefrontRenderContextInstallerTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        StorefrontRenderContextInstaller::clearProcessCache();
+        StorefrontRenderContextReader::setWebsiteDataProvider(
+            new \Weline\Websites\Integration\Framework\StorefrontWebsiteDataProvider()
+        );
+    }
+
     protected function tearDown(): void
     {
+        StorefrontRenderContextReader::setWebsiteDataProvider(null);
         RequestContext::cleanup();
         if (Context::hasCurrent()) {
             Context::leave();
@@ -64,7 +74,9 @@ final class StorefrontRenderContextInstallerTest extends TestCase
         WebsiteData::clearProcessCache();
         WebsiteData::putProcessLocalRows(7, $rows);
 
-        $ctx = (new StorefrontRenderContextInstaller())->installOnce();
+        $ctx = (new StorefrontRenderContextInstaller(
+            new \Weline\Websites\Integration\Framework\StorefrontWebsiteDataProvider()
+        ))->installOnce();
 
         self::assertSame($rows, $ctx->websiteLocal);
         self::assertSame($rows, StorefrontRenderContextReader::websiteLocal());

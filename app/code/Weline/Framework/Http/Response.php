@@ -285,6 +285,17 @@ class Response implements ResponseInterface, RequestLocalInterface
 
     public function setBody(string $body): static
     {
+        // Storefront HTML is the one payload that must carry the global regions. This sits on
+        // the response chokepoint because page HTML is produced by several pipelines
+        // (compiled layout, solidified artefact, original-source fallback) and this is the
+        // only point all of them pass through. No-op for anything that is not a full document.
+        if (str_contains($body, '<head') && str_contains($body, '</body>')) {
+            try {
+                $body = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Runtime\GlobalRegionInjectorInterface::class)
+                    ->ensure($body, 'frontend');
+            } catch (\Throwable) {
+            }
+        }
         $this->body = $body;
         $this->telemetryPrepared = false;
         $this->titleLocaleProbeApplied = false;

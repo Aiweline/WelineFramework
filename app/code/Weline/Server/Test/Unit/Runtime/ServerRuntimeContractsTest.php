@@ -70,12 +70,6 @@ final class ServerRuntimeContractsTest extends TestCase
             'FiberAdmissionQueue::testInstanceAdmissionPolicyIsLoadedFromEnvironmentBeforeWorkerStarts' => function () {
             $this->assert_FiberAdmissionQueue_testInstanceAdmissionPolicyIsLoadedFromEnvironmentBeforeWorkerStarts();
         },
-            'WlsRuntimeNoStorefrontWarmSchedule::testNeedsDeferredStorefrontWarmupIsHardDisabled' => function () {
-            $this->assert_WlsRuntimeNoStorefrontWarmSchedule_testNeedsDeferredStorefrontWarmupIsHardDisabled();
-        },
-            'WlsRuntimeNoStorefrontWarmSchedule::testHomepageKeepWarmIsHardDisabled' => function () {
-            $this->assert_WlsRuntimeNoStorefrontWarmSchedule_testHomepageKeepWarmIsHardDisabled();
-        },
             'WlsRuntimeNoStorefrontWarmSchedule::testBuildAheadProcessPullAndDynamicDeferredAreHardDisabled' => function () {
             $this->assert_WlsRuntimeNoStorefrontWarmSchedule_testBuildAheadProcessPullAndDynamicDeferredAreHardDisabled();
         },
@@ -118,15 +112,6 @@ final class ServerRuntimeContractsTest extends TestCase
             'WlsRuntimeStorefrontWarmup::testStorefrontWarmupPrefersPublicHostForFpcIdentity' => function () {
             $this->assert_WlsRuntimeStorefrontWarmup_testStorefrontWarmupPrefersPublicHostForFpcIdentity();
         },
-            'WlsRuntimeStorefrontWarmup::testSingleStorefrontPathIsWarmedByEveryWorker' => function () {
-            $this->assert_WlsRuntimeStorefrontWarmup_testSingleStorefrontPathIsWarmedByEveryWorker();
-        },
-            'WlsRuntimeStorefrontWarmup::testDeferredWarmupOwnsHomepageWhenReadyGateFailOpen' => function () {
-            $this->assert_WlsRuntimeStorefrontWarmup_testDeferredWarmupOwnsHomepageWhenReadyGateFailOpen();
-        },
-            'WlsRuntimeStorefrontWarmup::testDeferredStorefrontWarmupRunsOnlyOnConfiguredOwnerWorker' => function () {
-            $this->assert_WlsRuntimeStorefrontWarmup_testDeferredStorefrontWarmupRunsOnlyOnConfiguredOwnerWorker();
-        },
             'WlsRuntimeStorefrontWarmup::testDynamicReadyProofAcceptsTheFirstBusinessPathWhenHomepageIsNotSampled' => function () {
             $this->assert_WlsRuntimeStorefrontWarmup_testDynamicReadyProofAcceptsTheFirstBusinessPathWhenHomepageIsNotSampled();
         },
@@ -138,9 +123,6 @@ final class ServerRuntimeContractsTest extends TestCase
         },
             'WlsRuntimeStorefrontWarmup::testRenderedBusinessPathWithoutControllerCacheHeaderIsStillReady' => function () {
             $this->assert_WlsRuntimeStorefrontWarmup_testRenderedBusinessPathWithoutControllerCacheHeaderIsStillReady();
-        },
-            'WlsRuntimeStorefrontWarmup::testLowMemoryWorkerTightensDeferredBagPrimeDefaults' => function () {
-            $this->assert_WlsRuntimeStorefrontWarmup_testLowMemoryWorkerTightensDeferredBagPrimeDefaults();
         },
             'WlsRuntimeTiming::testWorkerFiberCapturesHandleStartTimeForAdmissionWait' => function () {
             $this->assert_WlsRuntimeTiming_testWorkerFiberCapturesHandleStartTimeForAdmissionWait();
@@ -321,21 +303,21 @@ private function assert_FiberAdmissionQueue_testInstanceAdmissionPolicyIsLoadedF
 private function assert_WlsRuntimeNoStorefrontWarmSchedule_testNeedsDeferredStorefrontWarmupIsHardDisabled(): void
 {
     $source = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Server' . '/Runtime/WlsRuntime.php');
-    self::assertMatchesRegularExpression('/function needsDeferredStorefrontWarmup\(\): bool\s*\{[^}]*return false;/s', $source);
+    // Keep-warm/deferred storefront scheduling moved to Framework Cache Cron;
+    // the scheduling entrypoints must not come back on the Worker side.
     self::assertStringNotContainsString('homepageNeedsDeferredPrime', $source);
-}
-
-private function assert_WlsRuntimeNoStorefrontWarmSchedule_testHomepageKeepWarmIsHardDisabled(): void
-{
-    $source = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Server' . '/Runtime/WlsRuntime.php');
-    self::assertMatchesRegularExpression('/function homepageKeepWarmEnabled\(\): bool\s*\{[^}]*return false;/s', $source);
+    self::assertStringNotContainsString('shouldScheduleHomepageKeepWarm', $source);
+    self::assertStringNotContainsString('runHomepageKeepWarmCycle', $source);
+    self::assertStringNotContainsString('needsDeferredStorefrontWarmup', $source);
 }
 
 private function assert_WlsRuntimeNoStorefrontWarmSchedule_testBuildAheadProcessPullAndDynamicDeferredAreHardDisabled(): void
 {
     $source = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Server' . '/Runtime/WlsRuntime.php');
+    // FPC build-ahead / process-pull / dynamic deferred warm moved to Framework Cron;
+    // the Worker-side gates must not come back.
     foreach (['shouldRunDeferredFpcBuildAheadWarmup', 'shouldRunDeferredFpcProcessPullWarmup', 'shouldRunDeferredDynamicFirstRenderWarmup'] as $method) {
-        self::assertMatchesRegularExpression('/function ' . $method . '\(\): bool\s*\{[^}]*return false;/s', $source, $method);
+        self::assertStringNotContainsString($method, $source, $method);
     }
 }
 
@@ -384,11 +366,6 @@ private function assert_WlsRuntimeProcessL1Hydrate_testRuntimeSchedulesHydrateWi
     self::assertStringContainsString('bindStorefrontContextForProcessL1Hydrate', $source);
     $coordinatorSource = (string) \file_get_contents(BP . 'app/code/Weline/Framework/Router/FullPageCacheCoordinator.php');
     self::assertStringContainsString('buildProcessPayloadFromHtmlDisk', $coordinatorSource);
-    // Deferred SSR stays hard-off.
-    $needsBody = $this->extractMethodBody_WlsRuntimeProcessL1Hydrate($source, 'needsDeferredStorefrontWarmup');
-    self::assertStringContainsString('return false;', $needsBody);
-    $keepWarmBody = $this->extractMethodBody_WlsRuntimeProcessL1Hydrate($source, 'homepageKeepWarmEnabled');
-    self::assertStringContainsString('return false;', $keepWarmBody);
     // Deferred bootstrap must call hydrate even when storefront critical is off.
     $deferredBody = $this->extractMethodBody_WlsRuntimeProcessL1Hydrate($source, 'runDeferredWorkerBootstrapWarmup');
     self::assertStringContainsString('runProcessL1HydrateCycle', $deferredBody);
@@ -499,7 +476,6 @@ private function assert_WlsRuntimeStorefrontWarmup_testDynamicReadyGateKeepsTheU
     self::assertStringContainsString('FpcWarmupProviderInterface', $source);
     self::assertStringContainsString('warmupPaths()', $source);
     self::assertStringContainsString("Env::get('wls.worker.dynamic_ready_gate_fail_open', '1')", $source);
-    self::assertStringContainsString('needsDeferredStorefrontWarmup', $source);
     self::assertStringContainsString('runStorefrontFpcWarmupInternal', $source);
     self::assertStringContainsString('ready:fpc-hit', $source);
     self::assertStringContainsString('logDeferredStorefrontWarmupStage', $source);
@@ -517,13 +493,9 @@ private function assert_WlsRuntimeStorefrontWarmup_testReadyGateBuildsABoundedAn
     // Storefront deferred / dynamic deferred warm moved to Framework Cron;
     // Worker gates are hard-disabled (see WlsRuntimeNoStorefrontWarmScheduleContractTest).
     self::assertStringContainsString("Env::get('wls.worker.backend_deferred_warmup_enabled', '0')", $runtimeSource);
-    self::assertStringContainsString('needsDeferredStorefrontWarmup', $runtimeSource);
-    self::assertStringContainsString('shouldRunDeferredDynamicFirstRenderWarmup', $runtimeSource);
     self::assertStringContainsString("'storefront_ready_gate_enabled' => false", $envSource);
     self::assertStringContainsString("'storefront_ready_gate_max_paths' => 4", $envSource);
-    self::assertStringContainsString("'storefront_deferred_warmup_enabled' => false", $envSource);
     self::assertStringContainsString("'backend_deferred_warmup_enabled' => false", $envSource);
-    self::assertStringContainsString("'dynamic_deferred_warmup_enabled' => false", $envSource);
 }
 
 private function assert_WlsRuntimeStorefrontWarmup_testReadyGateRuntimeTraceHonorsTheConfiguredWlsDebugFlag(): void
@@ -556,57 +528,6 @@ private function assert_WlsRuntimeStorefrontWarmup_testStorefrontWarmupPrefersPu
     self::assertSame('127.0.0.1:9555', $method->invoke($runtime, ['127.0.0.1:9555']));
 }
 
-private function assert_WlsRuntimeStorefrontWarmup_testSingleStorefrontPathIsWarmedByEveryWorker(): void
-{
-    $source = file_get_contents(self::RUNTIME_WlsRuntimeStorefrontWarmup);
-    self::assertIsString($source);
-    self::assertStringContainsString('if (\count($paths) <= 1) {', $source);
-    self::assertStringContainsString("storefront_deferred_warmup_max_paths', 6)", $source);
-}
-
-private function assert_WlsRuntimeStorefrontWarmup_testDeferredWarmupOwnsHomepageWhenReadyGateFailOpen(): void
-{
-    $source = file_get_contents(self::RUNTIME_WlsRuntimeStorefrontWarmup);
-    self::assertIsString($source);
-    // Fail-open must NOT force Worker deferred storefront warm anymore.
-    self::assertStringNotContainsString('homepageNeedsDeferredPrime', $source);
-    self::assertStringContainsString('Abolish fail-open forced deferred', $source);
-    self::assertStringContainsString("\$paths['/'] = '/';", $source);
-}
-
-private function assert_WlsRuntimeStorefrontWarmup_testDeferredStorefrontWarmupRunsOnlyOnConfiguredOwnerWorker(): void
-{
-    $reflection = new \ReflectionClass(WlsRuntime::class);
-    $runtime = $reflection->newInstanceWithoutConstructor();
-    $method = $reflection->getMethod('shouldRunDeferredStorefrontCriticalWarmup');
-    $method->setAccessible(true);
-    $previousRole = $_SERVER['WLS_PROCESS_ROLE'] ?? null;
-    $previousWorkerId = $_SERVER['WLS_WORKER_ID'] ?? null;
-    $_SERVER['WLS_PROCESS_ROLE'] = 'worker';
-    $_SERVER['WLS_WORKER_ID'] = '1';
-    \putenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_ENABLED=1');
-    \putenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID=1');
-    try {
-        // Hard-disabled regardless of owner / env flag.
-        self::assertFalse($method->invoke($runtime));
-        $_SERVER['WLS_WORKER_ID'] = '2';
-        self::assertFalse($method->invoke($runtime));
-    } finally {
-        if ($previousRole === null) {
-            unset($_SERVER['WLS_PROCESS_ROLE']);
-        } else {
-            $_SERVER['WLS_PROCESS_ROLE'] = $previousRole;
-        }
-        if ($previousWorkerId === null) {
-            unset($_SERVER['WLS_WORKER_ID']);
-        } else {
-            $_SERVER['WLS_WORKER_ID'] = $previousWorkerId;
-        }
-        \putenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_ENABLED');
-        \putenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID');
-    }
-}
-
 private function assert_WlsRuntimeStorefrontWarmup_testDynamicReadyProofAcceptsTheFirstBusinessPathWhenHomepageIsNotSampled(): void
 {
     $reflection = new \ReflectionClass(WlsRuntime::class);
@@ -628,8 +549,6 @@ private function assert_WlsRuntimeStorefrontWarmup_testSampleConfigurationLeaves
     self::assertStringContainsString("'dynamic_ready_gate_paths' => []", $source);
     self::assertStringContainsString("'dynamic_ready_gate_fail_open' => true", $source);
     self::assertStringContainsString("'worker_startup_trace' => false", $source);
-    self::assertStringContainsString("'storefront_deferred_warmup_peer_wait_ms' => 5000", $source);
-    self::assertStringContainsString("'storefront_deferred_warmup_owner_worker_id' => 1", $source);
 }
 
 private function assert_WlsRuntimeStorefrontWarmup_testSlowDiagnosticWarmupDoesNotRenderTheSamePathThreeTimesByDefault(): void
@@ -649,27 +568,6 @@ private function assert_WlsRuntimeStorefrontWarmup_testRenderedBusinessPathWitho
     self::assertIsArray($validation);
     self::assertTrue($validation['ok']);
     self::assertStringContainsString('ready:', $validation['reason']);
-}
-
-private function assert_WlsRuntimeStorefrontWarmup_testLowMemoryWorkerTightensDeferredBagPrimeDefaults(): void
-{
-    $source = file_get_contents(self::RUNTIME_WlsRuntimeStorefrontWarmup);
-    self::assertIsString($source);
-    self::assertStringContainsString('resolveStorefrontDeferredPrimeBudgetDefaults', $source);
-    self::assertStringContainsString("Env::get('wls.worker_memory_limit'", $source);
-    self::assertStringContainsString("'locale_max' => 2", $source);
-    self::assertStringContainsString("'currency_max' => 1", $source);
-    self::assertStringContainsString("'category_max_paths' => 2", $source);
-    self::assertStringContainsString('$primeBudget[\'locale_max\']', $source);
-    self::assertStringContainsString('$primeBudget[\'currency_max\']', $source);
-    self::assertStringContainsString('$primeBudget[\'category_max_paths\']', $source);
-    $reflection = new \ReflectionClass(WlsRuntime::class);
-    $runtime = $reflection->newInstanceWithoutConstructor();
-    $parse = $reflection->getMethod('parsePhpMemoryLimitToMb');
-    $parse->setAccessible(true);
-    self::assertSame(512, $parse->invoke($runtime, '512M'));
-    self::assertSame(768, $parse->invoke($runtime, '768M'));
-    self::assertSame(0, $parse->invoke($runtime, '-1'));
 }
 
 private function assert_WlsRuntimeTiming_testWorkerFiberCapturesHandleStartTimeForAdmissionWait(): void

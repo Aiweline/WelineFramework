@@ -114,6 +114,9 @@ final class CustomerServiceViewContractsTest extends TestCase
             'HeaderContactServiceLinkWidget::testHeaderContactServiceLinkOpensFloatingChat' => function () {
             $this->assert_HeaderContactServiceLinkWidget_testHeaderContactServiceLinkOpensFloatingChat();
         },
+            'CsFloatFragment::testBootsViaFloatLoaderNotDirectChatScript' => function () {
+            $this->assert_CsFloatFragment_testBootsViaFloatLoaderNotDirectChatScript();
+        },
         ];
     }
 
@@ -617,5 +620,38 @@ private function assert_HeaderContactServiceLinkWidget_testHeaderContactServiceL
     self::assertStringContainsString('__WelineLoadCustomerServiceWidget', $template);
     self::assertStringContainsString('@widget.slot {header-nav-extensions}', $template);
     self::assertStringContainsString('客户服务', $template);
+}
+
+/**
+ * 悬浮客服片段必须引「启动器」customer-service-float.js，不能直引 customer-service.js。
+ *
+ * customer-service.js 只导出 window.CustomerServiceWidget，自己从不 init()；
+ * 按钮监听（[data-cs-toggle-chat] → toggleChat）在 init() 里绑。直引的结果是：
+ * 按钮可见但点击无任何反应（2026-11-03 实测：floatLoader=undefined / csConfig=false，
+ * 点击 cs-chat-button 后 cs-chat-window 仍 display:none）。
+ */
+private function assert_CsFloatFragment_testBootsViaFloatLoaderNotDirectChatScript(): void
+{
+    $src = (string) file_get_contents(
+        '/Users/weline/Project/Official/框架/app/code/Weline/CustomerService'
+        . '/view/theme/base/body_end/ops/02-cs-float.phtml'
+    );
+    self::assertStringContainsString(
+        '<js defer>Weline_CustomerService::js/customer-service-float.js</js>',
+        $src,
+        '悬浮客服片段必须引启动器 customer-service-float.js'
+    );
+    self::assertStringNotContainsString(
+        '<js defer>Weline_CustomerService::js/customer-service.js</js>',
+        $src,
+        '禁止直引 customer-service.js：它不 init()，按钮监听永远不会绑定'
+    );
+    // 启动器自己负责 init + 懒加载会话体。
+    $loader = (string) file_get_contents(
+        '/Users/weline/Project/Official/框架/app/code/Weline/CustomerService'
+        . '/view/statics/js/customer-service-float.js'
+    );
+    self::assertStringContainsString('CustomerServiceWidget.init(', $loader);
+    self::assertStringContainsString('[data-cs-toggle-chat]', $loader);
 }
 }

@@ -73,8 +73,14 @@ final class ShadowRunner
         }
 
         $isDForm = \str_contains($source, 'w:d-form');
-        if ($isDForm && \class_exists(\Weline\DataTable\Helper\UiAssets::class)) {
-            \Weline\DataTable\Helper\UiAssets::resetRequestState();
+        if ($isDForm) {
+            try {
+                \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Framework\View\Compiler\Shadow\UiStateResetInterface::class
+                )->resetUiState();
+            } catch (\Throwable) {
+                // 无 data-table 模块时无需重置。
+            }
         }
 
         $slotClass = 'Weline\\Theme\\Taglib\\Slot';

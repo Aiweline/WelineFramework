@@ -810,11 +810,18 @@ class MenuRenderService
 
     private function renderIcon(string $name, string $size = 'md'): string
     {
+        if (!\class_exists(IconRegistry::class)) {
+            return '';
+        }
+
         return ObjectManager::getInstance(IconRegistry::class)->render($this->resolveMenuIconName($name), $size);
     }
 
     private function resolveMenuIconName(string $icon): string
     {
+        if (!\class_exists(IconRegistry::class)) {
+            return $icon !== '' ? $icon : 'circle';
+        }
         $registry = ObjectManager::getInstance(IconRegistry::class);
         $icon = trim($icon);
         if ($icon !== '' && $registry->has($icon)) {

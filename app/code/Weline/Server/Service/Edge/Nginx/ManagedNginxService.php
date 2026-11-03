@@ -386,6 +386,20 @@ final class ManagedNginxService
                 $this->activeLifecycleDeadlineMonotonic,
             );
             if (($test['code'] ?? 1) !== 0) {
+                @\file_put_contents(
+                    \defined('BP') ? \constant('BP') . 'var/log/nginx-gate-debug.log' : '/tmp/nginx-gate-debug.log',
+                    \date('c') . ' ' . \json_encode([
+                        'candidate' => $candidate,
+                        'candidate_exists' => \is_file($candidate),
+                        'candidate_size' => \is_file($candidate) ? \filesize($candidate) : null,
+                        'binary' => $this->paths->binary(),
+                        'binary_exists' => \is_file($this->paths->binary()),
+                        'prefix' => $this->paths->runtimeRoot(),
+                        'conf_dir' => $this->paths->confDir(),
+                        'result' => $test,
+                    ], JSON_UNESCAPED_SLASHES) . "\n",
+                    FILE_APPEND,
+                );
                 $this->configWriter->discardCandidate($candidate);
                 return [
                     'ok' => false,

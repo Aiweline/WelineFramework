@@ -200,6 +200,12 @@ EXEMPT：内容运营与纯闲聊。宿主常带：`~/.cursor/rules/requirement-
 
 ## 3. MCP 技能来源（`mcp_skills_fetch_from_mcp`）
 
+> **强引导（P0 · 用户指定 2026-11-02：本地 weline-mcp 是真技能点/权威，宿主技能只是薄壳）**
+> - **真技能点与规则权威在本地 weline-mcp**（`mcp_skills_fetch_from_mcp`）与仓内 `app/code/Weline/Ai/doc/**`、`dev/ai-command/**`。宿主 `~/.agents/skills/**` 只是薄壳/路由提示。
+> - 每个工程会话必须 `ensure → prepare_project → hard_constraints → get_skill/resolve_task_context`；**上下文压缩/长跑后规则失效必须重新 prepare_project**，不得凭记忆或仅凭宿主技能正文。
+> - 子智能体/工程团队成员必须挂载并调用本地 MCP；只传宿主技能或摘要不算到位。
+> - **冲突裁决**：仓内 `hard_constraints` / `AI硬规则索引.md` / 分册 > 宿主技能正文 / 宿主 `.mdc`；冲突以本地 MCP 为准。
+
 | 允许 | 禁止 |
 |------|------|
 | **编码/工程**技能正文由 MCP `mcp-skills.v1` 提供：`prepare_project.agent_guidance.mcp_skills` → `resolve_skill` → `get_skill` | 把 Cursor/Codex 本地 `SKILL.md` 当作高于 MCP 的权威（工程技能） |

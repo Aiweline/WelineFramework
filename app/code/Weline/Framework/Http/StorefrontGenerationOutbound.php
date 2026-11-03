@@ -95,11 +95,11 @@ final class StorefrontGenerationOutbound
     public static function resolveVersionId(): string
     {
         try {
-            if (!\class_exists(\Weline\Frontend\Helper\StorefrontGenerationIdentity::class)) {
-                return '';
-            }
+            $identity = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Runtime\StorefrontGenerationIdentityInterface::class
+            );
 
-            return \trim((string)\Weline\Frontend\Helper\StorefrontGenerationIdentity::currentVersionId());
+            return \trim((string)$identity->currentVersionId());
         } catch (\Throwable) {
             return '';
         }

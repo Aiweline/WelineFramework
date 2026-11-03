@@ -147,7 +147,7 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
                             <input class="w-input" role="combobox" id="run-browser-model-input"
                                    aria-expanded="false" aria-controls="run-browser-model-list" aria-autocomplete="list"
                                    placeholder="搜索或选择模型" autocomplete="off">
-                            <input type="hidden" id="run-browser-model" value="chrome-builtin">
+                            <input type="hidden" id="run-browser-model" value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC">
                             <div class="w-combobox__panel" role="listbox" id="run-browser-model-list" hidden>
                                 <?php
                                 $browserModels = [
@@ -161,7 +161,7 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
                                 ?>
                                     <button type="button" class="w-combobox__option" role="option"
                                             data-value="<?= htmlspecialchars((string)$bCode, ENT_QUOTES, 'UTF-8') ?>"
-                                            aria-selected="<?= $bCode === 'chrome-builtin' ? 'true' : 'false' ?>">
+                                            aria-selected="<?= $bCode === 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC' ? 'true' : 'false' ?>">
                                         <span class="acq-option-label"><?= htmlspecialchars((string)$bLabel, ENT_QUOTES, 'UTF-8') ?></span>
                                     </button>
                                 <?php endforeach; ?>
@@ -872,6 +872,10 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
     }
     bindCombobox('run-model-input', 'run-model');
     bindCombobox('run-browser-model-input', 'run-browser-model');
+    // 初始显示默认端侧模型（hidden input 的 value），避免只显示占位符。
+    if (byId('run-browser-model').value) {
+        syncComboboxDisplay('run-browser-model-input', 'run-browser-model-list', byId('run-browser-model').value);
+    }
 
     byId('run-model').addEventListener('change', function () {
         refreshPrice();

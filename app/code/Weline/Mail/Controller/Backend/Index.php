@@ -2570,8 +2570,10 @@ class Index extends BackendController
         if ($userId <= 0 || $source === '') {
             return false;
         }
-        $ctx = \Weline\Backend\Model\BackendUser::getAclContext($userId);
-        $roleId = (int)($ctx['role_id'] ?? 0);
+        $ctx = ObjectManager::getInstance(
+            \Weline\Backend\Api\Auth\BackendUserContextProviderInterface::class
+        )->find($userId);
+        $roleId = (int)($ctx?->getRoleId() ?? 0);
         if ($roleId <= 0) {
             return false;
         }
@@ -2615,9 +2617,11 @@ class Index extends BackendController
             return '';
         }
         try {
-            $user = ObjectManager::getInstance(\Weline\Backend\Model\BackendUser::class)->clear()->load($userId);
-            if ($user->getId()) {
-                return strtolower(trim((string)$user->getEmail()));
+            $user = ObjectManager::getInstance(
+                \Weline\Backend\Api\User\BackendUserAdministrationInterface::class
+            )->find($userId);
+            if ($user !== null) {
+                return strtolower(trim($user->getEmail()));
             }
         } catch (\Throwable) {
         }

@@ -40,6 +40,18 @@ final class ThemeLayoutEntityWidgetRenderer
         $type = (string)($entry['widget_type'] ?? '');
         $code = (string)($entry['widget_code'] ?? '');
         if ($code === '__no_widget_placements__') { return ''; }
+        // 全局区契约（禁止回潮）：同名片段已接管时，布局实体里的旧放置不再渲染。
+        // 用轻量判定（只扫片段目录 + 开关树），不在这里启动渲染 provider。
+        // 但编辑器保存的这份配置必须交给片段：记进本次请求的 page config，
+        // 由占位带签名令牌传给水合请求（否则「编辑器改了、前台不变」）。
+        if ($code !== '' && \Weline\Theme\Region\GlobalRegionWidgetOwnership::isReplaced($code)) {
+            $config = \is_array($entry['config'] ?? null) ? $entry['config'] : [];
+            if ($config !== []) {
+                \Weline\Theme\Region\FragmentRegionProvider::rememberPageConfig($code, $config);
+            }
+
+            return '';
+        }
         $area = $identity?->area ?? 'frontend';
         $theme = $identity !== null ? $this->themeForRequest($identity->themeId) : null;
         // Widget templates that read theme design data (ThemeData) must see the entity theme:

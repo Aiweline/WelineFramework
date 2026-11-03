@@ -4,8 +4,8 @@ declare(strict_types=1);
 namespace Weline\Smtp\Service;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Mail\Service\MailOutboundRelaySecretService;
-use Weline\Mail\Service\StalwartManagementAdapter;
+use Weline\Mail\Api\Relay\RelaySecretInterface;
+use Weline\Mail\Api\Stalwart\StalwartAdminInterface;
 use Weline\Smtp\Model\SmtpAccount;
 use Weline\Smtp\Model\SmtpService;
 
@@ -144,7 +144,7 @@ final class SmtpSystemAccountProvisioner
         $password = rtrim(strtr(base64_encode(random_bytes(18)), '+/', '._'), '=');
         try {
             /** @var MailOutboundRelaySecretService $secrets */
-            $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+            $secrets = ObjectManager::getInstance(RelaySecretInterface::class);
             $sealed = $secrets->seal($password);
         } catch (\Throwable $e) {
             return [
@@ -157,7 +157,7 @@ final class SmtpSystemAccountProvisioner
         }
         try {
             /** @var StalwartManagementAdapter $mgmt */
-            $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+            $mgmt = ObjectManager::getInstance(StalwartAdminInterface::class);
             $mgmt->ensureDomain($domain);
             $mgmt->provisionOrResetAccount($email, $password, 128);
         } catch (\Throwable $e) {
@@ -330,9 +330,9 @@ final class SmtpSystemAccountProvisioner
             $status = strtolower(trim((string)$row->getData(SmtpAccount::schema_fields_STATUS)));
             try {
                 /** @var StalwartManagementAdapter $mgmt */
-                $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+                $mgmt = ObjectManager::getInstance(StalwartAdminInterface::class);
                 /** @var MailOutboundRelaySecretService $secrets */
-                $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+                $secrets = ObjectManager::getInstance(RelaySecretInterface::class);
                 $needRemint = $sealed === '';
                 $plain = null;
                 if (!$needRemint) {
@@ -418,7 +418,7 @@ final class SmtpSystemAccountProvisioner
         }
         try {
             /** @var MailOutboundRelaySecretService $secrets */
-            $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+            $secrets = ObjectManager::getInstance(RelaySecretInterface::class);
             $plain = $secrets->open($sealedB64);
 
             return is_string($plain) && $plain !== '';

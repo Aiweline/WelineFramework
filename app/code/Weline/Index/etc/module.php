@@ -4,6 +4,7 @@ return [
     "name" => 'Weline_Index',
     "version" => '1.0.7',
     "requires" => [
+        'Weline_Websites' => '*',
     ],
     "optional" => [
         'Weline_Seo' => '*',

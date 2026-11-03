@@ -5,11 +5,17 @@ declare(strict_types=1);
 namespace Weline\Compare\Controller;
 
 use Weline\Framework\Router\RouterInterface;
+use Weline\Framework\View\ModulePublicRouteInterface;
 
 /** Owns the Compare module's public storefront compare route. */
-final class Router implements RouterInterface
+final class Router implements RouterInterface, ModulePublicRouteInterface
 {
     private const INDEX_ROUTE = 'weline_compare/frontend';
+
+    public static function handles(string $normalizedPath): bool
+    {
+        return $normalizedPath === 'compare';
+    }
 
     /**
      * @inheritDoc

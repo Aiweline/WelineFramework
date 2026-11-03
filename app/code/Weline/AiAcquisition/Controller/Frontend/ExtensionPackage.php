@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\AiAcquisition\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Http\ResponseTerminateException;
 
 use function __;
 
@@ -185,14 +186,15 @@ class ExtensionPackage extends FrontendController
         $size = (int)\filesize($path);
         $etag = '"' . \md5($path . '|' . $size . '|' . (int)\filemtime($path)) . '"';
 
-        \header('Content-Type: application/zip');
-        \header('Content-Disposition: attachment; filename="' . $downloadName . '"');
-        \header('Content-Length: ' . $size);
-        \header('Cache-Control: private, no-store, max-age=0, must-revalidate');
-        \header('ETag: ' . $etag);
-        \header('X-Content-Type-Options: nosniff');
-
-        \readfile($path);
-        exit;
+        // 用框架 ResponseTerminateException 终止请求：直接 header()+readfile()+exit 会绕过
+        // WLS Response 生命周期，Worker 判定请求异常返回 503。
+        throw new ResponseTerminateException(200, (string)\file_get_contents($path), [
+            'Content-Type' => 'application/zip',
+            'Content-Length' => (string)$size,
+            'Content-Disposition' => 'attachment; filename="' . $downloadName . '"',
+            'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
+            'ETag' => $etag,
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 }

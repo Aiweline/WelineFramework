@@ -9,9 +9,8 @@ use Weline\AiAcquisition\Model\LeadConversation;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Mail\Model\MailMessage;
-use Weline\Mail\Service\MailComposerService;
-use Weline\Mail\Service\MailSmtpAccountService;
+use Weline\Mail\Api\MailCompositionInterface;
+use Weline\Mail\Api\MailMessageLookupInterface;
 
 /**
  * 线索邮件沟通：弹窗内容 + AJAX 发送。
@@ -81,7 +80,7 @@ final class LeadMail extends BackendController
             return $this->jsonResponse(['success' => false, 'message' => (string)__('无可用发件账户，请先在企业邮箱启用账户')], 422);
         }
 
-        $result = ObjectManager::getInstance(MailComposerService::class)->send(
+        $result = ObjectManager::getInstance(MailCompositionInterface::class)->send(
             $accountId,
             $to,
             $subject,
@@ -148,8 +147,8 @@ final class LeadMail extends BackendController
      */
     private function activeAccounts(): array
     {
-        /** @var MailSmtpAccountService $service */
-        $service = ObjectManager::getInstance(MailSmtpAccountService::class);
+        /** @var MailCompositionInterface $service */
+        $service = ObjectManager::getInstance(MailCompositionInterface::class);
         $items = [];
         foreach ($service->searchAccounts('', 100) as $config) {
             $accountId = (int)($config['account_id'] ?? 0);
@@ -216,16 +215,8 @@ final class LeadMail extends BackendController
 
     private function latestMailMessageId(int $leadId): int
     {
-        /** @var MailMessage $messageModel */
-        $messageModel = ObjectManager::getInstance(MailMessage::class);
-        $row = $messageModel->clear()
-            ->where(MailMessage::schema_fields_SOURCE, LeadConversation::MAIL_SOURCE)
-            ->where(MailMessage::schema_fields_SOURCE_ID, $leadId)
-            ->order(MailMessage::schema_fields_ID, 'DESC')
-            ->find()
-            ->fetch();
-
-        return $row && $row->getId() ? (int)$row->getId() : 0;
+        return ObjectManager::getInstance(MailMessageLookupInterface::class)
+            ->latestIdBySource(LeadConversation::MAIL_SOURCE, $leadId);
     }
 
     private function jsonResponse(array $data, int $code = 200): string

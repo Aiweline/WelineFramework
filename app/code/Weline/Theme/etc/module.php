@@ -8,21 +8,45 @@ return [
         'Weline_Framework' => '>=2.5.0',
         'Weline_I18n' => '*',
         'Weline_Meta' => '*',
+        'Weline_Product' => '*',
+        'Weline_Search' => '*',
         'Weline_SystemConfig' => '*',
         'Weline_Widget' => '*',
     ],
     "optional" => [
+        'Aiweline_PlayinChina' => '*',
         'Weline_Ai' => '*',
         'Weline_Cdn' => '*',
         'Weline_Cron' => '*',
+        'Weline_Currency' => '*',
+        'Weline_Dashboard' => '*',
         'Weline_Eav' => '*',
         'Weline_FileManager' => '*',
         'Weline_ModuleRouter' => '*',
+        'Weline_Promotion' => '*',
+        'Weline_Review' => '*',
         'Weline_Seo' => '*',
         'Weline_Server' => '*',
+        'Weline_Smtp' => '*',
         'Weline_Websites' => '*',
     ],
     "provides" => [
+        \Weline\Theme\Api\I18n\WidgetTranslationInterface::class
+            => \Weline\Theme\Service\I18n\WidgetTranslation::class,
+        \Weline\Framework\Runtime\GlobalRegionInjectorInterface::class
+            => \Weline\Theme\Region\GlobalRegionHtmlInjector::class,
+        \Weline\Framework\Deploy\ThemeRuntimeStateInterface::class
+            => \Weline\Theme\Service\ThemeUpdate\ThemeRuntimeState::class,
+        \Weline\Framework\View\GlobalRegionContractInterface::class
+            => \Weline\Theme\Region\GlobalRegionSourceRewriter::class,
+        \Weline\Framework\Runtime\ThemeIdProviderInterface::class
+            => \Weline\Theme\Integration\Framework\ThemeFrameworkReadProvider::class,
+        \Weline\Framework\View\ThemeSpecGateInterface::class
+            => \Weline\Theme\Integration\Framework\ThemeFrameworkReadProvider::class,
+        \Weline\Framework\Runtime\ThemePublishedVersionResolverInterface::class
+            => \Weline\Theme\Integration\Framework\ThemeFrameworkReadProvider::class,
+        \Weline\Framework\Runtime\ThemeRuntimeCacheResetInterface::class
+            => \Weline\Theme\Integration\Framework\ThemeRuntimeCacheReset::class,
         // Worker start-up preload owned by this module: publishes the theme
         // component/widget catalogue before the first request builds it.
         'worker_preload_provider.Weline_Theme' =>

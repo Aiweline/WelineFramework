@@ -103,6 +103,75 @@ class GeoProtocolRenderer
         return IndustryProtocolDocuments::trustTxt($this->resolvePublicBaseUrl($website));
     }
 
+    /**
+     * ARD v0.91 agent catalog entries built from published feed items.
+     * Consumed by IndustryProtocolDocuments::aiCatalogJson(); keeps the manifest
+     * shape (identifier/displayName/type + url, representativeQueries) in one place.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function agentCatalogEntries(int $limit = 100): array
+    {
+        $website = $this->websiteResolver->currentWebsite();
+        $config = $this->loadWebsiteConfig($website->id);
+        if (!$config->isFeedEnabled()) {
+            return [];
+        }
+
+        $baseUrl = $this->resolvePublicBaseUrl($website);
+        if ($baseUrl === '') {
+            return [];
+        }
+        $publisher = strtolower((string) (parse_url($baseUrl, PHP_URL_HOST) ?? ''));
+        if ($publisher === '') {
+            return [];
+        }
+
+        $items = $this->collectItems($limit, $config->getFeedId(), $website->id, $baseUrl);
+        $entries = [];
+        foreach ($items as $item) {
+            $title = trim((string) ($item[FeedItem::schema_fields_TITLE] ?? ''));
+            $url = $this->publicItemUrl(trim((string) ($item[FeedItem::schema_fields_URL] ?? '')), $baseUrl);
+            if ($title === '' || $url === '' || !$this->isHttpUrl($url)) {
+                continue;
+            }
+            $summary = $this->plain((string) ($item[FeedItem::schema_fields_CONTENT] ?? ''));
+            $slug = preg_replace('/[^a-zA-Z0-9._-]+/', '-', rawurldecode((string) (parse_url($url, PHP_URL_PATH) ?: '')));
+            $entry = [
+                'identifier' => 'urn:air:' . $publisher . ':catalog' . ($slug !== '' && $slug !== '-' ? ':' . trim($slug, '-') : ''),
+                'displayName' => $this->plain($title),
+                'type' => 'application/web-page+json',
+                'url' => $url,
+                'representativeQueries' => $this->representativeQueries($this->plain($title), $summary),
+            ];
+            if ($summary !== '') {
+                $entry['description'] = mb_substr($summary, 0, 300);
+            }
+            $entries[] = $entry;
+        }
+
+        return $entries;
+    }
+
+    /**
+     * ARD SHOULD term: 2-5 natural-language sample queries built from the item title.
+     *
+     * @return list<string>
+     */
+    private function representativeQueries(string $title, string $summary): array
+    {
+        $queries = [$title !== '' ? $title : 'site overview'];
+        $topic = trim(mb_substr($summary, 0, 60));
+        if ($topic !== '') {
+            $queries[] = $topic;
+        }
+        if (count($queries) < 2) {
+            $queries[] = 'tickets and guides on this site';
+        }
+
+        return array_slice($queries, 0, 5);
+    }
+
     public function renderFeed(string $format = 'json_feed'): string
     {
         $website = $this->websiteResolver->currentWebsite();

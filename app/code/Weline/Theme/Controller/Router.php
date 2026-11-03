@@ -177,60 +177,16 @@ class Router implements RouterInterface
             || self::isInstalledModuleOwnedPublicRoute($normalizedPath)
             || self::generatedFrontendRouteExists($normalizedPath, $request)
         ) {
-            if ($normalizedPath === 'search' && class_exists('Weline\\Search\\Controller\\Router')) {
-                \Weline\Search\Controller\Router::process($path, $rule);
-            }
-            if ($normalizedPath === 'compare' && class_exists('Weline\\Compare\\Controller\\Router')) {
-                \Weline\Compare\Controller\Router::process($path, $rule);
-            }
-            if (
-                (
-                    $normalizedPath === 'product'
-                    || str_starts_with($normalizedPath, 'product/')
-                    || in_array($normalizedPath, ['products', 'category', 'categories'], true)
-                    || str_starts_with($normalizedPath, 'category/')
-                )
-                && class_exists('Weline\\Product\\Controller\\Router')
-            ) {
-                \Weline\Product\Controller\Router::process($path, $rule);
-            }
-            if (class_exists('Weline\\Blog\\Controller\\Router')) {
-                \Weline\Blog\Controller\Router::process($path, $rule);
-            }
-            if (class_exists('Weline\\Payment\\Controller\\Router')) {
-                \Weline\Payment\Controller\Router::process($path, $rule);
-            }
-            if (class_exists('Weline\\Customer\\Controller\\Router')) {
-                \Weline\Customer\Controller\Router::process($path, $rule);
-            }
-            if (class_exists('Weline\\Order\\Controller\\Router')) {
-                \Weline\Order\Controller\Router::process($path, $rule);
-            }
-            if (class_exists('Weline\\Promotion\\Controller\\Router')) {
-                \Weline\Promotion\Controller\Router::process($path, $rule);
-            }
-            if (class_exists('Aiweline\\PlayinChina\\Controller\\Router')) {
-                \Aiweline\PlayinChina\Controller\Router::process($path, $rule);
+            foreach (\Weline\Framework\View\ModulePublicRouteRegistry::handlers() as $routeHandler) {
+                if ($routeHandler::handles($normalizedPath)) {
+                    $routeHandler::process($path, $rule);
+                }
             }
             return;
         }
 
-        if (class_exists('Aiweline\\PlayinChina\\Controller\\Router')) {
-            \Aiweline\PlayinChina\Controller\Router::process($path, $rule);
-            if (!empty($rule['module'])) {
-                return;
-            }
-        }
-
-        if (class_exists('Weline\\Customer\\Controller\\Router')) {
-            \Weline\Customer\Controller\Router::process($path, $rule);
-            if (!empty($rule['module'])) {
-                return;
-            }
-        }
-
-        if (class_exists('Weline\\Order\\Controller\\Router')) {
-            \Weline\Order\Controller\Router::process($path, $rule);
+        foreach (\Weline\Framework\View\ModulePublicRouteRegistry::handlers() as $routeHandler) {
+            $routeHandler::process($path, $rule);
             if (!empty($rule['module'])) {
                 return;
             }

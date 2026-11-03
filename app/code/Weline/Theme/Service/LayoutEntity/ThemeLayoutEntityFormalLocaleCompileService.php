@@ -144,6 +144,12 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         $previousArea = ThemeData::getCurrentArea();
         ThemeData::setCurrentTheme($theme);
         ThemeData::setCurrentArea($identity->area);
+        // 发布编译：全局区在编译期展开成静态 HTML，hook 按生产口径烘成 include，
+        // 运行时不再逐请求走 GlobalRegion::render() / getHook() 事件派发。
+        $previousInlineGlobalRegions = Template::inlineGlobalRegionsAtCompileEnabled();
+        Template::setInlineGlobalRegionsAtCompile(true);
+        \putenv('WELINE_INLINE_GLOBAL_REGIONS=1');
+        \putenv('WELINE_BAKE_TEMPLATE_TAGS=1');
         try {
         $this->runPinnedToIdentityWebsite($identity, function () use (
             $identity,
@@ -317,6 +323,9 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             $this->clearCachesAfterCompileWarm($theme, $identity, $pages, $invalidation);
         });
         } finally {
+            Template::setInlineGlobalRegionsAtCompile($previousInlineGlobalRegions);
+            \putenv('WELINE_INLINE_GLOBAL_REGIONS');
+            \putenv('WELINE_BAKE_TEMPLATE_TAGS');
             ThemeData::setCurrentTheme($previousTheme);
             ThemeData::setCurrentArea($previousArea);
         }

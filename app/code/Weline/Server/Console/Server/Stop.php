@@ -389,6 +389,11 @@ class Stop extends CommandAbstract
                     0,
                     4096,
                 ),
+                // 谁发起的停机：多会话共用本机时只记 command 无法定位父进程/工作目录。
+                'cwd' => (string)\getcwd(),
+                'uid' => \function_exists('posix_geteuid') ? (int)\posix_geteuid() : null,
+                'parent_pid' => \function_exists('posix_getppid') ? (int)\posix_getppid() : null,
+                'parent_command' => self::describeProcess(self::parentPidOrZero()),
             ],
         );
         if (!\is_resource($handle)) {
@@ -4336,6 +4341,35 @@ class Stop extends CommandAbstract
         $this->printer->note('');
         $this->printer->note($this->colorize(str_repeat('─', 60), 'Yellow'));
         $this->printer->note('');
+    }
+
+    /** 停机锁诊断：父进程 pid（拿不到时 0）。 */
+    private static function parentPidOrZero(): int
+    {
+        return \function_exists('posix_getppid') ? (int)\posix_getppid() : 0;
+    }
+
+    /** 停机锁诊断：pid 对应的命令行（只读、失败返回空串）。 */
+    private static function describeProcess(int $pid): string
+    {
+        if ($pid < 1) {
+            return '';
+        }
+        try {
+            if (\is_file('/proc/' . $pid . '/cmdline')) {
+                $raw = (string)@\file_get_contents('/proc/' . $pid . '/cmdline');
+
+                return \substr(\str_replace("\0", ' ', \rtrim($raw, "\0")), 0, 1024);
+            }
+            if (!\function_exists('shell_exec')) {
+                return '';
+            }
+            $out = @\shell_exec('ps -o command= -p ' . (int)$pid . ' 2>/dev/null');
+
+            return \is_string($out) ? \substr(\trim($out), 0, 1024) : '';
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**

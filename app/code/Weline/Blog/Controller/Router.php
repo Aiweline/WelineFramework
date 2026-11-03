@@ -5,10 +5,16 @@ declare(strict_types=1);
 namespace Weline\Blog\Controller;
 
 use Weline\Framework\Router\RouterInterface;
+use Weline\Framework\View\ModulePublicRouteInterface;
 
 /** Owns the Blog module's public storefront /blog routes. */
-final class Router implements RouterInterface
+final class Router implements RouterInterface, ModulePublicRouteInterface
 {
+    public static function handles(string $normalizedPath): bool
+    {
+        return true;
+    }
+
     private const INDEX_ROUTE = 'blog/frontend';
     private const VIEW_ROUTE = 'blog/frontend/view';
     private const CATEGORY_ROUTE = 'blog/frontend/category';

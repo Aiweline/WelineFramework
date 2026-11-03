@@ -175,6 +175,10 @@ final class InlineEditSession
      */
     public function startAndBuildJumpUrl(string $storefrontTargetUrl): array
     {
+        if (!\class_exists(FpcPierceStampAdminService::class)) {
+            // Server 模块未安装：跳过穿章戳签发，返回裸跳转 URL。
+            return ['jump_url' => $storefrontTargetUrl, 'pierce_query' => '', 'cookie_name' => ''];
+        }
         /** @var FpcPierceStampAdminService $pierceAdmin */
         $pierceAdmin = ObjectManager::getInstance(FpcPierceStampAdminService::class);
         $pierce = $pierceAdmin->issueBrowserCookie(self::COOKIE_TTL_SECONDS);

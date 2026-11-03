@@ -242,8 +242,8 @@ final readonly class StorefrontCacheKeyContext
         $translationLocales = $translationLocales
             ?? \Weline\Framework\Phrase\LocaleFallbackChain::candidates($lang, $defaultLocale);
         $namespaceFingerprint = hash('sha256', 'storefront-global-namespace|' . self::SCHEMA_VERSION);
-        $static = class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)
-            ? \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pointerCacheGeneration()
+        $static = class_exists(\Weline\Framework\Deploy\ThemeRuntimeState::class)
+            ? \Weline\Framework\Deploy\ThemeRuntimeState::pointerCacheGeneration()
             : StaticBuildId::current();
         $fingerprint = hash('sha256', implode('|', [
             'storefront-global-scope-v2',
@@ -310,8 +310,8 @@ final readonly class StorefrontCacheKeyContext
     private function pageGeneration(): string
     {
         try {
-            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
-                return \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pageGeneration();
+            if (\class_exists('\\Weline\\Framework\\Deploy\\ThemeRuntimeState')) {
+                return \Weline\Framework\Deploy\ThemeRuntimeState::pageGeneration();
             }
         } catch (\Throwable) {
             // 代次机制不可用时保持部署构建号
@@ -356,8 +356,8 @@ final readonly class StorefrontCacheKeyContext
     private function staticGeneration(): string
     {
         try {
-            if (class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
-                return \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::cacheGeneration();
+            if (class_exists('\\Weline\\Framework\\Deploy\\ThemeRuntimeState')) {
+                return \Weline\Framework\Deploy\ThemeRuntimeState::cacheGeneration();
             }
         } catch (\Throwable) {
             // 代次机制不可用时保持部署构建号
@@ -372,8 +372,8 @@ final readonly class StorefrontCacheKeyContext
     public static function pageGenerationValue(): string
     {
         try {
-            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
-                return \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pageGeneration();
+            if (\class_exists('\\Weline\\Framework\\Deploy\\ThemeRuntimeState')) {
+                return \Weline\Framework\Deploy\ThemeRuntimeState::pageGeneration();
             }
         } catch (\Throwable) {
             // 代次机制不可用时保持部署构建号

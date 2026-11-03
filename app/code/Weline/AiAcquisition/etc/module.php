@@ -10,6 +10,8 @@ return [
         'Weline_Backend' => '*',
         'Weline_I18n' => '*',
         'Weline_Ai' => '*',
+        'Weline_Mail' => '*',
+        'Weline_SystemConfig' => '*',
     ],
     'optional' => [
         'Weline_Websites' => '*',

@@ -278,6 +278,15 @@
         Upgrade.php:83 在静态树发布后派发；观察者只改 deploy_build，主题代次原样保留。
         失败保留旧 active（站点继续服务旧版），并置 generation_promote_failed 供 s:up 判退出码。
     -->
+    <!-- WLS 启动完成：先跑完待固化布局，再预热店面 FPC（换代后首访 233–1350ms → 25–42ms） -->
+    <event name="Weline_Server::start_after">
+        <observer name="Weline_Theme::prewarm_storefront_on_server_start"
+                  instance="Weline\Theme\Observer\PrewarmStorefrontOnServerStart"
+                  disabled="false"
+                  shared="true"
+                  sort="800"/>
+    </event>
+
     <event name="Weline_Framework_Deploy::upgrade_after">
         <observer name="Weline_Theme::theme_generation_after_system_upgrade"
                   instance="Weline\Theme\Observer\ThemeGenerationAfterSystemUpgrade"

@@ -9,6 +9,9 @@ use Weline\Framework\Deploy\StaticBuildId;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ThemeApplicationContext;
+// 代次常量/配置键/指针文件都在 Theme 模块的实现里；不写 FQCN 会被解析成
+// Weline\Framework\Deploy\ThemeUpdateBatchService（不存在）→ 运行期 fatal。
+use Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService;
 
 /**
  * 主题更新代次的运行时读取口。

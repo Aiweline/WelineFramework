@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Weline\Product\Controller;
 
 use Weline\Framework\Router\RouterInterface;
+use Weline\Framework\View\ModulePublicRouteInterface;
 
 /** Owns the Product module's short public catalog routes. */
-final class Router implements RouterInterface
+final class Router implements RouterInterface, ModulePublicRouteInterface
 {
     private const CATALOG_ROUTE = 'weline_product/frontend/catalog';
     private const CATEGORY_ROUTE = 'weline_product/frontend/category';
@@ -15,6 +16,14 @@ final class Router implements RouterInterface
     private const DOWNLOAD_ROUTE = 'weline_product/frontend/download';
     private const BEST_SELLERS_ROUTE = 'weline_product/frontend/best-sellers';
     private const NEW_ARRIVALS_ROUTE = 'weline_product/frontend/new-arrivals';
+
+    public static function handles(string $normalizedPath): bool
+    {
+        return $normalizedPath === 'product'
+            || \str_starts_with($normalizedPath, 'product/')
+            || \in_array($normalizedPath, ['products', 'category', 'categories'], true)
+            || \str_starts_with($normalizedPath, 'category/');
+    }
 
     /**
      * @inheritDoc

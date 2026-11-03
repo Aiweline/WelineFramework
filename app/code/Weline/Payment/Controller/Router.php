@@ -5,11 +5,17 @@ declare(strict_types=1);
 namespace Weline\Payment\Controller;
 
 use Weline\Framework\Router\RouterInterface;
+use Weline\Framework\View\ModulePublicRouteInterface;
 use Weline\Payment\Service\PaymentBrowserCallbackRoutes;
 
 /** Owns public storefront /guide/payment routes for payment customer guides. */
-final class Router implements RouterInterface
+final class Router implements RouterInterface, ModulePublicRouteInterface
 {
+    public static function handles(string $normalizedPath): bool
+    {
+        return true;
+    }
+
     // Must match generated frontend_pc key (controller index method, no trailing /index).
     private const INDEX_ROUTE = 'payment/frontend/guide/payment';
     private const VIEW_ROUTE = 'payment/frontend/guide/payment/view';

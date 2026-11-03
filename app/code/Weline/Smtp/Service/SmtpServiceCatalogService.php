@@ -4,9 +4,9 @@ declare(strict_types=1);
 namespace Weline\Smtp\Service;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Mail\Model\MailDomain;
-use Weline\Mail\Service\MailOutboundRelaySecretService;
-use Weline\Mail\Service\StalwartManagementAdapter;
+use Weline\Mail\Api\Domain\SelfHostedDomainDirectoryInterface;
+use Weline\Mail\Api\Relay\RelaySecretInterface;
+use Weline\Mail\Api\Stalwart\StalwartAdminInterface;
 use Weline\Smtp\Model\SmtpAccount;
 use Weline\Smtp\Model\SmtpService;
 
@@ -195,7 +195,7 @@ final class SmtpServiceCatalogService
         if (trim($password) !== '') {
             try {
                 /** @var MailOutboundRelaySecretService $secrets */
-                $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+                $secrets = ObjectManager::getInstance(RelaySecretInterface::class);
                 $sealed = $secrets->seal($password);
             } catch (\Throwable $e) {
                 return ['success' => false, 'message' => (string)__('密码密封失败：%{1}', [$e->getMessage()]), 'smtp_service_id' => 0];
@@ -290,7 +290,7 @@ final class SmtpServiceCatalogService
         if (trim($password) !== '') {
             try {
                 /** @var MailOutboundRelaySecretService $secrets */
-                $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+                $secrets = ObjectManager::getInstance(RelaySecretInterface::class);
                 $svc->setData(SmtpService::schema_fields_PASSWORD_SEALED, $secrets->seal($password));
             } catch (\Throwable $e) {
                 return [
@@ -344,7 +344,7 @@ final class SmtpServiceCatalogService
                 max(1, $total)
             );
             /** @var StalwartManagementAdapter $mgmt */
-            $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+            $mgmt = ObjectManager::getInstance(StalwartAdminInterface::class);
             $index = 0;
             foreach ($workable as $one) {
                 $index++;
@@ -464,7 +464,7 @@ final class SmtpServiceCatalogService
         $password = rtrim(strtr(base64_encode(random_bytes(18)), '+/', '._'), '=');
         try {
             /** @var MailOutboundRelaySecretService $secrets */
-            $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+            $secrets = ObjectManager::getInstance(RelaySecretInterface::class);
             $sealed = $secrets->seal($password);
         } catch (\Throwable $e) {
             return $this->acctFail(__('密码密封失败：%{1}', [$e->getMessage()]));
@@ -606,7 +606,7 @@ final class SmtpServiceCatalogService
         if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false) {
             try {
                 /** @var StalwartManagementAdapter $mgmt */
-                $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+                $mgmt = ObjectManager::getInstance(StalwartAdminInterface::class);
                 if ($nextStatus === 'active') {
                     $sealed = trim((string)$model->getData(SmtpAccount::schema_fields_PASSWORD_SEALED));
                     if ($sealed === '') {
@@ -617,7 +617,7 @@ final class SmtpServiceCatalogService
                         );
                     }
                     /** @var MailOutboundRelaySecretService $secrets */
-                    $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+                    $secrets = ObjectManager::getInstance(RelaySecretInterface::class);
                     $plain = $secrets->open($sealed);
                     $this->provisionSelfMailboxToStalwart($email, $plain);
                     $stalwartNote = (string)__('；已同步写入本机 Stalwart');
@@ -695,7 +695,7 @@ final class SmtpServiceCatalogService
             );
             try {
                 /** @var StalwartManagementAdapter $mgmt */
-                $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+                $mgmt = ObjectManager::getInstance(StalwartAdminInterface::class);
                 $mgmt->deleteAccount($email);
             } catch (\Throwable $e) {
                 return $this->acctFail(
@@ -768,7 +768,7 @@ final class SmtpServiceCatalogService
             throw new \InvalidArgumentException('Smtp 邮箱域名无效。');
         }
         /** @var StalwartManagementAdapter $mgmt */
-        $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+        $mgmt = ObjectManager::getInstance(StalwartAdminInterface::class);
         $mgmt->ensureDomain($domain);
         $mgmt->provisionOrResetAccount($email, $password, 128);
     }
@@ -948,7 +948,7 @@ final class SmtpServiceCatalogService
             if ($sealed !== '') {
                 try {
                     /** @var MailOutboundRelaySecretService $secrets */
-                    $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+                    $secrets = ObjectManager::getInstance(RelaySecretInterface::class);
                     $password = $secrets->open($sealed);
                 } catch (\Throwable $e) {
                     return array_merge($empty, ['message' => (string)__('无法解密外部 Smtp 密码：%{1}', [$e->getMessage()])]);
@@ -987,7 +987,7 @@ final class SmtpServiceCatalogService
         }
         try {
             /** @var MailOutboundRelaySecretService $secrets */
-            $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+            $secrets = ObjectManager::getInstance(RelaySecretInterface::class);
             $plain = $secrets->open($sealed);
         } catch (\Throwable $e) {
             return $this->acctFail(__('无法解密密码：%{1}', [$e->getMessage()]), $accountId, (string)$model->getData(SmtpAccount::schema_fields_EMAIL));
@@ -1069,7 +1069,7 @@ final class SmtpServiceCatalogService
         }
         try {
             /** @var StalwartManagementAdapter $mgmt */
-            $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+            $mgmt = ObjectManager::getInstance(StalwartAdminInterface::class);
             $locals = $mgmt->listLocalPartsForDomain($domain);
             $set = [];
             foreach ($locals as $local) {
@@ -1113,12 +1113,9 @@ final class SmtpServiceCatalogService
      */
     public function importSelfServicesFromMailDomains(): array
     {
-        /** @var MailDomain $domainModel */
-        $domainModel = ObjectManager::getInstance(MailDomain::class);
-        $collection = $domainModel->clear()->order(MailDomain::schema_fields_ID, 'ASC')->select()->fetch();
-        $rows = is_object($collection) && method_exists($collection, 'toModels')
-            ? $collection->toModels()
-            : (is_iterable($collection) ? $collection : []);
+        /** @var SelfHostedDomainDirectoryInterface $domainDirectory */
+        $domainDirectory = ObjectManager::getInstance(SelfHostedDomainDirectoryInterface::class);
+        $rows = $domainDirectory->listSelfHostedDomains();
 
         $existingByDomain = [];
         $existingByHost = [];
@@ -1143,14 +1140,11 @@ final class SmtpServiceCatalogService
         $localHealth = ObjectManager::getInstance(SmtpLocalDomainHealthService::class);
 
         foreach ($rows as $row) {
-            if (!$row instanceof MailDomain) {
-                continue;
-            }
-            $domain = strtolower(trim((string)$row->getData(MailDomain::schema_fields_DOMAIN_NAME)));
+            $domain = strtolower(trim((string)($row['domain'] ?? '')));
             if ($domain === '') {
                 continue;
             }
-            $hostname = strtolower(trim((string)$row->getData(MailDomain::schema_fields_HOSTNAME)));
+            $hostname = strtolower(trim((string)($row['hostname'] ?? '')));
             if ($hostname === '') {
                 $hostname = 'mail.' . $domain;
             }
@@ -1269,7 +1263,7 @@ final class SmtpServiceCatalogService
         }
         try {
             /** @var StalwartManagementAdapter $mgmt */
-            $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+            $mgmt = ObjectManager::getInstance(StalwartAdminInterface::class);
             $locals = $mgmt->listLocalPartsForDomain($domain);
         } catch (\Throwable $e) {
             return [
@@ -1374,7 +1368,7 @@ final class SmtpServiceCatalogService
         }
         try {
             /** @var StalwartManagementAdapter $mgmt */
-            $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+            $mgmt = ObjectManager::getInstance(StalwartAdminInterface::class);
             if ($mgmt->accountExists($email)) {
                 return [
                     'success' => true,
@@ -1396,7 +1390,7 @@ final class SmtpServiceCatalogService
         }
         try {
             /** @var MailOutboundRelaySecretService $secrets */
-            $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+            $secrets = ObjectManager::getInstance(RelaySecretInterface::class);
             $plain = $secrets->open($sealed);
             $this->provisionSelfMailboxToStalwart($email, $plain);
         } catch (\Throwable $e) {

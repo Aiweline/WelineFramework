@@ -384,8 +384,19 @@ final class InventoryService implements
         }
 
         $loadRows = function () use ($websiteId, $storeId, $offerIds): array {
+            // 可用性计算只读 8 个数值/枚举列（见 availabilityFromStockRow），
+            // 不需要 created_at/updated_at；冷态下少读宽行能省传输与堆页 IO。
             $rows = $this->newStock()
                 ->clear()
+                ->fields([
+                    InventoryStock::schema_fields_OFFER_ID,
+                    InventoryStock::schema_fields_STRATEGY,
+                    InventoryStock::schema_fields_ON_HAND_MINOR,
+                    InventoryStock::schema_fields_RESERVED_MINOR,
+                    InventoryStock::schema_fields_OVERSELL_ALLOWANCE,
+                    InventoryStock::schema_fields_PREORDER_ALLOWANCE,
+                    InventoryStock::schema_fields_STOCK_VERSION,
+                ])
                 ->where(InventoryStock::schema_fields_WEBSITE_ID, $websiteId)
                 ->where(InventoryStock::schema_fields_STORE_ID, $storeId)
                 ->where(InventoryStock::schema_fields_OFFER_ID, $offerIds, 'IN')

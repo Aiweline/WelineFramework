@@ -246,11 +246,11 @@ final class StaticBuildId
      */
     private static function themeUpdateBuildId(string $path): ?string
     {
-        if (!class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+        if (!class_exists('\\Weline\\Framework\\Deploy\\ThemeRuntimeState')) {
             return null;
         }
         try {
-            return \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::staticPrefixForPath($path);
+            return \Weline\Framework\Deploy\ThemeRuntimeState::staticPrefixForPath($path);
         } catch (\Throwable) {
             return null;
         }
@@ -259,11 +259,11 @@ final class StaticBuildId
     /** 主题更新指针上的 12 位构建号；没有部署 `.build.json` 时给 versionedPath 用。 */
     private static function themePinnedStaticBuild(): string
     {
-        if (!class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+        if (!class_exists('\\Weline\\Framework\\Deploy\\ThemeRuntimeState')) {
             return '';
         }
         try {
-            return \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pinnedStaticBuild();
+            return \Weline\Framework\Deploy\ThemeRuntimeState::pinnedStaticBuild();
         } catch (\Throwable) {
             return '';
         }
@@ -312,12 +312,12 @@ final class StaticBuildId
      */
     private static function themePairPrefix(string $path): ?array
     {
-        if (!\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+        if (!\class_exists('\\Weline\\Framework\\Deploy\\ThemeRuntimeState')) {
             return null;
         }
         $normalized = '/' . \ltrim(\str_replace('\\', '/', (string)\strtok($path, '?')), '/');
         try {
-            $prefix = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::activeThemePrefix();
+            $prefix = \Weline\Framework\Deploy\ThemeRuntimeState::activeThemePrefix();
         } catch (\Throwable) {
             $prefix = '';
         }
@@ -329,7 +329,7 @@ final class StaticBuildId
             return null;
         }
         try {
-            $pair = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pairSegment();
+            $pair = \Weline\Framework\Deploy\ThemeRuntimeState::pairSegment();
         } catch (\Throwable) {
             $pair = '';
         }

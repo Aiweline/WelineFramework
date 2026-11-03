@@ -123,6 +123,20 @@ final class ToolService
                 $additive,
             ),
             self::tool(
+                'code_graph_query',
+                'Query code 3D graph (classes, methods, call graph)',
+                'Query the DeveloperWorkspace code 3D graph snapshot (var/code3d/graph.json, built by `php bin/w code3d:analyze`). Actions: stats | find | class | method | callers | callees | deps | modules | flow. flow returns directed call aggregation per module/namespace with mutual-call markers (static/instance/interface counts, reverse_total). Static analysis resolves instance calls by inferred receiver types and fans interface receivers out to implementations; string-built calls, call_user_func, template/hook calls and reflection remain unknown (meta.dyn_calls_unknown). Snapshot is stale until re-run after code changes.',
+                self::objectSchema([
+                    'action' => ['type' => 'string', 'enum' => ['stats', 'find', 'class', 'method', 'callers', 'callees', 'deps', 'modules', 'flow'], 'description' => 'Query action.'],
+                    'group' => ['type' => 'string', 'enum' => ['module', 'namespace'], 'description' => 'action=flow 聚合粒度，默认 module。'],
+                    'query' => self::stringSchema('Substring for action=find (class short name or FQCN).'),
+                    'fqcn' => self::stringSchema('Class FQCN for action=class|deps.'),
+                    'method' => self::stringSchema('Method reference Class::method for action=method|callers|callees.'),
+                    'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'description' => 'Max results (default 20).'],
+                ] + $scope, ['action', 'repository']),
+                $readOnly,
+            ),
+            self::tool(
                 'search_project_knowledge',
                 'Search project knowledge',
                 'Hybrid-search indexed code, module docs, skills, configuration, and rules without a query-time recursive file scan.',
@@ -255,6 +269,7 @@ final class ToolService
             'get_indexed_document',
             'resolve_skill',
             'get_skill',
+            'code_graph_query',
             'health',
         ], true);
 
@@ -307,6 +322,7 @@ final class ToolService
             'get_skill',
             'check_document_drift' => $this->intelligence->call($name, $arguments),
             'cognition' => $this->cognition($arguments),
+            'code_graph_query' => $this->codeGraphQuery($arguments),
             'health' => $this->health(),
             default => throw new ToolException('NOT_FOUND', 'Unknown tool: ' . $name, false, ['tool' => $name]),
         };
@@ -351,9 +367,226 @@ final class ToolService
         };
     }
 
-    private function health(): array
+    /**
+     * 代码 3D 图查询：读取 var/code3d/graph.json（php bin/w code3d:analyze 生成）。
+     * 独立实现，不依赖框架运行时，保证 MCP STDIO 进程可直接使用。
+     */
+    private function codeGraphQuery(array $input): array
     {
-        return [
+        static $cache = [];
+        $repository = $this->resolveProjectRepository($input);
+        $action = (string)($input['action'] ?? 'stats');
+        $limit = max(1, min(200, (int)($input['limit'] ?? 20)));
+        $path = rtrim($repository, '/') . '/var/code3d/graph.json';
+        if (!is_file($path)) {
+            throw new ToolException(
+                'CODE_GRAPH_MISSING',
+                'Code 3D graph snapshot not found: ' . $path,
+                false,
+                ['next_action' => 'Run `php bin/w code3d:analyze` in ' . $repository . ', then retry.']
+            );
+        }
+        $mtime = (int)filemtime($path);
+        if (!isset($cache[$path]) || $cache[$path]['mtime'] !== $mtime) {
+            $graph = json_decode((string)file_get_contents($path), true);
+            if (!is_array($graph) || !isset($graph['nodes'], $graph['edges'], $graph['mcalls'])) {
+                throw new ToolException('CODE_GRAPH_CORRUPT', 'graph.json is not a well-formed code graph.', false);
+            }
+            $cache[$path] = ['mtime' => $mtime, 'graph' => $graph];
+        }
+        $g = $cache[$path]['graph'];
+        $nodes = $g['nodes'];
+        $mods = $g['mods'];
+        $kinds = ['c' => 'class', 'i' => 'interface', 't' => 'trait', 'n' => 'enum', 'f' => 'function'];
+
+        $nodeIndex = static function (string $ref) use ($nodes): int {
+            foreach ($nodes as $i => $n) {
+                if ($n['fq'] === $ref || strcasecmp($n['fq'], $ref) === 0) {
+                    return $i;
+                }
+            }
+            foreach ($nodes as $i => $n) {
+                if (strcasecmp($n['n'], $ref) === 0) {
+                    return $i;
+                }
+            }
+            throw new ToolException('CODE_GRAPH_NOT_FOUND', 'Class not found: ' . $ref, false);
+        };
+
+        return match ($action) {
+            'stats' => [
+                'meta' => $g['meta'],
+                'graph_json' => $path,
+            ],
+            'find' => (function () use ($nodes, $mods, $kinds, $input, $limit): array {
+                $q = strtolower((string)($input['query'] ?? ''));
+                if ($q === '') {
+                    throw new ToolException('INVALID_ARGUMENT', 'query is required for action=find', false);
+                }
+                $hits = [];
+                foreach ($nodes as $n) {
+                    $short = strtolower($n['n']);
+                    $fq = strtolower($n['fq']);
+                    $score = $short === $q ? 0 : (str_starts_with($short, $q) ? 1 : (str_contains($fq, $q) ? 2 : -1));
+                    if ($score >= 0) {
+                        $hits[] = [$score, $n];
+                    }
+                }
+                usort($hits, fn($a, $b) => $a[0] <=> $b[0]);
+                return [
+                    'query' => $q,
+                    'hits' => array_map(fn($h) => [
+                        'fqcn' => $h[1]['fq'],
+                        'kind' => $kinds[$h[1]['k']] ?? $h[1]['k'],
+                        'module' => $mods[$h[1]['m']] ?? '',
+                        'file' => $h[1]['f'],
+                        'lines' => $h[1]['lc'],
+                        'methods' => count($h[1]['mt']),
+                    ], array_slice($hits, 0, $limit)),
+                ];
+            })(),
+            'class', 'deps' => (function () use ($input, $nodes, $mods, $kinds, $nodeIndex, $limit, $g): array {
+                $fq = (string)($input['fqcn'] ?? '');
+                if ($fq === '') {
+                    throw new ToolException('INVALID_ARGUMENT', 'fqcn is required for action=class|deps', false);
+                }
+                $i = $nodeIndex($fq);
+                $n = $nodes[$i];
+                $edgeList = static function (array $g, int $idx, string $dir, int $lim): array {
+                    $out = [];
+                    foreach ($g['edges'] as $e) {
+                        [$a, $b, $t] = $e;
+                        if ($dir === 'out' && $a === $idx) {
+                            $out[] = ['fqcn' => $g['nodes'][$b]['fq'], 'type' => $t];
+                        } elseif ($dir === 'in' && $b === $idx) {
+                            $out[] = ['fqcn' => $g['nodes'][$a]['fq'], 'type' => $t];
+                        }
+                        if (count($out) >= $lim) {
+                            break;
+                        }
+                    }
+                    return $out;
+                };
+                return [
+                    'fqcn' => $n['fq'],
+                    'kind' => $kinds[$n['k']] ?? $n['k'],
+                    'module' => $mods[$n['m']] ?? '',
+                    'file' => $n['f'],
+                    'lines' => $n['lc'],
+                    'methods' => $n['mt'],
+                    'uses' => $edgeList($g, $i, 'out', $limit),
+                    'used_by' => $edgeList($g, $i, 'in', $limit),
+                ];
+            })(),
+            'method', 'callers', 'callees' => (function () use ($input, $nodes, $nodeIndex, $limit, $g): array {
+                $ref = (string)($input['method'] ?? '');
+                $pos = strrpos($ref, '::');
+                if ($pos === false) {
+                    throw new ToolException('INVALID_ARGUMENT', 'method must be Class::method', false);
+                }
+                $classFq = substr($ref, 0, $pos);
+                $method = substr($ref, $pos + 2);
+                $i = $nodeIndex($classFq);
+                $n = $nodes[$i];
+                if (!in_array($method, $n['mt'], true)) {
+                    throw new ToolException('CODE_GRAPH_NOT_FOUND', sprintf('%s has no method %s', $n['fq'], $method), false);
+                }
+                $key = $i . ':' . $method;
+                $fmt = static function (string $k) use ($nodes): array {
+                    $c = strpos($k, ':');
+                    $idx = (int)substr($k, 0, $c);
+                    return ['class' => $nodes[$idx]['fq'] ?? '?', 'method' => substr($k, $c + 1)];
+                };
+                $callees = array_map($fmt, array_slice($g['mcalls'][$key] ?? [], 0, $limit));
+                $callers = [];
+                foreach ($g['mcalls'] as $from => $targets) {
+                    if (in_array($key, $targets, true)) {
+                        $callers[] = $fmt((string)$from);
+                        if (count($callers) >= $limit) {
+                            break;
+                        }
+                    }
+                }
+                return [
+                    'class' => $n['fq'],
+                    'method' => $method,
+                    'file' => $n['f'],
+                    'callees' => $callees,
+                    'callers' => $callers,
+                ];
+            })(),
+            'flow' => (function () use ($g, $nodes, $mods, $input, $limit): array {
+                $groupBy = (string)($input['group'] ?? 'module');
+                if (!in_array($groupBy, ['module', 'namespace'], true)) {
+                    $groupBy = 'module';
+                }
+                $keyOf = static function (int $idx) use ($nodes, $mods, $groupBy): string {
+                    $n = $nodes[$idx];
+                    $mod = $mods[$n['m']] ?? '_';
+                    if ($groupBy === 'module') {
+                        return $mod;
+                    }
+                    $fq = ltrim(str_starts_with($n['fq'], 'fn:') ? substr($n['fq'], 3) : $n['fq'], '\\');
+                    $segs = explode('\\', $fq);
+                    $tail = $segs[count(explode('.', $mod))] ?? '';
+                    return $tail === '' ? $mod : $mod . '.' . $tail;
+                };
+                /* 只统计真实调用（s 静态 / i 精确实例）；u 接口分发是可能实现，单独计数 */
+                $callTypes = ['s' => 'static', 'i' => 'instance'];
+                $pairs = [];
+                $dispatch = [];
+                foreach ($g['edges'] as $e) {
+                    [$a, $b, $t] = $e;
+                    if ($t === 'u') {
+                        $ga = $keyOf((int)$a);
+                        $gb = $keyOf((int)$b);
+                        if ($ga !== $gb) {
+                            $dispatch[$ga . "\t" . $gb] = ($dispatch[$ga . "\t" . $gb] ?? 0) + 1;
+                        }
+                        continue;
+                    }
+                    if (!isset($callTypes[$t])) {
+                        continue;
+                    }
+                    $ga = $keyOf((int)$a);
+                    $gb = $keyOf((int)$b);
+                    if ($ga === $gb) {
+                        continue;
+                    }
+                    $k = $ga . "\t" . $gb;
+                    $pairs[$k] ??= ['from' => $ga, 'to' => $gb, 'static' => 0, 'instance' => 0, 'total' => 0];
+                    $pairs[$k][$callTypes[$t]]++;
+                    $pairs[$k]['total']++;
+                }
+                $out = [];
+                foreach ($pairs as $k => $p) {
+                    $rev = $pairs[$p['to'] . "\t" . $p['from']] ?? null;
+                    $p['reverse_total'] = $rev['total'] ?? 0;
+                    $p['mutual'] = ($rev['total'] ?? 0) > 0;
+                    $p['dispatch_targets'] = $dispatch[$k] ?? 0;
+                    $out[] = $p;
+                }
+                usort($out, fn($x, $y) => $y['total'] <=> $x['total']);
+                return ['group_by' => $groupBy, 'pairs' => array_slice($out, 0, $limit)];
+            })(),
+            'modules' => (function () use ($nodes, $mods, $limit): array {
+                $count = array_fill(0, max(1, count($mods)), 0);
+                foreach ($nodes as $n) {
+                    $count[$n['m']] = ($count[$n['m']] ?? 0) + 1;
+                }
+                $out = [];
+                foreach ($mods as $mi => $name) {
+                    $out[] = ['module' => $name, 'classes' => $count[$mi] ?? 0];
+                }
+                usort($out, fn($a, $b) => $b['classes'] <=> $a['classes']);
+                return ['modules' => array_slice($out, 0, $limit)];
+            })(),
+            default => throw new ToolException('INVALID_ARGUMENT', 'Unknown code_graph_query action: ' . $action, false),
+        };
+    }
+
+    private function health(): array
+    {        return [
             'request_id' => Ids::make('req'),
             'server' => [
                 'name' => 'weline-project-intelligence',

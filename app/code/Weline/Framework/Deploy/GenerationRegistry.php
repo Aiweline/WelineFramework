@@ -282,8 +282,8 @@ final class GenerationRegistry
         $build = StaticBuildId::current();
         $pair = '';
         try {
-            if (\class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)) {
-                $pair = \trim((string)\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pairSegment());
+            if (\class_exists(\Weline\Framework\Deploy\ThemeRuntimeState::class)) {
+                $pair = \trim((string)\Weline\Framework\Deploy\ThemeRuntimeState::pairSegment());
             }
         } catch (\Throwable) {
             $pair = '';

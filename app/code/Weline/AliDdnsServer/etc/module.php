@@ -7,6 +7,7 @@ return [
     'version' => '1.0.2',
     'requires' => [
         'Weline_Admin' => '*',
+        'Weline_SystemConfig' => '*',
     ],
     'optional' => [],
     'provides' => [],

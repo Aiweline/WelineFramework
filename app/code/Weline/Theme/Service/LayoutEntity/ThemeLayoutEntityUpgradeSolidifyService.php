@@ -273,7 +273,7 @@ final class ThemeLayoutEntityUpgradeSolidifyService
     }
 
     /**
-     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string,force_pages?:bool} $options
+     * @param array{scope?:string,all_versions?:bool,version_ids?:list<int>,layout_type?:string,layout_option?:string,force_pages?:bool} $options
      * @return array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string,force_pages?:bool}
      */
     private function bakeOptions(array $options): array
@@ -285,6 +285,9 @@ final class ThemeLayoutEntityUpgradeSolidifyService
         }
         if (!empty($options['all_versions'])) {
             $out['all_versions'] = true;
+        }
+        if (!empty($options['version_ids']) && \is_array($options['version_ids'])) {
+            $out['version_ids'] = \array_values(\array_map('intval', $options['version_ids']));
         }
         $layoutType = trim((string)($options['layout_type'] ?? ''));
         if ($layoutType !== '') {

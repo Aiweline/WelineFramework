@@ -38,8 +38,8 @@ $this->setData('layoutOption', $layoutOption);
         }
     </style>
     <w:hook>seo::head</w:hook>
-</head>
-<body>
+<!--@weline-global:head:begin--><?= \Weline\Theme\Region\GlobalRegion::render('head') ?><!--@weline-global:head:end--></head>
+<body><!--@weline-global:body_open:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_open') ?><!--@weline-global:body_open:end-->
     <w:hook>seo::body</w:hook>
     <div class="test-container">
         <w:slot id="content"
@@ -65,6 +65,6 @@ $this->setData('layoutOption', $layoutOption);
     </div>
     
     <w:hook>seo::footer</w:hook>
-</body>
+<!--@weline-global:body_end:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_end') ?><!--@weline-global:body_end:end--></body>
 </html>
 

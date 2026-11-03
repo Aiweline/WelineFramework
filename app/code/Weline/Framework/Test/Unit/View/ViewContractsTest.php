@@ -882,20 +882,20 @@ private function extractFrontendAuthMethod_TemplateFrontendAuthGuestContext(stri
 private function assert_TemplateNestedStream_testFetchStreamsWhenCaptureActiveAndFetchHtmlRemainsCaptureApi(): void
 {
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/View/Template.php');
-    self::assertStringContainsString('fetch_stream', $source);
+    $engineSource = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/View/Engine/ViewEngine.php');
+    self::assertStringContainsString('fetch_stream', $engineSource);
     self::assertStringContainsString('streamCompiledFile', $source);
     self::assertStringContainsString('softBindRequestForNestedRender', $source);
     self::assertStringContainsString('hook_stream', $source);
     self::assertStringContainsString('view.hook.require_string_result', $source);
     self::assertStringContainsString('view.fetch_file:', $source);
     self::assertStringContainsString('view.hook.files:', $source);
-    self::assertStringContainsString('EngineFlags::isV2Enabled()', $source);
     self::assertStringContainsString('ViewEngine::for($this)->fetch', $source);
-    self::assertStringContainsString('function fetchLegacy', $source);
+    self::assertStringNotContainsString('fetchLegacy', $source);
+    self::assertStringNotContainsString('EngineFlags', $source);
     self::assertStringContainsString('public function resolve(string $logical): string', $source);
     self::assertStringContainsString('public function include(string $logicalOrCompiled, array $data = []): void', $source);
     self::assertStringContainsString('public function capture(string $logical, array $data = []): string', $source);
-    self::assertMatchesRegularExpression('/private function fetchLegacy\(string \$fileName, array \$data = \[\]\)\s*\{[\s\S]{0,400}?FiberOutputBuffer::hasActiveCapture\(\)/', $source);
     self::assertMatchesRegularExpression('/public function fetchHtml\(string \$fileName, array \$dictionary = \[\]\)/', $source);
     self::assertDoesNotMatchRegularExpression('/function streamCompiledFile\([\s\S]{0,900}?FiberOutputBuffer::beginCapture\(\)/', $source);
 }
@@ -905,7 +905,6 @@ private function assert_ViewEngine_testEnginePackageAndFlagsExist(): void
     $root = '/Users/weline/Project/Official/框架/app/code/Weline/Framework/View/Engine';
     foreach ([
         'RenderMode.php',
-        'EngineFlags.php',
         'CaptureSession.php',
         'RenderContext.php',
         'TemplateResolver.php',
@@ -915,13 +914,12 @@ private function assert_ViewEngine_testEnginePackageAndFlagsExist(): void
     ] as $file) {
         self::assertFileExists($root . '/' . $file);
     }
+    self::assertFileDoesNotExist($root . '/EngineFlags.php');
     $engine = (string) file_get_contents($root . '/ViewEngine.php');
     self::assertStringContainsString('function include(', $engine);
     self::assertStringContainsString('function capture(', $engine);
     self::assertStringContainsString('function resolve(', $engine);
     self::assertStringContainsString('CaptureSession::hasActive()', $engine);
-    $flags = (string) file_get_contents($root . '/EngineFlags.php');
-    self::assertStringContainsString("view.engine.v2", $flags);
     $hook = (string) file_get_contents($root . '/HookRuntime.php');
     self::assertStringContainsString('preferStreamIntoCapture', $hook);
     $taglib = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/View/Taglib.php');

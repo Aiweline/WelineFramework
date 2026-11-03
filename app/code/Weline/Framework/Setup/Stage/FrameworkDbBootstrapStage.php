@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Weline\Framework\Setup\Stage;
 
 use Weline\Framework\App\Exception;
-use Weline\Database\Service\Release\SchemaDiffExecutor;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Schema\SchemaParser;
@@ -13,6 +12,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Model\Cache\NamespaceVersion;
 use Weline\Framework\Setup\Model\ModuleBackup;
 use Weline\Framework\Setup\Model\ModuleTable;
+use Weline\Framework\Setup\Schema\SchemaDiffExecutorInterface;
 
 /**
  * Framework 数据库引导阶段（order=0）
@@ -53,7 +53,7 @@ class FrameworkDbBootstrapStage extends AbstractStage
     public function __construct(
         private readonly ConnectionFactory $connectionFactory,
         private readonly SchemaParser $schemaParser,
-        private readonly SchemaDiffExecutor $schemaDiffExecutor,
+        private readonly SchemaDiffExecutorInterface $schemaDiffExecutor,
     ) {
     }
 

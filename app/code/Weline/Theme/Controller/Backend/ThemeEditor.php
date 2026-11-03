@@ -896,18 +896,42 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * Backend-owned next version label for save/publish dialogs (e.g. v21).
+     * Backend-owned next version label for save/publish dialogs.
+     *
+     * 必须与 {@see allocateScopeVersionDraftRow()} 同源（scope 版本号 = max+1），
+     * 否则对话框预填 v356 而实际分配 v355（实测 2026-11-02）。
      *
      * @return array{next_version_number:int,suggested_version_name:string}
      */
     private function nextLayoutVersionSuggestion(ThemeEditorContext $context): array
     {
-        $next = $this->peekNextLayoutVersionNumber($context);
+        $next = $this->peekNextScopeVersionNumber($context);
 
         return [
             'next_version_number' => $next,
-            'suggested_version_name' => 'v' . $next,
+            'suggested_version_name' => 'v' . $next . '-new',
         ];
+    }
+
+    /** 该范围下一个可用版本号（与 allocateScopeVersionDraftRow 的分配口径一致）。 */
+    private function peekNextScopeVersionNumber(ThemeEditorContext $context): int
+    {
+        try {
+            $row = ObjectManager::getInstance(ThemeScopeVersion::class)
+                ->reset()->clearData()->clearQuery()
+                ->where(ThemeScopeVersion::schema_fields_THEME_ID, $context->themeId)
+                ->where(ThemeScopeVersion::schema_fields_SCOPE, $context->scope->storageScope)
+                ->where(ThemeScopeVersion::schema_fields_STORE_MODE, $context->scope->storeMode)
+                ->where(ThemeScopeVersion::schema_fields_AREA, $context->area)
+                ->order(ThemeScopeVersion::schema_fields_VERSION_NUMBER, 'DESC')
+                ->limit(1)
+                ->select()->fetchArray();
+            $row = \is_array($row) && $row !== [] ? (\array_is_list($row) ? ($row[0] ?? []) : $row) : [];
+
+            return \max(1, (int)($row[ThemeScopeVersion::schema_fields_VERSION_NUMBER] ?? 0) + 1);
+        } catch (\Throwable) {
+            return 1;
+        }
     }
 
     private function isTruthyPublishFlag(mixed $value): bool
@@ -3640,43 +3664,24 @@ class ThemeEditor extends BackendController
                 'version_id' => isset($data['version_id']) ? (int)$data['version_id'] : 0,
                 'reason' => 'theme_editor_compat_publish',
             ];
-            if ($this->wantsStandardPublishStream($data)) {
-                $this->streamStandardLayoutPublish(
-                    $context,
-                    $opts,
-                    null,
-                    static function (array $result, array $finalizeMeta): array {
-                        return [
-                            'message' => (string)__('主题已发布'),
-                            'code' => 'theme_standard_publish_ok',
-                            'data' => \array_merge(
-                                \is_array($result['data'] ?? null) ? $result['data'] : [],
-                                ['finalize' => $finalizeMeta],
-                            ),
-                        ];
-                    },
-                );
+            // 发布只有 SSE 一种形态（用户口径 2026-11-02）。
+            $this->streamStandardLayoutPublish(
+                $context,
+                $opts,
+                null,
+                static function (array $result, array $finalizeMeta): array {
+                    return [
+                        'message' => (string)__('主题已发布'),
+                        'code' => 'theme_standard_publish_ok',
+                        'data' => \array_merge(
+                            \is_array($result['data'] ?? null) ? $result['data'] : [],
+                            ['finalize' => $finalizeMeta],
+                        ),
+                    ];
+                },
+            );
 
-                return;
-            }
-
-            $result = $this->runStandardLayoutPublish($context, $opts);
-            if (empty($result['success'])) {
-                return $this->dispatchThemeEditorResultAfter($this->fetchJson($result), 'publish_layout');
-            }
-
-            $finalizeMeta = $this->finalizeStandardLayoutPublish($context, null);
-            $message = __('主题已发布');
-
-            return $this->dispatchThemeEditorResultAfter($this->fetchJson([
-                'success' => true,
-                'message' => $message,
-                'code' => 'theme_standard_publish_ok',
-                'data' => \array_merge(
-                    \is_array($result['data'] ?? null) ? $result['data'] : [],
-                    ['finalize' => $finalizeMeta],
-                ),
-            ]), 'publish_layout');
+            return;
         } catch (\Exception $e) {
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => false,
@@ -8578,7 +8583,7 @@ HTML;
                     'draft' => $draftRow,
                     'archived_only' => $archivedOnly,
                     'next_version_number' => $nextNumber,
-                    'suggested_version_name' => 'v' . $nextNumber,
+                    'suggested_version_name' => 'v' . $nextNumber . '-new',
                     'theme_version_id' => isset($data['theme_version_id'])
                         ? (int)$data['theme_version_id']
                         : null,
@@ -8804,19 +8809,17 @@ HTML;
                 $snapshots = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class);
                 $snapshots->captureCurrent($version, $context, $initial);
                 $actual = $version->getContentRevision();
-                $identity = $owner->withVersion($draftId, ThemeVersionIdentity::MODE_DRAFT, $actual);
-                $sealed = ObjectManager::getInstance(ThemeVersionPublicationService::class)->seal($identity, [
-                    'published_version_id' => (int)($selection['published_version_id'] ?? 0),
-                ]);
-                $this->persistScopeVersionSealed($draftId, $owner, $actual,
-                    isset($data['version_name']) ? (string)$data['version_name'] : null,
-                    isset($data['description']) ? (string)$data['description'] : null);
-                ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class)
-                    ->bakePublishArtifactsForVersion($context, $draftId);
                 $this->clearVersionPreviewCaches($context->themeId);
-                return ['success' => true, 'message' => __('Scope 版本已封存（未发布）'),
-                    'data' => $sealed + ['theme_version_id' => $draftId, 'content_revision' => $actual,
-                        'published' => false, 'selection' => $this->loadScopeVersionSelectionArray($owner)]];
+                // 草稿只是编辑容器：保存不封存、不建版本、不烘焙产物。
+                // 版本由「发布」生成（默认名 v{版本号}-new，用户可改）。
+                return ['success' => true, 'message' => __('草稿已保存'),
+                    'data' => [
+                        'theme_version_id' => $draftId,
+                        'content_revision' => $actual,
+                        'lifecycle' => ThemeScopeVersion::LIFECYCLE_DRAFT,
+                        'published' => false,
+                        'selection' => $this->loadScopeVersionSelectionArray($owner),
+                    ]];
             });
         } catch (\Throwable $error) {
             return ['success' => false, 'message' => $error->getMessage(),
@@ -8832,13 +8835,11 @@ HTML;
     public function postPublishScopeVersion()
     {
         $data = $this->getScopeVersionRequestData();
-        if ($this->wantsStandardPublishStream($data)) {
-            $this->streamPublishScopeVersion($data);
+        // 发布只有 SSE 一种形态（用户口径 2026-11-02）：固化+多语编译耗时长，
+        // 一次性 JSON 会撞代理读超时；进度必须持续外发。
+        $this->streamPublishScopeVersion($data);
 
-            return;
-        }
-
-        return $this->fetchJson($this->publishScopeVersionPayload());
+        return;
     }
 
     /**
@@ -8936,22 +8937,61 @@ HTML;
     public function publishScopeVersionPayload(?callable $onProgress = null): array
     {
         $response = null;
+        $owner = null;
+        $versionId = 0;
         try {
             $data = $this->getScopeVersionRequestData();
             $context = $this->requireLayoutWriteContext($data, (int)($data['theme_id'] ?? 0), (string)($data['page_type'] ?? 'homepage'));
-            return \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityOwnerLock::write(
-                $this->themeVersionOwnerFromContext($context), function () use (&$response, $onProgress): array {
+            $owner = $this->themeVersionOwnerFromContext($context);
+            $published = \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityOwnerLock::write(
+                $owner, function () use (&$response, &$versionId, $onProgress): array {
                     $connection = ObjectManager::getInstance(ThemeScopeVersion::class)->getConnection();
                     return ObjectManager::getInstance(\Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface::class)
-                        ->runWrite($connection, function () use (&$response, $onProgress): array {
+                        ->runWrite($connection, function () use (&$response, &$versionId, $onProgress): array {
                             $response = $this->publishScopeVersionPayloadLocked($onProgress);
+                            $versionId = (int)($response['data']['theme_version_id'] ?? 0);
                             if (empty($response['success'])) { throw new \RuntimeException((string)($response['message'] ?? 'theme_scope_publish_failed')); }
                             return $response;
                         });
                 });
+            // 事务提交后复核：版本确实已发布 + selection 指向它。事务被回滚时不得冒充成功。
+            if (!empty($published['success']) && !$this->isScopeVersionReallyPublished($owner, $versionId)) {
+                return [
+                    'success' => false,
+                    'code' => 'theme_scope_publish_not_committed',
+                    'message' => __('发布未落库（事务回滚）：版本 %{1} 未标记为已发布', [(string)$versionId]),
+                    'data' => ['theme_version_id' => $versionId],
+                ];
+            }
+            return $published;
         } catch (\Throwable $error) {
             if (isset($context)) { ObjectManager::getInstance(ThemeScopeVersionService::class)->invalidateOwner($context->themeId,$context->scope->storageScope,$context->scope->storeMode,$context->area); }
             return $response ?? ['success'=>false,'message'=>$error->getMessage()];
+        }
+    }
+
+    /**
+     * 发布是否真的落库。
+     *
+     * 权威是 `w_theme_scope_version_selection.published_version_id`（is_current/is_published
+     * 是 legacy 兼容字段，不作判据——按它判会把成功发布误报成回滚）。
+     */
+    private function isScopeVersionReallyPublished(?ThemeVersionIdentity $owner, int $versionId): bool
+    {
+        if ($owner === null || $versionId < 1) {
+            return false;
+        }
+        try {
+            $version = (clone ObjectManager::getInstance(ThemeScopeVersion::class))
+                ->clearData()->clearQuery()->load($versionId);
+            if ((int)$version->getId() !== $versionId) {
+                return false;
+            }
+            $selection = $this->loadScopeVersionSelectionArray($owner);
+
+            return (int)($selection['published_version_id'] ?? 0) === $versionId;
+        } catch (\Throwable) {
+            return false;
         }
     }
 
@@ -9030,6 +9070,33 @@ HTML;
             }
             $identity = $owner->withVersion($themeVersionId, $mode, $contentRevision);
 
+            // 发布前把 workspace 的最新草稿同步进版本快照。
+            // 草稿保存可能只推进 workspace revision（4216），而版本快照仍指向旧 revision（4215），
+            // 结果「发布成功但产物/前端不含新编辑」（2026-11-02 实测）。
+            try {
+                $wsState = ObjectManager::getInstance(\Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface::class)
+                    ->load($context, true);
+                $wsRevision = (int)($wsState['draft_revision_id'] ?? 0);
+                $wsPayload = $wsState['draft_payload'] ?? null;
+                if ($wsRevision > 0 && \is_array($wsPayload) && $wsPayload !== []) {
+                    $snap = $snapshots->read($version->toVersionIdentity(), $context);
+                    if ($wsRevision > (int)($snap['draft_revision_id'] ?? 0)) {
+                        $snapshots->advance($version->toVersionIdentity(), $context, [
+                            'revision_id' => $wsRevision,
+                            'draft_payload' => $wsPayload,
+                            'changes' => ['layout:' . $context->layoutType => true],
+                        ], 'publish_sync');
+                        $version = (clone ObjectManager::getInstance(ThemeScopeVersion::class))
+                            ->clearData()->clearQuery()->load($themeVersionId);
+                        $contentRevision = \max(1, $version->getContentRevision());
+                        $identity = $owner->withVersion($themeVersionId, $mode, $contentRevision);
+                        $row = $version->getData();
+                    }
+                }
+            } catch (\Throwable) {
+                // 同步失败不阻断：仍按版本快照发布（结果由事务后复核判定是否真落库）。
+            }
+
             $expectedSelectionRevision = \array_key_exists('expected_selection_revision', $data)
                 ? (int)$data['expected_selection_revision']
                 : (int)($selection['selection_revision'] ?? 0);
@@ -9093,13 +9160,38 @@ HTML;
             $emit('seal', (string)__('封存发布版本'), 20, [
                 'ssh' => \sprintf('$ seal-scope-version --version=%d --revision=%d', $themeVersionId, $contentRevision),
             ]);
+            // 发布才生成版本：没给名字就用 `v{该草稿版本号}-new`，等用户改名。
+            $publishVersionName = \trim((string)($data['version_name'] ?? ''));
+            if ($publishVersionName === '') {
+                $publishVersionName = 'v' . (int)($row['version_number'] ?? 0) . '-new';
+            }
             $this->persistScopeVersionSealed(
                 $themeVersionId,
                 $owner,
                 $contentRevision,
-                isset($data['version_name']) ? (string)$data['version_name'] : null,
+                $publishVersionName,
                 isset($data['description']) ? (string)$data['description'] : null,
             );
+
+            // 版本发布必须同时落 effective release：运行时按 release 读载荷，
+            // 只翻 selection 会出现「发布成功、前端仍是旧内容」（2026-11-02 实测 2974）。
+            try {
+                $workspaceService = ObjectManager::getInstance(\Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface::class);
+                $wsState = $workspaceService->load($context, true);
+                $wsRevisionNo = (int)($wsState['revision'] ?? 0);
+                if ($wsRevisionNo > 0) {
+                    $workspaceService->publish(
+                        $context,
+                        $wsRevisionNo,
+                        ($wsState['expected_parent_release_id'] ?? null) === '' ? null : ($wsState['expected_parent_release_id'] ?? null),
+                        'backend-user:' . (string)($this->session->getUserId() ?? 0),
+                        (string)($this->session->getUsername() ?? ''),
+                        'theme_scope_version_publish',
+                    );
+                }
+            } catch (\Throwable) {
+                // 已经封存；release 失败由后续 selection/前端验收判定，不在此吞掉成功结论。
+            }
 
             // Gate: formal solidify + locale com_* compile must succeed before pointer flip.
             $emit('solidify', (string)__('正在固化并编译正式布局产物（含默认注入与多语编译）'), 40, [
@@ -9632,6 +9724,11 @@ HTML;
         if ($nextNumber < 1) {
             $nextNumber = 1;
         }
+        // 发布草稿生成新版本时的默认名：`v{新版本号}-new`，等用户改名。
+        $resolvedVersionName = \trim((string)$versionName);
+        if ($resolvedVersionName === '') {
+            $resolvedVersionName = 'v' . $nextNumber . '-new';
+        }
 
         // 「承接源」按「取第一个正值」解析，不能用 ?? 链：调用方（createScopeDraftPayload）
         // 恒会把 source_theme_version_id 写成 int（缺省即 0），而 ?? 只在键不存在/null 时回退，
@@ -9644,7 +9741,7 @@ HTML;
             ->setStoreMode($owner->storeMode)
             ->setArea($owner->area)
             ->setVersionNumber($nextNumber)
-            ->setVersionName($versionName)
+            ->setVersionName($resolvedVersionName)
             ->setVersionType(ThemeScopeVersion::TYPE_MANUAL)
             ->setLifecycle(ThemeScopeVersion::LIFECYCLE_DRAFT)
             ->setContentRevision(1)

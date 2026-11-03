@@ -1277,13 +1277,9 @@ final class FrontendWorkerSessionService
      */
     private function isAcceptableWarmupGeneration(string $clientVersionId): bool
     {
-        if (!\class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
-            return false;
-        }
         try {
-            /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
             $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class
+                \Weline\Framework\Runtime\ThemePublishedVersionResolverInterface::class
             );
 
             return $resolver->isAcceptableStorefrontGenerationId($clientVersionId);

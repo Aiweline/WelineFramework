@@ -2751,6 +2751,10 @@ class SlotRendererService
         if ($code === '') {
             return '';
         }
+        // 全局区契约（禁止回潮）：烘焙产物里的部件占位 hydration 同样要让位给同名片段。
+        if (\Weline\Theme\Region\GlobalRegion::replacesWidget($code)) {
+            return '';
+        }
 
         $configRaw = $this->attrFromTag($openTag, 'data-config');
         if ($configRaw === '') {
@@ -3337,6 +3341,11 @@ class SlotRendererService
         $widgetCode = (string)($widget['widget_code'] ?? '');
         $widgetType = (string)($widget['widget_type'] ?? '');
         $slotId = (string)($widget['slot_id'] ?? '');
+        // 全局区契约（禁止回潮）：同名片段已接管时跳过旧部件渲染，
+        // 否则已物化的放置会与全局区片段各渲染一份。
+        if ($widgetCode !== '' && \Weline\Theme\Region\GlobalRegion::replacesWidget($widgetCode)) {
+            return '';
+        }
         if ($widgetModule !== '' && $widgetCode !== '') {
             TemplateRenderRouteTrace::mark(
                 'widget',
@@ -3370,6 +3379,10 @@ class SlotRendererService
 
         $widgetModule = $widget['widget_module'] ?? '';
         $widgetCode = $widget['widget_code'] ?? '';
+        // 全局区契约（禁止回潮）：所有渲染入口最终都汇到这里，同名片段已接管时不再出第二份。
+        if (\is_string($widgetCode) && $widgetCode !== '' && \Weline\Theme\Region\GlobalRegion::replacesWidget($widgetCode)) {
+            return '';
+        }
         $widgetType = $widget['widget_type'] ?? '';
         $layoutId = $widget['layout_id'] ?? '';
         $config = $widget['config'] ?? [];

@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Controller;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Service\Head\SeoPageProfileBag;
-use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Api\I18n\WidgetTranslationInterface;
 
 class Contact extends \Weline\Framework\App\Controller\FrontendController
 {
@@ -13,7 +14,7 @@ class Contact extends \Weline\Framework\App\Controller\FrontendController
 
     public function getIndex(): string
     {
-        $title = WidgetI18n::label('联系我们');
+        $title = ObjectManager::getInstance(WidgetTranslationInterface::class)->label('联系我们');
         $this->assign('title', $title);
         if (class_exists(SeoPageProfileBag::class)) {
             SeoPageProfileBag::publish(['title' => $title]);

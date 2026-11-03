@@ -103,8 +103,8 @@ final class StaticAssetHtmlRewriter
     {
         $pair = '';
         try {
-            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
-                $pair = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pairSegment();
+            if (\class_exists('\\Weline\\Framework\\Deploy\\ThemeRuntimeState')) {
+                $pair = \Weline\Framework\Deploy\ThemeRuntimeState::pairSegment();
             }
         } catch (\Throwable) {
             $pair = '';
@@ -124,8 +124,8 @@ final class StaticAssetHtmlRewriter
     private static function pinnedThemeBuild(): string
     {
         try {
-            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
-                $build = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pinnedStaticBuild();
+            if (\class_exists('\\Weline\\Framework\\Deploy\\ThemeRuntimeState')) {
+                $build = \Weline\Framework\Deploy\ThemeRuntimeState::pinnedStaticBuild();
 
                 return \preg_match('/^[0-9a-f]{12}$/', $build) === 1 ? $build : '';
             }
@@ -139,8 +139,8 @@ final class StaticAssetHtmlRewriter
     private static function currentPairSegment(): string
     {
         try {
-            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
-                $pair = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pairSegment();
+            if (\class_exists('\\Weline\\Framework\\Deploy\\ThemeRuntimeState')) {
+                $pair = \Weline\Framework\Deploy\ThemeRuntimeState::pairSegment();
 
                 return \preg_match('#^[A-Za-z0-9_.-]+/v[0-9]+$#', $pair) === 1 ? $pair : '';
             }
@@ -154,8 +154,8 @@ final class StaticAssetHtmlRewriter
     private static function currentThemePrefix(): string
     {
         try {
-            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
-                return \trim(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::activeThemePrefix(), '/');
+            if (\class_exists('\\Weline\\Framework\\Deploy\\ThemeRuntimeState')) {
+                return \trim(\Weline\Framework\Deploy\ThemeRuntimeState::activeThemePrefix(), '/');
             }
         } catch (\Throwable) {
         }
@@ -171,8 +171,8 @@ final class StaticAssetHtmlRewriter
     {
         $pair = '';
         try {
-            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
-                $pair = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pairSegment();
+            if (\class_exists('\\Weline\\Framework\\Deploy\\ThemeRuntimeState')) {
+                $pair = \Weline\Framework\Deploy\ThemeRuntimeState::pairSegment();
             }
         } catch (\Throwable) {
             $pair = '';

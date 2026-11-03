@@ -98,70 +98,6 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         }
     }
 
-    public function testDeferredDynamicWarmupDefaultsOffForEveryWorker(): void
-    {
-        $this->withDynamicWarmupEnv([
-            'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED' => null,
-            'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_OWNER_WORKER_ID' => null,
-            'WLS_WORKER_ID' => '2',
-            'WLS_PROCESS_ROLE' => 'worker',
-        ], function (): void {
-            $runtime = new WlsRuntime();
-
-            self::assertFalse($this->invokePrivate($runtime, 'shouldRunDeferredDynamicFirstRenderWarmup'));
-        });
-
-        $this->withDynamicWarmupEnv([
-            'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED' => null,
-            'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_OWNER_WORKER_ID' => null,
-            'WLS_WORKER_ID' => '1',
-            'WLS_PROCESS_ROLE' => 'worker',
-        ], function (): void {
-            $runtime = new WlsRuntime();
-
-            self::assertFalse($this->invokePrivate($runtime, 'shouldRunDeferredDynamicFirstRenderWarmup'));
-        });
-    }
-
-    public function testDeferredDynamicWarmupHonorsExplicitOwnerWorker(): void
-    {
-        $this->withDynamicWarmupEnv([
-            'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED' => '1',
-            'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_OWNER_WORKER_ID' => '1',
-            'WLS_WORKER_ID' => '2',
-            'WLS_PROCESS_ROLE' => 'worker',
-        ], function (): void {
-            $runtime = new WlsRuntime();
-
-            self::assertFalse($this->invokePrivate($runtime, 'shouldRunDeferredDynamicFirstRenderWarmup'));
-        });
-
-        $this->withDynamicWarmupEnv([
-            'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED' => '1',
-            'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_OWNER_WORKER_ID' => '2',
-            'WLS_WORKER_ID' => '2',
-            'WLS_PROCESS_ROLE' => 'worker',
-        ], function (): void {
-            $runtime = new WlsRuntime();
-
-            self::assertTrue($this->invokePrivate($runtime, 'shouldRunDeferredDynamicFirstRenderWarmup'));
-        });
-    }
-
-    public function testDeferredDynamicWarmupRunsWhenEnabledForOwnerWorker(): void
-    {
-        $this->withDynamicWarmupEnv([
-            'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED' => '1',
-            'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_OWNER_WORKER_ID' => '2',
-            'WLS_WORKER_ID' => '2',
-            'WLS_PROCESS_ROLE' => 'worker',
-        ], function (): void {
-            $runtime = new WlsRuntime();
-
-            self::assertTrue($this->invokePrivate($runtime, 'shouldRunDeferredDynamicFirstRenderWarmup'));
-        });
-    }
-
     public function testReadyGateDynamicWarmupDefaultsOffUnlessExplicitlyEnabled(): void
     {
         $this->withDynamicWarmupEnv([
@@ -394,27 +330,6 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         });
     }
 
-    public function testDeferredBootstrapWarmupDefaultsOffAfterReady(): void
-    {
-        $this->withDynamicWarmupEnv([
-            'WLS_WORKER_BOOTSTRAP_WARMUP' => null,
-            'WLS_PROCESS_ROLE' => 'worker',
-        ], function (): void {
-            $runtime = new WlsRuntime();
-
-            self::assertFalse($this->invokePrivate($runtime, 'shouldRunWorkerBootstrapWarmup'));
-        });
-
-        $this->withDynamicWarmupEnv([
-            'WLS_WORKER_BOOTSTRAP_WARMUP' => '1',
-            'WLS_PROCESS_ROLE' => 'worker',
-        ], function (): void {
-            $runtime = new WlsRuntime();
-
-            self::assertTrue($this->invokePrivate($runtime, 'shouldRunWorkerBootstrapWarmup'));
-        });
-    }
-
     public function testDeferredBackendWarmupRunsWhenExplicitlyEnabledForOwnerWorker(): void
     {
         $this->withDynamicWarmupEnv([
@@ -429,39 +344,14 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         });
     }
 
-    public function testDeferredFpcProcessPullDefaultsOffAndRequiresExplicitOptIn(): void
-    {
-        $this->withDynamicWarmupEnv([
-            'WLS_WORKER_FPC_PROCESS_PULL_ENABLED' => null,
-            'WLS_PROCESS_ROLE' => 'worker',
-        ], function (): void {
-            $runtime = new WlsRuntime();
-
-            self::assertFalse($this->invokePrivate($runtime, 'shouldRunDeferredFpcProcessPullWarmup'));
-        });
-
-        $this->withDynamicWarmupEnv([
-            'WLS_WORKER_FPC_PROCESS_PULL_ENABLED' => '1',
-            'WLS_PROCESS_ROLE' => 'worker',
-        ], function (): void {
-            $runtime = new WlsRuntime();
-
-            self::assertTrue($this->invokePrivate($runtime, 'shouldRunDeferredFpcProcessPullWarmup'));
-        });
-    }
-
     public function testMaintenanceRoleDoesNotRunWorkerBootstrapWarmups(): void
     {
         $this->withDynamicWarmupEnv([
             'WLS_PROCESS_ROLE' => 'maintenance',
-            'WLS_WORKER_BOOTSTRAP_WARMUP' => null,
-            'WLS_WORKER_DEFERRED_BOOTSTRAP_WARMUP' => null,
             'WLS_WORKER_DEFERRED_URL_METADATA_WARMUP' => '1',
         ], function (): void {
             $runtime = new WlsRuntime();
 
-            self::assertFalse($this->invokePrivate($runtime, 'shouldRunWorkerBootstrapWarmup'));
-            self::assertFalse($this->invokePrivate($runtime, 'shouldRunDeferredWorkerBootstrapObserverWarmup'));
             self::assertFalse($this->invokePrivate($runtime, 'shouldRunDeferredWorkerBootstrapUrlMetadataWarmup'));
         });
     }
@@ -469,7 +359,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
     public function testBackendWarmupPathsIncludePlainAndLocalizedAdminRoutes(): void
     {
         $runtime = new WlsRuntime();
-        $paths = $this->invokePrivate($runtime, 'resolveReadyGateBackendWarmupPaths');
+        $paths = $this->invokePrivate($runtime, 'resolveBackendWarmupPaths', 'ready-gate');
 
         self::assertNotEmpty($paths);
         self::assertNotSame([], \array_values(\array_filter($paths, static fn (string $path): bool => \str_ends_with($path, '/admin/login'))));
@@ -482,7 +372,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
     public function testBackendReadyGateWarmupHostsDefaultToLoopbackOnly(): void
     {
         $runtime = new WlsRuntime();
-        $hosts = $this->invokePrivate($runtime, 'resolveReadyGateBackendWarmupHosts');
+        $hosts = $this->invokePrivate($runtime, 'resolveBackendWarmupHosts', 'ready-gate');
 
         self::assertSame(['127.0.0.1'], $hosts);
     }

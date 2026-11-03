@@ -13,6 +13,7 @@ return [
         'Weline_I18n' => '*',
         'Weline_FileManager' => '*',
         'Weline_Ai' => '*',
+        'Weline_Eav' => '*',
     ],
     'optional' => [
         'Weline_Cms' => '*',
@@ -26,5 +27,6 @@ return [
     ],
     'provides' => [
         \Weline\Blog\Api\Sitemap\BlogSitemapContentSourceInterface::class => \Weline\Blog\Service\BlogContentResolver::class,
+        'theme.public_route.blog' => \Weline\Blog\Controller\Router::class,
     ],
 ];

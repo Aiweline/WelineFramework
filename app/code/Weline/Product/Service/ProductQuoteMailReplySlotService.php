@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Weline\Product\Service;
 
 use Weline\Acl\Api\Authorization\ResourceAuthorizationServiceInterface;
-use Weline\Backend\Model\BackendUser;
+use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
+use Weline\Backend\Api\User\BackendUserAdministrationInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
 
@@ -173,8 +174,8 @@ final class ProductQuoteMailReplySlotService
         if ($backendUserId <= 0) {
             return false;
         }
-        $ctx = BackendUser::getAclContext($backendUserId);
-        $roleId = (int)($ctx['role_id'] ?? 0);
+        $ctx = ObjectManager::getInstance(BackendUserContextProviderInterface::class)->find($backendUserId);
+        $roleId = (int)($ctx?->getRoleId() ?? 0);
         if ($roleId <= 0) {
             return false;
         }
@@ -192,9 +193,9 @@ final class ProductQuoteMailReplySlotService
             return '';
         }
         try {
-            $user = ObjectManager::getInstance(BackendUser::class)->clear()->load($backendUserId);
-            if ($user->getId()) {
-                return strtolower(trim((string)$user->getEmail()));
+            $user = ObjectManager::getInstance(BackendUserAdministrationInterface::class)->find($backendUserId);
+            if ($user !== null) {
+                return strtolower(trim($user->getEmail()));
             }
         } catch (\Throwable) {
         }

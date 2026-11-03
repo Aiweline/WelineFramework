@@ -59,6 +59,31 @@ final class DevToolMemoryLimitBootstrap
      */
     private static function isLikelyDevToolSession(): bool
     {
+        // 先做一次 cookie 存在性预检：正常访客根本没有面板 cookie，
+        // 没必要为了「可能放大 memory_limit」去装配整个 DeveloperWorkspace 服务图
+        // （实测该次装配 200–300 ms/请求，且是请求级实例，预热也救不了）。
+        try {
+            $cookieName = \trim((string)Env::get('dev_tool.panel.cookie_name', 'w_weline_panel'));
+            if ($cookieName === '') {
+                return false;
+            }
+            $hasCookie = isset($_COOKIE[$cookieName]) && (string)$_COOKIE[$cookieName] !== '';
+            if (!$hasCookie) {
+                $prefix = $cookieName . '_w';
+                foreach (\array_keys($_COOKIE) as $name) {
+                    if (\is_string($name) && \str_starts_with($name, $prefix)) {
+                        $hasCookie = true;
+                        break;
+                    }
+                }
+            }
+            if (!$hasCookie) {
+                return false;
+            }
+        } catch (\Throwable) {
+            // 预检失败就走原路径，行为不变。
+        }
+
         try {
             $access = ObjectManager::getInstance(DeveloperAccessProviderInterface::class);
             if ($access instanceof DeveloperAccessProviderInterface) {

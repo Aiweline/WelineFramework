@@ -333,6 +333,28 @@ final class ThemeHeadChromeCssPack
     {
         $theme = $this->resolveTheme($area);
         $layoutType = $pack === self::PACK_OVERLAY ? $this->resolveLayoutType($options) : '';
+
+        // 冷请求实测：资源包解析 66ms（scan+hash），整页 head 前缀可达 192ms。
+        // 这里把「已发布产物」按 主题代次 短缓存，让重启后第一批请求直接复用；
+        // key 含代次，theme:update 换代即失效；命中前校验产物文件仍在盘上。
+        $packCacheKey = '';
+        try {
+            $packCacheKey = 'theme.head_css_pack.' . \substr(\sha1((string)\json_encode([
+                'v1',
+                $area,
+                $pack,
+                $layoutType,
+                (int)($theme?->getId() ?? 0),
+                \Weline\Framework\Cache\StorefrontCacheKeyContext::pageGenerationValue(),
+            ])), 0, 24);
+            $cached = \w_cache('theme')->get($packCacheKey);
+            if (\is_array($cached) && !empty($cached['url']) && !empty($cached['path']) && \is_file((string)$cached['path'])) {
+                return ['url' => (string)$cached['url'], 'path' => (string)$cached['path']];
+            }
+        } catch (\Throwable) {
+            $packCacheKey = '';
+        }
+
         $sources = $this->collectSources($area, $pack, $theme, $options + ['layout_type' => $layoutType]);
         if ($sources === []) {
             return [];
@@ -404,7 +426,16 @@ final class ThemeHeadChromeCssPack
             $this->atomicPublisher->publish($target['path'], $body);
         }
 
-        return ['url' => (string)$target['url'], 'path' => (string)$target['path']];
+        $published = ['url' => (string)$target['url'], 'path' => (string)$target['path']];
+        if ($packCacheKey !== '') {
+            try {
+                \w_cache('theme')->set($packCacheKey, $published, 120);
+            } catch (\Throwable) {
+                // 写缓存失败不影响本次输出。
+            }
+        }
+
+        return $published;
     }
 
     /**
@@ -762,7 +793,20 @@ final class ThemeHeadChromeCssPack
         $includeOverlay = $pack === self::PACK_OVERLAY
             || (($options['include_theme_overlay'] ?? false) && $pack === self::PACK_STOREFRONT);
         if ($includeOverlay) {
-            foreach ($this->collectThemeOverlaySources($area, $theme, (string)($options['layout_type'] ?? '')) as $overlay) {
+            $overlaySources = $this->collectThemeOverlaySources($area, $theme, (string)($options['layout_type'] ?? ''));
+            if ($overlaySources === []) {
+                // 静默返回会让 head 一条皮肤 CSS 都不发，页面全裸但所有已发请求都是 200。
+                // 这里保留原行为（不阻断渲染），但必须留下可被日志/巡检抓到的证据。
+                if (\function_exists('w_log_warning')) {
+                    $themeLabel = $theme instanceof WelineTheme
+                        ? ((int)$theme->getId() . '|' . (string)$theme->getPath())
+                        : 'null';
+                    w_log_warning('Theme head overlay pack has no sources: area=' . $area
+                        . ' pack=' . $pack . ' theme=' . $themeLabel
+                        . ' layout=' . (string)($options['layout_type'] ?? ''));
+                }
+            }
+            foreach ($overlaySources as $overlay) {
                 $sources[] = $overlay;
             }
         }

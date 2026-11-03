@@ -267,3 +267,27 @@ pub/static/<legacy 原路径>            ← 兼容旧 HTML / 第三方硬编码
 ### 6.6 尚未做
 
 - WLS 热重载当前被并发生命周期操作占用，代码改动需下一次 `server:reload` 才在运行时生效。
+
+### 6.7 店面外壳 bag 的代次（2026-11-02 实测补充）
+
+`StorefrontHomepageLayoutHtmlBag` 里存的是「wrap 后的店面外壳 HTML」，键前缀带版本：
+`theme.homepage_layout.html.v26.`。它的失效只能靠**升版本号**，因为内容里没有任何内容指纹可比：
+
+- 改动会进入外壳的东西（全局区片段、chrome 槽声明、注入钩子）时，必须把 `LOGICAL_KEY_PREFIX` 升一版；
+  否则旧外壳会被继续命中，表现为「同一 URL 两次请求结果不同 / 有的页面有、有的没有」。
+- 本轮即把 `v25 → v26`：全局区片段（异步占位 + 内联像素）进入外壳后，旧 bag 必须整体作废。
+- 清 `generated/html/generations` 只解决 FPC 磁盘代次，**不影响**内存热缓存里的 bag，两者要分别处理。
+
+复现口径（本机）：
+
+```bash
+php bin/w theme:update --force -t hanfu
+rm -rf generated/html/generations && mkdir -p generated/html/generations
+php bin/w framework:compile
+php bin/w server:stop --all && sleep 10 && php bin/w server:start default   # restart 不换 worker
+S=$(cat generated/framework/fpc_pierce_secret)
+curl -sk -H 'Host: p05113ef3.test.weline.com' "https://127.0.0.1/?w_fpc_pierce=$S"
+```
+
+判据：同一 URL 连续多次 pierced 请求结果一致（外壳含全局区占位与内联像素）。
+

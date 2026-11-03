@@ -111,7 +111,9 @@ class RequestLifecycleTrace
 
     /** 极端重试/风暴时防止静态 span 无限增长导致 OOM（可被 wls.debug.request_trace_max_spans 覆盖） */
     private const DEFAULT_MAX_SPANS = 4096;
-    private const MAX_SUMMARY_PHASES = 48;
+    /** v14: 48 会把列表页后段的 phase（footer/卡渲染后的主题段）整批挤掉，
+     *  账本看起来像几百 ms 的「无打点黑盒」；实测列表页全冷 phase 名 > 48，提到 128。 */
+    private const MAX_SUMMARY_PHASES = 128;
 
     /**
      * 单 span 时长合理性上限（毫秒）。24h 远大于任何真实请求阶段，却远小于

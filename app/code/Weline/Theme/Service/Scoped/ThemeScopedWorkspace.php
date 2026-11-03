@@ -405,18 +405,33 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                     ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID,
                 ));
                 $owned = $this->patchEngine->mergeOwnedCommands($current, $changes);
-                $baselineParentReleaseId = $this->nullablePositiveInt(
-                    $workspace->getData(ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID),
+                // 基线 = 草稿自己继承的那个版本（revision.parent），不是工作区最后一次发布。
+                $baselineParentReleaseId = $this->draftBaseReleaseId(
+                    $workspace,
+                    (int)$workspace->getData(ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID),
                 );
                 $oldParent = $versionInput !== null ? $basePayload : ($actualRevision === 0 && $baselineParentReleaseId === null
                     ? $parent['payload']
                     : $this->payloadForReleaseOrRootBase($baselineParentReleaseId, $context));
                 $conflicts = $this->patchEngine->structuralConflicts($oldParent, $basePayload, $owned);
                 $revisionNo = $actualRevision + 1;
+                // 草稿只是编辑容器：基线快照以 **非 effective** 状态落库（不是发布版本），
+                // 仅作为 revision.parent 供补丁校验使用；真正发布才产生 effective release + 版本。
                 $intentParentReleaseId = $versionInput !== null ? $versionInput['parent_release_id'] : $parent['release_id'];
-                if (($intentParentReleaseId === null || !empty($versionInput['freeze_baseline'])) && $context->resourceType !== ThemeEditorContext::RESOURCE_THEME_BINDING) {
-                    $intentParentReleaseId = $this->insertRelease($workspace, $context, null, null,
-                        $basePayload, [], $actorId, $actorName, 'draft_baseline')->getId();
+                if (($intentParentReleaseId === null || !empty($versionInput['freeze_baseline']))
+                    && $context->resourceType !== ThemeEditorContext::RESOURCE_THEME_BINDING) {
+                    $intentParentReleaseId = $this->insertRelease(
+                        $workspace,
+                        $context,
+                        null,
+                        null,
+                        $basePayload,
+                        [],
+                        $actorId,
+                        $actorName,
+                        'draft_baseline',
+                        ThemeScopeRelease::STATUS_BASELINE,
+                    )->getId();
                 }
                 $revision = $this->insertRevision(
                     $workspace->getId(),
@@ -688,7 +703,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 $releaseParentId = $versionInput !== null ? null : $parent['release_id'];
                 $commands = $this->commandsForRevision($revisionId);
                 $oldParent = $this->payloadForReleaseOrRootBase(
-                    $this->nullablePositiveInt($workspace->getData(ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID)),
+                    $this->draftBaseReleaseId($workspace, $revisionId),
                     $context,
                 );
                 $conflicts = $versionInput !== null ? [] : $this->patchEngine->structuralConflicts($oldParent, $parent['payload'], $commands);
@@ -2316,6 +2331,32 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         )->save();
     }
 
+    /**
+     * 草稿的基线版本：草稿继承「它是从哪个版本改出来的」，不是工作区最后一次发布。
+     *
+     * 工作区 `parent_release_id` 只在发布时推进；草稿期间可能落后于草稿基线
+     * （实测 1415 vs 234 错位 → 发布必报 theme_scope_structural_conflict）。
+     */
+    private function draftBaseReleaseId(ThemeScopeWorkspace $workspace, int $revisionId): ?int
+    {
+        if ($revisionId > 0) {
+            $revision = clone $this->revisions;
+            $revision->clearData()->clearQuery()->load($revisionId);
+            if ((int)$revision->getId() === $revisionId) {
+                $revisionParent = $this->nullablePositiveInt(
+                    $revision->getData(ThemeScopeRevision::schema_fields_PARENT_RELEASE_ID)
+                );
+                if ($revisionParent !== null) {
+                    return $revisionParent;
+                }
+            }
+        }
+
+        return $this->nullablePositiveInt(
+            $workspace->getData(ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID)
+        );
+    }
+
     /** @param list<array<string,mixed>> $conflicts */
     private function markRevisionConflictState(int $revisionId, array $conflicts): void
     {
@@ -2373,6 +2414,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         string $actorId,
         string $actorName,
         string $reason,
+        string $status = ThemeScopeRelease::STATUS_EFFECTIVE,
     ): ThemeScopeRelease {
         $payloadJson = $this->json($payload);
         $release = clone $this->releases;
@@ -2391,7 +2433,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             ThemeScopeRelease::schema_fields_EFFECTIVE_PAYLOAD_JSON => $payloadJson,
             ThemeScopeRelease::schema_fields_COMPILED_ARTIFACT_JSON => $artifact === [] ? null : $this->json($artifact),
             ThemeScopeRelease::schema_fields_FINGERPRINT => (string)($artifact['fingerprint'] ?? \hash('sha256', $payloadJson)),
-            ThemeScopeRelease::schema_fields_STATUS => ThemeScopeRelease::STATUS_EFFECTIVE,
+            ThemeScopeRelease::schema_fields_STATUS => $status,
             ThemeScopeRelease::schema_fields_ACTOR_ID => $actorId,
             ThemeScopeRelease::schema_fields_ACTOR_NAME => $actorName !== '' ? $actorName : null,
             ThemeScopeRelease::schema_fields_REASON => $reason !== '' ? $reason : null,

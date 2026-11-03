@@ -1416,13 +1416,33 @@ class App
         if (!self::isRequestRuntime()) {
             $this->bootstrapRequestCycle();
             $this->dispatchRunBefore();
-            $resultStr = $this->normalizeOutput($this->dispatchRunAfter(''));
+            $resultStr = $this->applyGlobalRegions($this->normalizeOutput($this->dispatchRunAfter('')));
             return $this->broadcastTelemetry($resultStr, $this->resolveRequest());
         }
 
         $execution = (new RequestPipeline())->execute($this);
-        $resultStr = $this->normalizeOutput($execution->output());
+        $resultStr = $this->applyGlobalRegions($this->normalizeOutput($execution->output()));
         return $this->broadcastTelemetry($resultStr, $this->resolveRequest());
+    }
+
+    /**
+     * Append the global regions to storefront HTML.
+     *
+     * This is the single engine-independent outlet of the request pipeline: it does not
+     * matter whether the page came from a compiled template, a solidified artefact or the
+     * original-source fallback. Additive and idempotent; non-page payloads are untouched.
+     */
+    private function applyGlobalRegions(string $html): string
+    {
+        if (!str_contains($html, '<head') || !str_contains($html, '</body>')) {
+            return $html;
+        }
+        try {
+            return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Runtime\GlobalRegionInjectorInterface::class)
+                ->ensure($html, 'frontend');
+        } catch (\Throwable) {
+            return $html;
+        }
     }
 
     /**

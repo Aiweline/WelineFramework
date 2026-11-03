@@ -7,6 +7,7 @@ use Weline\Framework\Cache\Contract\CacheAdapterHealthInterface;
 use Weline\Framework\Cache\Contract\CacheAdapterInterface;
 use Weline\Framework\Cache\Contract\FreshCacheReadInterface;
 use Weline\Framework\Cache\Contract\FreshCacheWriteInterface;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Service\Query\FrontendQueryException;
 
 /**
@@ -67,7 +68,8 @@ final class LockedCacheFrontendWorkerStateStore implements FrontendWorkerStateSt
                     $locked = true;
                     break;
                 }
-                \usleep(1000);
+                // 等锁在请求链上：调度器在线时让出 Fiber，避免阻塞同 Worker 的其他请求。
+                SchedulerSystem::usleep(1000);
             } while (\hrtime(true) < $deadline);
 
             if (!$locked) {

@@ -1322,14 +1322,40 @@ final class ManagedNginxProcessManager
     {
         if (\PHP_OS_FAMILY === 'Windows'
             || $command === []
-            || !\is_file('/bin/sh')
             || !\is_dir('/proc/self/fd')
         ) {
             return $command;
         }
 
+        // POSIX keeps manual redirection fd numbers single-digit: dash parses
+        // `exec 10>&-` as the command `10` and aborts the whole wrapper before
+        // `exec "$@"` — with stderr discarded by `2>/dev/null` the caller only
+        // sees exit 126/127 with EMPTY output, so `nginx -t` never ran and the
+        // managed edge gate rejected a perfectly valid config. bash extends
+        // the syntax and closes every inherited descriptor, so prefer bash and
+        // keep the plain command untouched when neither shell can close fds.
+        // Every close stays `|| true` + stderr-discarded in BOTH shells so a
+        // hostile fd entry or a broken shell can never abort before `exec`.
+        if (\is_file('/bin/bash')) {
+            $shell = '/bin/bash';
+            $closeScript = 'for f in /proc/self/fd/*; do '
+                . 'n=${f##*/}; case $n in 0|1|2) continue;; esac; '
+                . 'eval "exec $n>&-" 2>/dev/null || true; '
+                . 'done; exec "$@"';
+        } elseif (\is_file('/bin/sh')) {
+            $shell = '/bin/sh';
+            // dash cannot close fd numbers >= 10 (single-digit redirection
+            // syntax); close what it can — an unclosed high fd only risks an
+            // inherited flock, never a failed publish.
+            $closeScript = 'for f in /proc/self/fd/[3-9]; do '
+                . 'eval "exec ${f##*/}>&-" 2>/dev/null || true; '
+                . 'done; exec "$@"';
+        } else {
+            return $command;
+        }
+
         return [
-            '/bin/sh',
+            $shell,
             '-c',
             // Probe /proc/self/fd and close only the descriptors that are really
             // open. Blindly closing 3..255 makes dash tear down its own I/O
@@ -1337,10 +1363,7 @@ final class ManagedNginxProcessManager
             // `nginx -t` reported code 0/1 with EMPTY output and the managed edge
             // gate rejected an otherwise valid config — `server:start` could never
             // publish on such hosts.
-            'for f in /proc/self/fd/*; do '
-                . 'n=${f##*/}; case $n in 0|1|2) continue;; esac; '
-                . 'eval "exec $n>&-" 2>/dev/null || true; '
-                . 'done; exec "$@"',
+            $closeScript,
             'wls-fd-close',
             ...$command,
         ];

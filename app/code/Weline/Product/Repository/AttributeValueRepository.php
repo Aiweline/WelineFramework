@@ -551,6 +551,61 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         }
 
         $diagBefore = \memory_get_usage(false);
+
+        // 请求级「行集合超集复用」：卡片快照（codes=name/type/slug…）、facet 计数、
+        // 定价会对同一批 entity_id 各查一次 attribute_value（全冷实测 6 次 / 855ms）。
+        // 按 (website, entityType, storeIds, locales) 维护本请求已加载的 ids×codes
+        // 行集合；后续子集调用直接 PHP 过滤，不打库。
+        $supersetKey = null;
+        $superset = null;
+        try {
+            if (\Weline\Framework\Runtime\Context::hasCurrent()) {
+                $supersetKey = 'eav.superset.' . \sha1((string)\json_encode([
+                    $websiteId, $entityType,
+                    \array_values($storeIds), $localeFilter,
+                ]));
+                $cached = \Weline\Framework\Runtime\RequestContext::get($supersetKey);
+                if (\is_array($cached)) {
+                    $superset = $cached;
+                }
+            }
+        } catch (\Throwable) {
+            $superset = null;
+        }
+        if ($superset !== null) {
+            $idsLoaded = \array_fill_keys((array)($superset['entityIds'] ?? []), true);
+            $codesLoaded = $superset['codes'] ?? null; // null = 未按 codes 过滤（全量）
+            $idsCovered = \count(\array_filter($entityIds, static fn(int $id): bool => isset($idsLoaded[$id])))
+                === \count($entityIds);
+            $codesCovered = $codesLoaded === null;
+            if (!$codesCovered && \is_array($codesLoaded) && $codeFilter !== null) {
+                $missing = \array_filter($codeFilter, static fn(string $code): bool => !isset($codesLoaded[$code]));
+                $codesCovered = \count($missing) === 0;
+            } elseif ($codeFilter === null && $codesLoaded !== null) {
+                $codesCovered = false; // 请求全量但缓存只有子集 → 必须补查
+            }
+            if ($idsCovered && $codesCovered) {
+                $wantIds = \array_fill_keys($entityIds, true);
+                $rowsOut = [];
+                foreach ((array)($superset['rows'] ?? []) as $row) {
+                    if (!\is_array($row)) {
+                        continue;
+                    }
+                    if (!isset($wantIds[(int)($row[AttributeValue::schema_fields_ENTITY_ID] ?? 0)])) {
+                        continue;
+                    }
+                    if ($codeFilter !== null
+                        && !isset($codeFilter[\strtolower(\trim((string)($row[AttributeValue::schema_fields_ATTRIBUTE_CODE] ?? '')))])
+                    ) {
+                        continue;
+                    }
+                    $rowsOut[] = $row;
+                }
+
+                return $rowsOut;
+            }
+        }
+
         $query = $this->newModel($websiteId)
             ->clear()
             ->where(AttributeValue::schema_fields_ENTITY_TYPE, $entityType)
@@ -636,6 +691,34 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
                 'delta_before_sort' => $deltaMaterialize,
                 'delta_after_sort' => $deltaMaterialize,
             ]);
+        }
+        // 合并进本请求的超集：entityIds 取并集；codes=null（全量）直接覆盖为全量，
+        // 否则与已有 codes 取并集。后续子集调用即可 PHP 过滤命中。
+        if ($supersetKey !== null) {
+            try {
+                $prevIds = \array_fill_keys((array)($superset['entityIds'] ?? []), true);
+                foreach ($entityIds as $id) {
+                    $prevIds[$id] = true;
+                }
+                $prevCodes = $superset['codes'] ?? null;
+                if ($codeFilter === null) {
+                    $mergedCodes = null;
+                } elseif ($prevCodes === null) {
+                    $mergedCodes = null;
+                } else {
+                    $mergedCodes = $prevCodes;
+                    foreach ($codeFilter as $code) {
+                        $mergedCodes[\strtolower(\trim($code))] = true;
+                    }
+                }
+                \Weline\Framework\Runtime\RequestContext::set($supersetKey, [
+                    'rows' => array_merge((array)($superset['rows'] ?? []), $rows),
+                    'entityIds' => \array_keys($prevIds),
+                    'codes' => $mergedCodes,
+                ]);
+            } catch (\Throwable) {
+                // 合并失败不影响本次返回。
+            }
         }
         return $rows;
     }

@@ -39,7 +39,8 @@ final class CartControllerContractsTest extends TestCase
 private function assert_CartIndexPageTitle_testCartControllerPublishesExplicitPageTitleForThemeLayouts(): void
 {
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Cart' . '/Controller/Index.php');
-    self::assertStringContainsString("\$this->request->setGet('theme_page_title', WidgetI18n::label('购物车'));", $source);
-    self::assertStringContainsString("\$this->assign('page_title', WidgetI18n::label('购物车'));", $source);
+    self::assertStringContainsString("\$this->request->setGet('theme_page_title', \$this->t('购物车'));", $source);
+    self::assertStringContainsString("\$this->assign('page_title', \$this->t('购物车'));", $source);
+    self::assertStringContainsString('WidgetTranslationInterface', $source);
 }
 }

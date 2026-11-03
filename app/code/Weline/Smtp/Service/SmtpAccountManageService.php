@@ -4,8 +4,8 @@ declare(strict_types=1);
 namespace Weline\Smtp\Service;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Mail\Service\MailOutboundRelaySecretService;
-use Weline\Mail\Service\StalwartManagementAdapter;
+use Weline\Mail\Api\Relay\RelaySecretInterface;
+use Weline\Mail\Api\Stalwart\StalwartAdminInterface;
 use Weline\Smtp\Helper\Data;
 use Weline\Smtp\Model\SmtpAccount;
 
@@ -64,7 +64,7 @@ final class SmtpAccountManageService
         }
         $password = $this->generatePassword();
         /** @var MailOutboundRelaySecretService $secrets */
-        $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+        $secrets = ObjectManager::getInstance(RelaySecretInterface::class);
         try {
             $sealed = $secrets->seal($password);
         } catch (\Throwable $e) {
@@ -188,7 +188,7 @@ final class SmtpAccountManageService
         }
         $password = $this->generatePassword();
         /** @var MailOutboundRelaySecretService $secrets */
-        $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+        $secrets = ObjectManager::getInstance(RelaySecretInterface::class);
         try {
             $sealed = $secrets->seal($password);
         } catch (\Throwable $e) {
@@ -225,7 +225,7 @@ final class SmtpAccountManageService
             throw new \InvalidArgumentException('Smtp 邮箱域名无效。');
         }
         /** @var StalwartManagementAdapter $mgmt */
-        $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+        $mgmt = ObjectManager::getInstance(StalwartAdminInterface::class);
         $mgmt->ensureDomain($domain);
         $mgmt->provisionOrResetAccount($email, $password, 128);
     }

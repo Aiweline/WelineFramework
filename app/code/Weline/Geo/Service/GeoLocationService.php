@@ -14,6 +14,7 @@ namespace Weline\Geo\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Geo\Service\Provider\GeoProviderInterface;
 use Weline\Geo\Service\Provider\LocalProvider;
 use Weline\Geo\Service\Provider\IpApiComProvider;
@@ -29,6 +30,12 @@ use Weline\Geo\Service\Provider\IpapiCoProvider;
  */
 class GeoLocationService
 {
+    /** 单次重试退避上限（微秒） */
+    private const RETRY_BACKOFF_US = 100_000;
+
+    /** 一次 getLocationByIp 调用内所有退避的总预算（微秒），防止前台请求被退避拖长 */
+    private const RETRY_BACKOFF_BUDGET_US = 300_000;
+
     /**
      * 提供者实例缓存
      * 
@@ -187,7 +194,8 @@ class GeoLocationService
         }
 
         $lastError = null;
-        $retry = $this->config['retry'] ?? 1;
+        $retry = \max(0, (int)($this->config['retry'] ?? 1));
+        $backoffBudgetUs = self::RETRY_BACKOFF_BUDGET_US;
 
         // 按优先级尝试各个提供者
         foreach ($this->providers as $provider) {
@@ -203,8 +211,12 @@ class GeoLocationService
                     $lastError = $e;
                     // 如果是最后一次尝试，继续下一个提供者
                     if ($attempt < $retry) {
-                        // 等待一小段时间后重试
-                        usleep(100000); // 0.1秒
+                        // 退避受总预算约束（前台请求链），且调度器在线时让出 Fiber。
+                        if ($backoffBudgetUs > 0) {
+                            $waitUs = \min(self::RETRY_BACKOFF_US, $backoffBudgetUs);
+                            $backoffBudgetUs -= $waitUs;
+                            SchedulerSystem::usleep($waitUs);
+                        }
                         continue;
                     }
                 }

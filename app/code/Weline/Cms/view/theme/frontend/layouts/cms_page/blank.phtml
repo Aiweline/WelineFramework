@@ -29,8 +29,8 @@ $rawContent = (string)$this->getData('content');
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::cms_page::blank::head-after</w:hook>
     <w:hook>seo::head</w:hook>
-</head>
-<body class="cms-page-blank <?= htmlspecialchars($meta['class'] ?? '') ?>">
+<!--@weline-global:head:begin--><?= \Weline\Theme\Region\GlobalRegion::render('head') ?><!--@weline-global:head:end--></head>
+<body class="cms-page-blank <?= htmlspecialchars($meta['class'] ?? '') ?>"><!--@weline-global:body_open:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_open') ?><!--@weline-global:body_open:end-->
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::cms_page::blank::body-start</w:hook>
@@ -103,5 +103,5 @@ $rawContent = (string)$this->getData('content');
     </style>
 
     <w:hook>seo::footer</w:hook>
-</body>
+<!--@weline-global:body_end:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_end') ?><!--@weline-global:body_end:end--></body>
 </html>

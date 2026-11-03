@@ -6,6 +6,9 @@ return [
     "requires" => [
     ],
     "optional" => [
+        // StorefrontWarmupOrchestrator 经 WebsiteCatalogInterface（try-guard）消费站点目录：
+        // Websites 未安装时预热降级为跳过站点枚举。optional 反映该可选集成，不参与排序。
+        'Weline_Websites' => '*',
     ],
     "provides" => [
         \Weline\Framework\Cache\Contract\NamespaceGenerationInterface::class

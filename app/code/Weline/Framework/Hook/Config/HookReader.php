@@ -333,6 +333,64 @@ class HookReader extends ModuleFileReader
      * @param array $hookFiles Hook文件列表，格式：['module' => 'file_path'] 或 ['module' => ['file' => 'file_path', 'priority' => 100, 'sort_order' => 1]]
      * @return array 过滤并排序后的Hook文件列表，格式：['module' => 'file_path']
      */
+
+    /**
+     * 按 hook 优先级排序（纯函数，生产与测试共用同一份规则）。
+     *
+     * 规则：priority 降序 → sort_order 升序 → 模块位置（app > composer > framework > system）
+     * → 模块名升序。
+     *
+     * @param array<string, array{file:string,priority:int,sort_order:int,solo:bool}> $entries
+     * @return array<string, array{file:string,priority:int,sort_order:int,solo:bool}>
+     */
+    public static function orderByPriority(array $entries): array
+    {
+        uksort($entries, static function (string $moduleA, string $moduleB) use ($entries): int {
+            $a = $entries[$moduleA];
+            $b = $entries[$moduleB];
+
+            if ($a['priority'] != $b['priority']) {
+                return $b['priority'] <=> $a['priority'];
+            }
+            if ($a['sort_order'] != $b['sort_order']) {
+                return $a['sort_order'] <=> $b['sort_order'];
+            }
+            $positionOrder = ['app' => 4, 'composer' => 3, 'framework' => 2, 'system' => 1];
+            try {
+                $env = \Weline\Framework\App\Env::getInstance();
+                $positionA = $positionOrder[$env->getModuleInfo($moduleA)['position'] ?? 'composer'] ?? 0;
+                $positionB = $positionOrder[$env->getModuleInfo($moduleB)['position'] ?? 'composer'] ?? 0;
+                if ($positionA != $positionB) {
+                    return $positionB <=> $positionA;
+                }
+            } catch (\Throwable) {
+                // 取不到模块信息时退化为模块名排序
+            }
+
+            return strcmp($moduleA, $moduleB);
+        });
+
+        return $entries;
+    }
+
+    /**
+     * solo 语义：任一实现声明 `@hook-solo true` 时，**只渲染它**，其余同 hook 实现被丢弃。
+     *
+     * @param array<string, string> $files module => 模板标识
+     * @param array<string, array{solo?:bool}> $metaByModule
+     * @return array<string, string>
+     */
+    public static function applySolo(array $files, array $metaByModule): array
+    {
+        foreach ($metaByModule as $module => $meta) {
+            if (!empty($meta['solo']) && isset($files[$module])) {
+                return [$module => $files[$module]];
+            }
+        }
+
+        return $files;
+    }
+
     private function filterAndSortHooks(array $hookFiles): array
     {
         if (empty($hookFiles)) {
@@ -372,38 +430,7 @@ class HookReader extends ModuleFileReader
         // 2. 排序顺序（sort_order）升序（数字越小越优先）
         // 3. 模块位置优先级：app > composer > framework > system
         // 4. 模块依赖顺序（模块加载顺序）
-        uksort($activeHooks, function($moduleA, $moduleB) use ($env, $activeHooks) {
-            $a = $activeHooks[$moduleA];
-            $b = $activeHooks[$moduleB];
-            
-            // 1. 按优先级排序（降序）
-            if ($a['priority'] != $b['priority']) {
-                return $b['priority'] <=> $a['priority'];
-            }
-            
-            // 2. 按排序顺序排序（升序）
-            if ($a['sort_order'] != $b['sort_order']) {
-                return $a['sort_order'] <=> $b['sort_order'];
-            }
-            
-            // 3. 按模块位置排序
-            $positionOrder = ['app' => 4, 'composer' => 3, 'framework' => 2, 'system' => 1];
-            try {
-                $moduleInfoA = $env->getModuleInfo($moduleA);
-                $moduleInfoB = $env->getModuleInfo($moduleB);
-                $positionA = $positionOrder[$moduleInfoA['position'] ?? 'composer'] ?? 0;
-                $positionB = $positionOrder[$moduleInfoB['position'] ?? 'composer'] ?? 0;
-                
-                if ($positionA != $positionB) {
-                    return $positionB <=> $positionA; // 降序：app优先
-                }
-            } catch (\Exception $e) {
-                // 如果获取模块信息失败，继续使用模块名排序
-            }
-            
-            // 4. 按模块名排序（作为最后的排序依据）
-            return strcmp($moduleA, $moduleB);
-        });
+        $activeHooks = self::orderByPriority($activeHooks);
         
         // 第三步：转换为简单格式返回，格式为 ModuleName::hooks/path/to/file.phtml
         // 这样在 Template.php 中可以直接使用，不需要再次构建路径

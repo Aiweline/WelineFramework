@@ -9,8 +9,11 @@ return [
         'Weline_I18n' => '*',
     ],
     "optional" => [
+        'Weline_Product' => '*',
+        'Weline_Seo' => '*',
         'Weline_Server' => '*',
         'Weline_Theme' => '*',
+        'Weline_Websites' => '*',
         'Weline_Widget' => '*',
     ],
     "provides" => [

@@ -131,46 +131,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private bool $readyGateWorkerBootstrapWarmupCompleted = false;
 
     /**
-     * Captured by handle() finally when bag-prime pending (wave8-8c2/8c3).
-     *
-     * @var array{seeded?:int,peeked?:int,bags?:list<string>,errors?:list<string>,providers?:int}|null
-     */
-    private ?array $deferredHotCacheBagPrimeCapture = null;
-
-    /**
-     * Instance flag: ServerBag/getServer drops custom WLS_PRIME_* keys, so finally
-     * must not rely on request->getServer('WLS_PRIME_HOT_CACHE_BAGS') (wave8-8c3).
-     */
-    private bool $deferredHotCacheBagPrimePending = false;
-
-    /** wave8-8c7: stage survives ServerBag strip of WLS_PRIME_HOT_CACHE_BAGS_STAGE. */
-    private string $deferredHotCacheBagPrimeStage = '';
-
-    /**
-     * Process-local deferred warmup website scopes (default + capped managed locals).
-     * RequestContext may be absent outside handle(); keep an instance bag instead.
-     *
-     * @var list<array{
-     *   website_id:int,
-     *   host:string,
-     *   default_language:string,
-     *   default_currency:string,
-     *   language_codes:list<string>,
-     *   currency_codes:list<string>
-     * }>|null
-     */
-    private ?array $deferredWarmupWebsiteScopesCache = null;
-
-    /**
-     * P5-fiber-yield O2: bag-prime latch must be Fiber-local. A live peer Fiber's
-     * handle() finally used to see the process-wide pending flag, clear it, and
-     * leave the bag-prime Fiber with capture_miss.
-     *
-     * @var \WeakMap<\Fiber, array{pending: bool, stage: string, capture: ?array}>|null
-     */
-    private ?\WeakMap $fiberHotCacheBagPrimeStates = null;
-
-    /**
      * @var array{hit:bool,fpc_status:string,source:string,full_uri:string,reason:string,http_status:int}|null
      */
     private ?array $readyGateHomepageFpcProof = null;
@@ -184,6 +144,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      */
     private array $readyGateDynamicFirstRenderProof = [];
 
+    /** Homepage proof-recovery cycle mutex (proof-only; no HTML FPC warm in Worker). */
     private bool $homepageKeepWarmRunning = false;
 
     /** Layer B Process L1 Hydrate (Shared→process, no SSR). */
@@ -208,12 +169,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private int $homepageProofNextAtNs = 0;
     private int $homepageProofObservationDeadlineNs = 0;
     private string $homepageProofObservedPublicationDigest = '';
-
-    private float $homepageKeepWarmNextAt = 0.0;
-
-    private float $homepageLastNaturalHitAt = 0.0;
-
-    private float $homepageNaturalHitRescheduleNotBefore = 0.0;
 
     private string $homepageCacheFullUri = '';
 
@@ -269,11 +224,24 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private ?array $performanceConfig = null;
     
     /**
+     * 进程级引导标记：引导只做一次（preflight / App::init / 重置回调注册 / Fiber 安装）。
+     * 每个请求都会 new 一个 WlsRuntime，实例级 $bootstrapped 挡不住重复引导——
+     * 实测每请求在引导上白花 19–25 ms。
+     */
+    private static int $bootstrappedPid = 0;
+
+    /**
      * @inheritDoc
      */
     public function bootstrap(): void
     {
         if ($this->bootstrapped) {
+            return;
+        }
+        $this->bootstrapped = true;
+        // 用 PID 判定：worker 由 master fork 出来时会继承父进程的静态量，
+        // 只判 bool 会让子进程漏掉引导（启动即退出、Nginx 503）。
+        if (self::$bootstrappedPid === \getmypid()) {
             return;
         }
         
@@ -318,7 +286,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         // 请求级状态由 Router::__init() 在每个请求开始时重置，
         // 无需在此注册额外回调（__init 通过 RequestContext ID 检测新请求）。
         
-        $this->bootstrapped = true;
+        self::$bootstrappedPid = \getmypid();
     }
 
     private function getWorkerPreloadManager(): WorkerPreloadManager
@@ -341,29 +309,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             WorkerPreloadContext::fromGlobals($phase, RuntimeInterface::MODE_WLS)
         );
         $this->preloadPhasesCompleted[$phase] = true;
-    }
-
-    private function shouldRunWorkerBootstrapWarmup(): bool
-    {
-        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
-        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor', 'maintenance'], true)) {
-            return false;
-        }
-
-        $rawFlag = \getenv('WLS_WORKER_BOOTSTRAP_WARMUP');
-        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker_bootstrap_warmup', null);
-        }
-
-        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            // READY already owns the mandatory homepage/dynamic bootstrap.
-            // Keep the post-READY registry pass opt-in so a Worker never
-            // repeats the same preload immediately after becoming routable.
-            $rawFlag = '0';
-        }
-
-        $flag = \strtolower(\trim((string)$rawFlag));
-        return \in_array($flag, ['1', 'true', 'yes', 'on', 'sync', 'async', 'deferred'], true);
     }
 
     /**
@@ -444,7 +389,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             );
             $this->logReadyGateWarmupStep('homepage_fpc_final_done', $workerId, $startedAt);
             $this->readyGateWorkerBootstrapWarmupCompleted = true;
-            $this->scheduleNextHomepageKeepWarm();
             return $this->readyGateHomepageFpcProof;
         }
 
@@ -526,7 +470,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $this->logReadyGateWarmupStep('homepage_fpc_final_done', $workerId, $startedAt);
 
         $this->readyGateWorkerBootstrapWarmupCompleted = true;
-        $this->scheduleNextHomepageKeepWarm();
         if (\function_exists('w_log_info')) {
             \w_log_info('[WlsRuntime] ready-gate bootstrap warmup done worker=' . $workerId
                 . ' backend_warmed=' . (int)($backendResult['warmed'] ?? 0)
@@ -1127,7 +1070,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     public function shouldScheduleHomepageProofRecovery(bool $draining, bool $memoryPressure): bool
     {
-        if (!$this->readyGateWorkerBootstrapWarmupCompleted || !$this->homepageKeepWarmEnabled()
+        if (!$this->readyGateWorkerBootstrapWarmupCompleted
             || $this->homepageKeepWarmRunning || $draining || $memoryPressure) {
             return false;
         }
@@ -1204,59 +1147,14 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
     }
 
-    public function shouldScheduleHomepageKeepWarm(
-        int $activeRequests,
-        bool $draining,
-        bool $memoryPressure
-    ): bool {
-        if (!$this->readyGateWorkerBootstrapWarmupCompleted
-            || !$this->homepageKeepWarmEnabled()
-            || $this->homepageKeepWarmRunning
-            || $activeRequests > 0
-            || $draining
-            || $memoryPressure
-        ) {
-            return false;
-        }
-
-        $now = \microtime(true);
-        if ($this->homepageKeepWarmNextAt <= 0.0) {
-            $this->scheduleNextHomepageKeepWarm($now);
-            return false;
-        }
-        if ($now < $this->homepageKeepWarmNextAt) {
-            return false;
-        }
-        if ($this->homepageLastNaturalHitAt > 0.0
-            && ($now - $this->homepageLastNaturalHitAt) < $this->homepageKeepWarmIntervalSeconds()
-        ) {
-            // The natural-hit fast path updates the exact last-hit timestamp
-            // but bounds schedule recomputation. If the old deadline happens
-            // to mature inside that one-second window, advance it once here.
-            $this->scheduleNextHomepageKeepWarm($this->homepageLastNaturalHitAt);
-            return false;
-        }
-
-        return true;
-    }
-
     public function noteHomepageNaturalHit(string $requestTarget): void
     {
         if ($requestTarget !== '' && $requestTarget !== '/' && !$this->isRootRequestUri($requestTarget)) {
             return;
         }
 
-        $now = \microtime(true);
-        $this->homepageLastNaturalHitAt = $now;
-        if ($now < $this->homepageNaturalHitRescheduleNotBefore) {
-            return;
-        }
-
-        // A high-QPS homepage can produce thousands of natural hits per second.
-        // Keep the latest-hit timestamp exact while bounding Env/jitter schedule
-        // recomputation to once per second per Worker.
-        $this->homepageNaturalHitRescheduleNotBefore = $now + 1.0;
-        $this->scheduleNextHomepageKeepWarm($now);
+        // Keep-warm scheduling moved to Framework Cache Cron (StorefrontWarmupOrchestrator);
+        // natural-hit tracking is retained only as a cheap no-op for the request path.
     }
 
     /**
@@ -1339,90 +1237,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         ];
     }
 
-    /**
-     * @return array{ok:bool,reason:string,host:string,elapsed_ms:float}
-     */
-    public function runHomepageKeepWarmCycle(): array
-    {
-        if ($this->homepageKeepWarmRunning) {
-            return ['ok' => false, 'reason' => 'already-running', 'host' => '', 'elapsed_ms' => 0.0];
-        }
-
-        $this->homepageKeepWarmRunning = true;
-        SchedulerSystem::markCurrentFiberBackground();
-        $startedAt = \microtime(true);
-        $host = ($this->homepageCacheFullUri !== ''
-            ? $this->normalizeInternalWarmupHost($this->homepageCacheFullUri)
-            : null)
-            ?? $this->resolveCanonicalHomepageWarmupHost($this->resolveDynamicFirstRenderWarmupHosts());
-        $result = ['ok' => false, 'reason' => 'not-run', 'host' => $host, 'elapsed_ms' => 0.0];
-        try {
-            $transaction = $this->runHomepageFpcWarmupTransaction($host, 1, false);
-            $validation = \is_array($transaction['validation'] ?? null) ? $transaction['validation'] : [];
-            $result['ok'] = (bool)($validation['ok'] ?? false);
-            $result['reason'] = (string)($validation['reason'] ?? 'validation-missing');
-        } catch (\Throwable $e) {
-            $result['reason'] = $e->getMessage();
-        } finally {
-            $result['elapsed_ms'] = \round((\microtime(true) - $startedAt) * 1000, 2);
-            $this->homepageKeepWarmRunning = false;
-            $this->scheduleNextHomepageKeepWarm();
-        }
-
-        if (\function_exists($result['ok'] ? 'w_log_info' : 'w_log_warning')) {
-            $message = '[WlsRuntime] homepage keep-warm ' . ($result['ok'] ? 'done' : 'degraded')
-                . ' worker=' . $this->currentWorkerId()
-                . ' host=' . $host
-                . ' reason=' . $result['reason']
-                . ' elapsed_ms=' . $result['elapsed_ms'];
-            $result['ok'] ? \w_log_info($message) : \w_log_warning($message);
-        }
-
-        return $result;
-    }
-
-    private function homepageKeepWarmEnabled(): bool
-    {
-        // Storefront keep-warm moved to Framework Cache Cron (StorefrontWarmupOrchestrator).
-        // Workers must not schedule homepage HTML FPC warm in background Fibers.
-        return false;
-    }
-
-    private function homepageKeepWarmIntervalSeconds(): int
-    {
-        $raw = \getenv('WLS_WORKER_HOMEPAGE_KEEP_WARM_INTERVAL_SEC');
-        if ($raw === false || \trim((string)$raw) === '') {
-            $raw = Env::get('wls.worker.homepage_keep_warm_interval_sec', 300);
-        }
-
-        return \max(30, \min(3600, (int)$raw));
-    }
-
-    private function scheduleNextHomepageKeepWarm(?float $from = null): void
-    {
-        $interval = $this->homepageKeepWarmIntervalSeconds();
-        $maxJitter = \max(0, \min(30, (int)\floor($interval / 4)));
-        $workerId = \max(1, $this->currentWorkerId());
-        $jitter = $maxJitter > 0 ? (($workerId * 7919) % ($maxJitter * 1000 + 1)) / 1000 : 0.0;
-        $this->homepageKeepWarmNextAt = ($from ?? \microtime(true)) + $interval + $jitter;
-    }
-
     public function runDeferredWorkerBootstrapWarmup(): void
     {
         SchedulerSystem::markCurrentFiberBackground();
-        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
-        $roleCanRunGeneralDeferred = $this->roleCanRunDeferredWorkerBootstrap($role);
 
-        $runRegistryWarmup = $roleCanRunGeneralDeferred && $this->shouldRunWorkerBootstrapWarmup();
-        $runObserverWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredWorkerBootstrapObserverWarmup();
-        $runUrlMetadataWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredWorkerBootstrapUrlMetadataWarmup();
+        $runUrlMetadataWarmup = $this->shouldRunDeferredWorkerBootstrapUrlMetadataWarmup()
+            && !$this->readyGateWorkerRegistryWarmupCompleted;
         $runBackendFirstRenderWarmup = $this->shouldRunDeferredBackendFirstRenderWarmup();
-        $runFpcBuildAheadWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredFpcBuildAheadWarmup();
-        $runFpcProcessPullWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredFpcProcessPullWarmup();
-        $runDynamicFirstRenderWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredDynamicFirstRenderWarmup();
-        $runStorefrontCriticalWarmup = $this->shouldRunDeferredStorefrontCriticalWarmup();
-        $runStorefrontPeerBagHydrate = !$runStorefrontCriticalWarmup
-            && $this->shouldRunDeferredStorefrontPeerHotCacheBagHydrate();
         // Layer B: READY deferred Fiber runs hydrate once (or when reclaim queued pending).
         // Idle Fiber uses shouldScheduleProcessL1Hydrate for Shared-miss / bag retries.
         $runProcessL1Hydrate = $this->shouldRunProcessL1HydrateAfterReady()
@@ -1430,63 +1251,24 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 !$this->processL1HydrateCompletedOnce
                 || StorefrontProcessL1HydrateCoordinator::hasPendingRequest()
             );
-        if ($this->readyGateWorkerRegistryWarmupCompleted) {
-            $runRegistryWarmup = false;
-            $runUrlMetadataWarmup = false;
-        }
-        if (!$runRegistryWarmup
-            && !$runObserverWarmup
-            && !$runUrlMetadataWarmup
+        if (!$runUrlMetadataWarmup
             && !$runBackendFirstRenderWarmup
-            && !$runFpcBuildAheadWarmup
-            && !$runFpcProcessPullWarmup
-            && !$runDynamicFirstRenderWarmup
-            && !$runStorefrontCriticalWarmup
-            && !$runStorefrontPeerBagHydrate
             && !$runProcessL1Hydrate
         ) {
             return;
         }
 
-        $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
-        $this->router ??= ObjectManager::getInstance(Router::class);
         if ($runProcessL1Hydrate) {
             // Shared→Process only; never re-opens deferred storefront SSR.
             $this->runProcessL1HydrateCycle();
-        }
-        if ($runRegistryWarmup) {
-            $this->preloadWorkerRegistries();
-        }
-        if ($runObserverWarmup) {
-            $this->dispatchWorkerBootstrapWarmup();
         }
         if ($runUrlMetadataWarmup) {
             $this->warmupStep(static function (): void {
                 Url::preloadWorkerRoutingMetadata();
             }, 'url metadata');
         }
-        if ($runStorefrontCriticalWarmup) {
-            // Warm the bounded public catalog path before the broad backend
-            // warmup. This runs after Worker READY, uses the local listener,
-            // and lets the shared FPC build lock publish one response without
-            // holding the control-plane READY handshake open.
-            $this->runDeferredStorefrontCriticalWarmup();
-        } elseif ($runStorefrontPeerBagHydrate) {
-            // wave8-8c6: non-owner Workers hydrate HotCache bags (esp.
-            // chrome_slot_projection) into Process L1 after owner Shared publish.
-            $this->runDeferredStorefrontPeerHotCacheBagHydrate();
-        }
         if ($runBackendFirstRenderWarmup) {
             $this->runDeferredBackendFirstRenderWarmup();
-        }
-        if ($runFpcBuildAheadWarmup) {
-            $this->runDeferredFpcBuildAheadWarmup();
-        }
-        if ($runFpcProcessPullWarmup) {
-            $this->runDeferredFpcProcessPullWarmup($runFpcBuildAheadWarmup);
-        }
-        if ($runDynamicFirstRenderWarmup) {
-            $this->runDeferredDynamicFirstRenderWarmup();
         }
     }
 
@@ -1760,2278 +1542,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         ];
     }
 
-    private function shouldRunDeferredStorefrontCriticalWarmup(): bool
-    {
-        if (!$this->needsDeferredStorefrontWarmup()) {
-            return false;
-        }
-
-        // A cold storefront render is expensive and publishes to shared FPC.
-        // Elect one Worker so the remaining Workers do not render the same
-        // path concurrently and wait on the shared build lock.
-        return $this->isDynamicFirstRenderWarmupOwnerWorker(
-            'WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID',
-            'wls.worker.storefront_deferred_warmup_owner_worker_id',
-            1
-        );
-    }
-
-    /**
-     * wave8-8c6: non-owner Workers must hydrate HotCache bags (chrome_slot_projection)
-     * into Process L1 after the owner publishes Shared — low-rc probes are sticky.
-     */
-    private function shouldRunDeferredStorefrontPeerHotCacheBagHydrate(): bool
-    {
-        if (!$this->needsDeferredStorefrontWarmup()) {
-            return false;
-        }
-
-        return !$this->isDynamicFirstRenderWarmupOwnerWorker(
-            'WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID',
-            'wls.worker.storefront_deferred_warmup_owner_worker_id',
-            1
-        );
-    }
-
-    private function needsDeferredStorefrontWarmup(): bool
-    {
-        // Storefront deferred/peer/idle_rank warm moved to Framework Cron.
-        // Abolish fail-open forced deferred that starved 2-core VPS CPUs.
-        return false;
-    }
-
-    /**
-     * wave8-8c6: peer Workers hydrate Theme/Product HotCache bags without
-     * re-running critical FPC SSR. Delay so owner Shared publish lands first.
-     */
-    private function runDeferredStorefrontPeerHotCacheBagHydrate(): void
-    {
-        $startedAt = \microtime(true);
-        $workerId = \max(1, (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 1));
-        $delayMs = (int)(Env::get('wls.worker.storefront_peer_bag_hydrate_delay_ms', 6000) ?: 6000);
-        $delayMs = \max(0, \min(20000, $delayMs)) + (($workerId - 1) * 250);
-        if ($delayMs > 0) {
-            SchedulerSystem::yieldDelay($delayMs);
-        }
-
-        // 同一已存在的background Fiber只消费producer exact receipt；不冷SSR。
-        $homepagePull = $this->runHomepageKeepWarmCycle();
-
-        // Light stage: Product skips catalog.full; Theme still primes chrome_slot.
-        $bagPrime = $this->primeDeferredStorefrontHotCacheBags('peer_hydrate');
-        // Retry once if chrome_slot still missing (owner Shared may land mid-window).
-        $bags = \is_array($bagPrime['bags'] ?? null) ? $bagPrime['bags'] : [];
-        if (!\in_array('theme.layout_entity.chrome_slot_projection', $bags, true)) {
-            SchedulerSystem::yieldDelay(2000);
-            $bagPrime = $this->primeDeferredStorefrontHotCacheBags('peer_hydrate');
-        }
-        $this->logDeferredStorefrontWarmupStage('peer_bags_hydrated', [
-            'worker_id' => $workerId,
-            'delay_ms' => $delayMs,
-            'homepage_fpc' => ['ok' => (bool)$homepagePull['ok'], 'reason' => (string)$homepagePull['reason']],
-            'bag_prime' => $bagPrime,
-            'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-        ]);
-
-        // Peers must fill lang/currency-vary bags into Process L1.
-        // Owner-only locale/currency_bag_prime left Workers 2–4 cold
-        // (debug 8f7f40: /CNY/ ~1.5s, /en_US/ ~2.6s build_lock).
-        $this->runLocaleBagPrimeShards([]);
-        $this->runCurrencyBagPrimeShards();
-        // category_surface_prime stays owner-only: concurrent peer seal races
-        // Shared/build_lock (probe MISS thrash). Peers hydrate via Shared HIT.
-
-        if (\function_exists('w_log_info')) {
-            \w_log_info('[WlsRuntime] deferred storefront peer bag hydrate worker='
-                . $workerId
-                . ' seeded=' . (int)($bagPrime['seeded'] ?? 0)
-                . ' bags=' . \implode(',', \is_array($bagPrime['bags'] ?? null) ? $bagPrime['bags'] : [])
-                . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
-        }
-    }
-
-    /**
-     * Warm one bounded public storefront path in the elected Worker after READY.
-     *
-     * The provider is the single source of truth for public paths. This uses
-     * the normal FullPageCacheCoordinator build path so one Worker publishes
-     * the response and peers can hydrate their process cache from the shared
-     * payload instead of independently rendering the same page.
-     */
-    /**
-     * Critical storefront warmup paths.
-     *
-     * The runtime must not name a business route. `/` is structural; any other
-     * critical path comes from `wls.worker.storefront_critical_paths` or from
-     * the FPC provider's ordered paths (first non-locale path acts as the
-     * directory representative).
-     *
-     * @param array<string,string> $availablePaths
-     * @return list<string>
-     */
-    private function storefrontCriticalWarmupPaths(array $availablePaths = []): array
-    {
-        $critical = ['/'];
-        $configured = Env::get('wls.worker.storefront_critical_paths', []);
-        if (\is_string($configured)) {
-            $decoded = \json_decode($configured, true);
-            $configured = \is_array($decoded)
-                ? $decoded
-                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
-        }
-        if (\is_array($configured)) {
-            foreach ($configured as $path) {
-                if (!\is_scalar($path)) {
-                    continue;
-                }
-                $path = \trim((string)$path);
-                if ($path === '') {
-                    continue;
-                }
-                if ($path[0] !== '/') {
-                    $path = '/' . $path;
-                }
-                if (!\in_array($path, $critical, true)) {
-                    $critical[] = $path;
-                }
-            }
-        }
-        if (\count($critical) > 1) {
-            return $critical;
-        }
-        foreach ($availablePaths as $path => $_) {
-            $path = (string)$path;
-            $trimmed = \trim($path, '/');
-            if ($path === '/' || $trimmed === '') {
-                continue;
-            }
-            // Locale/currency roots and their prefixed homes stay on the
-            // locale ledger; they are not the directory representative.
-            if (\preg_match('/^(?:[A-Z]{3}\/)?[a-z]{2}(?:_[A-Z][A-Za-z]+){1,2}$/', $trimmed) === 1) {
-                continue;
-            }
-            $critical[] = $path;
-            break;
-        }
-
-        return $critical;
-    }
-
-    /**
-     * @param array<string,string> $availablePaths
-     */
-    private function isStorefrontCriticalWarmupPath(string $path, array $availablePaths = []): bool
-    {
-        return \in_array($path, $this->storefrontCriticalWarmupPaths($availablePaths), true);
-    }
-
-    private function runDeferredStorefrontCriticalWarmup(): void
-    {
-        $startedAt = \microtime(true);
-        $paths = [];
-        // Homepage READY gate defaults to fail-open and skips in-process `/` prime.
-        // Deferred warmup used to exclude `/` under the assumption READY owned it,
-        // which left every Worker cold for the first anonymous homepage SSR.
-        $homepageProofHit = \is_array($this->readyGateHomepageFpcProof)
-            && (bool)($this->readyGateHomepageFpcProof['hit'] ?? false);
-        $needsCriticalPrime = $this->isHomepageReadyGateFailOpen() || !$homepageProofHit;
-        if ($needsCriticalPrime) {
-            // Force the configured critical slots so Shared HotCache/FPC exist
-            // before the first public/probe MISS. Business paths never come
-            // from this orchestrator; they come from the provider or env.
-            foreach ($this->storefrontCriticalWarmupPaths() as $criticalPath) {
-                $paths[$criticalPath] = $criticalPath;
-            }
-        }
-        // Prefer raw provider paths with normalizeInternalWarmupPath so locale
-        // homes keep their trailing slash (`/ar_SA/` → FPC key). Drop paths that
-        // Language and currency prefixes are served in place. Do not drop them
-        // as if App would 301-strip them.
-        try {
-            $warmup = $this->runtimeProvider(FpcWarmupProviderInterface::class);
-            if ($warmup instanceof FpcWarmupProviderInterface) {
-                foreach ($warmup->warmupPaths() as $rawPath) {
-                    $path = $this->filterDeferredStorefrontWarmupPath((string)$rawPath);
-                    if ($path === null || $path === '' || $path === '/') {
-                        continue;
-                    }
-                    $paths[$path] = $path;
-                }
-            }
-        } catch (\Throwable) {
-            foreach ($this->readyGateDynamicCriticalWarmupPaths() as $path) {
-                $path = $this->filterDeferredStorefrontWarmupPath((string)$path);
-                if ($path === null || $path === '' || $path === '/') {
-                    continue;
-                }
-                $paths[$path] = $path;
-            }
-        }
-        // Hot-path reserve: `/` + Provider-declared directory representative
-        // take slots before locale homes (public_origin Host already selected
-        // below). Locale extras fill the remaining max_paths budget only.
-        $critical = [];
-        foreach ($this->storefrontCriticalWarmupPaths($paths) as $criticalPath) {
-            if (isset($paths[$criticalPath])) {
-                $critical[$criticalPath] = $paths[$criticalPath];
-            }
-        }
-        $localeExtras = [];
-        foreach ($paths as $path => $value) {
-            $path = (string)$path;
-            if ($path === '' || isset($critical[$path])) {
-                continue;
-            }
-            $localeExtras[$path] = $value;
-        }
-        // Keep `/` plus locale homes + catalog representatives. Default was 1,
-        // which let homepage fail-open steal the only slot and left catalog cold
-        // (debug 70285b: logged-in wait_miss on /products while `/` was warm).
-        $maxPaths = (int)(Env::get('wls.worker.storefront_deferred_warmup_max_paths', 6) ?: 6);
-        $budget = \max(1, \min(8, $maxPaths));
-        $criticalList = \array_values($critical);
-        $localeBudget = \max(0, $budget - \count($criticalList));
-        // wls-perf A+B (architect msg-5): fail-open near-virgin window hard-seals
-        // localeBudget=0 so `/`+`/products` seal first; Provider may still declare
-        // locale paths — extras stay on the deferred ledger (not deleted).
-        // P7 B′: localeIdleBudget is env-gated (default 0) and MUST NOT inherit
-        // max_paths−critical — multi-locale full HTML SSR is out of mandatory wall clock.
-        $localeIdleRaw = Env::get('wls.worker.storefront_locale_idle_budget', null);
-        if ($localeIdleRaw === null || $localeIdleRaw === '') {
-            $localeIdleRaw = Env::get('storefront_locale_idle_budget', 0);
-        }
-        $localeIdleBudget = \max(0, \min(8, (int)$localeIdleRaw));
-        // Always retain Provider-declared extras for begin.log locale_deferred_paths.
-        $localeDeferred = \array_values($localeExtras);
-        if ($needsCriticalPrime) {
-            $localeBudget = 0;
-        } else {
-            // B′: non-near-virgin also must not default multi-locale SSR into wall clock.
-            $localeBudget = 0;
-        }
-        $localeList = \array_slice(\array_values($localeExtras), 0, $localeBudget);
-        $paths = \array_merge($criticalList, $localeList);
-        if ($paths === [] && $criticalList === [] && $localeDeferred === []) {
-            $this->logDeferredStorefrontWarmupStage('skipped', [
-                'reason' => 'no-provider-path',
-                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-            ]);
-            return;
-        }
-
-        $hosts = $this->resolveProcessLocalDynamicWarmupHosts();
-        $this->logDeferredStorefrontWarmupStage('begin', [
-            'paths' => $paths === [] ? $criticalList : $paths,
-            'critical_paths' => $criticalList,
-            'locale_paths' => $localeList,
-            'locale_deferred_paths' => $localeDeferred,
-            'locale_budget_near_virgin' => $localeBudget,
-            'locale_idle_budget' => $localeIdleBudget,
-            'hosts' => $hosts,
-            'max_paths' => $maxPaths,
-            'needs_critical_prime' => $needsCriticalPrime,
-        ]);
-
-        // wave8-8c3 + perf A: prime light/peek bags BEFORE critical FPC seal.
-        // Product pre_critical is Shared peek-only (禁冷 publishedOffers(1000)).
-        $bagPrimePre = $this->primeDeferredStorefrontHotCacheBags('pre_critical');
-
-        // Phase A: seal `/` + `/products` (and adopt) before any locale SSR so
-        // Process/Shared stock exists for the first public/probe cold window.
-        $resultCritical = $criticalList === []
-            ? ['warmed' => 0, 'failed' => 0, 'errors' => [], 'samples' => [], 'elapsed_ms' => 0.0]
-            : $this->runStorefrontFpcWarmupInternal($criticalList, $hosts);
-        $this->retouchDeferredCriticalProcessL1($hosts, $criticalList);
-        // Retouch bags after FPC SSR / PostResponse chrome seeds.
-        $bagPrimeCritical = $this->primeDeferredStorefrontHotCacheBags('critical');
-        $this->logDeferredStorefrontWarmupStage('critical_sealed', [
-            'paths' => $criticalList,
-            'hosts' => $hosts,
-            'warmed' => (int)($resultCritical['warmed'] ?? 0),
-            'failed' => (int)($resultCritical['failed'] ?? 0),
-            'elapsed_ms' => (float)($resultCritical['elapsed_ms'] ?? 0.0),
-            'bag_prime_pre' => $bagPrimePre,
-            'bag_prime' => $bagPrimeCritical,
-            'samples' => \array_slice(
-                \is_array($resultCritical['samples'] ?? null) ? $resultCritical['samples'] : [],
-                0,
-                4
-            ),
-        ]);
-
-        // Heavy catalog bags only AFTER critical seal (out of first-request window).
-        // P5 O2: idle-gate so critical_sealed yields the event loop before long sync.
-        $idleGateHeavy = $this->awaitDeferredStorefrontIdleGate('post_critical_heavy');
-        $bagPrimeHeavy = $this->primeDeferredStorefrontHotCacheBags('post_critical_heavy');
-        $this->logDeferredStorefrontWarmupStage('post_critical_heavy', [
-            'bag_prime' => $bagPrimeHeavy,
-            'idle_gate' => $idleGateHeavy,
-            'elapsed_ms' => (float)($bagPrimeHeavy['elapsed_ms'] ?? 0.0),
-        ]);
-
-        // B′: locale full HTML SSR only when env budget>0 (idle-gate + begin).
-        // Default budget=0 → skip SSR, keep Provider deferred ledger, log skipped.
-        $localeIdleSkipped = false;
-        if ($localeList === [] && $localeDeferred !== [] && $localeIdleBudget > 0) {
-            $idleGateLocale = $this->awaitDeferredStorefrontIdleGate('locale_idle');
-            $localeList = \array_slice($localeDeferred, 0, $localeIdleBudget);
-            $paths = \array_merge($criticalList, $localeList);
-            $this->logDeferredStorefrontWarmupStage('locale_idle_begin', [
-                'locale_paths' => $localeList,
-                'locale_idle_budget' => $localeIdleBudget,
-                'deferred_count' => \count($localeDeferred),
-                'idle_gate' => $idleGateLocale,
-            ]);
-        } elseif ($localeDeferred !== [] && $localeIdleBudget <= 0) {
-            $localeIdleSkipped = true;
-            $this->logDeferredStorefrontWarmupStage('locale_idle_skipped', [
-                'deferred_count' => \count($localeDeferred),
-                'locale_idle_budget' => $localeIdleBudget,
-                'budget' => $localeIdleBudget,
-                'reason' => 'budget_zero',
-            ]);
-        }
-
-        // P8 O1 / UC-post-locale: only run locale FPC when list non-empty; track
-        // whether SSR actually executed so post_locale retouch is gated.
-        $localeSsrRan = $localeList !== [];
-        $resultLocale = $localeSsrRan
-            ? $this->runStorefrontFpcWarmupInternal($localeList, $hosts, true)
-            : ['warmed' => 0, 'failed' => 0, 'errors' => [], 'samples' => [], 'elapsed_ms' => 0.0];
-
-        // Retouch Process L1 bags only after locale extras may have evicted them.
-        // locale_idle_skipped / localeList empty → post_locale_skipped (禁同成本全量种袋).
-        if ($localeSsrRan) {
-            $bagPrimeFinal = $this->primeDeferredStorefrontHotCacheBags('post_locale');
-        } else {
-            $postLocaleSkipReason = $localeIdleSkipped ? 'locale_idle_skipped' : 'locale_ssr_not_run';
-            $bagPrimeFinal = [
-                'stage' => 'post_locale_skipped',
-                'reason' => $postLocaleSkipReason,
-                'post_response_drained' => 0,
-                'seeded' => 0,
-                'peeked' => 0,
-                'bags' => [],
-                'errors' => [],
-                'providers' => 0,
-                'in_request' => false,
-                'elapsed_ms' => 0.0,
-                'skipped' => true,
-            ];
-            $this->logDeferredStorefrontWarmupStage('post_locale_skipped', [
-                'reason' => $postLocaleSkipReason,
-                'locale_idle_budget' => $localeIdleBudget,
-                'deferred_count' => \count($localeDeferred),
-                'elapsed_ms' => 0.0,
-            ]);
-        }
-
-        $result = [
-            'warmed' => (int)($resultCritical['warmed'] ?? 0) + (int)($resultLocale['warmed'] ?? 0),
-            'failed' => (int)($resultCritical['failed'] ?? 0) + (int)($resultLocale['failed'] ?? 0),
-            'errors' => \array_slice(\array_merge(
-                \is_array($resultCritical['errors'] ?? null) ? $resultCritical['errors'] : [],
-                \is_array($resultLocale['errors'] ?? null) ? $resultLocale['errors'] : [],
-            ), 0, 8),
-            'samples' => \array_slice(\array_merge(
-                \is_array($resultCritical['samples'] ?? null) ? $resultCritical['samples'] : [],
-                \is_array($resultLocale['samples'] ?? null) ? $resultLocale['samples'] : [],
-            ), 0, 8),
-            'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-            'bag_prime_critical' => $bagPrimeCritical,
-            'bag_prime_heavy' => $bagPrimeHeavy,
-            'bag_prime_final' => $bagPrimeFinal,
-        ];
-
-        if ((int)($result['failed'] ?? 0) > 0) {
-            $this->logDeferredStorefrontWarmupStage('failed', [
-                'paths' => $paths,
-                'hosts' => $hosts,
-                'warmed' => (int)($result['warmed'] ?? 0),
-                'failed' => (int)($result['failed'] ?? 0),
-                'elapsed_ms' => (float)($result['elapsed_ms'] ?? 0.0),
-                'bag_prime_final' => $bagPrimeFinal,
-                'samples' => \array_slice(\is_array($result['samples'] ?? null) ? $result['samples'] : [], 0, 4),
-                'errors' => \array_slice(\is_array($result['errors'] ?? null) ? $result['errors'] : [], 0, 4),
-            ]);
-            if (\function_exists('w_log_warning')) {
-                \w_log_warning('[WlsRuntime] deferred storefront critical warmup incomplete: ' . \json_encode([
-                    'warmed' => (int)($result['warmed'] ?? 0),
-                    'failed' => (int)($result['failed'] ?? 0),
-                    'errors' => \array_slice(\is_array($result['errors'] ?? null) ? $result['errors'] : [], 0, 4),
-                    'hosts' => $hosts,
-                ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
-            }
-            $this->adoptDeferredHomepageWarmupProof($hosts, $result);
-            // Out of UC-deferred mandatory wall clock (done already logged above as failed).
-            // Same post-done bag/FPC primes as the success path — incomplete must not skip them.
-            $this->runLocaleBagPrimeShards($localeDeferred);
-            $this->runCurrencyBagPrimeShards();
-            $this->runCategorySurfaceFpcPrimeShards();
-            return;
-        }
-
-        $this->logDeferredStorefrontWarmupStage('done', [
-            'paths' => $paths,
-            'hosts' => $hosts,
-            'warmed' => (int)($result['warmed'] ?? 0),
-            'failed' => (int)($result['failed'] ?? 0),
-            'elapsed_ms' => (float)($result['elapsed_ms'] ?? 0.0),
-            'bag_prime_final' => $bagPrimeFinal,
-            'samples' => \array_slice(\is_array($result['samples'] ?? null) ? $result['samples'] : [], 0, 4),
-        ]);
-        $this->adoptDeferredHomepageWarmupProof($hosts, $result);
-
-        if (\function_exists('w_log_info')) {
-            \w_log_info('[WlsRuntime] deferred storefront critical warmup done warmed='
-                . (int)($result['warmed'] ?? 0)
-                . ' elapsed_ms=' . (float)($result['elapsed_ms'] ?? 0.0)
-                . ' bags_seeded=' . (int)($bagPrimeFinal['seeded'] ?? 0));
-        }
-
-        // locale_bag_prime: WebsiteLanguage × primary currency light bags ONLY.
-        // Must run AFTER done so UC-deferred done≤5s wall clock excludes this stage.
-        // Never full×locales; never bind post_locale SSR; Fiber yield between shards.
-        $this->runLocaleBagPrimeShards($localeDeferred);
-        // currency_bag_prime: primary language × non-default enabled currencies
-        // (chrome + product_card_html vary currency — cold /CNY/ evidence 8f7f40).
-        $this->runCurrencyBagPrimeShards();
-        // category_surface_prime: top /category/** FPC seal (own budget).
-        // Evidence 8f7f40: category MISS 1–2.9s vs HIT ~0.2–0.5s; critical
-        // warmup only seals `/`+`/products` (localeBudget=0 drops provider extras).
-        $this->runCategorySurfaceFpcPrimeShards();
-        // Idle P2–P4 (product / policy / blog long-tail) after category surface.
-        // Wait for quiet window so crawler pressure does not starve workers.
-        $this->runIdleRankFpcPrimeShards();
-    }
-
-    /**
-     * Deferred bag/category prime fallbacks.
-     *
-     * When Worker memory_limit ≤512MiB (typical ~3.5Gi hosts with 512M×2), tighten
-     * defaults so locale/currency/category prime + phrase prefetch cannot push RSS
-     * into FileAdapter / memory_pressure thrash under crawler load.
-     * Explicit env keys still win; this only supplies the null-default path.
-     *
-     * @return array{
-     *   locale_max:int,
-     *   locale_elapsed_ms:int,
-     *   currency_max:int,
-     *   currency_elapsed_ms:int,
-     *   category_max_paths:int,
-     *   category_elapsed_ms:int,
-     *   worker_memory_mb:int,
-     *   tight:bool
-     * }
-     */
-    private function resolveStorefrontDeferredPrimeBudgetDefaults(): array
-    {
-        $mb = $this->resolveWorkerMemoryLimitMbForWarmupBudget();
-        $tight = ($mb > 0 && $mb <= 512);
-        if ($tight) {
-            return [
-                'locale_max' => 2,
-                'locale_elapsed_ms' => 2500,
-                'currency_max' => 1,
-                'currency_elapsed_ms' => 1500,
-                'category_max_paths' => 2,
-                'category_elapsed_ms' => 8000,
-                'worker_memory_mb' => $mb,
-                'tight' => true,
-            ];
-        }
-
-        return [
-            'locale_max' => 8,
-            'locale_elapsed_ms' => 8000,
-            'currency_max' => 4,
-            'currency_elapsed_ms' => 6000,
-            'category_max_paths' => 8,
-            'category_elapsed_ms' => 20000,
-            'worker_memory_mb' => $mb,
-            'tight' => false,
-        ];
-    }
-
-    private function resolveWorkerMemoryLimitMbForWarmupBudget(): int
-    {
-        $candidates = [
-            (string)Env::get('wls.worker_memory_limit', ''),
-            (string)(\getenv('WLS_WORKER_MEMORY_LIMIT') ?: ''),
-            (string)\ini_get('memory_limit'),
-        ];
-        foreach ($candidates as $raw) {
-            $mb = $this->parsePhpMemoryLimitToMb($raw);
-            if ($mb > 0) {
-                return $mb;
-            }
-        }
-
-        return 0;
-    }
-
-    private function parsePhpMemoryLimitToMb(string $limit): int
-    {
-        $limit = \trim($limit);
-        if ($limit === '' || $limit === '-1') {
-            return 0;
-        }
-        if (!\preg_match('/^(\d+)\s*([KMG])?$/i', $limit, $m)) {
-            return 0;
-        }
-        $n = (int)$m[1];
-        $u = \strtoupper((string)($m[2] ?? ''));
-
-        return match ($u) {
-            'G' => $n * 1024,
-            'M' => $n,
-            'K' => \max(1, (int)\intdiv($n, 1024)),
-            default => \max(1, (int)\intdiv($n, 1024 * 1024)),
-        };
-    }
-
-    /**
-     * After UC-deferred `done`: prime homepage critical allowlist bags for enabled
-     * non-default locales × primary currency. Out of mandatory wall clock.
-     * Fail-open; never full×locales; never locale HTML SSR; Fiber yield between shards.
-     *
-     * @param list<string> $preferredLocalePaths Provider locale_deferred_paths (e.g. /ru_RU/)
-     */
-    private function runLocaleBagPrimeShards(array $preferredLocalePaths = []): void
-    {
-        $startedAt = \microtime(true);
-        $scopes = $this->resolveDeferredWarmupWebsiteScopes();
-
-        $primeBudget = $this->resolveStorefrontDeferredPrimeBudgetDefaults();
-        $maxLocalesRaw = Env::get('wls.worker.storefront_locale_bag_prime_max_locales', null);
-        if ($maxLocalesRaw === null || $maxLocalesRaw === '') {
-            $maxLocalesRaw = Env::get(
-                'storefront_locale_bag_prime_max_locales',
-                $primeBudget['locale_max']
-            );
-        }
-        $maxLocales = \max(0, \min(16, (int)$maxLocalesRaw));
-
-        $elapsedCapRaw = Env::get('wls.worker.storefront_locale_bag_prime_elapsed_cap_ms', null);
-        if ($elapsedCapRaw === null || $elapsedCapRaw === '') {
-            $elapsedCapRaw = Env::get(
-                'storefront_locale_bag_prime_elapsed_cap_ms',
-                $primeBudget['locale_elapsed_ms']
-            );
-        }
-        $elapsedCapMs = \max(500, \min(60000, (int)$elapsedCapRaw));
-
-        if ($maxLocales <= 0) {
-            $this->logDeferredStorefrontWarmupStage('locale_bag_prime_skipped', [
-                'reason' => 'max_locales_zero',
-                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-            ]);
-
-            return;
-        }
-
-        $items = [];
-        $allLocales = [];
-        foreach ($scopes as $scope) {
-            $defaultLanguage = $this->normalizeDeferredWarmupLocaleCode((string)($scope['default_language'] ?? ''));
-            $currency = \trim((string)($scope['default_currency'] ?? ''));
-            $targets = [];
-            foreach ($preferredLocalePaths as $rawPath) {
-                $locale = $this->extractLocaleCodeFromWarmupPath((string)$rawPath);
-                $normalized = $this->normalizeDeferredWarmupLocaleCode($locale);
-                if ($normalized === '' || ($defaultLanguage !== '' && $normalized === $defaultLanguage)) {
-                    continue;
-                }
-                $enabledOnScope = false;
-                foreach ($scope['language_codes'] as $code) {
-                    if ($this->normalizeDeferredWarmupLocaleCode((string)$code) === $normalized) {
-                        $targets[$normalized] = (string)$code;
-                        $enabledOnScope = true;
-                        break;
-                    }
-                }
-                if (!$enabledOnScope && $locale !== '') {
-                    // Provider path may name a locale not yet listed — still try once.
-                    $targets[$normalized] = $locale;
-                }
-                if (\count($targets) >= $maxLocales) {
-                    break;
-                }
-            }
-            if (\count($targets) < $maxLocales) {
-                $enabled = [];
-                foreach ($scope['language_codes'] as $locale) {
-                    $normalized = $this->normalizeDeferredWarmupLocaleCode((string)$locale);
-                    if ($normalized === '' || ($defaultLanguage !== '' && $normalized === $defaultLanguage)) {
-                        continue;
-                    }
-                    $enabled[$normalized] = (string)$locale;
-                }
-                $priority = [
-                    'en_us', 'ru_ru', 'es_es', 'fr_fr', 'de_de', 'ja_jp', 'pt_br', 'ar_sa',
-                    'ko_kr', 'it_it', 'zh_hant_tw', 'zh_hant_hk',
-                ];
-                foreach ($priority as $normalized) {
-                    if (!isset($enabled[$normalized]) || isset($targets[$normalized])) {
-                        continue;
-                    }
-                    $targets[$normalized] = $enabled[$normalized];
-                    if (\count($targets) >= $maxLocales) {
-                        break;
-                    }
-                }
-                if (\count($targets) < $maxLocales) {
-                    foreach ($enabled as $normalized => $locale) {
-                        if (isset($targets[$normalized])) {
-                            continue;
-                        }
-                        $targets[$normalized] = $locale;
-                        if (\count($targets) >= $maxLocales) {
-                            break;
-                        }
-                    }
-                }
-            }
-            foreach ($targets as $locale) {
-                $items[] = [
-                    'website_id' => (int)$scope['website_id'],
-                    'host' => (string)$scope['host'],
-                    'locale' => (string)$locale,
-                    'currency' => $currency,
-                ];
-                $allLocales[$this->normalizeDeferredWarmupLocaleCode((string)$locale)] = (string)$locale;
-            }
-        }
-
-        if ($items === []) {
-            $this->logDeferredStorefrontWarmupStage('locale_bag_prime_skipped', [
-                'reason' => 'no_extra_locales',
-                'scopes_count' => \count($scopes),
-                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-            ]);
-
-            return;
-        }
-
-        $this->logDeferredStorefrontWarmupStage('locale_bag_prime', [
-            'items' => \array_map(static fn(array $i): array => [
-                'website_id' => $i['website_id'],
-                'host' => $i['host'],
-                'locale' => $i['locale'],
-                'currency' => $i['currency'],
-            ], $items),
-            'scopes_count' => \count($scopes),
-            'max_locales' => $maxLocales,
-            'elapsed_cap_ms' => $elapsedCapMs,
-        ]);
-
-        $bounded = $this->runBoundedDeferredPrimeShards(
-            'locale_bag_prime',
-            $items,
-            $elapsedCapMs,
-            15,
-            function (array $item): array {
-                $prime = $this->primeDeferredStorefrontHotCacheBags(
-                    'locale_bag_prime',
-                    (string)$item['locale'],
-                    (string)$item['currency'],
-                    (string)$item['host'],
-                    (int)$item['website_id'],
-                );
-                $errors = [];
-                foreach (\is_array($prime['errors'] ?? null) ? $prime['errors'] : [] as $error) {
-                    $errors[] = (string)$item['website_id'] . ':' . (string)$item['locale'] . ':' . (string)$error;
-                }
-
-                return [
-                    'sample' => [
-                        'website_id' => (int)$item['website_id'],
-                        'host' => (string)$item['host'],
-                        'locale' => (string)$item['locale'],
-                        'currency' => (string)$item['currency'],
-                        'seeded' => (int)($prime['seeded'] ?? 0),
-                        'peeked' => (int)($prime['peeked'] ?? 0),
-                        'bags' => \array_slice(
-                            \is_array($prime['bags'] ?? null) ? $prime['bags'] : [],
-                            0,
-                            12
-                        ),
-                        'elapsed_ms' => (float)($prime['elapsed_ms'] ?? 0.0),
-                    ],
-                    'errors' => $errors,
-                ];
-            },
-        );
-
-        $aux = $this->primeDeferredLocalePhraseAndSwitcher(\array_values($allLocales));
-
-        $this->logDeferredStorefrontWarmupStage(
-            !empty($bounded['truncated']) ? 'locale_bag_prime_truncated' : 'locale_bag_prime_done',
-            [
-                'scopes_count' => \count($scopes),
-                'seeded_locales' => $bounded['samples'],
-                'seeded_count' => \count($bounded['samples']),
-                'truncated' => (bool)$bounded['truncated'],
-                'errors' => \array_slice($bounded['errors'], 0, 8),
-                'elapsed_ms' => (float)$bounded['elapsed_ms'],
-                'elapsed_cap_ms' => $elapsedCapMs,
-                'phrase_prime' => $aux['phrase'] ?? [],
-                'switcher_prime' => $aux['switcher'] ?? [],
-            ]
-        );
-    }
-
-    /**
-     * Cold-locale P1/P2 after HotCache bags: chrome phrase Shared + LanguageSwitcher catalog.
-     * Fail-open; no N× hook prefetch; catalog never includes URL.
-     *
-     * @param list<string> $locales
-     * @return array{phrase:array<string,mixed>,switcher:array<string,mixed>}
-     */
-    private function primeDeferredLocalePhraseAndSwitcher(array $locales): array
-    {
-        $phrase = [
-            'locales' => $locales,
-            'modules' => 0,
-            'ok' => false,
-            'error' => '',
-        ];
-        $switcher = [
-            'locales' => $locales,
-            'ok' => false,
-            'error' => '',
-        ];
-        if ($locales === []) {
-            return ['phrase' => $phrase, 'switcher' => $switcher];
-        }
-
-        try {
-            $modules = \Weline\Framework\Phrase\PageDictionaryPrefetchCoordinator::resolveStorefrontChromeModules();
-            $phrase['modules'] = \count($modules);
-            \Weline\Framework\Phrase\Parser::prefetchGlobalDictionaryModulesForLocales($modules, $locales);
-            $phrase['ok'] = true;
-            $this->logDeferredStorefrontWarmupStage('locale_phrase_prime', [
-                'locales' => $locales,
-                'modules' => $modules,
-                'module_count' => \count($modules),
-            ]);
-        } catch (\Throwable $e) {
-            $phrase['error'] = $e->getMessage();
-            $this->logDeferredStorefrontWarmupStage('locale_phrase_prime', [
-                'locales' => $locales,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        try {
-            SchedulerSystem::yieldDelay(15);
-        } catch (\Throwable) {
-        }
-
-        try {
-            if (\class_exists(\Weline\I18n\Taglib\LanguageSwitcher::class)) {
-                \Weline\I18n\Taglib\LanguageSwitcher::warmStorefrontCatalogCaches($locales);
-                $switcher['ok'] = true;
-            } else {
-                $switcher['error'] = 'LanguageSwitcher_missing';
-            }
-            $this->logDeferredStorefrontWarmupStage('locale_switcher_catalog_prime', [
-                'locales' => $locales,
-                'ok' => $switcher['ok'],
-                'error' => $switcher['error'],
-            ]);
-        } catch (\Throwable $e) {
-            $switcher['error'] = $e->getMessage();
-            $this->logDeferredStorefrontWarmupStage('locale_switcher_catalog_prime', [
-                'locales' => $locales,
-                'ok' => false,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        return ['phrase' => $phrase, 'switcher' => $switcher];
-    }
-
-    /**
-     * After locale_bag_prime: prime homepage critical bags for primary language ×
-     * each non-default enabled website currency (cap). Out of UC-deferred wall clock.
-     * Targets currency-vary HotCache (theme.storefront_chrome / product_card_html).
-     */
-    private function runCurrencyBagPrimeShards(): void
-    {
-        $startedAt = \microtime(true);
-        $scopes = $this->resolveDeferredWarmupWebsiteScopes();
-
-        $primeBudget = $this->resolveStorefrontDeferredPrimeBudgetDefaults();
-        $maxCurrenciesRaw = Env::get('wls.worker.storefront_currency_bag_prime_max_currencies', null);
-        if ($maxCurrenciesRaw === null || $maxCurrenciesRaw === '') {
-            $maxCurrenciesRaw = Env::get(
-                'storefront_currency_bag_prime_max_currencies',
-                $primeBudget['currency_max']
-            );
-        }
-        $maxCurrencies = \max(0, \min(8, (int)$maxCurrenciesRaw));
-
-        $elapsedCapRaw = Env::get('wls.worker.storefront_currency_bag_prime_elapsed_cap_ms', null);
-        if ($elapsedCapRaw === null || $elapsedCapRaw === '') {
-            $elapsedCapRaw = Env::get(
-                'storefront_currency_bag_prime_elapsed_cap_ms',
-                $primeBudget['currency_elapsed_ms']
-            );
-        }
-        $elapsedCapMs = \max(500, \min(60000, (int)$elapsedCapRaw));
-
-        if ($maxCurrencies <= 0) {
-            $this->logDeferredStorefrontWarmupStage('currency_bag_prime_skipped', [
-                'reason' => 'max_currencies_zero',
-                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-            ]);
-
-            return;
-        }
-
-        $items = [];
-        foreach ($scopes as $scope) {
-            $defaultLanguage = \trim((string)($scope['default_language'] ?? ''));
-            $defaultCurrency = \strtoupper(\trim((string)($scope['default_currency'] ?? '')));
-            if ($defaultLanguage === '') {
-                continue;
-            }
-            $targets = [];
-            foreach ($scope['currency_codes'] as $code) {
-                $normalized = \strtoupper(\trim((string)$code));
-                if ($normalized === '' || ($defaultCurrency !== '' && $normalized === $defaultCurrency)) {
-                    continue;
-                }
-                $targets[$normalized] = $normalized;
-                if (\count($targets) >= $maxCurrencies) {
-                    break;
-                }
-            }
-            if ($targets === []) {
-                continue;
-            }
-            $languages = [];
-            $languages[$this->normalizeDeferredWarmupLocaleCode($defaultLanguage)] = $defaultLanguage;
-            foreach (['en_US', 'ru_RU', 'es_ES'] as $extraLang) {
-                $normalized = $this->normalizeDeferredWarmupLocaleCode($extraLang);
-                if ($normalized === '' || isset($languages[$normalized])) {
-                    continue;
-                }
-                foreach ($scope['language_codes'] as $code) {
-                    if ($this->normalizeDeferredWarmupLocaleCode((string)$code) === $normalized) {
-                        $languages[$normalized] = (string)$code;
-                        break;
-                    }
-                }
-                if (\count($languages) >= 3) {
-                    break;
-                }
-            }
-            foreach (\array_values($languages) as $language) {
-                foreach (\array_values($targets) as $currency) {
-                    $items[] = [
-                        'website_id' => (int)$scope['website_id'],
-                        'host' => (string)$scope['host'],
-                        'language' => (string)$language,
-                        'currency' => (string)$currency,
-                    ];
-                }
-            }
-        }
-
-        if ($items === []) {
-            $this->logDeferredStorefrontWarmupStage('currency_bag_prime_skipped', [
-                'reason' => 'no_extra_currencies',
-                'scopes_count' => \count($scopes),
-                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-            ]);
-
-            return;
-        }
-
-        $this->logDeferredStorefrontWarmupStage('currency_bag_prime', [
-            'items' => \array_map(static fn(array $i): array => [
-                'website_id' => $i['website_id'],
-                'host' => $i['host'],
-                'language' => $i['language'],
-                'currency' => $i['currency'],
-            ], $items),
-            'scopes_count' => \count($scopes),
-            'max_currencies' => $maxCurrencies,
-            'elapsed_cap_ms' => $elapsedCapMs,
-        ]);
-
-        $bounded = $this->runBoundedDeferredPrimeShards(
-            'currency_bag_prime',
-            $items,
-            $elapsedCapMs,
-            15,
-            function (array $item): array {
-                $prime = $this->primeDeferredStorefrontHotCacheBags(
-                    'currency_bag_prime',
-                    (string)$item['language'],
-                    (string)$item['currency'],
-                    (string)$item['host'],
-                    (int)$item['website_id'],
-                );
-                $errors = [];
-                foreach (\is_array($prime['errors'] ?? null) ? $prime['errors'] : [] as $error) {
-                    $errors[] = (string)$item['website_id'] . ':'
-                        . (string)$item['language'] . '/' . (string)$item['currency'] . ':' . (string)$error;
-                }
-
-                return [
-                    'sample' => [
-                        'website_id' => (int)$item['website_id'],
-                        'host' => (string)$item['host'],
-                        'currency' => (string)$item['currency'],
-                        'language' => (string)$item['language'],
-                        'seeded' => (int)($prime['seeded'] ?? 0),
-                        'peeked' => (int)($prime['peeked'] ?? 0),
-                        'bags' => \array_slice(
-                            \is_array($prime['bags'] ?? null) ? $prime['bags'] : [],
-                            0,
-                            12
-                        ),
-                        'elapsed_ms' => (float)($prime['elapsed_ms'] ?? 0.0),
-                    ],
-                    'errors' => $errors,
-                ];
-            },
-        );
-
-        $this->logDeferredStorefrontWarmupStage(
-            !empty($bounded['truncated']) ? 'currency_bag_prime_truncated' : 'currency_bag_prime_done',
-            [
-                'scopes_count' => \count($scopes),
-                'seeded_currencies' => $bounded['samples'],
-                'seeded_count' => \count($bounded['samples']),
-                'truncated' => (bool)$bounded['truncated'],
-                'errors' => \array_slice($bounded['errors'], 0, 8),
-                'elapsed_ms' => (float)$bounded['elapsed_ms'],
-                'elapsed_cap_ms' => $elapsedCapMs,
-            ]
-        );
-    }
-
-    /**
-     * After currency_bag_prime: seal a bounded set of anonymous `/categories` +
-     * `/category/**` FPC surfaces (own max_paths + elapsed cap). Out of
-     * UC-deferred wall clock. Fail-open; Fiber yield between paths.
-     */
-    private function runCategorySurfaceFpcPrimeShards(): void
-    {
-        $startedAt = \microtime(true);
-
-        $primeBudget = $this->resolveStorefrontDeferredPrimeBudgetDefaults();
-        $maxPathsRaw = Env::get('wls.worker.storefront_category_surface_prime_max_paths', null);
-        if ($maxPathsRaw === null || $maxPathsRaw === '') {
-            $maxPathsRaw = Env::get(
-                'storefront_category_surface_prime_max_paths',
-                $primeBudget['category_max_paths']
-            );
-        }
-        $maxPaths = \max(0, \min(16, (int)$maxPathsRaw));
-
-        $elapsedCapRaw = Env::get('wls.worker.storefront_category_surface_prime_elapsed_cap_ms', null);
-        if ($elapsedCapRaw === null || $elapsedCapRaw === '') {
-            $elapsedCapRaw = Env::get(
-                'storefront_category_surface_prime_elapsed_cap_ms',
-                $primeBudget['category_elapsed_ms']
-            );
-        }
-        $elapsedCapMs = \max(1000, \min(120000, (int)$elapsedCapRaw));
-
-        if ($maxPaths <= 0) {
-            $this->logDeferredStorefrontWarmupStage('category_surface_prime_skipped', [
-                'reason' => 'max_paths_zero',
-                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-            ]);
-
-            return;
-        }
-
-        $scopes = $this->resolveDeferredWarmupWebsiteScopes();
-        $scopeCount = \max(1, \count($scopes));
-        $pathsPerScope = \max(1, (int)\intdiv($maxPaths, $scopeCount));
-        $items = [];
-        foreach ($scopes as $scope) {
-            $paths = $this->resolveCategorySurfaceWarmupPaths($pathsPerScope, (int)$scope['website_id']);
-            foreach ($paths as $path) {
-                $items[] = [
-                    'website_id' => (int)$scope['website_id'],
-                    'host' => (string)$scope['host'],
-                    'path' => (string)$path,
-                ];
-            }
-        }
-        if ($items === []) {
-            $this->logDeferredStorefrontWarmupStage('category_surface_prime_skipped', [
-                'reason' => 'no_category_paths',
-                'scopes_count' => \count($scopes),
-                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-            ]);
-
-            return;
-        }
-
-        $this->logDeferredStorefrontWarmupStage('category_surface_prime', [
-            'items' => $items,
-            'scopes_count' => \count($scopes),
-            'max_paths' => $maxPaths,
-            'paths_per_scope' => $pathsPerScope,
-            'elapsed_cap_ms' => $elapsedCapMs,
-        ]);
-
-        $warmed = 0;
-        $failed = 0;
-        $bounded = $this->runBoundedDeferredPrimeShards(
-            'category_surface_prime',
-            $items,
-            $elapsedCapMs,
-            20,
-            function (array $item) use (&$warmed, &$failed): array {
-                $host = \trim((string)$item['host']);
-                $hosts = $host !== '' ? [$host] : $this->resolveProcessLocalDynamicWarmupHosts();
-                $result = $this->runStorefrontFpcWarmupInternal([(string)$item['path']], $hosts, true);
-                $warmed += (int)($result['warmed'] ?? 0);
-                $failed += (int)($result['failed'] ?? 0);
-                $errors = [];
-                foreach (\is_array($result['errors'] ?? null) ? $result['errors'] : [] as $error) {
-                    $errors[] = (string)$item['website_id'] . ':' . (string)$item['path'] . ':' . (string)$error;
-                }
-                $sample = null;
-                foreach (\is_array($result['samples'] ?? null) ? $result['samples'] : [] as $row) {
-                    if (\is_array($row)) {
-                        $sample = $row + [
-                            'website_id' => (int)$item['website_id'],
-                            'host' => (string)$item['host'],
-                            'path' => (string)$item['path'],
-                        ];
-                        break;
-                    }
-                }
-                if ($sample === null) {
-                    $sample = [
-                        'website_id' => (int)$item['website_id'],
-                        'host' => (string)$item['host'],
-                        'path' => (string)$item['path'],
-                        'warmed' => (int)($result['warmed'] ?? 0),
-                        'failed' => (int)($result['failed'] ?? 0),
-                    ];
-                }
-
-                return ['sample' => $sample, 'errors' => $errors];
-            },
-        );
-
-        $this->logDeferredStorefrontWarmupStage(
-            !empty($bounded['truncated']) ? 'category_surface_prime_truncated' : 'category_surface_prime_done',
-            [
-                'scopes_count' => \count($scopes),
-                'warmed' => $warmed,
-                'failed' => $failed,
-                'attempted' => (int)$bounded['attempted'],
-                'truncated' => (bool)$bounded['truncated'],
-                'errors' => \array_slice($bounded['errors'], 0, 8),
-                'samples' => \array_slice($bounded['samples'], 0, 8),
-                'elapsed_ms' => (float)$bounded['elapsed_ms'],
-                'elapsed_cap_ms' => $elapsedCapMs,
-            ]
-        );
-    }
-
-    /**
-     * Idle deferred FPC for provider ranks P2–P4 (products, policy, blog/long-tail).
-     * P0 critical + P1 category_surface already ran; this fills the long tail when quiet.
-     */
-    private function runIdleRankFpcPrimeShards(): void
-    {
-        $startedAt = \microtime(true);
-        $enabledRaw = Env::get('wls.worker.storefront_idle_rank_warmup_enabled', null);
-        if ($enabledRaw === null || $enabledRaw === '') {
-            $enabledRaw = Env::get('storefront_idle_rank_warmup_enabled', 1);
-        }
-        if (!(bool)(int)$enabledRaw) {
-            $this->logDeferredStorefrontWarmupStage('idle_rank_prime_skipped', [
-                'reason' => 'disabled',
-                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-            ]);
-
-            return;
-        }
-
-        $maxPathsRaw = Env::get('wls.worker.storefront_idle_rank_warmup_max_paths', null);
-        if ($maxPathsRaw === null || $maxPathsRaw === '') {
-            $maxPathsRaw = Env::get('storefront_idle_rank_warmup_max_paths', 8);
-        }
-        $maxPaths = \max(0, \min(24, (int)$maxPathsRaw));
-        $minRank = \max(1, \min(4, (int)(Env::get('wls.worker.storefront_idle_rank_warmup_min', 2) ?: 2)));
-        $maxRank = \max($minRank, \min(4, (int)(Env::get('wls.worker.storefront_idle_rank_warmup_max', 4) ?: 4)));
-        $elapsedCapRaw = Env::get('wls.worker.storefront_idle_rank_warmup_elapsed_cap_ms', null);
-        if ($elapsedCapRaw === null || $elapsedCapRaw === '') {
-            $elapsedCapRaw = Env::get('storefront_idle_rank_warmup_elapsed_cap_ms', 30000);
-        }
-        $elapsedCapMs = \max(1000, \min(180000, (int)$elapsedCapRaw));
-
-        if ($maxPaths <= 0) {
-            $this->logDeferredStorefrontWarmupStage('idle_rank_prime_skipped', [
-                'reason' => 'max_paths_zero',
-                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-            ]);
-
-            return;
-        }
-
-        $idleGate = $this->awaitDeferredStorefrontIdleGate('idle_rank');
-        $paths = $this->resolveIdleRankWarmupPaths($maxPaths, $minRank, $maxRank);
-        if ($paths === []) {
-            $this->logDeferredStorefrontWarmupStage('idle_rank_prime_skipped', [
-                'reason' => 'no_paths',
-                'min_rank' => $minRank,
-                'max_rank' => $maxRank,
-                'idle_gate' => $idleGate,
-                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-            ]);
-
-            return;
-        }
-
-        $hosts = $this->resolveProcessLocalDynamicWarmupHosts();
-        $items = [];
-        foreach ($paths as $path) {
-            $items[] = ['path' => $path, 'host' => (string)($hosts[0] ?? '127.0.0.1')];
-        }
-
-        $this->logDeferredStorefrontWarmupStage('idle_rank_prime', [
-            'paths' => $paths,
-            'min_rank' => $minRank,
-            'max_rank' => $maxRank,
-            'max_paths' => $maxPaths,
-            'elapsed_cap_ms' => $elapsedCapMs,
-            'idle_gate' => $idleGate,
-            'hosts' => $hosts,
-        ]);
-
-        $warmed = 0;
-        $failed = 0;
-        $bounded = $this->runBoundedDeferredPrimeShards(
-            'idle_rank_prime',
-            $items,
-            $elapsedCapMs,
-            30,
-            function (array $item) use (&$warmed, &$failed, $hosts): array {
-                // Yield between paths so busy crawlers can reclaim the event loop.
-                $gate = $this->awaitDeferredStorefrontIdleGate('idle_rank_path');
-                $result = $this->runStorefrontFpcWarmupInternal([(string)$item['path']], $hosts, true);
-                $warmed += (int)($result['warmed'] ?? 0);
-                $failed += (int)($result['failed'] ?? 0);
-                $errors = [];
-                foreach (\is_array($result['errors'] ?? null) ? $result['errors'] : [] as $error) {
-                    $errors[] = (string)$item['path'] . ':' . (string)$error;
-                }
-
-                return [
-                    'sample' => [
-                        'path' => (string)$item['path'],
-                        'warmed' => (int)($result['warmed'] ?? 0),
-                        'failed' => (int)($result['failed'] ?? 0),
-                        'idle_gate' => $gate,
-                    ],
-                    'errors' => $errors,
-                ];
-            },
-        );
-
-        $this->logDeferredStorefrontWarmupStage(
-            !empty($bounded['truncated']) ? 'idle_rank_prime_truncated' : 'idle_rank_prime_done',
-            [
-                'warmed' => $warmed,
-                'failed' => $failed,
-                'attempted' => (int)$bounded['attempted'],
-                'truncated' => (bool)$bounded['truncated'],
-                'min_rank' => $minRank,
-                'max_rank' => $maxRank,
-                'errors' => \array_slice($bounded['errors'], 0, 8),
-                'samples' => \array_slice($bounded['samples'], 0, 8),
-                'elapsed_ms' => (float)$bounded['elapsed_ms'],
-                'elapsed_cap_ms' => $elapsedCapMs,
-            ]
-        );
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function resolveIdleRankWarmupPaths(int $maxPaths, int $minRank, int $maxRank): array
-    {
-        try {
-            // Ranked paths live on Theme WorkerBootstrapWarmup (not the thin provider).
-            if (\class_exists(\Weline\Theme\Observer\WorkerBootstrapWarmup::class)) {
-                /** @var \Weline\Theme\Observer\WorkerBootstrapWarmup $bootstrap */
-                $bootstrap = ObjectManager::getInstance(\Weline\Theme\Observer\WorkerBootstrapWarmup::class);
-                $ranked = $bootstrap->getFpcWarmupPathsByRanks($minRank, $maxRank);
-                $paths = [];
-                foreach ($ranked as $rawPath) {
-                    $path = $this->filterDeferredStorefrontWarmupPath((string)$rawPath);
-                    if ($path === null || $path === ''
-                        || $this->isStorefrontCriticalWarmupPath($path)
-                    ) {
-                        continue;
-                    }
-                    $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
-                    // Categories stay on category_surface_prime (P1).
-                    if ($pathOnly === '/categories' || \str_starts_with($pathOnly, '/category/')) {
-                        continue;
-                    }
-                    $paths[$path] = $path;
-                }
-
-                return \array_slice(\array_values($paths), 0, \max(0, $maxPaths));
-            }
-
-            return [];
-        } catch (\Throwable $e) {
-            $this->logDeferredStorefrontWarmupStage('idle_rank_paths_error', [
-                'error' => $e->getMessage(),
-            ]);
-
-            return [];
-        }
-    }
-
-    /**
-     * Category FPC surfaces come only from FpcWarmupProvider (Product contribution).
-     * Framework never invents catalog slugs — it only selects provider paths whose
-     * path shape is the Product category route contract (`/categories`, `/category/**`).
-     *
-     * @return list<string>
-     */
-    private function resolveCategorySurfaceWarmupPaths(int $maxPaths, ?int $websiteId = null): array
-    {
-        $paths = [];
-        try {
-            $warmup = $this->runtimeProvider(FpcWarmupProviderInterface::class);
-            if (!$warmup instanceof FpcWarmupProviderInterface) {
-                return [];
-            }
-            foreach ($warmup->warmupPaths() as $rawPath) {
-                $path = $this->filterDeferredStorefrontWarmupPath((string)$rawPath, $websiteId);
-                if ($path === null || $path === '' || $path === '/') {
-                    continue;
-                }
-                $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
-                if ($pathOnly !== '/categories' && !\str_starts_with($pathOnly, '/category/')) {
-                    continue;
-                }
-                $paths[$path] = $path;
-            }
-        } catch (\Throwable $e) {
-            $this->logDeferredStorefrontWarmupStage('category_surface_paths_error', [
-                'website_id' => $websiteId,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [];
-        }
-
-        return \array_slice(\array_values($paths), 0, \max(0, $maxPaths));
-    }
-
-    /**
-     * Bounded deferred prime loop shared by locale/currency/category shards.
-     *
-     * @param list<array<string,mixed>> $items
-     * @param callable(array<string,mixed>):array{sample?:array<string,mixed>|null,errors?:list<string>} $each
-     * @return array{truncated:bool,attempted:int,errors:list<string>,samples:list<array<string,mixed>>,elapsed_ms:float}
-     */
-    private function runBoundedDeferredPrimeShards(
-        string $stage,
-        array $items,
-        int $elapsedCapMs,
-        int $yieldMs,
-        callable $each,
-    ): array {
-        $startedAt = \microtime(true);
-        $truncated = false;
-        $attempted = 0;
-        $errors = [];
-        $samples = [];
-        foreach ($items as $index => $item) {
-            $elapsedMs = (\microtime(true) - $startedAt) * 1000;
-            if ($elapsedMs >= $elapsedCapMs) {
-                $truncated = true;
-                break;
-            }
-            if ($index > 0 && $yieldMs > 0) {
-                try {
-                    SchedulerSystem::yieldDelay($yieldMs);
-                } catch (\Throwable) {
-                    // Cooperative yield interrupt — expected; keep empty.
-                }
-            }
-            $attempted++;
-            try {
-                $result = $each(\is_array($item) ? $item : []);
-                if (\is_array($result['sample'] ?? null)) {
-                    $samples[] = $result['sample'];
-                }
-                foreach (\is_array($result['errors'] ?? null) ? $result['errors'] : [] as $error) {
-                    $errors[] = (string)$error;
-                }
-            } catch (\Throwable $e) {
-                $errors[] = $stage . ':' . $e->getMessage();
-                $this->logDeferredStorefrontWarmupStage($stage . '_error', [
-                    'error' => $e->getMessage(),
-                    'item_index' => $index,
-                ]);
-            }
-        }
-
-        return [
-            'truncated' => $truncated,
-            'attempted' => $attempted,
-            'errors' => $errors,
-            'samples' => $samples,
-            'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-        ];
-    }
-
-    /**
-     * Default website + capped managed-local website scopes for deferred bag/FPC prime.
-     *
-     * @return list<array{
-     *   website_id:int,
-     *   host:string,
-     *   default_language:string,
-     *   default_currency:string,
-     *   language_codes:list<string>,
-     *   currency_codes:list<string>
-     * }>
-     */
-    private function resolveDeferredWarmupWebsiteScopes(): array
-    {
-        if ($this->deferredWarmupWebsiteScopesCache !== null) {
-            return $this->deferredWarmupWebsiteScopesCache;
-        }
-
-        // Prefer request memo when a Context exists; else process instance bag.
-        if (\class_exists(RequestContext::class) && RequestContext::has('wls.deferred_warmup.website_scopes.v1')) {
-            $cached = RequestContext::get('wls.deferred_warmup.website_scopes.v1');
-            if (\is_array($cached)) {
-                /** @var list<array{website_id:int,host:string,default_language:string,default_currency:string,language_codes:list<string>,currency_codes:list<string>}> $cached */
-                $this->deferredWarmupWebsiteScopesCache = $cached;
-
-                return $cached;
-            }
-        }
-
-        $maxWebsitesRaw = Env::get('wls.worker.storefront_deferred_warmup_max_websites', null);
-        if ($maxWebsitesRaw === null || $maxWebsitesRaw === '') {
-            $maxWebsitesRaw = Env::get('storefront_deferred_warmup_max_websites', 3);
-        }
-        $maxWebsites = \max(1, \min(8, (int)$maxWebsitesRaw));
-
-        $defaultWebsiteId = 0;
-        if (\class_exists(\Weline\Websites\Model\Website::class)) {
-            $defaultWebsiteId = (int)\Weline\Websites\Model\Website::ID_DEFAULT;
-        }
-
-        $defaultHosts = $this->resolveProcessLocalDynamicWarmupHosts();
-        $defaultHost = \trim((string)($defaultHosts[0] ?? ''));
-        if ($defaultHost === '') {
-            $defaultHost = '127.0.0.1';
-        }
-
-        $scopesById = [];
-        $scopesById[$defaultWebsiteId] = $this->buildDeferredWarmupWebsiteScope($defaultWebsiteId, $defaultHost);
-
-        try {
-            if (\interface_exists(\Weline\Server\Api\Tls\ActiveCertificateDomainSourceInterface::class)
-                && \class_exists(\Weline\Server\Api\Domain\LocalDomainPolicy::class)
-            ) {
-                /** @var \Weline\Server\Api\Tls\ActiveCertificateDomainSourceInterface $source */
-                $source = ObjectManager::getInstance(
-                    \Weline\Server\Api\Tls\ActiveCertificateDomainSourceInterface::class
-                );
-                $rows = $source->getActiveCertificateDomains(64);
-                // Prefer managed local domains first.
-                \usort($rows, static function (array $a, array $b): int {
-                    $aLocal = \Weline\Server\Api\Domain\LocalDomainPolicy::isManagedLocalDomain(
-                        (string)($a['domain'] ?? '')
-                    ) ? 0 : 1;
-                    $bLocal = \Weline\Server\Api\Domain\LocalDomainPolicy::isManagedLocalDomain(
-                        (string)($b['domain'] ?? '')
-                    ) ? 0 : 1;
-
-                    return $aLocal <=> $bLocal;
-                });
-                foreach ($rows as $row) {
-                    if (\count($scopesById) >= $maxWebsites) {
-                        break;
-                    }
-                    if (!\is_array($row)) {
-                        continue;
-                    }
-                    $domain = \strtolower(\trim((string)($row['domain'] ?? '')));
-                    $websiteId = (int)($row['website_id'] ?? -1);
-                    if ($domain === '' || $websiteId < $defaultWebsiteId || isset($scopesById[$websiteId])) {
-                        continue;
-                    }
-                    if (!\Weline\Server\Api\Domain\LocalDomainPolicy::isManagedLocalDomain($domain)
-                        && !\Weline\Server\Api\Domain\LocalDomainPolicy::isManagedWildcardDomain($domain)
-                    ) {
-                        continue;
-                    }
-                    $host = $this->attachDeferredWarmupPublicPort($domain);
-                    if ($host === '') {
-                        continue;
-                    }
-                    $scopesById[$websiteId] = $this->buildDeferredWarmupWebsiteScope($websiteId, $host);
-                }
-            }
-        } catch (\Throwable $e) {
-            $this->logDeferredStorefrontWarmupStage('website_scopes_error', [
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        $scopes = \array_values($scopesById);
-        $this->deferredWarmupWebsiteScopesCache = $scopes;
-        if (\class_exists(RequestContext::class)) {
-            try {
-                RequestContext::remember(
-                    'wls.deferred_warmup.website_scopes.v1',
-                    static fn() => $scopes,
-                );
-            } catch (\Throwable $e) {
-                $this->logDeferredStorefrontWarmupStage('website_scopes_remember_error', [
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
-
-        return $scopes;
-    }
-
-    /**
-     * @return array{
-     *   website_id:int,
-     *   host:string,
-     *   default_language:string,
-     *   default_currency:string,
-     *   language_codes:list<string>,
-     *   currency_codes:list<string>
-     * }
-     */
-    private function buildDeferredWarmupWebsiteScope(int $websiteId, string $host): array
-    {
-        $defaults = $this->resolveDeferredWarmupWebsiteDefaults($websiteId);
-
-        return [
-            'website_id' => $websiteId,
-            'host' => $host,
-            'default_language' => (string)($defaults['language'] ?? ''),
-            'default_currency' => (string)($defaults['currency'] ?? ''),
-            'language_codes' => $this->resolveDeferredWarmupWebsiteLanguageCodes($websiteId),
-            'currency_codes' => $this->resolveDeferredWarmupWebsiteCurrencyCodes($websiteId),
-        ];
-    }
-
-    private function attachDeferredWarmupPublicPort(string $domainHost): string
-    {
-        $domainHost = \trim($domainHost);
-        if ($domainHost === '') {
-            return '';
-        }
-        $normalized = $this->normalizeInternalWarmupHost($domainHost);
-        if ($normalized === null) {
-            return '';
-        }
-        if (\str_contains($normalized, ':')) {
-            return $normalized;
-        }
-        $public = $this->resolveWorkerPublicOrigin();
-        $publicHost = \is_array($public) ? (string)($public['host'] ?? '') : '';
-        if ($publicHost !== '' && \preg_match('/:(\\d+)$/', $publicHost, $m) === 1) {
-            return $normalized . ':' . $m[1];
-        }
-        $instance = $this->readCurrentInstanceWarmupMetadata();
-        $port = (int)($instance['main_port'] ?? $instance['port'] ?? 0);
-        if ($port > 0) {
-            return $normalized . ':' . $port;
-        }
-
-        return $normalized;
-    }
-
-    /**
-     * WebsiteCurrency codes for a website (Shared snapshot first).
-     *
-     * @return list<string>
-     */
-    private function resolveDeferredWarmupWebsiteCurrencyCodes(?int $websiteId = null): array
-    {
-        $websiteId = $websiteId ?? (
-            \class_exists(\Weline\Websites\Model\Website::class)
-                ? (int)\Weline\Websites\Model\Website::ID_DEFAULT
-                : 0
-        );
-        $codes = [];
-        try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
-                $snapshot = \Weline\Websites\Data\WebsiteData::readSharedSnapshotById($websiteId);
-                $raw = \is_array($snapshot['currency_codes'] ?? null)
-                    ? $snapshot['currency_codes']
-                    : [];
-                foreach ($raw as $code) {
-                    $code = \strtoupper(\trim((string)$code));
-                    if ($code !== '') {
-                        $codes[$code] = $code;
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            $this->logDeferredStorefrontWarmupStage('currency_codes_error', [
-                'website_id' => $websiteId,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        if ($codes === []) {
-            try {
-                if (\class_exists(\Weline\Websites\Model\WebsiteCurrency::class)) {
-                    /** @var \Weline\Websites\Model\WebsiteCurrency $model */
-                    $model = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteCurrency::class);
-                    foreach ($model->getWebsiteCurrencyCodes($websiteId) as $code) {
-                        $code = \strtoupper(\trim((string)$code));
-                        if ($code !== '') {
-                            $codes[$code] = $code;
-                        }
-                    }
-                }
-            } catch (\Throwable $e) {
-                $this->logDeferredStorefrontWarmupStage('currency_codes_model_error', [
-                    'website_id' => $websiteId,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
-
-        return \array_values($codes);
-    }
-
-    /**
-     * WebsiteLanguage codes for a website (Shared snapshot first).
-     *
-     * @return list<string>
-     */
-    private function resolveDeferredWarmupWebsiteLanguageCodes(?int $websiteId = null): array
-    {
-        $websiteId = $websiteId ?? (
-            \class_exists(\Weline\Websites\Model\Website::class)
-                ? (int)\Weline\Websites\Model\Website::ID_DEFAULT
-                : 0
-        );
-        $codes = [];
-        try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
-                $snapshot = \Weline\Websites\Data\WebsiteData::readSharedSnapshotById($websiteId);
-                $raw = \is_array($snapshot['language_codes'] ?? null)
-                    ? $snapshot['language_codes']
-                    : [];
-                foreach ($raw as $code) {
-                    $code = \trim((string)$code);
-                    if ($code !== '') {
-                        $codes[$this->normalizeDeferredWarmupLocaleCode($code)] = $code;
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            $this->logDeferredStorefrontWarmupStage('language_codes_error', [
-                'website_id' => $websiteId,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        if ($codes === []) {
-            try {
-                if (\class_exists(\Weline\Websites\Model\WebsiteLanguage::class)) {
-                    /** @var \Weline\Websites\Model\WebsiteLanguage $model */
-                    $model = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteLanguage::class);
-                    foreach ($model->getWebsiteLanguageCodes($websiteId) as $code) {
-                        $code = \trim((string)$code);
-                        if ($code !== '') {
-                            $codes[$this->normalizeDeferredWarmupLocaleCode($code)] = $code;
-                        }
-                    }
-                }
-            } catch (\Throwable $e) {
-                $this->logDeferredStorefrontWarmupStage('language_codes_model_error', [
-                    'website_id' => $websiteId,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
-
-        return \array_values($codes);
-    }
-
-    private function normalizeDeferredWarmupLocaleCode(string $locale): string
-    {
-        return \strtolower(\str_replace('-', '_', \trim($locale)));
-    }
-
-    /**
-     * Extract locale code from deferred warmup path (/ru_RU/, /USD/en_US/, …).
-     */
-    private function extractLocaleCodeFromWarmupPath(string $rawPath): string
-    {
-        $path = \trim($rawPath);
-        if ($path === '') {
-            return '';
-        }
-        $parts = \array_values(\array_filter(\explode('/', \trim($path, '/')), static fn(string $p): bool => $p !== ''));
-        foreach ($parts as $part) {
-            $part = \trim($part);
-            if ($part === '') {
-                continue;
-            }
-            // Language-like xx_YY (or xx-YY); skip bare currency codes (3 letters).
-            if (\preg_match('/^[A-Za-z]{2,3}[_-][A-Za-z]{2}$/', $part) === 1) {
-                return \str_replace('-', '_', $part);
-            }
-        }
-
-        return '';
-    }
-
-    /**
-     * wave8-8c2: drain PostResponse + prime header/builder HotCache bags inside a
-     * live storefront request Context (compiled registry may lag until compile).
-     * Fail-open; never invents FPC HIT; never clears shared FPC.
-     *
-     * @return array{
-     *   stage:string,
-     *   post_response_drained:int,
-     *   seeded:int,
-     *   peeked:int,
-     *   bags:list<string>,
-     *   errors:list<string>,
-     *   elapsed_ms:float,
-     *   providers?:int,
-     *   in_request?:bool,
-     *   db_span_count?:int,
-     *   db_duration_ms?:float,
-     *   wls_span_count?:int,
-     *   wls_duration_ms?:float
-     * }
-     */
-    private function primeDeferredStorefrontHotCacheBags(
-        string $stage,
-        string $language = '',
-        string $currency = '',
-        string $host = '',
-        ?int $websiteId = null,
-    ): array {
-        $startedAt = \microtime(true);
-        $drained = 0;
-        try {
-            // Flush wave7 PostResponse chrome.rendered seeds before public hit.
-            $drained = PostResponseTaskQueue::drain(250.0, 64);
-        } catch (\Throwable $e) {
-            $drained = 0;
-            $this->logDeferredStorefrontWarmupStage('hot_cache_bag_prime_drain_error', [
-                'stage' => $stage,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        // Bag prime must run with frozen storefront scope (CachePolicy keys).
-        // After FPC warmup handle() resets Context — so open a dedicated / request.
-        $payload = [
-            'stage' => $stage,
-            'post_response_drained' => $drained,
-            'seeded' => 0,
-            'peeked' => 0,
-            'bags' => [],
-            'errors' => [],
-            'providers' => 0,
-            'in_request' => false,
-            'elapsed_ms' => 0.0,
-            'db_span_count' => 0,
-            'db_duration_ms' => 0.0,
-            'wls_span_count' => 0,
-            'wls_duration_ms' => 0.0,
-            'language' => \trim($language),
-            'currency' => \trim($currency),
-            'host' => \trim($host),
-            'website_id' => $websiteId,
-        ];
-        try {
-            $host = \trim($host);
-            if ($host === '') {
-                $hosts = $this->resolveProcessLocalDynamicWarmupHosts();
-                $host = \trim((string)($hosts[0] ?? ''));
-            }
-            if ($host === '') {
-                $host = '127.0.0.1';
-            }
-            $payload['host'] = $host;
-            $this->beginHotCacheBagPrimeLatch($stage);
-            try {
-                $this->runStorefrontFpcWarmupAttemptWithBagPrime(
-                    $host,
-                    '/',
-                    $stage,
-                    $language,
-                    $currency,
-                    $websiteId,
-                );
-            } finally {
-                // Keep Fiber-local capture; only drop the pending latch.
-                $this->clearHotCacheBagPrimePendingLatch();
-            }
-            $captured = $this->takeHotCacheBagPrimeCapture();
-            // One cooperative retry when a peer Fiber raced the legacy process latch.
-            if ($captured === null) {
-                SchedulerSystem::yieldDelay(25);
-                $this->beginHotCacheBagPrimeLatch($stage);
-                try {
-                    $this->runStorefrontFpcWarmupAttemptWithBagPrime(
-                        $host,
-                        '/',
-                        $stage,
-                        $language,
-                        $currency,
-                        $websiteId,
-                    );
-                } finally {
-                    $this->clearHotCacheBagPrimePendingLatch();
-                }
-                $captured = $this->takeHotCacheBagPrimeCapture();
-                if ($captured !== null) {
-                    $errors = \is_array($captured['errors'] ?? null) ? $captured['errors'] : [];
-                    \array_unshift($errors, 'capture_retry');
-                    $captured['errors'] = \array_slice($errors, 0, 8);
-                }
-            }
-            if ($captured !== null) {
-                $payload['seeded'] = (int)($captured['seeded'] ?? 0);
-                $payload['peeked'] = (int)($captured['peeked'] ?? 0);
-                $payload['bags'] = \array_values(\is_array($captured['bags'] ?? null) ? $captured['bags'] : []);
-                $payload['errors'] = \array_slice(
-                    \is_array($captured['errors'] ?? null) ? $captured['errors'] : [],
-                    0,
-                    8
-                );
-                $payload['providers'] = (int)($captured['providers'] ?? 0);
-                $payload['in_request'] = true;
-                $payload['db_span_count'] = (int)($captured['db_span_count'] ?? 0);
-                $payload['db_duration_ms'] = (float)($captured['db_duration_ms'] ?? 0.0);
-                $payload['wls_span_count'] = (int)($captured['wls_span_count'] ?? 0);
-                $payload['wls_duration_ms'] = (float)($captured['wls_duration_ms'] ?? 0.0);
-            } else {
-                // Fallback: invoke providers without Context (may no-op Shared keys).
-                $fallback = $this->invokeStorefrontHotCacheBagProviders();
-                $payload['seeded'] = (int)($fallback['seeded'] ?? 0);
-                $payload['peeked'] = (int)($fallback['peeked'] ?? 0);
-                $payload['bags'] = \array_values(\is_array($fallback['bags'] ?? null) ? $fallback['bags'] : []);
-                $payload['errors'] = \array_slice(
-                    \array_merge(['capture_miss'], \is_array($fallback['errors'] ?? null) ? $fallback['errors'] : []),
-                    0,
-                    8
-                );
-                $payload['providers'] = (int)($fallback['providers'] ?? 0);
-            }
-        } catch (\Throwable $e) {
-            $this->clearHotCacheBagPrimePendingLatch();
-            $payload['errors'][] = 'bag_prime_request:' . $e->getMessage();
-        }
-
-        $payload['elapsed_ms'] = \round((\microtime(true) - $startedAt) * 1000, 2);
-        $this->logDeferredStorefrontWarmupStage('hot_cache_bags_primed', $payload);
-
-        return $payload;
-    }
-
-    /**
-     * Internal `/` request that keeps storefront Context long enough to seed bags
-     * even when FPC is already HIT (SSR skipped).
-     */
-    private function runStorefrontFpcWarmupAttemptWithBagPrime(
-        string $host,
-        string $path,
-        string $stage,
-        string $language = '',
-        string $currency = '',
-        ?int $websiteId = null,
-    ): array {
-        $defaults = $this->resolveDeferredWarmupWebsiteDefaults($websiteId);
-        $language = \trim($language) !== '' ? \trim($language) : (string)($defaults['language'] ?? '');
-        $currency = \trim($currency) !== '' ? \trim($currency) : (string)($defaults['currency'] ?? '');
-        $serverOverrides = [
-            'WLS_INTERNAL_STOREFRONT_WARMUP' => '1',
-            'WLS_PRIME_HOT_CACHE_BAGS' => '1',
-            'WLS_PRIME_HOT_CACHE_BAGS_STAGE' => $stage,
-        ];
-        if ($websiteId !== null) {
-            $serverOverrides['WELINE_WEBSITE_ID'] = (string)$websiteId;
-        }
-        if ($language !== '') {
-            $serverOverrides['WELINE_WEBSITE_LANGUAGE'] = $language;
-        }
-        if ($currency !== '') {
-            $serverOverrides['WELINE_WEBSITE_CURRENCY'] = $currency;
-        }
-
-        return $this->runInternalWarmupRequest(
-            $host,
-            $path,
-            9000 + (\strlen($stage) % 100),
-            'storefront-hotcache-bag-prime',
-            $serverOverrides,
-            [
-                'User-Agent' => 'WLS-Storefront-HotCacheBagPrime/1.0',
-                // Match near-virgin probe transport. Do NOT set X-WLS-Fpc-Bypass:
-                // wave8-8c4 bypass forced 3× full SSR + catalog rebuild and thrash
-                // Shared/Process LRU so peer-worker probes saw chrome/builder L1/L2 absent.
-                'Accept-Encoding' => 'identity',
-                'X-WLS-Storefront-Warmup' => '1',
-                'X-WLS-HotCache-Bag-Prime' => '1',
-            ],
-        );
-    }
-
-    /**
-     * Resolve Theme/Product bag primers even when generated modules.php lags
-     * (wave8-8c logged seeded=0/bags=[] because capability was not compiled yet).
-     *
-     * @return array{
-     *   seeded:int,
-     *   peeked:int,
-     *   bags:list<string>,
-     *   errors:list<string>,
-     *   providers:int
-     * }
-     */
-    private function invokeStorefrontHotCacheBagProviders(): array
-    {
-        $seeded = 0;
-        $peeked = 0;
-        $bags = [];
-        $errors = [];
-        $providers = 0;
-
-        $implementations = [];
-        try {
-            $registry = ObjectManager::getInstance(\Weline\Framework\Compilation\ServiceProviderRegistry::class);
-            foreach ($registry->implementationsWithPrefix(
-                StorefrontHotCacheBagWarmupProviderInterface::CAPABILITY_PREFIX
-            ) as $capability => $implementation) {
-                if (\is_string($implementation) && $implementation !== '') {
-                    $implementations[(string)$capability] = $implementation;
-                }
-            }
-        } catch (\Throwable $e) {
-            $errors[] = 'registry:' . $e->getMessage();
-        }
-
-        // Fail-open fallbacks: work before the next framework:compile refreshes provides.
-        // Product BEFORE Theme so header chrome is written last (MRU) and survives
-        // Shared/Process LRU pressure from catalog.full (wave8-8c5).
-        foreach ([
-            'storefront_hot_cache_bag_warmup.Weline_Product'
-                => 'Weline\\Product\\Api\\Runtime\\StorefrontHotCacheBagWarmupProvider',
-            'storefront_hot_cache_bag_warmup.Weline_Theme'
-                => 'Weline\\Theme\\Api\\Runtime\\StorefrontHotCacheBagWarmupProvider',
-        ] as $capability => $implementation) {
-            if (!isset($implementations[$capability]) && \class_exists($implementation)) {
-                $implementations[$capability] = $implementation;
-            }
-        }
-
-        $ordered = [];
-        foreach ([
-            'storefront_hot_cache_bag_warmup.Weline_Product',
-            'storefront_hot_cache_bag_warmup.Weline_Theme',
-        ] as $capability) {
-            if (isset($implementations[$capability])) {
-                $ordered[$capability] = $implementations[$capability];
-                unset($implementations[$capability]);
-            }
-        }
-        foreach ($implementations as $capability => $implementation) {
-            $ordered[$capability] = $implementation;
-        }
-
-        foreach ($ordered as $capability => $implementation) {
-            if (!\is_string($implementation)
-                || !\class_exists($implementation)
-                || !\is_subclass_of($implementation, StorefrontHotCacheBagWarmupProviderInterface::class)
-            ) {
-                continue;
-            }
-            $providers++;
-            try {
-                $provider = ObjectManager::getInstance($implementation);
-                if (!$provider instanceof StorefrontHotCacheBagWarmupProviderInterface) {
-                    continue;
-                }
-                $result = $provider->primeCriticalBags();
-                $seeded += (int)($result['seeded'] ?? 0);
-                $peeked += (int)($result['peeked'] ?? 0);
-                foreach (\is_array($result['bags'] ?? null) ? $result['bags'] : [] as $bag) {
-                    $bag = \trim((string)$bag);
-                    if ($bag !== '') {
-                        $bags[$bag] = $bag;
-                    }
-                }
-                foreach (\is_array($result['errors'] ?? null) ? $result['errors'] : [] as $error) {
-                    $errors[] = (string)$capability . ':' . (string)$error;
-                }
-            } catch (\Throwable $e) {
-                $errors[] = (string)$capability . ':' . $e->getMessage();
-            }
-            SchedulerSystem::yield();
-        }
-
-        if ($providers === 0) {
-            $errors[] = 'no_bag_warmup_providers';
-        }
-
-        return [
-            'seeded' => $seeded,
-            'peeked' => $peeked,
-            'bags' => \array_values($bags),
-            'errors' => \array_slice($errors, 0, 8),
-            'providers' => $providers,
-        ];
-    }
-
-    /**
-     * Called from handle() finally while storefront Context is still alive.
-     * wave8-8c3: prefer instance pending flag — ServerBag strips custom WLS_PRIME_*.
-     */
-    private function maybeCaptureHotCacheBagPrimeBeforeReset(Request $request): void
-    {
-        $pending = $this->isHotCacheBagPrimePendingForCurrentFiber();
-        if (!$pending) {
-            $currentFiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
-            // P5 O2: under Fiber, process-wide $_SERVER can leak across peer Fibers
-            // during yield — never steal another Fiber's bag-prime latch.
-            if ($currentFiber instanceof \Fiber) {
-                return;
-            }
-            $flag = '';
-            try {
-                if (\method_exists($request, 'getServer')) {
-                    $flag = \trim((string)$request->getServer('WLS_PRIME_HOT_CACHE_BAGS'));
-                }
-            } catch (\Throwable) {
-                $flag = '';
-            }
-            if ($flag === '') {
-                $flag = \trim((string)($_SERVER['WLS_PRIME_HOT_CACHE_BAGS'] ?? ''));
-            }
-            if (!\in_array(\strtolower($flag), ['1', 'true', 'yes', 'on'], true)) {
-                return;
-            }
-        }
-        $this->clearHotCacheBagPrimePendingLatch();
-
-        try {
-            // Drain any PostResponse seeds queued during this same request first.
-            PostResponseTaskQueue::drain(250.0, 64);
-        } catch (\Throwable) {
-        }
-
-        $stage = \trim($this->hotCacheBagPrimeStageForCurrentFiber());
-        if ($stage === '') {
-            try {
-                $stage = \trim((string)($_SERVER['WLS_PRIME_HOT_CACHE_BAGS_STAGE'] ?? ''));
-            } catch (\Throwable) {
-                $stage = '';
-            }
-        }
-        try {
-            // wave8-8c7: Product/Theme seeders must not rely on stripped $_SERVER stage.
-            RequestContext::set('wls.storefront_hot_cache_bag_prime.stage', $stage);
-        } catch (\Throwable) {
-        }
-
-        $dbBefore = 0;
-        $dbMsBefore = 0.0;
-        $wlsBefore = 0;
-        $wlsMsBefore = 0.0;
-        try {
-            $before = TraceGate::getAggregateSummary();
-            $dbBefore = (int)($before['db_span_count'] ?? 0);
-            $dbMsBefore = (float)($before['db_duration_ms'] ?? 0.0);
-            $wlsBefore = (int)($before['wls_span_count'] ?? 0);
-            $wlsMsBefore = (float)($before['wls_duration_ms'] ?? 0.0);
-        } catch (\Throwable) {
-        }
-
-        try {
-            $captured = $this->invokeStorefrontHotCacheBagProviders();
-            $dbAfter = $dbBefore;
-            $dbMsAfter = $dbMsBefore;
-            $wlsAfter = $wlsBefore;
-            $wlsMsAfter = $wlsMsBefore;
-            try {
-                $after = TraceGate::getAggregateSummary();
-                $dbAfter = (int)($after['db_span_count'] ?? 0);
-                $dbMsAfter = (float)($after['db_duration_ms'] ?? 0.0);
-                $wlsAfter = (int)($after['wls_span_count'] ?? 0);
-                $wlsMsAfter = (float)($after['wls_duration_ms'] ?? 0.0);
-            } catch (\Throwable) {
-            }
-            $captured['db_span_count'] = \max(0, $dbAfter - $dbBefore);
-            $captured['db_duration_ms'] = \round(\max(0.0, $dbMsAfter - $dbMsBefore), 2);
-            $captured['wls_span_count'] = \max(0, $wlsAfter - $wlsBefore);
-            $captured['wls_duration_ms'] = \round(\max(0.0, $wlsMsAfter - $wlsMsBefore), 2);
-            $this->storeHotCacheBagPrimeCapture($captured);
-        } catch (\Throwable $e) {
-            $this->storeHotCacheBagPrimeCapture([
-                'seeded' => 0,
-                'peeked' => 0,
-                'bags' => [],
-                'errors' => ['in_request:' . $e->getMessage()],
-                'providers' => 0,
-                'db_span_count' => 0,
-                'db_duration_ms' => 0.0,
-                'wls_span_count' => 0,
-                'wls_duration_ms' => 0.0,
-            ]);
-        } finally {
-            try {
-                RequestContext::remove('wls.storefront_hot_cache_bag_prime.stage');
-            } catch (\Throwable) {
-            }
-            $this->writeHotCacheBagPrimeFiberState(['stage' => '']);
-        }
-    }
-
-    /**
-     * P5 O2: after critical_sealed, cooperatively yield the event loop before
-     * long sync (heavy bags / locale idle SSR). Bounded peer drain only —
-     * does not invent FPC HIT and does not disable deferred priming.
-     *
-     * @return array{
-     *   stage:string,
-     *   rounds:int,
-     *   peer_suspended_before:int,
-     *   peer_suspended_after:int,
-     *   elapsed_ms:float,
-     *   mode:string
-     * }
-     */
-    private function awaitDeferredStorefrontIdleGate(string $stage): array
-    {
-        $startedAt = \microtime(true);
-        $peerBefore = WlsConcurrency::getOtherSuspendedRequestFiberCount();
-        $rounds = 0;
-        $maxWaitMs = \max(0, \min(
-            5000,
-            (int)(Env::get('wls.worker.storefront_deferred_idle_gate_max_ms', 750) ?: 750)
-        ));
-        $sliceMs = \max(5, \min(
-            100,
-            (int)(Env::get('wls.worker.storefront_deferred_idle_gate_slice_ms', 25) ?: 25)
-        ));
-        $quietNeeded = \max(1, \min(
-            4,
-            (int)(Env::get('wls.worker.storefront_deferred_idle_gate_quiet_slices', 2) ?: 2)
-        ));
-
-        // Always release once so critical_sealed is observable before heavy/idle.
-        SchedulerSystem::yield();
-        $rounds++;
-
-        $quiet = 0;
-        while (true) {
-            $elapsedMs = (\microtime(true) - $startedAt) * 1000.0;
-            if ($elapsedMs >= $maxWaitMs) {
-                break;
-            }
-            $peers = WlsConcurrency::getOtherSuspendedRequestFiberCount();
-            if ($peers === 0) {
-                $quiet++;
-                if ($quiet >= $quietNeeded) {
-                    break;
-                }
-            } else {
-                $quiet = 0;
-            }
-            SchedulerSystem::yieldDelay($sliceMs);
-            $rounds++;
-        }
-
-        $payload = [
-            'stage' => $stage,
-            'rounds' => $rounds,
-            'peer_suspended_before' => $peerBefore,
-            'peer_suspended_after' => WlsConcurrency::getOtherSuspendedRequestFiberCount(),
-            'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-            'max_wait_ms' => $maxWaitMs,
-            'slice_ms' => $sliceMs,
-            'quiet_needed' => $quietNeeded,
-            'mode' => $peerBefore > 0 ? 'peer_drain' : 'quiet_window',
-        ];
-        $this->logDeferredStorefrontWarmupStage('idle_gate', $payload);
-
-        return $payload;
-    }
-
-    /**
-     * @return array{pending: bool, stage: string, capture: ?array}
-     */
-    private function readHotCacheBagPrimeFiberState(): array
-    {
-        $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
-        if (!$fiber instanceof \Fiber) {
-            return [
-                'pending' => $this->deferredHotCacheBagPrimePending,
-                'stage' => $this->deferredHotCacheBagPrimeStage,
-                'capture' => $this->deferredHotCacheBagPrimeCapture,
-            ];
-        }
-
-        if ($this->fiberHotCacheBagPrimeStates === null) {
-            $this->fiberHotCacheBagPrimeStates = new \WeakMap();
-        }
-        if (!isset($this->fiberHotCacheBagPrimeStates[$fiber])) {
-            return ['pending' => false, 'stage' => '', 'capture' => null];
-        }
-        $state = $this->fiberHotCacheBagPrimeStates[$fiber];
-
-        return [
-            'pending' => (bool)($state['pending'] ?? false),
-            'stage' => (string)($state['stage'] ?? ''),
-            'capture' => \is_array($state['capture'] ?? null) ? $state['capture'] : null,
-        ];
-    }
-
-    /**
-     * @param array{pending?: bool, stage?: string, capture?: ?array} $patch
-     */
-    private function writeHotCacheBagPrimeFiberState(array $patch): void
-    {
-        $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
-        if (!$fiber instanceof \Fiber) {
-            if (\array_key_exists('pending', $patch)) {
-                $this->deferredHotCacheBagPrimePending = (bool)$patch['pending'];
-            }
-            if (\array_key_exists('stage', $patch)) {
-                $this->deferredHotCacheBagPrimeStage = (string)$patch['stage'];
-            }
-            if (\array_key_exists('capture', $patch)) {
-                $cap = $patch['capture'];
-                $this->deferredHotCacheBagPrimeCapture = \is_array($cap) ? $cap : null;
-            }
-            return;
-        }
-
-        if ($this->fiberHotCacheBagPrimeStates === null) {
-            $this->fiberHotCacheBagPrimeStates = new \WeakMap();
-        }
-        $state = isset($this->fiberHotCacheBagPrimeStates[$fiber])
-            && \is_array($this->fiberHotCacheBagPrimeStates[$fiber])
-            ? $this->fiberHotCacheBagPrimeStates[$fiber]
-            : ['pending' => false, 'stage' => '', 'capture' => null];
-        if (\array_key_exists('pending', $patch)) {
-            $state['pending'] = (bool)$patch['pending'];
-        }
-        if (\array_key_exists('stage', $patch)) {
-            $state['stage'] = (string)$patch['stage'];
-        }
-        if (\array_key_exists('capture', $patch)) {
-            $cap = $patch['capture'];
-            $state['capture'] = \is_array($cap) ? $cap : null;
-        }
-        $this->fiberHotCacheBagPrimeStates[$fiber] = $state;
-    }
-
-    private function beginHotCacheBagPrimeLatch(string $stage): void
-    {
-        $this->writeHotCacheBagPrimeFiberState([
-            'pending' => true,
-            'stage' => $stage,
-            'capture' => null,
-        ]);
-    }
-
-    private function clearHotCacheBagPrimePendingLatch(): void
-    {
-        $this->writeHotCacheBagPrimeFiberState(['pending' => false]);
-    }
-
-    private function isHotCacheBagPrimePendingForCurrentFiber(): bool
-    {
-        return (bool)($this->readHotCacheBagPrimeFiberState()['pending'] ?? false);
-    }
-
-    private function hotCacheBagPrimeStageForCurrentFiber(): string
-    {
-        return \trim((string)($this->readHotCacheBagPrimeFiberState()['stage'] ?? ''));
-    }
-
-    /**
-     * @param array{seeded?:int,peeked?:int,bags?:list<string>,errors?:list<string>,providers?:int,db_span_count?:int,db_duration_ms?:float,wls_span_count?:int,wls_duration_ms?:float} $captured
-     */
-    private function storeHotCacheBagPrimeCapture(array $captured): void
-    {
-        $this->writeHotCacheBagPrimeFiberState(['capture' => $captured]);
-    }
-
-    /**
-     * @return array{seeded?:int,peeked?:int,bags?:list<string>,errors?:list<string>,providers?:int,db_span_count?:int,db_duration_ms?:float,wls_span_count?:int,wls_duration_ms?:float}|null
-     */
-    private function takeHotCacheBagPrimeCapture(): ?array
-    {
-        $state = $this->readHotCacheBagPrimeFiberState();
-        $capture = \is_array($state['capture'] ?? null) ? $state['capture'] : null;
-        $this->writeHotCacheBagPrimeFiberState(['capture' => null]);
-
-        return $capture;
-    }
-
-    /**
-     * Best-effort LRU retouch of sealed critical FPC Process L1 before locale
-     * extras run. Does not invent HIT status — probe miss is ignored.
-     *
-     * @param list<string> $hosts
-     * @param list<string> $criticalPaths
-     */
-    private function retouchDeferredCriticalProcessL1(array $hosts, array $criticalPaths): void
-    {
-        if ($hosts === [] || $criticalPaths === []) {
-            return;
-        }
-        $sequence = 0;
-        foreach ($hosts as $host) {
-            $host = \trim((string)$host);
-            if ($host === '') {
-                continue;
-            }
-            foreach ($criticalPaths as $path) {
-                $path = (string)$path;
-                if (!$this->isStorefrontCriticalWarmupPath($path, \array_combine($criticalPaths, $criticalPaths) ?: [])) {
-                    continue;
-                }
-                $sequence++;
-                try {
-                    $this->runStorefrontFpcWarmupAttempt($host, $path, $sequence);
-                } catch (\Throwable) {
-                    // Fail-open: retouch must not abort deferred warmup.
-                }
-                SchedulerSystem::yield();
-            }
-        }
-    }
-
     /**
      * Fail-open READY leaves homepage proof empty. After deferred `/` warmup
      * publishes Process L1 + root receipt, adopt that identity so Worker
@@ -4155,13 +1665,11 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     /**
      * @param list<string> $paths
      * @param list<string> $hosts
-     * @param bool $localeIdleSlice P5 O2: locale_idle SSR — yield/idle between paths
      * @return array{warmed:int,failed:int,errors:list<string>,samples:list<array<string,mixed>>,elapsed_ms:float}
      */
     private function runStorefrontFpcWarmupInternal(
         array $paths,
         array $hosts,
-        bool $localeIdleSlice = false,
     ): array {
         $startedAt = \microtime(true);
         $warmed = 0;
@@ -4169,23 +1677,10 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $errors = [];
         $samples = [];
         $sequence = 0;
-        // After this many consecutive non-critical (locale) probe/build failures,
-        // skip remaining locale slots so multi-MB MISS SSR does not thrash Process
-        // L1 or starve already-warmed `/` + `/products` HIT.
-        $localeFailSkipThreshold = 2;
-        $localeYieldMs = $localeIdleSlice
-            ? \max(10, \min(200, (int)(Env::get('wls.worker.storefront_locale_idle_yield_ms', 50) ?: 50)))
-            : 0;
 
         foreach ($hosts as $host) {
-            $consecutiveLocaleFailures = 0;
-            $skipRemainingLocales = false;
             foreach ($paths as $path) {
                 $path = (string)$path;
-                $isCriticalPath = $this->isStorefrontCriticalWarmupPath($path, \array_combine($paths, $paths) ?: []);
-                if ($skipRemainingLocales && !$isCriticalPath) {
-                    continue;
-                }
                 $sequence++;
                 try {
                     $warmupMeta = $this->runStorefrontFpcWarmupAttempt($host, $path, $sequence);
@@ -4228,28 +1723,11 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         $sample['ready'] = false;
                         $sample['reason'] = $reason;
                         $samples[] = $sample;
-                        if (!$isCriticalPath) {
-                            $consecutiveLocaleFailures++;
-                            if ($consecutiveLocaleFailures >= $localeFailSkipThreshold) {
-                                $skipRemainingLocales = true;
-                            }
-                        } else {
-                            $consecutiveLocaleFailures = 0;
-                        }
-                        if ($localeIdleSlice && !$isCriticalPath && $localeYieldMs > 0) {
-                            SchedulerSystem::yieldDelay($localeYieldMs);
-                        } else {
-                            SchedulerSystem::yield();
-                        }
+                        SchedulerSystem::yield();
                         continue;
                     }
 
-                    // P5 O2: between locale build and HIT probe, yield the event loop.
-                    if ($localeIdleSlice && !$isCriticalPath && $localeYieldMs > 0) {
-                        SchedulerSystem::yieldDelay($localeYieldMs);
-                    } else {
-                        SchedulerSystem::yield();
-                    }
+                    SchedulerSystem::yield();
 
                     // A build response itself does not always expose a cache
                     // status header. A second request must be a real FPC hit;
@@ -4287,14 +1765,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         $sample['ready'] = false;
                         $sample['reason'] = $reason;
                         $samples[] = $sample;
-                        if (!$isCriticalPath) {
-                            $consecutiveLocaleFailures++;
-                            if ($consecutiveLocaleFailures >= $localeFailSkipThreshold) {
-                                $skipRemainingLocales = true;
-                            }
-                        } else {
-                            $consecutiveLocaleFailures = 0;
-                        }
                         continue;
                     }
 
@@ -4308,7 +1778,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                             && $this->publishDeferredHomepageWarmupReceipt($homepageReceipt);
                     }
                     $samples[] = $sample;
-                    $consecutiveLocaleFailures = 0;
                     // Adopt homepage proof immediately while Process L1 still
                     // holds `/` — later multi-MB locale/catalog SSRs can evict
                     // the payload and make end-of-batch receipt lookup fail.
@@ -4332,21 +1801,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         'ready' => false,
                         'reason' => $e->getMessage(),
                     ];
-                    if (!$isCriticalPath) {
-                        $consecutiveLocaleFailures++;
-                        if ($consecutiveLocaleFailures >= $localeFailSkipThreshold) {
-                            $skipRemainingLocales = true;
-                        }
-                    } else {
-                        $consecutiveLocaleFailures = 0;
-                    }
                 }
 
-                if ($localeIdleSlice && !$isCriticalPath && $localeYieldMs > 0) {
-                    SchedulerSystem::yieldDelay($localeYieldMs);
-                } else {
-                    SchedulerSystem::yield();
-                }
+                SchedulerSystem::yield();
             }
         }
 
@@ -5069,14 +2526,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     /**
      * @return list<string>
      */
-    private function resolveReadyGateBackendWarmupHosts(): array
-    {
-        return $this->resolveBackendWarmupHosts('ready-gate');
-    }
-
-    /**
-     * @return list<string>
-     */
     private function resolveBackendWarmupHosts(string $scope): array
     {
         $hosts = [];
@@ -5194,14 +2643,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $data = \json_decode((string)@\file_get_contents($file), true);
         return \is_array($data) ? $data : [];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function resolveReadyGateBackendWarmupPaths(): array
-    {
-        return $this->shardReadyGateWarmupPaths($this->resolveBackendWarmupPaths('ready-gate'));
     }
 
     /**
@@ -7132,26 +4573,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
     }
 
-    private function shouldRunDeferredWorkerBootstrapObserverWarmup(): bool
-    {
-        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
-        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor', 'maintenance'], true)) {
-            return false;
-        }
-
-        $rawFlag = \getenv('WLS_WORKER_DEFERRED_BOOTSTRAP_WARMUP');
-        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker_deferred_bootstrap_warmup', null);
-        }
-
-        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            $rawFlag = '0';
-        }
-
-        $flag = \strtolower(\trim((string)$rawFlag));
-        return \in_array($flag, ['1', 'true', 'yes', 'on', 'async', 'deferred'], true);
-    }
-
     private function shouldRunDeferredWorkerBootstrapUrlMetadataWarmup(): bool
     {
         $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
@@ -7168,34 +4589,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true);
-    }
-
-    private function shouldRunDeferredDynamicFirstRenderWarmup(): bool
-    {
-        // Dynamic first-render storefront warm is Framework Cron owned.
-        return false;
-    }
-
-    private function runDeferredDynamicFirstRenderWarmup(): void
-    {
-        $maxPaths = (int)(Env::get('wls.worker.dynamic_hot_path_max', 32) ?: 32);
-        $maxPaths = \max(1, \min(128, $maxPaths));
-        $result = $this->runDynamicFirstRenderWarmupInternal($maxPaths, $this->newDynamicFirstRenderWarmupResult());
-        if ((int)($result['failed'] ?? 0) > 0) {
-            if (\function_exists('w_log_warning')) {
-                \w_log_warning('[WlsRuntime] deferred dynamic first-render warmup incomplete: ' . \json_encode([
-                    'warmed' => (int)($result['warmed'] ?? 0),
-                    'failed' => (int)($result['failed'] ?? 0),
-                    'errors' => \array_slice(\is_array($result['errors'] ?? null) ? $result['errors'] : [], 0, 8),
-                ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
-            }
-            return;
-        }
-
-        if (\function_exists('w_log_info')) {
-            \w_log_info('[WlsRuntime] deferred dynamic first-render warmup done warmed=' . (int)($result['warmed'] ?? 0)
-                . ' elapsed_ms=' . (float)($result['elapsed_ms'] ?? 0.0));
-        }
     }
 
     private function canRunDynamicFirstRenderWarmupForCurrentRole(): bool
@@ -7215,160 +4608,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $ownerWorkerId = (int)$rawOwner;
         return $workerId <= 0 || $ownerWorkerId <= 0 || $workerId === $ownerWorkerId;
-    }
-
-    private function shouldRunDeferredFpcBuildAheadWarmup(): bool
-    {
-        // Storefront FPC build-ahead is Framework Cron owned; Worker must not warm.
-        return false;
-    }
-
-    private function roleCanRunDeferredFpcBuildAhead(string $role): bool
-    {
-        $configured = Env::get('wls.worker.fpc_buildahead_roles', null);
-        if ($configured === null || $configured === '') {
-            $configured = [];
-        }
-        if (\is_string($configured)) {
-            $decoded = \json_decode($configured, true);
-            $configured = \is_array($decoded)
-                ? $decoded
-                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
-        }
-        if (!\is_array($configured)) {
-            return false;
-        }
-
-        $roles = [];
-        foreach ($configured as $item) {
-            if (!\is_scalar($item)) {
-                continue;
-            }
-            $normalized = \strtolower(\trim((string)$item));
-            if ($normalized !== '') {
-                $roles[$normalized] = true;
-            }
-        }
-
-        return isset($roles['all']) || isset($roles[$role]);
-    }
-
-    private function shouldRunDeferredFpcProcessPullWarmup(): bool
-    {
-        // Process-pull hydrate of storefront FPC is Framework Cron owned.
-        return false;
-    }
-
-    private function runDeferredFpcBuildAheadWarmup(): void
-    {
-        $paths = $this->resolveFpcBuildAheadPaths();
-        $hosts = $this->resolveFpcBuildAheadHosts();
-        if ($paths === [] || $hosts === []) {
-            return;
-        }
-
-        $built = 0;
-        $failed = 0;
-        $startedAt = \microtime(true);
-        foreach ($hosts as $host) {
-            foreach ($paths as $path) {
-                try {
-                    $this->runInternalWarmupRequest($host, $path, $built + $failed + 1, 'fpc-build-ahead');
-                    $built++;
-                } catch (\Throwable $e) {
-                    $failed++;
-                    if (\function_exists('w_log_warning')) {
-                        \w_log_warning('[WlsRuntime] FPC build-ahead failed ' . $host . $path . ': ' . $e->getMessage());
-                    }
-                }
-                SchedulerSystem::yield();
-            }
-        }
-
-        if (\function_exists('w_log_info')) {
-            \w_log_info('[WlsRuntime] FPC build-ahead warmed=' . $built
-                . ' failed=' . $failed
-                . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
-        }
-    }
-
-    private function roleCanRunDeferredWorkerBootstrap(string $role): bool
-    {
-        $configured = Env::get('wls.worker_deferred_bootstrap_roles', null);
-        if ($configured === null || $configured === '') {
-            $configured = ['maintenance'];
-        }
-        if (\is_string($configured)) {
-            $decoded = \json_decode($configured, true);
-            $configured = \is_array($decoded)
-                ? $decoded
-                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
-        }
-        if (!\is_array($configured)) {
-            return false;
-        }
-
-        $roles = [];
-        foreach ($configured as $item) {
-            if (!\is_scalar($item)) {
-                continue;
-            }
-            $normalized = \strtolower(\trim((string)$item));
-            if ($normalized !== '') {
-                $roles[$normalized] = true;
-            }
-        }
-
-        return isset($roles['all']) || isset($roles[$role]);
-    }
-
-    private function runDeferredFpcProcessPullWarmup(bool $ownerBuildAheadRan): void
-    {
-        $warmup = $this->runtimeProvider(FpcWarmupProviderInterface::class);
-        if (!$warmup instanceof FpcWarmupProviderInterface) {
-            return;
-        }
-
-        $workerId = (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0);
-        $defaultRounds = $ownerBuildAheadRan ? 2 : 3;
-        $rounds = (int)(Env::get('wls.worker.fpc_process_pull_rounds', $defaultRounds) ?: $defaultRounds);
-        $rounds = \max(1, \min($rounds, 10));
-        $initialDelayMs = (int)(Env::get(
-            'wls.worker.fpc_process_pull_initial_delay_ms',
-            $ownerBuildAheadRan ? 0 : 1000
-        ) ?: 0);
-        $intervalMs = (int)(Env::get('wls.worker.fpc_process_pull_interval_ms', 5000) ?: 5000);
-        $intervalMs = \max(0, \min($intervalMs, 30000));
-
-        if ($initialDelayMs > 0) {
-            SchedulerSystem::yieldDelay($initialDelayMs + \max(0, $workerId) * 125);
-        }
-
-        $startedAt = \microtime(true);
-        $completedRounds = 0;
-        for ($round = 1; $round <= $rounds; $round++) {
-            try {
-                $warmup->warmProcessFastPathPayloads();
-                $completedRounds++;
-            } catch (\Throwable $e) {
-                if (\function_exists('w_log_warning')) {
-                    \w_log_warning('[WlsRuntime] FPC process-pull warmup failed worker=' . $workerId
-                        . ' round=' . $round . ': ' . $e->getMessage());
-                }
-            }
-
-            if ($round < $rounds && $intervalMs > 0) {
-                SchedulerSystem::yieldDelay($intervalMs);
-            } else {
-                SchedulerSystem::yield();
-            }
-        }
-
-        if ($completedRounds > 0 && \function_exists('w_log_info')) {
-            \w_log_info('[WlsRuntime] FPC process-pull rounds=' . $completedRounds
-                . ' worker=' . $workerId
-                . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
-        }
     }
 
     private function normalizeInternalWarmupHost(mixed $host): ?string
@@ -7482,37 +4721,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
         if (\strlen($path) > 2048 || \preg_match('/\s/', $path)) {
             throw new \InvalidArgumentException('Invalid internal warmup path.');
-        }
-
-        return $path;
-    }
-
-    /**
-     * Keep trailing-slash locale homes. Language and currency prefixes are not
-     * 301 targets, so they stay eligible for deferred warmup.
-     */
-    private function filterDeferredStorefrontWarmupPath(string $rawPath, ?int $websiteId = null): ?string
-    {
-        try {
-            $path = $this->normalizeInternalWarmupPath($rawPath);
-        } catch (\InvalidArgumentException) {
-            return null;
-        }
-
-        $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
-        if ($pathOnly === '') {
-            $pathOnly = '/';
-        }
-
-        $defaults = $this->resolveDeferredWarmupWebsiteDefaults($websiteId);
-        $canonical = \Weline\Framework\App\State::canonicalizeStorefrontLocalizationPath(
-            $pathOnly,
-            $defaults['language'],
-            $defaults['currency'],
-        );
-        if ($canonical !== null) {
-            // Would 301 to $canonical (often `/` or `/products`) — skip the slot.
-            return null;
         }
 
         return $path;
@@ -7771,100 +4979,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         return \array_values($normalized) ?: ['127.0.0.1'];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function resolveFpcBuildAheadHosts(): array
-    {
-        $hosts = ['127.0.0.1'];
-        $configured = Env::get('wls.worker.fpc_buildahead_hosts', null);
-        if ($configured === null || $configured === '') {
-            $configured = Env::get('wls.worker.fpc_warmup_hosts', []);
-        }
-        if (\is_string($configured)) {
-            $decoded = \json_decode($configured, true);
-            $configured = \is_array($decoded)
-                ? $decoded
-                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
-        }
-        if (\is_array($configured)) {
-            foreach ($configured as $host) {
-                if (\is_scalar($host)) {
-                    $hosts[] = (string)$host;
-                }
-            }
-        }
-
-        $normalized = [];
-        foreach ($hosts as $host) {
-            $host = $this->normalizeInternalWarmupHost($host);
-            if ($host === null) {
-                continue;
-            }
-            $normalized[$host] = $host;
-            if (\count($normalized) >= 3) {
-                break;
-            }
-        }
-
-        return \array_values($normalized);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function resolveFpcBuildAheadPaths(): array
-    {
-        // Framework owns only the universal homepage contract. Modules publish
-        // additional page paths through FpcWarmupProviderInterface.
-        $paths = ['/'];
-
-        try {
-            $warmup = $this->runtimeProvider(FpcWarmupProviderInterface::class);
-            if ($warmup instanceof FpcWarmupProviderInterface) {
-                $resolved = $warmup->warmupPaths();
-                if ($resolved !== []) {
-                    $paths = $resolved;
-                }
-            }
-        } catch (\Throwable) {
-        }
-
-        $configured = Env::get('wls.worker.fpc_buildahead_paths', []);
-        if (\is_string($configured)) {
-            $decoded = \json_decode($configured, true);
-            $configured = \is_array($decoded)
-                ? $decoded
-                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
-        }
-        if (\is_array($configured)) {
-            foreach ($configured as $path) {
-                if (\is_scalar($path)) {
-                    $paths[] = (string)$path;
-                }
-            }
-        }
-
-        $normalized = [];
-        foreach ($paths as $path) {
-            $path = \str_replace(["\r", "\n", "\t"], '', \trim((string)$path));
-            if ($path === '') {
-                continue;
-            }
-            if ($path[0] !== '/') {
-                $path = '/' . $path;
-            }
-            if (\strlen($path) > 2048) {
-                continue;
-            }
-            $normalized[$path] = $path;
-        }
-
-        $maxPaths = (int)(Env::get('wls.worker.fpc_buildahead_max_paths', 96) ?: 96);
-        $maxPaths = \max(1, \min($maxPaths, 192));
-        return \array_slice(\array_values($normalized), 0, $maxPaths);
     }
 
     /**
@@ -8130,30 +5244,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     /**
-     * @return list<string>
-     */
-    private function hotWorkerBootstrapEvents(): array
-    {
-        return [
-            'Weline_Framework_Runtime::worker_bootstrap_after',
-            'Weline_Framework::App::pre_route_gate',
-            'Weline_Framework::App::run_before',
-            'Weline_Framework::App::run_after',
-            'Weline_Framework::App::url_parsed_after',
-            'Weline_Framework_Router::before_start',
-            'Weline_Framework_Router::process_uri_before',
-            'Weline_Framework_Router::route_before',
-            'Weline_Framework_Router::route_after',
-            'Weline_Framework_View::fetch_file',
-            'Weline_Framework_Template::after_render',
-            'Weline_Framework_FrontendController::init_before',
-            'Weline_Framework_FrontendController::init_after',
-            'Weline_Framework_Query::before_execute',
-            'Weline_Framework_Query::after_execute',
-        ];
-    }
-
-    /**
      * @param callable(): void $callback
      */
     private function warmupStep(callable $callback, string $label): void
@@ -8195,6 +5285,55 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
     }
 
+    /**
+     * Append the global regions to the storefront body right before it leaves the runtime.
+     *
+     * `handle()` is the single point where the WLS response body is produced, whichever
+     * view engine or layout pipeline rendered it, so the contract lives here instead of in
+     * each producer. Additive and idempotent; non-page payloads are untouched.
+     */
+    private function withGlobalRegions(string $body): string
+    {
+        if (!\str_contains($body, '<head') || !\str_contains($body, '</body>')) {
+            return $body;
+        }
+        try {
+            // 同一请求更早的阶段可能已经渲染过（并记忆为空）某个 region；出口处必须以
+            // 当前站点开关重新算一遍，否则「有的页面有全局区、有的没有」会随首个调用者漂移。
+            \Weline\Theme\Region\GlobalRegion::reset();
+
+            return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Region\GlobalRegionHtmlInjector::class)
+                ->ensure($body, 'frontend');
+        } catch (\Throwable) {
+            return $body;
+        }
+    }
+
+    /**
+     * Same contract as withGlobalRegions(), for responses that are already formatted as a
+     * raw HTTP message (cached FPC / bag hits). Compressed bodies are left untouched.
+     */
+    private function withGlobalRegionsHttp(string $httpResponse): string
+    {
+        $sep = \strpos($httpResponse, "\r\n\r\n");
+        if ($sep === false) {
+            // Some paths hand back a bare body instead of a formatted HTTP message.
+            return $this->withGlobalRegions($httpResponse);
+        }
+        $header = \substr($httpResponse, 0, $sep + 4);
+        $body = \substr($httpResponse, $sep + 4);
+        if (\preg_match('/\r\nContent-Encoding:\s*(?!identity)/i', $header) === 1) {
+            return $httpResponse;
+        }
+        $patched = $this->withGlobalRegions($body);
+        if ($patched === $body) {
+            return $httpResponse;
+        }
+        $replaced = \preg_replace('/(\r\nContent-Length:\s*)\d+/i', '${1}' . \strlen($patched), $header, 1);
+
+        return (\is_string($replaced) ? $replaced : $header) . $patched;
+    }
+
     private function requestPipeline(): RequestPipelineInterface
     {
         return $this->requestPipeline ??= new RequestPipeline($this);
@@ -8212,6 +5351,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      * @inheritDoc
      */
     public function handle(?Request $request = null): string
+    {
+        $response = $this->handleInternal($request);
+
+        return $this->withGlobalRegionsHttp($response);
+    }
+
+    private function handleInternal(?Request $request = null): string
     {
         if ($request === null) {
             throw new \LogicException('WLS: WlsRuntime::handle() requires a Request instance for fiber-local context isolation.');
@@ -8478,7 +5624,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $this->applyDynamicFirstRenderHeaders($timing, $request, true, $cachedFpcResponse);
                 $this->decorateCachedFpcResponseForTelemetry($cachedFpcResponse, $request);
 
-                return $cachedFpcResponse->toHttpString();
+                return $this->withGlobalRegionsHttp($cachedFpcResponse->toHttpString());
             }
             unset($parse, $cachedFpcResponse, $appApplyUrlProfile);
             $result = $pipelineExecution->result;
@@ -8636,7 +5782,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $this->applyTitleLocaleProbeToPendingResponse($resultStr, $request);
             $this->clearRequestContextProfileSnapshots();
 
-            return $resultStr;
+            return $this->withGlobalRegions($resultStr);
             
         } catch (\Weline\Framework\Http\StaticFileException $staticEx) {
             // 静态文件异常：转换为文件响应
@@ -8880,15 +6026,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 } catch (\Throwable $e) {
                     RequestResetException::append($finalizationFailures, 'request_trace_reset', $e);
                 }
-            }
-            // wave8-8c2: seed HotCache bags while storefront Context is still alive
-            // (after FPC HIT/MISS body is ready, before StateManager::reset).
-            try {
-                if ($request instanceof Request) {
-                    $this->maybeCaptureHotCacheBagPrimeBeforeReset($request);
-                }
-            } catch (\Throwable $e) {
-                RequestResetException::append($finalizationFailures, 'hot_cache_bag_prime', $e);
             }
             // 确保总是重置状态（存在挂起 Fiber 时仍执行完整 reset，见 WlsConcurrency 类说明）
             try {

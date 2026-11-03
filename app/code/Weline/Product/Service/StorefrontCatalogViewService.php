@@ -110,25 +110,86 @@ final class StorefrontCatalogViewService
 
         $scope = $this->currentScope();
         $websiteId = max(0, (int)$scope->websiteId);
-        $logicalKey = $this->catalogCache->catalogTargetedOffersLogicalKey($websiteId, $productIds, false)
-            . '.media.v1';
-        $images = TraceGate::measurePhase(
-            'product.catalog.listing_media',
-            fn(): array => $this->hotCache->rememberPolicy(
-                StorefrontCatalogCacheCoordinator::catalogTargetedOffersPolicy(),
-                $logicalKey,
-                fn(): array => $this->snapshots->resolveCatalogImages($productIds, $scope),
-            ),
-            ['products' => count($productIds)],
-        );
         $locale = trim((string)RequestContext::getWelineUserLang());
+
+        // 同一页里列表卡片、推荐位、货架会拿同一批 product_id 反复来水合媒体
+        // （画像里 listing_media 一次页面 4 次调用 / 24ms）。同请求同入参复用上次结果。
+        $requestMemoKey = '';
+        try {
+            $requestMemoKey = 'product.catalog.listing_media.' . \sha1((string)\json_encode([
+                $websiteId,
+                $scope->canonicalKey(),
+                $locale,
+                $productIds,
+            ]));
+            $memo = RequestContext::get($requestMemoKey);
+            if (\is_array($memo)) {
+                return $memo;
+            }
+        } catch (\Throwable) {
+            $requestMemoKey = '';
+        }
+
+        // 同一页里列表网格、推荐位、货架、best-sellers 会拿**不同**的 id 集合反复来要图片；
+        // 之前每次按「整集合」缓存键各建一次（画像里 snapshot.media_url 6 次 / 194ms）。
+        // 这里维护「本请求已解析过的 product_id → 图片」增量表，只解析缺的部分。
+        $imageMapKey = 'product.catalog.image_by_id.' . \sha1($websiteId . '|' . $scope->canonicalKey());
+        $imageMap = [];
+        try {
+            $cachedMap = RequestContext::get($imageMapKey);
+            $imageMap = \is_array($cachedMap) ? $cachedMap : [];
+        } catch (\Throwable) {
+            $imageMapKey = '';
+        }
+        $missingIds = \array_values(\array_filter(
+            $productIds,
+            static fn(int $id): bool => !\array_key_exists($id, $imageMap)
+        ));
+
+        if ($missingIds !== []) {
+            $logicalKey = $this->catalogCache->catalogTargetedOffersLogicalKey($websiteId, $missingIds, false)
+                . '.media.v1';
+            $resolved = TraceGate::measurePhase(
+                'product.catalog.listing_media',
+                fn(): array => $this->hotCache->rememberPolicy(
+                    StorefrontCatalogCacheCoordinator::catalogTargetedOffersPolicy(),
+                    $logicalKey,
+                    fn(): array => $this->snapshots->resolveCatalogImages($missingIds, $scope),
+                ),
+                ['products' => count($missingIds)],
+            );
+            foreach ($missingIds as $id) {
+                $imageMap[$id] = (string)($resolved[$id] ?? '');
+            }
+            if ($imageMapKey !== '') {
+                try {
+                    RequestContext::set($imageMapKey, $imageMap);
+                } catch (\Throwable) {
+                    // 记忆失败退化为重复解析，不影响正确性。
+                }
+            }
+        }
+
         foreach ($offers as &$offer) {
-            $image = (string)($images[(int)($offer['product_id'] ?? 0)] ?? '');
+            $image = (string)($imageMap[(int)($offer['product_id'] ?? 0)] ?? '');
             $offer['image'] = $image;
             $offer['images'] = $image !== '' ? [$image] : [];
-            $offer = $this->mediaUrls->resolveListingOffer($offer, $scope, $locale);
         }
         unset($offer);
+
+        // 关键：必须走批量版本。resolveListingOffer() 内部对「单个 offer」做一次
+        // primeReferenceCache → resolveReferences 批处理（DB/资源索引），逐条调用等于
+        // 每张卡发一次批量解析请求（全冷页实测 snapshot.media_url 6 次 / 194ms）。
+        // resolveListingOffers() 会先按整页引用集合 prime 一次，再逐条映射。
+        $offers = $this->mediaUrls->resolveListingOffers($offers, $scope, $locale);
+
+        if ($requestMemoKey !== '') {
+            try {
+                RequestContext::set($requestMemoKey, $offers);
+            } catch (\Throwable) {
+                // 记忆失败退化为重复水合，不影响正确性。
+            }
+        }
 
         return $offers;
     }
@@ -1158,25 +1219,38 @@ final class StorefrontCatalogViewService
         $allowedProductIds = $filterIds !== [] ? \array_fill_keys($filterIds, true) : [];
 
         if ($maxRows !== null && $filterIds === []) {
-            $rows = [];
+            // Cold path: page size tracks remaining need; do not floor at 24.
+            //
+            // 先只做「分页取 offer 行」这一件便宜的事，把所有页攒齐后再**一次性**进
+            // snapshot/pricing/surface 全流程。之前每页 128 行都各自完整跑一遍
+            // build（实测 CLI 全冷两页把定价+surface 做了两轮，占 2.0s 里的 98%）。
+            $prepared = [];
             $afterOfferId = 0;
+            $page = [];
             do {
-                // Cold path: page size tracks remaining need; do not floor at 24.
-                $pageSize = max(1, min(128, $maxRows - count($rows)));
+                $pageSize = max(1, min(128, $maxRows - count($prepared)));
                 $page = $this->offers->listPublishedRepresentativePage($websiteId, $pageSize, $afterOfferId);
                 if ($page === []) {
                     break;
                 }
                 $afterOfferId = (int)$page[array_key_last($page)][Offer::schema_fields_ID];
-                $ids = array_values(array_unique(array_map(
-                    static fn(array $row): int => (int)$row[Offer::schema_fields_PRODUCT_ID], $page,
-                )));
-                $rows = array_merge($rows, $this->buildPublishedOffers(
-                    $websiteId, $scope, $ids, true, $includeListingDetails, null, $page, $includeMedia,
-                ));
-            } while (count($rows) < $maxRows && count($page) === $pageSize);
+                foreach ($page as $row) {
+                    $prepared[] = $row;
+                }
+            } while (count($prepared) < $maxRows && count($page) === $pageSize);
 
-            return array_slice($rows, 0, $maxRows);
+            if ($prepared === []) {
+                return [];
+            }
+
+            $ids = array_values(array_unique(array_map(
+                static fn(array $row): int => (int)$row[Offer::schema_fields_PRODUCT_ID],
+                $prepared,
+            )));
+
+            return array_slice($this->buildPublishedOffers(
+                $websiteId, $scope, $ids, true, $includeListingDetails, null, $prepared, $includeMedia,
+            ), 0, $maxRows);
         }
 
         $phaseStartedAt = hrtime(true);
@@ -1870,6 +1944,69 @@ final class StorefrontCatalogViewService
             return [];
         }
 
+        // 超集复用：同一页里列表快照（全 codes）与 facet 计数（子集 codes）会各自查
+        // attribute_value（画像里 facet_counts build 内一次 ~100ms）。若本请求已缓存
+        // 「更大 ids × 更大 codes」的行集合，直接 PHP 过滤，不再打库。
+        $supersetKey = 'product.attr_rows_superset.' . \sha1((string)\json_encode([
+            $websiteId, \array_values($storeIds), \array_values($locales),
+        ]));
+        $superset = null;
+        try {
+            if (Context::hasCurrent()) {
+                $superset = RequestContext::get($supersetKey);
+                $superset = \is_array($superset) ? $superset : null;
+            }
+        } catch (\Throwable) {
+            $superset = null;
+        }
+        if ($superset !== null) {
+            $idsLoaded = \array_fill_keys((array)($superset['ids'] ?? []), true);
+            $codesLoaded = $superset['codes'] ?? null; // null = 未按 codes 过滤（全量）
+            $storesLoaded = \array_fill_keys((array)($superset['storeIds'] ?? []), true);
+            $storesCovered = \count(\array_filter(
+                (array)$storeIds,
+                static fn(int $sid): bool => isset($storesLoaded[$sid]),
+            )) === \count((array)$storeIds);
+            $idsCovered = $storesCovered && \count(\array_filter($productIds, static fn(int $id): bool => isset($idsLoaded[$id])))
+                === \count($productIds);
+            $codesCovered = $codesLoaded === null
+                || (\is_array($codesLoaded)
+                    && ($attributeCodes === null
+                        || \count(\array_filter(
+                            (array)$attributeCodes,
+                            static fn(string $code): bool => !isset($codesLoaded[\strtolower(\trim($code))]),
+                        ))) === 0);
+            if ($idsCovered && $codesCovered) {
+                $filtered = [];
+                $wantIds = \array_fill_keys($productIds, true);
+                $wantCodes = $attributeCodes === null
+                    ? null
+                    : \array_fill_keys(\array_map(
+                        static fn(string $code): string => \strtolower(\trim($code)),
+                        (array)$attributeCodes,
+                    ), true);
+                foreach ((array)($superset['rows'] ?? []) as $row) {
+                    if (!\is_array($row)) {
+                        continue;
+                    }
+                    if (!isset($wantIds[(int)($row['entity_id'] ?? 0)])) {
+                        continue;
+                    }
+                    if ($wantCodes !== null
+                        && !isset($wantCodes[\strtolower(\trim((string)($row['attribute_code'] ?? '')))])
+                    ) {
+                        continue;
+                    }
+                    $filtered[] = $row;
+                }
+                if (Context::hasCurrent()) {
+                    RequestContext::set($key, $filtered);
+                }
+
+                return $filtered;
+            }
+        }
+
         // Unfiltered attribute dumps × listing catalogs still exceed HARD_LIMIT even with
         // storefront locales; chunk entities (facets should pass $attributeCodes instead).
         $chunkSize = $attributeCodes === null ? 24 : 120;
@@ -1888,6 +2025,23 @@ final class StorefrontCatalogViewService
         }
         if (Context::hasCurrent()) {
             RequestContext::set($key, $rows);
+            // 只维护最近一份超集（全冷下行集合可能很大），供后续子集调用复用。
+            try {
+                $codesLoaded = $attributeCodes === null
+                    ? null
+                    : \array_fill_keys(\array_map(
+                        static fn(string $code): string => \strtolower(\trim($code)),
+                        (array)$attributeCodes,
+                    ), true);
+                RequestContext::set($supersetKey, [
+                    'rows' => $rows,
+                    'ids' => $productIds,
+                    'codes' => $codesLoaded,
+                    'storeIds' => \array_values(\array_unique(\array_map('intval', (array)$storeIds))),
+                ]);
+            } catch (\Throwable) {
+                // 复用失败退化为按集合各查一次，不影响正确性。
+            }
         }
 
         return $rows;

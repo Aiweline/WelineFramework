@@ -23,6 +23,8 @@ class ProtocolRouteRewrite implements ObserverInterface
         '.well-known/trust.txt' => 'geo/protocol/llms',
         'geo-feed.json' => 'geo/protocol/feedjson',
         'geo-feed.xml' => 'geo/protocol/feedxml',
+        '.well-known/ai-catalog.json' => 'geo/protocol/llms',
+        '.well-known/ard.json' => 'geo/protocol/llms',
     ];
 
     public function execute(Event &$event): void

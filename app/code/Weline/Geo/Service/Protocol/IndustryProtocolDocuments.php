@@ -84,6 +84,8 @@ final class IndustryProtocolDocuments
             '- RSL license: ' . $baseUrl . '/license.xml',
             '- trust.txt: ' . $baseUrl . '/trust.txt',
             '- TDMRep: ' . $baseUrl . '/.well-known/tdmrep.json',
+            '- Agent catalog (ARD): ' . $baseUrl . '/.well-known/ard.json',
+            '- Agent catalog (ai-catalog): ' . $baseUrl . '/.well-known/ai-catalog.json',
         ];
         if ($feedEnabled) {
             $lines[] = '- JSON Feed: ' . $baseUrl . '/geo-feed.json';
@@ -144,8 +146,39 @@ final class IndustryProtocolDocuments
             $lines[] = '<link rel="alternate" type="text/plain" title="' . $title . ' llms.txt" href="' . self::escape($baseUrl . '/llms.txt') . '">';
             $lines[] = '<link rel="alternate" type="text/plain" title="' . $title . ' llms-full.txt" href="' . self::escape($baseUrl . '/llms-full.txt') . '">';
         }
+        if ($baseUrl !== '') {
+            // ARD v0.91 (agenticresourcediscovery.org): rel="ard" is the normative
+            // link relation; rel="ai-catalog" is the predecessor consumers MAY honour.
+            $lines[] = '<link rel="ard" type="application/ai-registry+json" href="' . self::escape($baseUrl . '/.well-known/ard.json') . '">';
+            $lines[] = '<link rel="ai-catalog" type="application/ai-catalog+json" href="' . self::escape($baseUrl . '/.well-known/ai-catalog.json') . '">';
+        }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * ARD agent catalog manifest (ai-catalog.schema.json, specVersion 1.0).
+     * Served at /.well-known/ai-catalog.json (predecessor) and /.well-known/ard.json.
+     *
+     * @param array{entries:list<array<string,mixed>>} $entries Prebuilt ARD catalog entries.
+     */
+    public static function aiCatalogJson(array $entries, string $baseUrl): string
+    {
+        $manifest = [
+            'specVersion' => '1.0',
+            'entries' => array_values($entries),
+        ];
+        $host = rtrim(trim($baseUrl), '/');
+        if ($host !== '' && preg_match('#^https?://#i', $host) === 1) {
+            $manifest['host'] = [
+                'displayName' => parse_url($host, PHP_URL_HOST) ?? $host,
+                'documentationUrl' => $host . '/llms.txt',
+            ];
+        }
+
+        $json = json_encode($manifest, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
+        return (is_string($json) ? $json : '{"specVersion":"1.0","entries":[]}') . "\n";
     }
 
     private static function escape(string $value): string

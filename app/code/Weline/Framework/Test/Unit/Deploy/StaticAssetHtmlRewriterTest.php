@@ -7,6 +7,7 @@ namespace Weline\Framework\Test\Unit\Deploy;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Deploy\StaticAssetHtmlRewriter;
 use Weline\Framework\Deploy\StaticBuildId;
+use Weline\Framework\Deploy\ThemeRuntimeState;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime;
 
 /**
@@ -15,6 +16,19 @@ use Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime;
 final class StaticAssetHtmlRewriterTest extends TestCase
 {
     private const ID = 'abc123def456';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        ThemeRuntimeState::set(new \Weline\Theme\Service\ThemeUpdate\ThemeRuntimeState());
+    }
+
+    protected function tearDown(): void
+    {
+        ThemeUpdateRuntime::reset();
+        ThemeRuntimeState::set(null);
+        parent::tearDown();
+    }
 
     public function testRewritesAttributesAndCssUrls(): void
     {

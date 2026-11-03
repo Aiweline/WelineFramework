@@ -88,6 +88,26 @@ final class PromotionStorefrontActiveDealResolver
         }
 
         $scope = $this->scopeResolver->resolve();
+
+        // 同一页里卡片、推荐位、货架、价格调整器会对同一商品反复问「有哪些活动」
+        // （画像里一次列表页 334 次调用 / 38ms）。同请求、同 scope、同入参才复用，
+        // 避免切换 scope/店铺后拿到上一个作用域的活动结果。
+        $requestMemoKey = '';
+        try {
+            $scopeKey = \method_exists($scope, 'canonicalKey') ? (string)$scope->canonicalKey() : '';
+            $requestMemoKey = 'promotion.eligible_deals.' . \sha1(
+                $scopeKey
+                . '|' . $productId
+                . '|' . ($catalogPrice === null ? '' : \number_format($catalogPrice, 2, '.', ''))
+            );
+            $memo = \Weline\Framework\Runtime\RequestContext::get($requestMemoKey);
+            if (\is_array($memo)) {
+                return $memo;
+            }
+        } catch (\Throwable) {
+            $requestMemoKey = '';
+        }
+
         $cache = \Weline\Framework\Manager\ObjectManager::getInstance(
             \Weline\Framework\Cache\Service\StorefrontScopeHotCache::class,
         );
@@ -217,7 +237,16 @@ final class PromotionStorefrontActiveDealResolver
             },
         );
 
-        return array_values($eligible);
+        $result = array_values($eligible);
+        if ($requestMemoKey !== '') {
+            try {
+                \Weline\Framework\Runtime\RequestContext::set($requestMemoKey, $result);
+            } catch (\Throwable) {
+                // 记忆失败退化为重复解析，不影响正确性。
+            }
+        }
+
+        return $result;
     }
 
     private function matchesPriceBand(float $price, string $priceBand): bool

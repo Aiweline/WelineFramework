@@ -2,15 +2,17 @@
 return array (
   'name' => 'Weline_Ai',
   'version' => '1.3.112',
-  'requires' => 
+  'requires' =>
   array (
     'Weline_Admin' => '*',
     'Weline_Backend' => '*',
+    'Weline_Database' => '*',
     'Weline_Framework' => '*',
   ),
-  'optional' => 
+  'optional' =>
   array (
     'Weline_I18n' => '*',
+    'Weline_Websites' => '*',
   ),
   'provides' => 
   array (

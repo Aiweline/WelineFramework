@@ -14,6 +14,7 @@ return [
     ],
     'optional' => [
         'Weline_Product' => '*',
+        'Weline_Server' => '*',
     ],
     'provides' => [
         'cache.warmer.search.query_result_tip'
@@ -34,5 +35,7 @@ return [
             => \Weline\Search\Service\SearchProjectionPendingDrainer::class,
         \Weline\Search\Api\SearchProjectionQueueAdmissionInterface::class
             => \Weline\Search\Service\SearchProjectionQueueAdmission::class,
+        'theme.public_route.search'
+            => \Weline\Search\Controller\Router::class,
     ],
 ];

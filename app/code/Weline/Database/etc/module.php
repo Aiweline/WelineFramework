@@ -16,5 +16,9 @@ return [
             => \Weline\Database\Service\Index\SchemaIndexChangeSink::class,
         \Weline\Framework\Database\Release\Api\DatabaseReleaseCoordinatorInterface::class
             => \Weline\Database\Service\Release\DatabaseReleaseCoordinator::class,
+        \Weline\Framework\Setup\Schema\SchemaDiffExecutorInterface::class
+            => \Weline\Database\Service\Release\SchemaDiffExecutor::class,
+        \Weline\Framework\Setup\Schema\SchemaDriftInspectorInterface::class
+            => \Weline\Database\Service\Release\SchemaCheckpointDriftInspector::class,
     ],
 ];

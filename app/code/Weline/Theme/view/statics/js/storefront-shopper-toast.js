@@ -194,7 +194,9 @@
         var noticeWidth = Math.min(22 * 16, Math.max(240, global.innerWidth - 32));
         host.style.width = noticeWidth + 'px';
 
-        var trigger = doc.querySelector('[data-mini-cart-trigger]');
+        // 触发器定位锚点：优先声明式展开元素（默认部件/设计主题都用它），
+        // 兼容旧标记 data-mini-cart-trigger。
+        var trigger = doc.querySelector('[data-mini-cart-open], [data-mini-cart-trigger]');
         if (!(trigger instanceof HTMLElement)) {
             host.style.top = 'max(1rem, env(safe-area-inset-top))';
             host.style.right = 'max(1rem, env(safe-area-inset-right))';

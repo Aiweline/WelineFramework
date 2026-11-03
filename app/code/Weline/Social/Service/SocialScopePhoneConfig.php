@@ -6,7 +6,7 @@ namespace Weline\Social\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Api\ConfigReader;
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Api\ConfigStore;
 
 class SocialScopePhoneConfig
 {
@@ -82,7 +82,7 @@ class SocialScopePhoneConfig
         ];
 
         foreach ($values as $field => $value) {
-            ObjectManager::getInstance(SystemConfig::class)->setScopedConfig(
+            ObjectManager::getInstance(ConfigStore::class)->setScopedConfig(
                 self::KEY_PREFIX . $field,
                 $value,
                 self::MODULE,

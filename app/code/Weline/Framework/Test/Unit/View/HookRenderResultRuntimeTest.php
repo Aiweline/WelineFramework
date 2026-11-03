@@ -25,7 +25,9 @@ final class HookRenderResultRuntimeTest extends TestCore
     {
         $template = new class extends Template {
             public string $mode = 'handled';
-            public bool $semanticRender = false;
+            /** getHook 执行瞬间看到的 decorate_output 取值（生产语义：preferFallback 时被强制为 false）。 */
+            public mixed $decorateDuringHook = null;
+            public bool $forceRefreshDuringHook = false;
 
             public function __construct()
             {
@@ -33,8 +35,8 @@ final class HookRenderResultRuntimeTest extends TestCore
 
             public function getHook(string $name, bool $forceRefresh = false): string
             {
-                $this->semanticRender = RequestContext::get('view.hook.decorate_output') === false
-                    && $forceRefresh;
+                $this->decorateDuringHook = RequestContext::get('view.hook.decorate_output');
+                $this->forceRefreshDuringHook = $forceRefresh;
 
                 return match ($this->mode) {
                     'handled' => $this->handled($name),
@@ -53,7 +55,9 @@ final class HookRenderResultRuntimeTest extends TestCore
 
         RequestContext::set('view.hook.decorate_output', true);
         $handled = $template->getHookResult(' header-language-switcher ', false, true);
-        self::assertTrue($template->semanticRender);
+        // 生产语义：preferFallbackOnEmpty 时 getHook 期间 decorate_output 被强制为 false，
+        // 返回后恢复调用前的 true；require_string_result 不泄漏到调用方。
+        self::assertFalse($template->decorateDuringHook);
         self::assertTrue($handled->handledEmpty);
         self::assertFalse($handled->shouldUseFallback());
         self::assertTrue(RequestContext::get('view.hook.decorate_output'));

@@ -2414,7 +2414,6 @@ $deferredWorkerBootstrapWarmupNotBefore = wlsWorkerDeferredWarmupNotBefore(
     $workerId,
 );
 $deferredWorkerBootstrapLoopCompleted = false;
-$homepageKeepWarmFiber = null;
 $processL1HydrateFiber = null;
 $attackLogNextFlushCheckAt = 0.0;
 
@@ -2755,7 +2754,6 @@ while (true) {
 
     // ========== Homepage keep-warm / Process L1 Hydrate (idle, low priority) ==========
     foreach ([
-        'homepageKeepWarmFiber',
         'processL1HydrateFiber',
         'deferredWarmupFiber',
         'sharedRuntimeConnectionWarmupFiber',
@@ -2770,36 +2768,6 @@ while (true) {
         && \memory_get_usage(true) >= (int)($maxMemoryBytes * 0.70);
     if (\Weline\Server\Service\Memory\WorkerHostPressureApplier::shouldSkipKeepWarm()) {
         $homepageMemoryPressure = true;
-    }
-    if ($runtime instanceof \Weline\Server\Runtime\WlsRuntime
-        && $workerLoopStartedSent
-        && !$isMaintenanceWorker
-        && !$ipcReceivedShutdown
-        && $homepageKeepWarmFiber === null
-        && \Weline\Server\Service\Policy\WorkerPolicyControl::isApplicationGateOpen()
-        && !wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, null)
-        && $runtime->shouldScheduleHomepageKeepWarm($activeRequests, $ipcDraining, $homepageMemoryPressure)
-    ) {
-        $fiberScheduler->registerFiber();
-        $homepageKeepWarmFiber = new \Fiber(static function () use ($runtime, $fiberScheduler): void {
-            $self = \Fiber::getCurrent();
-            try {
-                $runtime->runHomepageKeepWarmCycle();
-            } finally {
-                wlsReleaseFiberDbOwner('homepage-keep-warm');
-                if ($self instanceof \Fiber) {
-                    \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($self);
-                }
-                $fiberScheduler->unregisterFiber();
-            }
-        });
-        try {
-            $homepageKeepWarmFiber->start();
-        } catch (\Throwable $e) {
-            $fiberScheduler->unregisterFiber();
-            $homepageKeepWarmFiber = null;
-            WlsLogger::warning_('[WorkerWarmup] homepage keep-warm start failed: ' . $e->getMessage());
-        }
     }
     // Layer B hydrate is Shared→Process only; must retry while deferred even if
     // the public application gate is closed (maintenance / policy). Keep-warm
@@ -3581,7 +3549,6 @@ while (true) {
     if ($ipcClient !== null && $ipcClient->isConnected()) {
         $policyTrackedFibers = \count($activeFibers);
         foreach ([
-            $homepageKeepWarmFiber,
             $processL1HydrateFiber ?? null,
             $deferredWarmupFiber ?? null,
             $sharedRuntimeConnectionWarmupFiber ?? null,
@@ -6510,6 +6477,32 @@ function wlsWorkerReadStableEdgeSecret(string $file): ?string
         : null;
 }
 
+function wlsInjectGlobalRegions(string $httpResponse): string
+{
+    $sep = \strpos($httpResponse, "\r\n\r\n");
+    if ($sep === false) {
+        return $httpResponse;
+    }
+    $header = \substr($httpResponse, 0, $sep + 4);
+    $body = \substr($httpResponse, $sep + 4);
+    if ($body === '' || !\str_contains($body, '<head') || !\str_contains($body, '</body>')) {
+        return $httpResponse;
+    }
+    // Compressed bodies cannot be patched as text.
+    if (\preg_match('/\r\nContent-Encoding:\s*(?!identity)/i', $header) === 1) {
+        return $httpResponse;
+    }
+    try {
+        $body = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Region\GlobalRegionHtmlInjector::class)
+            ->ensure($body, 'frontend');
+    } catch (\Throwable) {
+        return $httpResponse;
+    }
+    $replaced = \preg_replace('/(\r\nContent-Length:\s*)\d+/i', '${1}' . \strlen($body), $header, 1);
+
+    return (\is_string($replaced) ? $replaced : $header) . $body;
+}
+
 function handleRequest(
     string $rawRequest,
     ?\Weline\Server\Runtime\WlsRuntime $runtime,
@@ -6883,7 +6876,7 @@ function handleRequest(
                 if (\session_status() === PHP_SESSION_ACTIVE) {
                     \session_write_close();
                 }
-                return $streamedMarker;
+                return wlsInjectGlobalRegions($streamedMarker);
             }
             // 302 等响应终止为正常控制流，不记错误
             if (!$handleE instanceof \Weline\Framework\Http\ResponseTerminateException) {
@@ -6899,7 +6892,7 @@ function handleRequest(
             if (\session_status() === PHP_SESSION_ACTIVE) {
                 \session_write_close();
             }
-            return $streamedMarker;
+            return wlsInjectGlobalRegions($streamedMarker);
         }
         if (\session_status() === PHP_SESSION_ACTIVE) {
             \session_write_close();
@@ -7168,7 +7161,7 @@ function handleRequest(
             }
         }
         
-        return $httpResponse;
+        return wlsInjectGlobalRegions($httpResponse);
     } catch (\Throwable $e) {
         // 302 等响应终止为正常控制流，不记错误
         if (!$e instanceof \Weline\Framework\Http\ResponseTerminateException) {

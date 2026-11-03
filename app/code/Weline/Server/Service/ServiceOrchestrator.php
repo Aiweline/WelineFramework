@@ -446,6 +446,17 @@ class ServiceOrchestrator
      * }|null
      */
     private ?array $pendingSslCertReloadAck = null;
+    /**
+     * Deferred-reload laggard tracking (industry-standard bounded-retry-then-
+     * replace, cf. etcd/ZooKeeper config-change convergence and Kubernetes
+     * rollout stuck-pod replacement). Keyed by client_id: each deferred round
+     * bumps the lagging member's count; once a member misses
+     * self::SSL_CERT_RELOAD_MAX_CONSECUTIVE_DEFERRED consecutive rounds it is
+     * fail-stopped and replaced (healthy members are untouched), so a single
+     * wedged Worker can never hold a retirement pending forever.
+     */
+    private array $sslCertReloadLaggardDeferredCounts = [];
+    private const SSL_CERT_RELOAD_MAX_CONSECUTIVE_DEFERRED = 3;
     /** Security containment gate: quarantined TLS/H3 slots must not resurrect. */
     private bool $tlsServingQuarantined = false;
 
@@ -30868,6 +30879,170 @@ class ServiceOrchestrator
     }
 
     /**
+     * Track per-client consecutive deferred-miss counts and return the members
+     * that crossed self::SSL_CERT_RELOAD_MAX_CONSECUTIVE_DEFERRED. Members that
+     * ACK in a later round reset to zero, so a one-off ACK jitter never
+     * accumulates toward replacement.
+     *
+     * @param array<string|int,mixed> $failures Terminal failure receipts of
+     *        this round (ack_timeout / ack_operation_mismatch / ...).
+     * @return list<int> client_ids that must now be replaced.
+     */
+    private function noteSslCertReloadDeferredLaggards(array $failures): array
+    {
+        // Bump every member that failed this round; success is proven by a
+        // later ACK, which clears its count there.
+        $seen = [];
+        foreach ($failures as $failure) {
+            if (!\is_array($failure)) {
+                continue;
+            }
+            $clientId = (int)($failure['client_id'] ?? 0);
+            if ($clientId < 1) {
+                continue;
+            }
+            $seen[$clientId] = true;
+            $count = (int)($this->sslCertReloadLaggardDeferredCounts[$clientId] ?? 0) + 1;
+            $this->sslCertReloadLaggardDeferredCounts[$clientId] = $count;
+        }
+
+        if ($this->sslCertReloadLaggardDeferredCounts === []) {
+            return [];
+        }
+
+        $laggards = [];
+        foreach ($this->sslCertReloadLaggardDeferredCounts as $clientId => $count) {
+            if (!isset($seen[$clientId])) {
+                // Healthy this round: a member that reappears in a later
+                // expected set starts counting from zero again.
+                unset($this->sslCertReloadLaggardDeferredCounts[$clientId]);
+                continue;
+            }
+            if ($count >= self::SSL_CERT_RELOAD_MAX_CONSECUTIVE_DEFERRED) {
+                $laggards[] = (int)$clientId;
+            }
+        }
+
+        return $laggards;
+    }
+
+    /**
+     * Replace only the wedged members: fail-stop them through the exact same
+     * managed-identity guard the security containment uses, and schedule their
+     * resurrection, so the next reload round reaches a full ACK set. Healthy
+     * (ACKed) members are never touched, and the authoritative serving pointer
+     * is deliberately NOT advanced — this is a member-healing action, not a
+     * manifest transaction.
+     *
+     * @param list<int> $laggardClientIds
+     * @return array<string,mixed>|null Containment-shaped report; null when no
+     *         laggard could be resolved against the live registry (caller then
+     *         keeps the plain deferred semantics).
+     */
+    private function replaceSslCertReloadLaggards(
+        array $laggardClientIds,
+        int $expectedManifestGeneration,
+        string $expectedManifestDigest,
+        int $expectedTlsRouteCount,
+        string $operationId,
+    ): ?array {
+        $result = [
+            'committed' => false,
+            'quarantined' => false,
+            'master_control_plane_preserved' => false,
+            'contained' => [],
+            'failures' => [],
+        ];
+        $targets = [];
+        try {
+            foreach ($this->registry->getAllInstances() as $instance) {
+                $clientId = $instance->ipcClientId;
+                if ($clientId === null || !\in_array((int)$clientId, $laggardClientIds, true)) {
+                    continue;
+                }
+                if (!$this->isLiveSslCertReloadTarget($instance)) {
+                    continue;
+                }
+                $targets[] = $instance;
+            }
+        } catch (\Throwable $throwable) {
+            $result['failures'][] = [
+                'code' => 'laggard_snapshot_failed',
+                'error' => GatewayBoundedText::singleLine(
+                    $throwable->getMessage(),
+                    512,
+                    'Laggard replacement could not snapshot the registry.',
+                ),
+            ];
+        }
+
+        if ($targets === []) {
+            WlsLogger::error_(
+                '[Orchestrator] SSL_CERT_RELOAD laggard replacement skipped (no live target resolved)'
+                . ' operation=' . $operationId
+                . ' laggard_clients=' . \json_encode($laggardClientIds)
+            );
+            return $targets === [] && $result['failures'] === [] ? null : $result;
+        }
+
+        $ids = [];
+        foreach ($targets as $target) {
+            $ids[] = 'worker#' . $target->instanceId . '(client=' . $target->ipcClientId . ')';
+        }
+        WlsLogger::error_(
+            '[Orchestrator] SSL_CERT_RELOAD laggard replacement: fail-stopping wedged workers after'
+            . ' ' . self::SSL_CERT_RELOAD_MAX_CONSECUTIVE_DEFERRED . ' consecutive deferred rounds'
+            . ' operation=' . $operationId
+            . ' targets=' . \json_encode($ids)
+        );
+
+        try {
+            $outcomes = $this->failStopSslCertReloadTargets(
+                $targets,
+                'tls_reload_laggard_replaced_after_bounded_retries',
+                true,
+                \min(4.0, \max(1.0, \count($targets) * 0.25)),
+            );
+        } catch (\Throwable $throwable) {
+            $outcomes = [[
+                'code' => 'laggard_fail_stop_exception',
+                'released' => false,
+                'error' => GatewayBoundedText::singleLine(
+                    $throwable->getMessage(),
+                    512,
+                    'Laggard fail-stop raised an exception.',
+                ),
+            ]];
+        }
+        foreach ($outcomes as $outcome) {
+            if (($outcome['released'] ?? false) === true) {
+                $result['contained'][] = $outcome;
+            } else {
+                $result['failures'][] = $outcome;
+            }
+        }
+
+        if ($result['contained'] !== []) {
+            try {
+                $this->scheduleResurrectQueueMainLoopTaskIfDue(
+                    self::monotonicSeconds(),
+                );
+            } catch (\Throwable $throwable) {
+                $result['failures'][] = [
+                    'code' => 'laggard_replacement_schedule_failed',
+                    'error' => GatewayBoundedText::singleLine(
+                        $throwable->getMessage(),
+                        512,
+                        'Laggard replacement could not schedule resurrect work.',
+                    ),
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * A failed exact reload is a security containment event.  The immutable
      * pointer has already advanced, so every process which cannot prove that
      * exact generation must stop accepting TLS before the operation returns.
@@ -32295,6 +32470,9 @@ class ServiceOrchestrator
             $success = false;
         }
         if ($success) {
+            // Full ACK set: every laggard converged (or was replaced and
+            // caught up) — reset the bounded-retry bookkeeping.
+            $this->sslCertReloadLaggardDeferredCounts = [];
             try {
                 $this->commitSslCertReloadManifestFence(
                     $expectedManifestGeneration,
@@ -32319,7 +32497,30 @@ class ServiceOrchestrator
             // 关键分类：忙/未就绪/瞬时不一致 → 延迟重试，保留 worker 与旧代证书；
             // 只有确认性失败才进入 containment（否则一次 ACK 抖动就会永久停摆）。
             if ($this->sslCertReloadFailureIsDeferrable($failures, $mutationException !== null)) {
-                $deferred = true;
+                $laggards = $this->noteSslCertReloadDeferredLaggards($failures);
+                if ($laggards !== []) {
+                    // Bounded-retry-then-replace: a member that keeps missing
+                    // reload rounds is wedged (never an ordinary ACK jitter).
+                    // Replace only the laggards, exactly like a stuck rollout
+                    // pod; healthy ACKed members keep serving undisturbed.
+                    $containment = $this->replaceSslCertReloadLaggards(
+                        $laggards,
+                        $expectedManifestGeneration,
+                        $expectedManifestDigest,
+                        $expectedTlsRouteCount,
+                        $operationId,
+                    );
+                    $deferred = $containment === null
+                        || ($containment['contained'] ?? []) === [];
+                    if (!$deferred) {
+                        $this->sslCertReloadLaggardDeferredCounts = [];
+                    }
+                    foreach (($containment['failures'] ?? []) as $index => $laggardFailure) {
+                        $failures['laggard_replacement:' . $index] = $laggardFailure;
+                    }
+                } else {
+                    $deferred = true;
+                }
                 // 用 error_ 而非 warning_：wls.log.verbose 默认 false 时 fileEnabled=false，
                 // WARNING 级别会被静默丢弃，运维看不到「因可延迟失败跳过 containment」这一关键决策。
                 WlsLogger::error_(

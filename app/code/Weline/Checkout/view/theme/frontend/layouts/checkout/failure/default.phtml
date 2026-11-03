@@ -143,8 +143,8 @@ $this->assign('title', $title);
         }
     </style>
     <w:hook>seo::head</w:hook>
-</head>
-<body class="checkout-failure-layout">
+<!--@weline-global:head:begin--><?= \Weline\Theme\Region\GlobalRegion::render('head') ?><!--@weline-global:head:end--></head>
+<body class="checkout-failure-layout"><!--@weline-global:body_open:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_open') ?><!--@weline-global:body_open:end-->
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
@@ -228,5 +228,5 @@ $this->assign('title', $title);
     <w:hook>Weline_Theme::frontend::layouts::checkout_failure::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end-dynamic</w:hook>
-</body>
+<!--@weline-global:body_end:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_end') ?><!--@weline-global:body_end:end--></body>
 </html>

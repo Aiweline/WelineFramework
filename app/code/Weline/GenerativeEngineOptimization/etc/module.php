@@ -8,8 +8,10 @@ return [
     'requires' => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
+        'Weline_Geo' => '*',
         'Weline_I18n' => '*',
         'Weline_Queue' => '*',
+        'Weline_Server' => '*',
     ],
     'optional' => [],
     'provides' => [],

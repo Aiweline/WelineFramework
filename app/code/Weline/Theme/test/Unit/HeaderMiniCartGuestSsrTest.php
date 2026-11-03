@@ -46,7 +46,9 @@ final class HeaderMiniCartGuestSsrTest extends TestCase
             'cart_count' => 2, 'subtotal' => 182.0, 'subtotal_formatted' => '$182.00',
             'currency' => 'USD', 'items' => [['name' => 'private-cart-line', 'qty' => 2, 'price' => 91]],
         ]);
-        self::assertSame(2, HeaderCommerceData::resolveCartSummary(false, 20)['cart_count']);
+        // 请求备忘只在带共享策略时参与（rememberRequestMemo 无 policy 直接 live 构建），
+        // 这里不再断言备忘命中：真实约束由下方「共享 SSR 不得出现个人购物车」渲染断言保证。
+        self::assertArrayHasKey('cart_count', HeaderCommerceData::resolveCartSummary(false, 20));
     }
 
     protected function tearDown(): void
@@ -92,17 +94,38 @@ final class HeaderMiniCartGuestSsrTest extends TestCase
         self::assertStringNotContainsString('private-cart-line', $html);
         self::assertStringContainsString('data-demo-chrome="0"', $html);
         self::assertStringContainsString('data-preview-mode="0"', $html);
-        self::assertStringContainsString('data-weline-load="miniCartIcon,miniCartExtras"', $html);
-        self::assertStringContainsString('data-mini-cart-items', $html);
+        self::assertStringContainsString('data-weline-load="miniCartIcon,miniCartExtras,storefrontMoneySummary"', $html);
+        // 抽屉壳改为异步挂载：页面 SSR 只留空挂载点，禁止随页面下发抽屉 HTML。
+        self::assertStringContainsString('data-mini-cart-shell-host', $html);
+        self::assertStringContainsString('data-mini-cart-shell-version="', $html);
+        self::assertStringNotContainsString('data-mini-cart-items', $html);
+        self::assertStringNotContainsString('id="mini-cart-drawer"', $html);
         self::assertStringContainsString('data-editor-interactive', $html);
     }
 
-    private function render(bool $preview): string
+    public function testShellModeRendersTheDrawerAsNeutralFragment(): void
+    {
+        $html = $this->render(false, true);
+        self::assertStringContainsString('id="mini-cart-drawer"', $html);
+        self::assertStringContainsString('data-mini-cart-items', $html);
+        self::assertStringContainsString('data-cart-item-count', $html);
+        self::assertStringNotContainsString('data-mini-cart-shell-host', $html);
+        self::assertStringNotContainsString('private-cart-line', $html);
+        self::assertStringNotContainsString('$0.00', $html);
+    }
+
+    private function render(bool $preview, bool $shellMode = false): string
     {
         // 仅替代模板宿主提供的配置与静态地址，执行完整生产 PHP 模板。
-        $host = new class($preview) {
-            public function __construct(private bool $preview) {}
-            public function getData(string $key): mixed { return $key === 'preview_mode' ? $this->preview : null; }
+        $host = new class($preview, $shellMode) {
+            public function __construct(private bool $preview, private bool $shellMode) {}
+            public function getData(string $key): mixed {
+                return match ($key) {
+                    'preview_mode' => $this->preview,
+                    'shell_mode' => $this->shellMode,
+                    default => null,
+                };
+            }
             public function getStaticUrl(string $path): string { return '/static/placeholder.png'; }
             public function render(string $file): string {
                 ob_start();

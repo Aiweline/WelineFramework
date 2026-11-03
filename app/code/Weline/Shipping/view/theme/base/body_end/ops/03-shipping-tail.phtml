@@ -1,0 +1,27 @@
+<?php
+/**
+ * 配送尾 Chrome · 全局区 body_end/ops 片段（本身就是一个部件）。
+ *
+ * base 也是部件：保留 `@widget.*` 元数据，运营可在面板里关停/改配置；
+ * 声明方式改成路径推导，不再依赖主题槽。
+ *
+ * @widget.code {shipping-storefront-tail}
+ * @widget.cache {3600}
+ * @widget.share {true}
+ * @widget.name {配送尾 Chrome}
+ * @widget.description {店面配送相关脚本；由全局区 body_end/ops 供位。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {[]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {}
+ * @widget.supports {["shipping-storefront-tail","layout-storefront-tail-chrome","content"]}
+ * @widget.default_injections {[]}
+ * @global-region.cache {60}
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+?>
+<?php /* 既有缺陷（非本次改造引入）：原实现用 $this->getStaticUrl() 解析三个 shipping 脚本，但 Template 无此方法，
+         条件恒为假 → 脚本从未输出。配送地址/定位/价格脚本的正式接入需走 weline.modules.js 登记或部件 bake，另立任务。 */ ?>
+<span hidden data-testid="shipping-storefront-tail" aria-hidden="true"></span>

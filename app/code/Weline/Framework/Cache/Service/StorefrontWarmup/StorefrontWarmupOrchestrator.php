@@ -9,7 +9,6 @@ use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
 use Weline\Framework\Deploy\StaticBuildId;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FpcWarmupProviderInterface;
-use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 
 /**
@@ -404,9 +403,12 @@ final class StorefrontWarmupOrchestrator
     private function fallbackPriorityHomePaths(): array
     {
         try {
+            $provider = ObjectManager::getInstance(
+                \Weline\Framework\Runtime\StorefrontWebsiteDataProviderInterface::class
+            );
             return $this->selectFallbackPriorityHome(
-                WebsiteData::languageCodesForWebsite(Website::ID_DEFAULT),
-                (string)(WebsiteData::defaultLanguageForWebsite(Website::ID_DEFAULT) ?? '')
+                $provider->languageCodesFor(Website::ID_DEFAULT),
+                (string)($provider->defaultLanguageFor(Website::ID_DEFAULT) ?? '')
             );
         } catch (\Throwable) {
         }

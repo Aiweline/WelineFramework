@@ -7,6 +7,7 @@ return [
         'Weline_Admin' => '*',
     ],
     "optional" => [
+        'Weline_Theme' => '*',
     ],
     "provides" => [
         \Weline\UrlManager\Api\Rewrite\UrlRewriteDirectoryInterface::class => \Weline\UrlManager\Api\Rewrite\UrlRewriteDirectory::class,

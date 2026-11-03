@@ -34,8 +34,8 @@ $safe = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_
     <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::backend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::backend::layouts::dashboard::head-after</w:hook>
-</head>
-<body>
+<!--@weline-global:head:begin--><?= \Weline\Theme\Region\GlobalRegion::render('head') ?><!--@weline-global:head:end--></head>
+<body><!--@weline-global:body_open:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_open') ?><!--@weline-global:body_open:end-->
     <w:hook>Weline_Theme::backend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::backend::layouts::dashboard::body-start</w:hook>
     <?php if ($showGlobalLoading): ?>
@@ -173,5 +173,5 @@ $safe = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_
 
     <w:hook>Weline_Theme::backend::layouts::dashboard::body-end</w:hook>
     <w:hook>Weline_Theme::backend::layouts::base::body-end</w:hook>
-</body>
+<!--@weline-global:body_end:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_end') ?><!--@weline-global:body_end:end--></body>
 </html>

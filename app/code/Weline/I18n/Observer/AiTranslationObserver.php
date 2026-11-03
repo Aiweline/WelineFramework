@@ -23,17 +23,23 @@ use Weline\Framework\Event\ObserverInterface;
 class AiTranslationObserver implements ObserverInterface
 {
     /**
-     * @var TranslationService
+     * @var TranslationService|null
      */
-    private TranslationService $translationService;
+    private ?TranslationService $translationService = null;
 
     /**
-     * 构造函数
+     * AI 翻译服务按需解析：Ai 模块未安装时观察者降级为「事件可触发但翻译不可用」。
      */
-    public function __construct(
-        TranslationService $translationService
-    ) {
-        $this->translationService = $translationService;
+    private function translationService(): ?TranslationService
+    {
+        if ($this->translationService === null) {
+            if (!\class_exists(TranslationService::class)) {
+                return null;
+            }
+            $this->translationService = \Weline\Framework\Manager\ObjectManager::getInstance(TranslationService::class);
+        }
+
+        return $this->translationService;
     }
 
     /**
@@ -63,7 +69,12 @@ class AiTranslationObserver implements ObserverInterface
 
             // 调用AI翻译服务
             try {
-                $translations = $this->translationService->batchTranslate(
+                $service = $this->translationService();
+                if ($service === null) {
+                    $this->setEventError($event, __('AI 翻译服务不可用（Weline_Ai 未安装）'));
+                    return;
+                }
+                $translations = $service->batchTranslate(
                     $words,
                     $targetLocale,
                     $sourceLocale,

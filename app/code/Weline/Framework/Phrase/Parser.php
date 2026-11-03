@@ -295,10 +295,9 @@ class Parser
         [$lang, $area] = \explode('|', $region, 2);
         $words = [];
         try {
-            if (\class_exists(\Weline\I18n\Service\LocaleAreaDictionaryLoader::class)) {
-                // shared bag + this area's bag only; never the legacy whole-locale bag.
-                $words = \Weline\I18n\Service\LocaleAreaDictionaryLoader::loadMerged($lang, $area, false);
-            }
+            $words = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Phrase\DictionaryLoaderInterface::class
+            )->loadMerged($lang, $area, false);
         } catch (\Throwable) {
             $words = [];
         }
@@ -328,15 +327,14 @@ class Parser
         if (self::$suppressInlinePhraseMarkDepth > 0 || self::translationResolutionDepth() > 1) {
             return $translated;
         }
-        if (!\class_exists(\Weline\I18n\Service\InlineEdit\InlinePhraseMarker::class)) {
-            return $translated;
-        }
         try {
             // __() may render inside HTML attributes (aria-label / title / alt).
             // Use session-gated attribute() → [[W18N:…]] (never call wrapAttribute
             // directly — that skips the session gate). Body <w-i18n-phrase> stays
             // for Taglib @lang emit(false) / explicit InlinePhraseMarker::body().
-            return \Weline\I18n\Service\InlineEdit\InlinePhraseMarker::attribute($source, $translated);
+            return \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\View\InlineEditRenderingInterface::class
+            )->markAttribute($source, $translated);
         } catch (\Throwable) {
             return $translated;
         }
@@ -1481,9 +1479,6 @@ class Parser
      */
     private static function loadLocaleAreaBagsForWorker(string $lang): array
     {
-        if (!\class_exists(\Weline\I18n\Service\LocaleAreaDictionaryLoader::class)) {
-            return [];
-        }
         // 重语种驻留默认只留 1 个。先踢冷袋，水位仍越过 55% 再丢掉未钉住的冷语种。
         // 还不够就不 include 区袋：本请求少译文，进程不能在语言包上 fatal。
         self::touchHeavyLocaleResident($lang);
@@ -1494,7 +1489,9 @@ class Parser
             return [];
         }
         try {
-            return \Weline\I18n\Service\LocaleAreaDictionaryLoader::loadMerged($lang, null, false);
+            return \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Phrase\DictionaryLoaderInterface::class
+            )->loadMerged($lang, null, false);
         } catch (\Throwable) {
             return [];
         }
@@ -1618,16 +1615,24 @@ class Parser
         }
 
         $words_file = Env::path_TRANSLATE_FILES_PATH . $lang . '.php';
-        // 优先区袋 shared∪requestArea；无区袋时回退整袋（LocaleAreaDictionaryLoader）
-        if (class_exists(\Weline\I18n\Service\LocaleAreaDictionaryLoader::class)
+        // 优先区袋 shared∪requestArea；无区袋时回退整袋（I18n 模块词典加载器契约）。
+        // I18n 未安装时回退直读 legacy words.php。
+        if (class_exists(\Weline\Framework\Phrase\DictionaryLoaderInterface::class)
             || is_file($words_file)
             || is_file(Env::path_TRANSLATE_FILES_PATH . $lang . '.shared.php')
         ) {
             try {
                 $beforeUsed = \memory_get_usage(false);
-                if (class_exists(\Weline\I18n\Service\LocaleAreaDictionaryLoader::class)) {
-                    $lang_words = \Weline\I18n\Service\LocaleAreaDictionaryLoader::loadMerged($lang);
-                } else {
+                $lang_words = [];
+                try {
+                    $lang_words = (array)\Weline\Framework\Manager\ObjectManager::getInstance(
+                        \Weline\Framework\Phrase\DictionaryLoaderInterface::class
+                    )->loadMerged($lang, null, true);
+                } catch (\Throwable) {
+                    // 无 I18n 模块提供词典时回退 legacy words.php 直读。
+                    $lang_words = [];
+                }
+                if ($lang_words === [] && is_file($words_file)) {
                     if (\function_exists('opcache_invalidate')) {
                         @opcache_invalidate($words_file, true);
                     }

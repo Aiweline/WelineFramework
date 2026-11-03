@@ -18,6 +18,7 @@ class ThemeLayoutEntityBatchPublisher
     public function publish(ThemeVersionIdentity $identity, array $candidates, array $options = []): array
     {
         $doCompile = ($options['compile'] ?? true) !== false;
+        $candidates = $this->injectGlobalRegions($candidates);
         $result = $this->promote($identity, $candidates);
         $completed = $result['completed'];
         $rollbackPlan = $result['rollback_plan'];
@@ -269,5 +270,43 @@ class ThemeLayoutEntityBatchPublisher
     {
         clearstatcache(true, $path);
         if (function_exists('opcache_invalidate')) { @opcache_invalidate($path, true); }
+    }
+
+    /**
+     * Append the three global-region anchors to page-layout candidates.
+     *
+     * This sits on the promotion boundary every bake path funnels through, so it does
+     * not matter whether a page came from the materializer, a chrome re-materialise or
+     * any future writer: the derived page always ends up with the anchors. Applying it
+     * only inside the materializer left artifacts written by other paths without them
+     * (`render=0` while a sibling artifact had `render=3`).
+     *
+     * Purely additive and idempotent; chrome candidates are untouched.
+     *
+     * @param array<string,?string> $candidates
+     * @return array<string,?string>
+     */
+    private function injectGlobalRegions(array $candidates): array
+    {
+        $rewriter = null;
+        foreach ($candidates as $path => $bytes) {
+            if (!is_string($bytes) || $bytes === '' || !str_contains($path, '/pages/layouts/')) {
+                continue;
+            }
+            if (str_contains($bytes, \Weline\Theme\Region\GlobalRegionSourceRewriter::SKIP_MARKER)) {
+                continue;
+            }
+            $rewriter ??= new \Weline\Theme\Region\GlobalRegionSourceRewriter();
+            try {
+                $candidates[$path] = $rewriter->rewrite($bytes);
+            } catch (\Throwable $error) {
+                // Runtime/bake must not die over one layout; the build check reports it.
+                if (class_exists(\Weline\Framework\App\Env::class)) {
+                    \Weline\Framework\App\Env::log('theme/global_region_contract_error', $error->getMessage() . ' @ ' . $path);
+                }
+            }
+        }
+
+        return $candidates;
     }
 }

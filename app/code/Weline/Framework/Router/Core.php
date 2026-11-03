@@ -1978,7 +1978,9 @@ class Core
                             return $cachedResponse;
                         }
                         if ($fpcBuildLock === null) {
-                            $graceMs = (int)Env::get('wls.performance.fpc_publish_grace_wait_ms', 10000);
+                            // 默认不等待：并发重建时直接走 SSR / 陈旧响应，不再让请求原地自旋。
+                            // 需要合并并发构建的部署可显式设 wls.performance.fpc_publish_grace_wait_ms > 0。
+                            $graceMs = (int)Env::get('wls.performance.fpc_publish_grace_wait_ms', 0);
                             if ($graceMs > 0 && $fpcCoordinator->isBuildLockBusy($method)) {
                                 $cachedResponse = $fpcCoordinator->waitForPublishedResponse(
                                     $method,

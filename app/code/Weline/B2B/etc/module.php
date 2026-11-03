@@ -9,6 +9,7 @@ return [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
         'Weline_I18n' => '*',
+        'Weline_Inventory' => '*',
         'Weline_SystemConfig' => '*',
         'Weline_Theme' => '*',
         'Weline_Websites' => '*',
@@ -23,6 +24,7 @@ return [
         'Weline_Cron' => '*',
         'Weline_Payment' => '*',
         'Weline_Currency' => '*',
+        'Weline_Smtp' => '*',
     ],
     'provides' => [
         \Weline\B2B\Api\B2BPriceCandidateInterface::class

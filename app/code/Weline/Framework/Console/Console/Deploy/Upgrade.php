@@ -241,14 +241,12 @@ class Upgrade extends CommandAbstract
             }
             // 部署换版：用新部署树生成当前主题世代，并删除该主题的旧世代目录。
             try {
-                if (class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService::class)) {
-                    $linked = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService::backfillThemePairForNewDeploy(
-                        $staticRoot,
-                        (string)$buildId,
-                    );
-                    if ($linked > 0) {
-                        $this->printer->note(__('主题世代目录已随部署换版补齐 %{1} 个', [$linked]));
-                    }
+                $linked = \Weline\Framework\Deploy\ThemeRuntimeState::backfillThemePair(
+                    $staticRoot,
+                    (string)$buildId,
+                );
+                if ($linked > 0) {
+                    $this->printer->note(__('主题世代目录已随部署换版补齐 %{1} 个', [$linked]));
                 }
             } catch (\Throwable) {
                 // 主题模块不可用时跳过（不影响主发布）
@@ -257,12 +255,12 @@ class Upgrade extends CommandAbstract
             // flat 契约下 URL 不再引用代次目录，无需补齐（且禁写 legacy 树）。
             try {
                 if (!\Weline\Framework\Deploy\StaticBuildId::isFlatMode()
-                    && class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)) {
+                    && class_exists(\Weline\Framework\Deploy\ThemeRuntimeState::class)) {
                     // 落点必须与 StaticBuildId::versionedPath() 发出的 URL 同源：
                     // 主题对前缀 `{code}/v{n}` 要带 pinned/部署构建号段，裸构建号不能加 tu-。
-                    $generation = (string)\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pairSegment();
+                    $generation = (string)\Weline\Framework\Deploy\ThemeRuntimeState::pairSegment();
                     if ($generation !== '') {
-                        $pinned = (string)\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pinnedStaticBuild();
+                        $pinned = (string)\Weline\Framework\Deploy\ThemeRuntimeState::pinnedStaticBuild();
                         $build = $pinned !== '' ? $pinned : (string)$buildId;
                         $generation = $build !== '' ? $generation . '/' . $build : '';
                     } else {

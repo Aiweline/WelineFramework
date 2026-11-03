@@ -886,6 +886,26 @@ class PageService
         $scope = $this->normalizeScope($scope);
         $websiteId = $websiteId ?? $this->resolveCurrentWebsiteId();
 
+        // 请求级 memo：同一页面上 banner/SEO/内容块会按同一 identifier 反复取
+        // （冷态实测单条 find 105ms）。同请求同键只查一次库；缓存 Page 克隆，
+        // 调用方拿到的仍是独立实例，不会互相污染。
+        $memoKey = 'cms.page.by_identifier.' . \sha1(\json_encode([
+            $identifier, $scope, $includeDeleted, $websiteId,
+        ]));
+        try {
+            if (\Weline\Framework\Runtime\Context::hasCurrent()) {
+                $cached = \Weline\Framework\Runtime\RequestContext::get($memoKey);
+                if ($cached instanceof Page) {
+                    return clone $cached;
+                }
+                if ($cached === false) {
+                    return null;
+                }
+            }
+        } catch (\Throwable) {
+            // memo 不可用就退化直查。
+        }
+
         $page = clone $this->pageModel;
         $query = $page->clearData()->reset()
             ->where(Page::schema_fields_IDENTIFIER, $identifier);
@@ -898,7 +918,16 @@ class PageService
         }
         $query->find()->fetch();
 
-        return $page->getPageId() > 0 ? $page : null;
+        $result = $page->getPageId() > 0 ? $page : null;
+        try {
+            if (\Weline\Framework\Runtime\Context::hasCurrent()) {
+                \Weline\Framework\Runtime\RequestContext::set($memoKey, $result === null ? false : clone $result);
+            }
+        } catch (\Throwable) {
+            // 缓存失败不影响本次结果。
+        }
+
+        return $result;
     }
 
     /**

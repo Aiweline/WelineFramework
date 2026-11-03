@@ -11,14 +11,22 @@ use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Cache\StorefrontCacheKeyContext;
 use Weline\Framework\Cache\StorefrontCacheKeyContextResolver;
 use Weline\Framework\Context;
+use Weline\Framework\Deploy\ThemeRuntimeState;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\ScopeIdentity;
 
 final class StorefrontCacheKeyContextTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        ThemeRuntimeState::set(new \Weline\Theme\Service\ThemeUpdate\ThemeRuntimeState());
+    }
+
     protected function tearDown(): void
     {
+        ThemeRuntimeState::set(null);
         RequestContext::cleanup();
         if (Context::hasCurrent()) {
             Context::leave();

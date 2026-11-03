@@ -422,6 +422,20 @@ final class ThemeLayoutEntityBakeCoordinator
      */
     public function solidifyScopeVersion(ThemeEditorContext $context, int $themeVersionId, array $options = []): array
     {
+        // 注意：固化产物是语种中立的，这里**不能**开 hook 烘焙/全局区内联——
+        // 烘出的 include 路径与区段内容会绑定当时进程的 locale（实测把 bg_BG 的
+        // hooks 路径写进 bn_BD 产物，include 目标不存在 → 该 hook 内容整段丢失）。
+        // 烘焙只允许出现在 per-locale 发布编译里：
+        // ThemeLayoutEntityFormalLocaleCompileService::compileAfterPromote()。
+        return $this->solidifyScopeVersionInner($context, $themeVersionId, $options);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     * @return array{ok:bool,reason?:string,theme_version_id?:int,content_revision?:int,fingerprints?:array<string,string>}
+     */
+    private function solidifyScopeVersionInner(ThemeEditorContext $context, int $themeVersionId, array $options = []): array
+    {
         if ($themeVersionId < 1) {
             return ['ok' => false, 'reason' => 'theme_scope_version_unresolved'];
         }
@@ -483,8 +497,17 @@ final class ThemeLayoutEntityBakeCoordinator
         }
 
         try {
-            $result = ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $context, $options): array {
+            $result = ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $context, $options, $version): array {
                 $candidates = $this->candidateWorkset($identity, $context);
+                if ($candidates === [] && $identity->mode === ThemeVersionIdentity::MODE_FORMAL) {
+                    // 发布版本若只有 draft 身份的资源快照，formal 身份算不出 candidates，
+                    // 结果 v<id>/ 目录建了但一个文件都不写（实测 2974 空目录）。按 formal 补抓一次。
+                    try {
+                        $this->snapshotService()->captureCurrent($version, $context, false);
+                        $candidates = $this->candidateWorkset($identity, $context);
+                    } catch (\Throwable) {
+                    }
+                }
                 if (\is_array($options['draft_prime_identity'] ?? null)) {
                     $prime = ThemeVersionIdentity::fromArray($options['draft_prime_identity']);
                     if ($prime->ownerHash() !== $identity->ownerHash()) {
@@ -836,7 +859,7 @@ final class ThemeLayoutEntityBakeCoordinator
     }
 
     /**
-     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string,force_pages?:bool} $options
+     * @param array{scope?:string,all_versions?:bool,version_ids?:list<int>,layout_type?:string,layout_option?:string,force_pages?:bool} $options
      * @return list<array{identity:ThemeVersionIdentity,pending:list<array<string,mixed>>,changes:array}>
      */
     private function collectRebakeWorkItems(
@@ -851,6 +874,14 @@ final class ThemeLayoutEntityBakeCoordinator
         $layoutTypeFilter = trim((string)($options['layout_type'] ?? ''));
         $layoutOptionFilter = trim((string)($options['layout_option'] ?? ''));
         $forcePages = !empty($options['force_pages']);
+        // 精确版本过滤：`theme:update -f` 指到「当前版本」时用；未发布（草稿/sealed 未发）版本也要能重建。
+        $versionIds = [];
+        foreach ((array)($options['version_ids'] ?? []) as $versionIdOption) {
+            $versionIdOption = (int)$versionIdOption;
+            if ($versionIdOption > 0) {
+                $versionIds[$versionIdOption] = $versionIdOption;
+            }
+        }
         $query = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->clearQuery();
         if ($themeId !== null) {
             $query->where('theme_id', $themeId);
@@ -864,10 +895,13 @@ final class ThemeLayoutEntityBakeCoordinator
             if ($scopeFilter !== '' && $identity->canonicalScope !== $scopeFilter) {
                 continue;
             }
+            if ($versionIds !== [] && !isset($versionIds[(int)$identity->themeVersionId])) {
+                continue;
+            }
             if (!$this->ownsPublicationDirectory($identity)) {
                 continue;
             }
-            if (!$allVersions && !$this->isCurrentlyEffectiveScopeVersion($identity, $includeSelectedDraft)) {
+            if ($versionIds === [] && !$allVersions && !$this->isCurrentlyEffectiveScopeVersion($identity, $includeSelectedDraft)) {
                 continue;
             }
             if (!$this->scopeOwnsSolidify($identity)) {

@@ -59,9 +59,12 @@ final class InlineEditUpdatePageService
             // Revision bump from publishLocale still covers next-request authority.
         }
 
-        /** @var ThemeStorefrontSlugFpcPublisher $fpc */
-        $fpc = ObjectManager::getInstance(ThemeStorefrontSlugFpcPublisher::class);
-        $purge = $fpc->purgeByStorefrontPath($path);
+        $purge = ['ok' => false, 'skipped' => 'theme_missing'];
+        if (\class_exists(ThemeStorefrontSlugFpcPublisher::class)) {
+            /** @var ThemeStorefrontSlugFpcPublisher $fpc */
+            $fpc = ObjectManager::getInstance(ThemeStorefrontSlugFpcPublisher::class);
+            $purge = $fpc->purgeByStorefrontPath($path);
+        }
         // Theme slug emit is best-effort (needs request Theme context).
         // Coordinator purge is the authority for this page's disk/Shared FPC.
         $this->purgeCoordinatorUrls($path);
@@ -70,6 +73,7 @@ final class InlineEditUpdatePageService
         // Soft skips: CLI / missing ThemeApplicationContext must not fail
         // after dictionary export + path FPC purge already ran.
         $softThemeSkip = \in_array($skipped, [
+            'theme_missing',
             'no_theme_context',
             'no_theme',
             'theme_context_invalid',
@@ -149,13 +153,17 @@ final class InlineEditUpdatePageService
             'percent' => 80,
         ]);
 
-        /** @var ThemeStorefrontSlugFpcPublisher $fpc */
-        $fpc = ObjectManager::getInstance(ThemeStorefrontSlugFpcPublisher::class);
-        $purge = $fpc->purgeByStorefrontPath($path);
+        $purge = ['ok' => false, 'skipped' => 'theme_missing'];
+        if (\class_exists(ThemeStorefrontSlugFpcPublisher::class)) {
+            /** @var ThemeStorefrontSlugFpcPublisher $fpc */
+            $fpc = ObjectManager::getInstance(ThemeStorefrontSlugFpcPublisher::class);
+            $purge = $fpc->purgeByStorefrontPath($path);
+        }
         $this->purgeCoordinatorUrls($path);
         $themeOk = (bool)($purge['ok'] ?? false);
         $skipped = (string)($purge['skipped'] ?? '');
         $softThemeSkip = \in_array($skipped, [
+            'theme_missing',
             'no_theme_context',
             'no_theme',
             'theme_context_invalid',

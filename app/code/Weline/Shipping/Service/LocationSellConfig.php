@@ -6,7 +6,7 @@ namespace Weline\Shipping\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Api\ConfigReader;
 
 /**
  * 地点跟随售卖双开关（范围继承）。
@@ -58,8 +58,8 @@ class LocationSellConfig
             ? strtolower(trim($storageScope))
             : $this->currentStorageScope();
         try {
-            /** @var SystemConfig $config */
-            $config = ObjectManager::getInstance(SystemConfig::class);
+            /** @var ConfigReader $config */
+            $config = ObjectManager::getInstance(ConfigReader::class);
             $value = $config->getConfig($key, self::MODULE, self::AREA, '0', $scope);
 
             return (int)$value === 1 || $value === true || $value === '1' || $value === 'true';

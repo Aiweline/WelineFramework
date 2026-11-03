@@ -9,13 +9,14 @@ use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Schema\SchemaDiffOp;
 use Weline\Framework\Database\Schema\SchemaMigrationExecutorInterface;
 use Weline\Framework\Database\Schema\TableSchema;
+use Weline\Framework\Setup\Schema\SchemaDiffExecutorInterface;
 
 /**
  * RSSE 的 Schema DDL 执行器：只执行 DDL，不写旧 checkpoint / backup。
  *
  * 所有连接由调用方显式传入（bootstrap/index/ssl/shard），不依赖 factory 单例。
  */
-final class SchemaDiffExecutor implements SchemaMigrationExecutorInterface
+final class SchemaDiffExecutor implements SchemaMigrationExecutorInterface, SchemaDiffExecutorInterface
 {
     public function __construct(private readonly SchemaDdlExecutor $ddlExecutor)
     {

@@ -1,0 +1,121 @@
+<?php
+/**
+ * 下载App 部件（结构骨架；视觉由 UI 席消费 CSS Token 后填充皮肤）。
+ *
+ * base 也是部件：保留 `@widget.*` 元数据供面板识别与改配置；位置改由全局区
+ * body_end/ops 决定，默认注入参数清空，避免与主题槽双写。
+ *
+ * @widget.source {Weline_App::css/widgets/app-download.css,Weline_App::js/widgets/app-download-async.js}
+ * @widget.code {app-download}
+ * @widget.name {下载App}
+ * @widget.description {按站点展示 iOS/Android/Web PWA 三端下载入口；由全局区 body_end/ops 供位}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {[]}
+ * @widget.page_layouts {["*"]}
+ * @widget.default_injections {[]}
+ * @global-region.float-slot {start}
+ * @global-region.cache {60}
+ * @widget.supports {["app-download","download","app"]}
+ * @widget.placement {injection}
+ */
+?>
+<css>Weline_App::css/widgets/app-download.css</css>
+<js defer>Weline_App::js/widgets/app-download-async.js</js>
+<?php
+/**@var \Weline\Framework\View\Template $this */
+// 数据面：三平台最新 released 产物（直接读登记表，禁 stat 产物文件）
+$service = new \Weline\App\Service\Build\LatestArtifact();
+$platforms = [
+    'web' => $service->latest('web'),
+    'android' => $service->latest('android'),
+    'ios' => $service->latest('ios'),
+];
+$entries = [];
+foreach ($platforms as $platform => $artifact) {
+    $hasArtifact = $artifact && $artifact->getData('id');
+    if ($platform === 'web') {
+        $entries[$platform] = $hasArtifact ? '/api/weline_app/rest/v1/download/download?platform=web' : null;
+    } elseif ($platform === 'android') {
+        $entries[$platform] = $hasArtifact ? '/api/weline_app/rest/v1/download/download?platform=android' : null;
+    } else {
+        // iOS App Store 链接占位，待 App Store 上架后补充
+        $entries[$platform] = null;
+    }
+}
+$versionOf = static function (string $platform) use ($platforms): string {
+    $artifact = $platforms[$platform] ?? null;
+
+    return $artifact && $artifact->getData('id') ? (string)$artifact->getData('version') : '';
+};
+$webVersion = $versionOf('web');
+$iosStoreUrl = \Weline\App\Service\Build\StoreLinks::iosStoreUrl();
+// 翻译兜底：未翻译的语言回退英文（避免小语种页面整段中文）
+$widgetLang = '';
+try {
+    $widgetLang = \trim((string)\Weline\Framework\Env\WelineEnv::getLang());
+} catch (\Throwable) {
+    $widgetLang = '';
+}
+$widgetIsZh = \str_starts_with(\strtolower($widgetLang), 'zh');
+$wt = static function (string $zh, string $en) use ($widgetIsZh): string {
+    $translated = (string)\__($zh);
+    if ($widgetIsZh) {
+        return $translated;
+    }
+
+    return ($translated === $zh || $translated === '') ? $en : $translated;
+};
+?>
+<?php if ($entries['web'] || $entries['android'] || $entries['ios']): ?>
+<div class="weline-app-download" data-app-download data-weline-app-version="<?= htmlspecialchars($webVersion, ENT_QUOTES) ?>">
+    <?php // 单一入口：平台差异全在二维码弹窗/下载中心里，避免按平台重复渲染同名按钮 ?>
+    <div class="app-download__entry">
+        <a class="app-download__btn app-download__btn--primary"
+           data-app-download-link="web"
+           data-app-download-open="web"
+           aria-haspopup="dialog"
+           href="/app/download"><?= $wt('下载 App', 'Download App') ?><span class="app-download__ver" data-app-download-version="web" hidden></span></a>
+    </div>
+
+    <div class="app-download__modal" data-app-download-modal hidden>
+        <div class="app-download__scrim" data-app-download-close></div>
+        <div class="app-download__dialog" role="dialog" aria-modal="true" aria-labelledby="app-download-dialog-title">
+            <div class="app-download__dialog-head">
+                <div>
+                    <p class="app-download__dialog-title" id="app-download-dialog-title"><?= $wt('扫码下载 App', 'Scan to download the app') ?></p>
+                    <p class="app-download__dialog-sub">
+                        <?= $wt('手机相机扫一扫', 'Scan with your phone camera') ?> · <?= $wt('版本', 'Version') ?>
+                        <span data-app-download-version="web"><?= htmlspecialchars($webVersion, ENT_QUOTES) ?></span>
+                    </p>
+                </div>
+                <button type="button" class="app-download__close" data-app-download-close aria-label="<?= $wt('关闭', 'Close') ?>">×</button>
+            </div>
+            <div class="app-download__dialog-body">
+                <div class="app-download__qr">
+                    <img src="/api/weline_app/rest/v1/download/qr?platform=web"
+                         width="200" height="200" loading="lazy"
+                         alt="<?= $wt('扫码打开下载中心', 'Scan to open the download center') ?>">
+                </div>
+                <div class="app-download__plat">
+                    <?php // iOS 暂不上（无 Apple 签名凭据，出不了可安装包），只列 android / web ?>
+                    <?php foreach (['android', 'web'] as $platform): ?>
+                        <?php $publishedVersion = $versionOf($platform); ?>
+                        <?php if ($publishedVersion === '') { continue; } ?>
+                        <div class="app-download__plat-row">
+                            <span class="app-download__plat-name"><?= $platform === 'web' ? 'Web / PWA' : 'Android' ?></span>
+                            <span class="app-download__plat-meta">v<?= htmlspecialchars($publishedVersion, ENT_QUOTES) ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                    <button type="button" class="app-download__btn app-download__pwa" data-pwa-install hidden><?= $wt('安装到桌面', 'Install to desktop') ?></button>
+                    <a class="app-download__btn app-download__btn--primary app-download__center" href="/app/download">
+                        <?= $wt('打开下载中心', 'Open download center') ?>
+                    </a>
+                    <span class="app-download__hint"><?= $wt('桌面端扫码即可；手机端可直接安装。', 'Scan on desktop; install directly on mobile.') ?></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+<span hidden data-widget-script="app-download-async"></span>

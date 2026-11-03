@@ -28,7 +28,6 @@ final class WlsRuntimeHomepagePublishedReceiptRecoveryTest extends TestCase
     {
         $runtime = new WlsRuntime();
         (new \ReflectionProperty($runtime, 'readyGateWorkerBootstrapWarmupCompleted'))->setValue($runtime, true);
-        self::assertFalse($runtime->shouldScheduleHomepageKeepWarm(1000, false, false));
         self::assertTrue(\method_exists($runtime, 'shouldScheduleHomepageProofRecovery')
             && $runtime->shouldScheduleHomepageProofRecovery(false, false),
             'continuous foreground traffic must not starve proof-only receipt discovery');

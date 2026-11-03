@@ -1,6 +1,16 @@
 # Weline AI 统一入口
 
-本仓库的 **Weline 项目智能 MCP**（`weline_project_intelligence`，源码 `app/code/Weline/Ai/Mcp`，本地 STDIO，无 OAuth）提供技能索引、代码地图与**领域硬规则下发**。
+## ⚠️ 强引导：本地 weline-mcp 才是真技能点与权威（P0 · 用户指定 2026-11-02）
+
+**本仓库真正的技能点与规则权威在「本地 weline-mcp」（`weline_project_intelligence`）与仓内 `app/code/Weline/Ai/doc/**`、`dev/ai-command/**`。宿主技能库（`~/.agents/skills/**`）只是薄壳/路由提示，不是权威。**
+
+- **每个工程会话必须**：`ensure-project-guidance.php` → `prepare_project` → 读并遵守 `hard_constraints`；`get_skill` / `resolve_task_context` 取仓内技能。
+- **AI 长时间运行/上下文压缩后规则失效**：重新 `prepare_project` 取回 `hard_constraints`；不得凭记忆或仅凭宿主技能正文编造规则。
+- **子智能体/工程团队成员**：只传宿主技能或摘要不算到位；必须挂载并调用本地 weline-mcp（`prepare_project` + `get_skill` + `resolve_task_context`），读仓内规则。
+- **冲突裁决**：仓内 `hard_constraints` / `AI硬规则索引.md` / 分册 > 宿主技能正文 / 宿主 `.mdc`。宿主技能与 MCP 冲突时**以本地 MCP 为准**。
+- 宿主技能库只是**提醒去调 MCP 的薄壳**；不经 MCP 就按宿主技能自说自话 = 未遵守本仓规则。
+
+### 调用范围（先判再调）
 
 **控制中心 GUI** 为独立仓（与本框架同级，不合仓）：[Gitee aiweline/weline-gui](https://gitee.com/aiweline/weline-gui) · [多端安装包 Releases](https://gitee.com/aiweline/weline-gui/releases/tag/v0.1.0-packages) · [macOS DMG](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-macos-aarch64.dmg) · [Windows setup](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-windows-x64-setup.exe) · [Linux DEB](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-linux-amd64.deb) · 本机可选 `../框架GUI`。
 

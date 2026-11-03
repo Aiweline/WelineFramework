@@ -6,6 +6,7 @@ return [
     "requires" => [
         'Weline_Cron' => '*',
         'Weline_Framework' => '*',
+        'Weline_I18n' => '*',
         'Weline_Queue' => '*',
         'Weline_SystemConfig' => '*',
         'Weline_Websites' => '*',

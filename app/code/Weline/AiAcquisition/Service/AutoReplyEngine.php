@@ -10,9 +10,9 @@ use Weline\AiAcquisition\Model\LeadRun;
 use Weline\AiAcquisition\Service\Model\ModelCatalogService;
 use Weline\AiAcquisition\Service\Model\ModelGatewayService;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Mail\Model\MailAccount;
-use Weline\Mail\Model\MailMessage;
-use Weline\Mail\Service\MailComposerService;
+use Weline\Mail\Api\MailAccountDirectoryInterface;
+use Weline\Mail\Api\MailCompositionInterface;
+use Weline\Mail\Api\MailMessageLookupInterface;
 use Weline\SystemConfig\Api\ConfigReader;
 
 /**
@@ -162,7 +162,7 @@ class AutoReplyEngine
         // 发送（AI 生成即发送，无人工确认步骤；require_approval 默认 1 仅作记录标记）
         $requireApproval = (int)$this->config('ai_acquisition/auto_reply/require_approval', 1);
         $subject = (string)__('【%1】感谢您的关注 — 跟进', [(string)$lead->getData(Lead::schema_fields_COMPANY_NAME) ?: $to]);
-        $sendResult = ObjectManager::getInstance(MailComposerService::class)->send(
+        $sendResult = ObjectManager::getInstance(MailCompositionInterface::class)->send(
             $accountId,
             $to,
             $subject,
@@ -220,13 +220,8 @@ class AutoReplyEngine
             return $configured;
         }
         // 缺省：contact@changanhanfu.com 对应的启用账户
-        /** @var MailAccount $account */
-        $account = ObjectManager::getInstance(MailAccount::class)->clear()
-            ->where(MailAccount::schema_fields_EMAIL, 'contact@changanhanfu.com')
-            ->where(MailAccount::schema_fields_STATUS, 'active')
-            ->find()
-            ->fetch();
-        return (int)$account->getId();
+        return ObjectManager::getInstance(MailAccountDirectoryInterface::class)
+            ->activeAccountIdByEmail('contact@changanhanfu.com');
     }
 
     private function resolveModel(): array|null
@@ -327,14 +322,8 @@ class AutoReplyEngine
     private function latestMailMessageId(int $leadId): int
     {
         try {
-            /** @var MailMessage $message */
-            $message = ObjectManager::getInstance(MailMessage::class)->clear()
-                ->where(MailMessage::schema_fields_SOURCE, LeadConversation::MAIL_SOURCE)
-                ->where(MailMessage::schema_fields_SOURCE_ID, $leadId)
-                ->order(MailMessage::schema_fields_ID, 'DESC')
-                ->find()
-                ->fetch();
-            return (int)$message->getId();
+            return ObjectManager::getInstance(MailMessageLookupInterface::class)
+                ->latestIdBySource(LeadConversation::MAIL_SOURCE, $leadId);
         } catch (\Throwable) {
             return 0;
         }

@@ -11,5 +11,6 @@ return [
     ],
     "provides" => [
         'request_resetter.Weline_DataTable' => \Weline\DataTable\Api\Runtime\RequestResetter::class,
+        \Weline\Framework\View\Compiler\Shadow\UiStateResetInterface::class => \Weline\DataTable\Integration\Framework\UiStateReset::class,
     ],
 ];

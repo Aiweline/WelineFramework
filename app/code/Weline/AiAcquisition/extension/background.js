@@ -1696,6 +1696,7 @@ async function webllmStep(context, messages, tools, params) {
   const hint = nextActionHint(messages);
   const prompt = [
     '你是运行在浏览器内的 Weline B2B 获客智能体。',
+    '示例输出（照这个格式，换你自己的内容）：{"assistant":"搜索批发买家","tool_calls":[{"name":"web_search","arguments":{"query":"hanfu wholesale buyer USA"}}]}',
     '只输出一行 JSON，结构：{"assistant":"一句说明","tool_calls":[{"name":"工具名","arguments":{}}]}。',
     '禁止重复题目、禁止解释、禁止 Markdown 代码块。没有可用工具时输出 {"assistant":"...","tool_calls":[]}。',
     '可用工具（只能选这四个）：',
@@ -1835,8 +1836,8 @@ function browserToolPrompt(tools) {
     parameters: tool.function.parameters,
   } : tool));
   return [
-    '你是运行在浏览器内的 Weline AI 获客智能体。',
-    '只输出一个 JSON 对象，不要 Markdown 代码块，不要解释。',
+    '你是运行在浏览器内的 Weline AI 获客智能体。你只能输出一个 JSON 对象，不要 Markdown 代码块，不要解释。',
+    '示例输出（照这个格式，换你自己的内容）：{"assistant":"搜索批发买家","tool_calls":[{"name":"web_search","arguments":{"query":"hanfu wholesale buyer USA"}}]}',
     'JSON 结构：{"assistant":"给用户看的简短说明","tool_calls":[{"name":"web_search","arguments":{"query":"..."}}]}。',
     '没有工具可调用时 tool_calls 必须是空数组。可用工具定义：',
     toolsText,
@@ -1897,13 +1898,29 @@ async function chromeBuiltinStep(context, messages, tools, params) {
     },
   });
   try {
-    const prompt = [
+    const basePrompt = [
       '继续完成获客任务。只返回 JSON。',
       browserTranscript(messages),
       `本轮参数：${JSON.stringify(params || {})}`,
     ].join('\n\n');
-    const raw = await session.prompt(prompt);
-    const parsed = parseBrowserJson(raw);
+    // 小模型输出不稳定：未按 JSON 协议或没有任何工具调用时，追加约束最多重试 3 次。
+    let raw = '';
+    let parsed = { assistant: '', tool_calls: [] };
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const prompt = attempt === 1
+        ? basePrompt
+        : [
+          basePrompt,
+          `你上一次的输出不是合法的获客 JSON（第 ${attempt - 1} 次）。请重新只输出一个 JSON 对象：{"assistant":"一句话","tool_calls":[{"name":"web_search","arguments":{"query":"..."}}]}，不要输出其他任何文字。`,
+        ].join('\n\n');
+      raw = await session.prompt(prompt);
+      parsed = parseBrowserJson(raw);
+      const hasCalls = Array.isArray(parsed.tool_calls) && parsed.tool_calls.length > 0;
+      if (hasCalls || String(parsed.assistant || '').trim() !== '') {
+        break;
+      }
+      log(`浏览器内置模型输出未按 JSON 协议（第 ${attempt} 次），追加约束重试`);
+    }
     const result = {
       assistant: String(parsed.assistant || ''),
       tool_calls: normalizeToolCalls(parsed.tool_calls),

@@ -6,9 +6,11 @@ namespace Weline\Theme\Service\ThemeUpdate;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\ThemePathResolver;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityUpgradeSolidifyService;
+use Weline\Theme\Service\ThemeHeadChromeCssPack;
 use Weline\Theme\Service\ThemeHeadCssDuplicateInspector;
 
 /**
@@ -58,7 +60,7 @@ final class ThemeUpdateBuildService
     }
 
     /**
-     * @param array{layouts?:list<string>,options?:list<string>,all_versions?:bool,skip_static?:bool,skip_entities?:bool,batch_id?:string} $options
+     * @param array{layouts?:list<string>,options?:list<string>,all_versions?:bool,skip_static?:bool,skip_entities?:bool,fresh?:bool,batch_id?:string} $options
      * @return array{batch_id:string,static_ns:string,entity_root:string,manifest:array<string,mixed>}
      */
     public function build(int $themeId, array $options = []): array
@@ -108,6 +110,25 @@ final class ThemeUpdateBuildService
             $entityCopied = 0;
             $this->linkCurrentEntityTree($entityDir, $batchId, $entityCopied);
             ThemeLayoutEntityPaths::forceRoot($entityDir);
+            $purge = [];
+            if (!empty($options['fresh'])) {
+                // -f：只删「本次指定范围/版本」的固化产物，再按源码重建（不动其它范围/版本、不动历史代次）。
+                $purge = $this->purgeTargetVersionArtifacts(
+                    $themeId,
+                    \trim((string)($options['scope'] ?? '')),
+                    !empty($options['all_versions'])
+                );
+                $checks[] = [
+                    'name' => 'fresh_version_artifacts',
+                    'ok' => true,
+                    'purged' => $purge['purged'],
+                    'versions' => $purge['versions'],
+                    'shared_formal_skipped' => $purge['shared_formal_skipped'] ?? [],
+                    'candidates' => $purge['rows'] ?? 0,
+                    'created_version_dirs' => $purge['created_version_dirs'] ?? 0,
+                    'errors' => $purge['errors'] ?? [],
+                ];
+            }
             // 固化/编译期把「本代次」作为静态前缀来源：编译产物烘焙的是本批次前缀，
             // 这样后续 GC 删旧批次不会让产物 404。
             // 编译/烘焙期静态前缀固定为「部署构建号」：promote 会把批次主题子树镜像到该目录，
@@ -125,6 +146,19 @@ final class ThemeUpdateBuildService
                 $baseOptions = ['cache_invalidation' => 'none'];
                 if (!empty($options['all_versions'])) {
                     $baseOptions['all_versions'] = true;
+                }
+                if (!empty($purge['version_ids'])) {
+                    // 精确到本次目标版本：未发布（草稿/sealed 未发）版本也要重建，不能只烘焙已发布版本。
+                    $baseOptions['version_ids'] = $purge['version_ids'];
+                }
+                // 范围层级：只处理该 canonical scope 的（当前激活 / --all 时为全部）版本。
+                $scope = \trim((string)($options['scope'] ?? ''));
+                if ($scope !== '') {
+                    $baseOptions['scope'] = $scope;
+                }
+                if (!empty($options['fresh'])) {
+                    // -f：不让 PageInputDigest 短路，全部布局页面按源码重固化一遍。
+                    $baseOptions['force_pages'] = true;
                 }
                 // 增量固化：layout_targets = [['type' => 'homepage', 'option' => 'default'], …]
                 // 为空表示全主题（全布局）固化。
@@ -157,14 +191,16 @@ final class ThemeUpdateBuildService
         }
 
         // 3) 校验：静态引用可解析（抽样）+ 产物非空可读
-        // 说明：实体 PHTML 是「布局源码派生」，{{…}} 与 <w:…> 属合法内联标记，
-        // 不能按「未编译残留」判红；编译正确性由渲染 smoke 覆盖（后续任务）。
+        // 说明：实体 PHTML 是「布局源码派生」，{{…}} 与 <w:…> 属合法内联标记，不能按「未编译残留」判红。
         if (empty($options['skip_static'])) {
             $checks[] = $this->checkStaticSample($staticDir, $themePrefix);
         }
         $checks[] = $this->checkEntitySample($entityDir);
-        // 3.1) 头部 CSS 重复投递（只允许 DEV 断言：PROD 发布不因它失败）
+        // 3.1) 头部 CSS 重复投递（所有环境同一判定）
         $checks[] = $this->checkHeadCssOverlayDuplicates($themeId);
+        // 3.2) 头部皮肤包可产出（消费侧）：清单叶必须解析得到、文件必须存在。
+        // 缺这一项时「代次 verified」与「页面真带皮肤 CSS」无关（2026-11-02 掉样式事故）。
+        $checks[] = $this->checkHeadPackLeaves($themeId);
 
         $ok = true;
         foreach ($checks as $check) {
@@ -200,8 +236,111 @@ final class ThemeUpdateBuildService
     }
 
     /**
-     * 把当前静态代次树硬链接进批目录；返回文件数（-1 表示失败）。
+     * `-f` 的目标粒度：只删「本次指定范围/版本」的固化产物，不是删整个主题。
+     *
+     * 目标版本来自 `w_theme_scope_version`：
+     * - 给了 `--scope`：该范围；没给：该主题全部范围；
+     * - `--all`：范围内全部版本；否则只取当前激版本（is_current=1）。
+     *
+     * 删除的是该版本独占目录（`generated/theme/<Vendor>/<theme>/<scope>/formal/v<versionId>/`）；
+     * 版本没有独占目录、历史产物落在共享 `formal/` 时只删根下非 `v*` 子项（保留其它版本 `v*`）。
+     * 删完后**预建** `formal/v<versionId>/`，让本次重建按版本落盘，不再回写共享根。
+     *
+     * @return array{purged:int,created_version_dirs:int,versions:list<string>,shared_formal_skipped:list<string>,rows:int,errors:list<string>}
      */
+    private function purgeTargetVersionArtifacts(int $themeId, string $scope, bool $allVersions): array
+    {
+        $model = ObjectManager::getInstance(\Weline\Theme\Model\ThemeScopeVersion::class);
+        $query = $model->reset()->clearData()->clearQuery()
+            ->where(\Weline\Theme\Model\ThemeScopeVersion::schema_fields_THEME_ID, $themeId)
+            ->where(\Weline\Theme\Model\ThemeScopeVersion::schema_fields_AREA, 'frontend');
+        if ($scope !== '') {
+            $query->where(\Weline\Theme\Model\ThemeScopeVersion::schema_fields_SCOPE, $scope);
+        }
+        if (!$allVersions) {
+            $query->where(\Weline\Theme\Model\ThemeScopeVersion::schema_fields_IS_CURRENT, 1);
+        }
+        $rows = (array)$query->select()->fetchArray();
+
+        $purged = 0;
+        $created = 0;
+        $versions = [];
+        $versionIds = [];
+        $shared = [];
+        $errors = [];
+        $generated = \defined('\Weline\Framework\App\Env::GENERATED_DIR')
+            ? (string)\Weline\Framework\App\Env::GENERATED_DIR
+            : \rtrim((string)BP, '/\\') . \DIRECTORY_SEPARATOR . 'generated';
+        $safeRoot = \str_replace('\\', '/', \rtrim($generated, '/\\') . \DIRECTORY_SEPARATOR . 'theme') . '/';
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            try {
+                $version = ObjectManager::getInstance(\Weline\Theme\Model\ThemeScopeVersion::class)
+                    ->setData($row);
+                $identity = $version->toVersionIdentity();
+                $owner = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths::class)
+                    ->ownerDir($identity);
+            } catch (\Throwable $e) {
+                $errors[] = get_class($e) . ': ' . $e->getMessage();
+                continue;
+            }
+            // 目标版本的产物：优先独占目录 `…/formal/v<versionId>/`；
+            // 没有独占目录时，历史上产物写在共享 `formal/` 根（当前激活版本），
+            // 此时只删根下非 `v*` 的子项，保留其它版本的 `v*` 目录。
+            $formal = \rtrim($owner, '/\\') . \DIRECTORY_SEPARATOR . 'formal' . \DIRECTORY_SEPARATOR;
+            $dir = $formal . 'v' . (int)$identity->themeVersionId . \DIRECTORY_SEPARATOR;
+            $label = $identity->canonicalScope . '@v' . $identity->themeVersionId;
+            $normalizedFormal = \str_replace('\\', '/', $formal);
+            if (!\str_starts_with($normalizedFormal, $safeRoot)) {
+                continue;
+            }
+            $versionIds[(int)$identity->themeVersionId] = (int)$identity->themeVersionId;
+            if (\is_dir($dir)) {
+                $this->removeTree($dir);
+                $purged++;
+                $versions[] = $label;
+            } elseif (\is_dir($formal)) {
+                $removed = 0;
+                foreach ((array)@\scandir($formal) as $item) {
+                    if ($item === '.' || $item === '..' || \preg_match('/^v[0-9]+$/', (string)$item) === 1) {
+                        continue;
+                    }
+                    $path = $formal . $item;
+                    if (\is_dir($path) && !\is_link($path)) {
+                        $this->removeTree($path);
+                    } else {
+                        @\unlink($path);
+                    }
+                    $removed++;
+                }
+                if ($removed > 0) {
+                    $purged++;
+                    $versions[] = $label . '(shared root, ' . $removed . ' items)';
+                } else {
+                    $shared[] = $label;
+                }
+            } else {
+                $shared[] = $label;
+            }
+            // 本次重建按版本落盘：预建 `v<versionId>/`，之后 versionModeDir 走独占目录，不再写共享根。
+            if (!\is_dir($dir) && (@\mkdir($dir, 0775, true) || \is_dir($dir))) {
+                $created++;
+            }
+        }
+
+        return [
+            'purged' => $purged,
+            'created_version_dirs' => $created,
+            'version_ids' => \array_values($versionIds),
+            'versions' => \array_slice($versions, 0, 20),
+            'shared_formal_skipped' => \array_slice($shared, 0, 20),
+            'rows' => \count($rows),
+            'errors' => \array_slice($errors, 0, 3),
+        ];
+    }
+
     /**
      * 准备批静态树：
      * - 主题自有子树（设计命名空间 `Weline/<themePrefix>`、`Weline/Theme`）→ 硬链接真实文件（可覆盖新资源）；
@@ -439,16 +578,13 @@ final class ThemeUpdateBuildService
      * 头部 CSS 重复投递检查：PACK_OVERLAY 已合并主题叶，layout/page 再挂同一个叶就是
      * 同一份 CSS 投递两次 + 多一个渲染阻塞请求。
      *
-     * 只允许 DEV 断言（用户 2026-10-28 指定）：PROD 直接 skipped，不拦住发版。
-     * 检查自身异常也不得把发版拖红，统一降级为 skipped。
+     * 所有环境同一判定（不区分 dev/prod）。
+     * 检查自身异常不得把构建拖红，降级为 skipped。
      *
      * @return array<string,mixed>
      */
     private function checkHeadCssOverlayDuplicates(int $themeId): array
     {
-        if (\defined('PROD') && \PROD) {
-            return ['name' => 'head_css_overlay_duplicate', 'ok' => true, 'skipped' => 'prod'];
-        }
         try {
             /** @var ThemeHeadCssDuplicateInspector $inspector */
             $inspector = ObjectManager::getInstance(ThemeHeadCssDuplicateInspector::class);
@@ -470,6 +606,77 @@ final class ThemeUpdateBuildService
                 'name' => 'head_css_overlay_duplicate',
                 'ok' => true,
                 'skipped' => 'inspector_error',
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * 头部皮肤包（PACK_OVERLAY）可产出检查：消费侧的最低机器判定。
+     *
+     * 只看主题自身：overlay 清单必须解析出叶，且每个叶文件真实存在。
+     * 清单为空/叶缺失 ⇒ 页面只会拿到 tokens+storefront，没有皮肤 CSS，
+     * 但静态树与实体树都“齐全”，旧校验全绿（2026-11-02 事故）。
+     *
+     * 不区分 dev/prod；检查自身异常降级为 skipped，不伪造通过。
+     *
+     * 公开：增量（无脏标记）路径也要跑这一条，否则“什么都没做”也会报成功。
+     *
+     * @return array<string,mixed>
+     */
+    public function checkHeadPackLeaves(int $themeId): array
+    {
+        try {
+            $theme = ObjectManager::getInstance(WelineTheme::class);
+            if ((int)$theme->getId() !== $themeId) {
+                $theme->load($themeId);
+            }
+            if ((int)$theme->getId() < 1) {
+                return ['name' => 'head_pack_leaves', 'ok' => true, 'skipped' => 'theme_not_found'];
+            }
+            /** @var ThemeHeadChromeCssPack $pack */
+            $pack = ObjectManager::getInstance(ThemeHeadChromeCssPack::class);
+            $leaves = $pack->overlayManifestLeaves('frontend', $theme);
+            if ($leaves === []) {
+                return [
+                    'name' => 'head_pack_leaves',
+                    'ok' => false,
+                    'reason' => 'overlay_manifest_empty',
+                    'theme_path' => (string)$theme->getPath(),
+                ];
+            }
+            $module = Env::getInstance()->getModuleList()['Weline_Theme'] ?? null;
+            $moduleBase = \is_array($module)
+                ? \rtrim((string)($module['base_path'] ?? ''), '/\\') . '/view/theme/'
+                : '';
+            $resolver = ObjectManager::getInstance(ThemePathResolver::class);
+            $missing = [];
+            foreach ($leaves as $leaf) {
+                $rel = \ltrim((string)$leaf, '/');
+                if (\str_starts_with($rel, 'theme/')) {
+                    $rel = \substr($rel, \strlen('theme/'));
+                }
+                if ($moduleBase === '' || $rel === '') {
+                    $missing[] = (string)$leaf;
+                    continue;
+                }
+                $abs = $resolver->resolveThemeFile($moduleBase . $rel, $theme);
+                if (!\is_file($abs)) {
+                    $missing[] = $rel;
+                }
+            }
+
+            return [
+                'name' => 'head_pack_leaves',
+                'ok' => $missing === [],
+                'leaves' => \count($leaves),
+                'missing' => \array_slice($missing, 0, 10),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'name' => 'head_pack_leaves',
+                'ok' => true,
+                'skipped' => 'check_error',
                 'error' => $e->getMessage(),
             ];
         }

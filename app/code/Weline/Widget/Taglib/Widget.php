@@ -150,6 +150,13 @@ class Widget implements TaglibInterface
                     return "<!-- Widget 错误: 未找到部件 {$type}/{$name} -->";
                 }
 
+                // 全局区契约（禁止回潮）：同名片段已接管且已启用时，旧部件不再渲染，
+                // 否则主题残留槽 + 已物化放置会让页面出现第二份。
+                $contractCode = $code !== '' ? $code : (string)($widget['code'] ?? $name);
+                if (\Weline\Theme\Region\GlobalRegion::replacesWidget($contractCode)) {
+                    return '';
+                }
+
                 foreach (['layout-source' => '_layout_source', 'source' => '_source'] as $attribute => $key) {
                     if (isset($attributes[$attribute])) { $params[$key] = (string)$attributes[$attribute]; }
                 }

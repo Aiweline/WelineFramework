@@ -14,12 +14,21 @@ use Weline\Framework\Manager\ObjectManager;
  */
 final class HookCompiledPhpInliner
 {
+    /** 烘焙产物形态版本：变更烘焙输出时必须改这个值，让带缓存的 compiled 重编。 */
+    public const COMPILE_SIGNATURE = 'baked-hook-guard-v1';
+
     /** @var array<string, int> */
     private static array $depth = [];
 
     public static function isProductionInlineEnabled(): bool
     {
-        return !(\defined('DEV') && DEV);
+        if (!(\defined('DEV') && DEV)) {
+            return true;
+        }
+
+        // 发布/固化编译：dev 也按生产口径把 hook 烘成 include，
+        // 避免产物里留 getHook() 让每次请求都走事件派发。
+        return \getenv('WELINE_BAKE_TEMPLATE_TAGS') === '1';
     }
 
     /**
@@ -124,16 +133,8 @@ final class HookCompiledPhpInliner
             return null;
         }
 
-        $soloModule = null;
-        foreach ($withMeta as $module => $meta) {
-            if (!empty($meta['solo'])) {
-                $soloModule = $module;
-                break;
-            }
-        }
-        if ($soloModule !== null && isset($files[$soloModule])) {
-            $files = [$soloModule => $files[$soloModule]];
-        }
+        // solo 语义与 Template 共用 HookReader::applySolo()。
+        $files = HookReader::applySolo($files, $withMeta);
 
         $template = Template::getInstance();
         $includes = [];
@@ -152,14 +153,24 @@ final class HookCompiledPhpInliner
             return null;
         }
 
+        $paths = [];
         $parts = [];
         foreach ($includes as $row) {
+            $paths[] = $row['path'];
             $export = \var_export($row['path'], true);
             $mod = \addcslashes($row['module'], "\\'");
             $parts[] = '/* baked-hook:' . $hookName . ' @' . $mod . ' */'
                 . ' include ' . $export . ';';
         }
 
-        return '<?php ' . \implode(' ', $parts) . ' ?>';
+        // 烘焙用的是绝对路径，而 compiled 目录会被 theme:update -f / gc 重建（换 hash 或清空）。
+        // 目标文件缺失时不能静默丢内容：回落运行期 getHook()，保证重建后 hook 依然完整。
+        $pathsExport = \var_export($paths, true);
+        $hookExport = \var_export($hookName, true);
+
+        return '<?php $__w_baked=' . $pathsExport . '; $__w_ok=true;'
+            . ' foreach($__w_baked as $__w_p){ if(!\is_file($__w_p)){ $__w_ok=false; break; } }'
+            . ' if($__w_ok){ ' . \implode(' ', $parts) . ' }'
+            . ' else { echo $this->getHook(' . $hookExport . '); } ?>';
     }
 }

@@ -112,6 +112,7 @@ final class RemoteDictionaryAssistService
         $invalidItems = [];
         $seen = [];
         $publishLocales = [];
+        $metaPrefix = \class_exists(MetaLocalWordParser::class) ? MetaLocalWordParser::META_PREFIX : null;
 
         foreach ($items as $index => $raw) {
             if (!is_array($raw)) {
@@ -128,7 +129,7 @@ final class RemoteDictionaryAssistService
                 $invalidItems[] = ['index' => (int)$index, 'reason' => 'empty_source'];
                 continue;
             }
-            $isMetaKey = str_starts_with($source, MetaLocalWordParser::META_PREFIX);
+            $isMetaKey = $metaPrefix !== null && str_starts_with($source, $metaPrefix);
             if ($type === self::TYPE_PHRASE && $isMetaKey) {
                 $invalid++;
                 $invalidItems[] = ['index' => (int)$index, 'reason' => 'wrong_shape_for_type'];
@@ -164,6 +165,11 @@ final class RemoteDictionaryAssistService
             $seen[$batchKey] = true;
 
             if ($type === self::TYPE_META) {
+                if (!\class_exists(MetaTranslation::class)) {
+                    $invalid++;
+                    $invalidItems[] = ['index' => (int)$index, 'reason' => 'meta_unavailable'];
+                    continue;
+                }
                 $existing = MetaTranslation::findTranslatedValueWithScope($source, 'default', $locale);
                 if ($existing !== null && trim($existing) !== '' && $existing !== $source) {
                     $skipped++;
@@ -314,6 +320,9 @@ final class RemoteDictionaryAssistService
      */
     private function queryMetaPendingUnion(array $locales, int $limit, int $offset): array
     {
+        if (!\class_exists(MetaLocal::class)) {
+            return [];
+        }
         $limit = max(1, $limit);
         $offset = max(0, $offset);
         $baseline = self::META_BASELINE_LOCALE;

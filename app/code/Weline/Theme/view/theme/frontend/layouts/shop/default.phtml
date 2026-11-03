@@ -39,8 +39,8 @@ $ctaCategory = (string)\Weline\Theme\Helper\WidgetI18n::label('按分类选购')
         .theme-shop-hub__btn--ghost { border: 1px solid var(--weline-theme-border, var(--weline-theme-border-color, #e5e7eb)); color: inherit; }
         .theme-shop-hub__section { margin: 2rem 0 0; }
     </style>
-</head>
-<body class="theme-layout-shop" data-layout="shop">
+<!--@weline-global:head:begin--><?= \Weline\Theme\Region\GlobalRegion::render('head') ?><!--@weline-global:head:end--></head>
+<body class="theme-layout-shop" data-layout="shop"><!--@weline-global:body_open:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_open') ?><!--@weline-global:body_open:end-->
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <div class="weline-page-wrapper" data-testid="storefront-shop-page">
@@ -87,5 +87,5 @@ $ctaCategory = (string)\Weline\Theme\Helper\WidgetI18n::label('按分类选购')
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end-dynamic</w:hook>
     <w:hook>seo::footer</w:hook>
-</body>
+<!--@weline-global:body_end:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_end') ?><!--@weline-global:body_end:end--></body>
 </html>

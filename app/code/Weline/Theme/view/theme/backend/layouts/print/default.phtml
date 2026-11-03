@@ -15,8 +15,8 @@ $classes = array_values(array_filter(preg_split('/\s+/', trim((string)($meta['cl
     <w:template>Weline_Admin::common/head.phtml</w:template>
     <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::backend::layouts::print::head-after</w:hook>
-</head>
-<body>
+<!--@weline-global:head:begin--><?= \Weline\Theme\Region\GlobalRegion::render('head') ?><!--@weline-global:head:end--></head>
+<body><!--@weline-global:body_open:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_open') ?><!--@weline-global:body_open:end-->
     <w:hook>Weline_Theme::backend::layouts::print::body-start</w:hook>
     <div class="w-backend-print-shell">
         <?php
@@ -33,5 +33,5 @@ $classes = array_values(array_filter(preg_split('/\s+/', trim((string)($meta['cl
         </div>
     </div>
     <w:hook>Weline_Theme::backend::layouts::print::body-end</w:hook>
-</body>
+<!--@weline-global:body_end:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_end') ?><!--@weline-global:body_end:end--></body>
 </html>

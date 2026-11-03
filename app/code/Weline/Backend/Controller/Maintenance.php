@@ -281,6 +281,9 @@ class Maintenance extends BackendController
     private function republishMaintenanceStaticPages(): void
     {
         try {
+            if (!\class_exists(MaintenanceStaticGenerator::class)) {
+                return;
+            }
             $retryAfter = (int)(Env::getInstance()->getConfig('maintenance_retry_after', 60));
             (new MaintenanceStaticGenerator())->publishAll($retryAfter);
         } catch (\Exception $e) {

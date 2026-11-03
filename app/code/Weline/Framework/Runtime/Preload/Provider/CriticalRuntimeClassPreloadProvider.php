@@ -202,23 +202,9 @@ final class CriticalRuntimeClassPreloadProvider implements WorkerPreloadProvider
         // 6) Taglibs: the template compiler resolves tag definitions on first render.
         //    Measured cold 49.5 ms vs 0.09 ms warm (~550x); every storefront page
         //    goes through the compiler.
-        if ($this->step('taglibs', static function (): void {
-            if (\class_exists(\Weline\Taglib\TaglibRegistry::class)) {
-                ObjectManager::getInstance(\Weline\Taglib\TaglibRegistry::class)->getTags();
-            }
-        }, $detail)) {
-            $items++;
-        }
-
-        // 7) Widgets: slot rendering resolves the widget catalogue on first use.
-        //    Measured cold 136 ms vs 5 ms warm (~27x).
-        if ($this->step('widgets', static function (): void {
-            if (\class_exists(\Weline\Widget\Service\WidgetData::class)) {
-                ObjectManager::getInstance(\Weline\Widget\Service\WidgetData::class)->getAllWidgets();
-            }
-        }, $detail)) {
-            $items++;
-        }
+        // taglibs/widgets 预热已下沉为各模块自有 preload provider
+        // (`worker_preload_provider.Weline_Taglib_Catalogue` / `..._Widget_Catalogue`)，
+        // 运行时只负责调度。
 
         // 8) Cache pools: the first w_cache() call constructs CacheManager, which
         //    merges cache switch state from the database (measured 61–82 ms cold:
@@ -301,6 +287,23 @@ final class CriticalRuntimeClassPreloadProvider implements WorkerPreloadProvider
         }, $detail)) {
             $items++;
         }
+
+        // 12) DevTool 面板会话探测：`DevToolMemoryLimitBootstrap::applyIfDevToolSessionActive()`
+        //     在每个请求的 bootstrapRequestCycle 里都会 resolve 这个 provider，
+        //     首次解析要装配 DeveloperWorkspace 的模型/配置图（冷启实测 130–560 ms）。
+        //     这里只把对象装配好，不触发真正的会话判定。
+        if ($this->step('developer_access_provider', static function (): void {
+            $interface = \Weline\Framework\Runtime\DeveloperAccessProviderInterface::class;
+            if (!\interface_exists($interface)) {
+                return;
+            }
+            ObjectManager::getInstance($interface);
+        }, $detail)) {
+            $items++;
+        }
+
+        // 13) 店面分类树预热已下沉为 Product 模块自有 preload provider
+        //     (`worker_preload_provider.Weline_Product_CategoryTree`)，运行时只负责调度。
 
         $durationMs = \round((\microtime(true) - $start) * 1000, 2);
         $memoryDelta = \memory_get_usage(true) - $memoryStart;

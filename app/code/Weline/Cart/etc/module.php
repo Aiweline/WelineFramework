@@ -4,7 +4,10 @@ return [
     "name" => 'Weline_Cart',
     "version" => '1.3.124',
     "requires" => [
+        'Weline_Currency' => '*',
         'Weline_Framework' => '*',
+        'Weline_Shipping' => '*',
+        'Weline_Theme' => '*',
     ],
     "optional" => [
         'Weline_Customer' => '*',

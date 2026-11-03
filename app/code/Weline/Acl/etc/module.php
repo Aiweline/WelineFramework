@@ -7,6 +7,7 @@ return [
         'Weline_Framework' => '*',
     ],
     "optional" => [
+        'Weline_Websites' => '*',
     ],
     "provides" => [
         \Weline\Acl\Service\AclServiceInterface::class => \Weline\Acl\Service\AclService::class,

@@ -752,7 +752,7 @@ final class ThemeUpdateBatchService
         $themeId = (int)$batch->getData(ThemeUpdateBatch::schema_fields_THEME_ID);
         $websiteId = (int)$batch->getData(ThemeUpdateBatch::schema_fields_WEBSITE_ID);
         $area = (string)$batch->getData(ThemeUpdateBatch::schema_fields_AREA);
-        $row = $this->loadPointerRow($websiteId, $themeId, $area);
+        $row = $this->findPointerRow($websiteId, $themeId, $area);
         $state = $row === null
             ? ['current' => '', 'previous' => '', 'epoch' => 0]
             : $row->toState();
@@ -762,6 +762,13 @@ final class ThemeUpdateBatchService
         $this->commitPointer($row, $websiteId, $themeId, $area, $next, (int)$state['epoch'], $batchId);
         $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch'], $pinnedBuild);
         $this->mirrorThemeStaticToDeploy($batchId, $pinnedBuild);
+        // Batch promote writes theme statics into the live tree, but `theme:update` never
+        // ran the framework-side static compile (`deploy:upgrade` does): weline-core.js
+        // merge, the static build id, and the incomplete-generation heal. Without it the
+        // promoted generation kept the previous core bundle, so `data-weline-load`
+        // widget scripts (store music, currency, cart …) silently stopped loading.
+        // Must run AFTER the mirror so the build id covers the freshly mirrored files.
+        $this->compileStaticRuntime();
         $this->rotateStorefrontHtmlGeneration();
         $errors = $this->invalidateThemeCaches($themeId, 'theme_update_promote');
         // 自动回收历史代次，避免批次目录无界增长（失败不影响切换，但必须上报）
@@ -795,6 +802,7 @@ final class ThemeUpdateBatchService
         $pinnedBuild = self::pinnedStaticBuildForBatch($next['current']);
         $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch'], $pinnedBuild);
         $this->mirrorThemeStaticToDeploy($next['current'], $pinnedBuild);
+        $this->compileStaticRuntime();
         $this->rotateStorefrontHtmlGeneration();
         // 2026-11-01（Task 0.2）：回滚也必须经权威号，且用 rollback kind 显式允许倒退；
         // 单调保护只挡"普通发版误退代"，不放行真正的回滚。
@@ -865,9 +873,11 @@ final class ThemeUpdateBatchService
         $deleted = [];
         foreach ($drop as $batchId) {
             $this->purgeBatchDirs($batchId);
-            $this->batch->reset()->clearQuery()
+            // delete() 内部已执行 fetch()：不能再串 ->fetch()（删除不落地）；
+            // 并且必须先 clearData()，否则共享 Model 上残留的已加载主键会让删除走 PK 而不是 batch_id。
+            $this->batch->reset()->clearData()->clearQuery()
                 ->where(ThemeUpdateBatch::schema_fields_BATCH_ID, $batchId)
-                ->delete()->fetch();
+                ->delete();
             $deleted[] = $batchId;
         }
 
@@ -994,6 +1004,27 @@ final class ThemeUpdateBatchService
         }
 
         return $batch;
+    }
+
+    /**
+     * 指针行（不论 current 是否为空）。
+     *
+     * promote 必须用它：`current` 已被清空的指针行仍然占用唯一键
+     * (`uk_theme_update_pointer_owner`)，按「无行」去插入会撞唯一约束
+     * （2026-11-02 实测：purge 后重建 promote 报 duplicate key）。
+     */
+    private function findPointerRow(int $websiteId, int $themeId, string $area): ?ThemeUpdatePointer
+    {
+        $row = $this->pointer->reset()->clearQuery()
+            ->where(ThemeUpdatePointer::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(ThemeUpdatePointer::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeUpdatePointer::schema_fields_AREA, $area)
+            ->find()->fetch();
+        if ($row instanceof ThemeUpdatePointer && (int)$row->getData(ThemeUpdatePointer::schema_fields_ID) > 0) {
+            return $row;
+        }
+
+        return null;
     }
 
     private function loadPointerRow(int $websiteId, int $themeId, string $area): ?ThemeUpdatePointer
@@ -1392,6 +1423,25 @@ final class ThemeUpdateBatchService
      * - `$staticBuild` 非空（默认）：每次换代一个新 12 位段，旧段留到 GC；
      * - 空串（`theme_update_pinned_static_build=false`）：沿用部署构建号、原地镜像并立即 retire 旧段。
      */
+    /**
+     * Run the framework-side static compile that only `deploy:upgrade` used to do.
+     *
+     * Promote/rollback both change the live static tree, so the merged frontend core
+     * bundle and the build id must be refreshed afterwards — otherwise the page keeps
+     * loading the previous generation's `weline-core.js` and every `data-weline-load`
+     * widget script stops resolving. Fail-open: a compile problem must not undo an
+     * otherwise successful switch, but it is reported.
+     */
+    private function compileStaticRuntime(): void
+    {
+        try {
+            ObjectManager::getInstance(ThemeStaticRuntimeCompileService::class)->compile();
+        } catch (\Throwable) {
+            // Never block a promote/rollback on the static compile; the next
+            // `deploy:upgrade` or theme update retries it.
+        }
+    }
+
     private function mirrorThemeStaticToDeploy(string $batchId, string $staticBuild = ''): void
     {
         if ($batchId === '') {

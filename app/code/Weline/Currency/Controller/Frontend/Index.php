@@ -7,6 +7,8 @@ namespace Weline\Currency\Controller\Frontend;
 use Weline\Currency\Data\CurrencyData;
 use Weline\Currency\Model\Config as CurrencyConfig;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Api\I18n\WidgetTranslationInterface;
 
 /**
  * 店面货币与汇率说明。
@@ -22,7 +24,7 @@ final class Index extends FrontendController
 
     public function index(): string
     {
-        $title = \Weline\Theme\Helper\WidgetI18n::label('货币与汇率');
+        $title = ObjectManager::getInstance(WidgetTranslationInterface::class)->label('货币与汇率');
         $currencies = CurrencyData::getCurrencies();
         $baseCode = strtoupper(trim($this->currencyConfig->getBaseCurrency()));
         $rateMode = $this->currencyConfig->getRateMode();
@@ -38,7 +40,8 @@ final class Index extends FrontendController
         $this->assign('currency_page_heading', $title);
         $this->assign(
             'currency_page_subtitle',
-            \Weline\Theme\Helper\WidgetI18n::label('查看本站支持的结算货币、基准币与汇率政策说明。')
+            ObjectManager::getInstance(WidgetTranslationInterface::class)
+                ->label('查看本站支持的结算货币、基准币与汇率政策说明。')
         );
         $this->assign('currency_list', $currencies);
         $this->assign('currency_base_code', $baseCode);

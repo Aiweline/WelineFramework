@@ -8,6 +8,11 @@ return [
         'Weline_Framework' => '*',
     ],
     "optional" => [
+        'Weline_Backend' => '*',
+        'Weline_Payment' => '*',
+        'Weline_Search' => '*',
+        'Weline_Theme' => '*',
+        'Weline_Websites' => '*',
     ],
     "provides" => [
         \Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class => \Weline\SystemConfig\Service\SystemConfigScopeResolver::class,

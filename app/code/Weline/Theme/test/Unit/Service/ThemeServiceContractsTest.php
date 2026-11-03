@@ -1630,8 +1630,11 @@ private function assert_HomepageLayoutHtmlBag_testLogicalKeyCarriesHomepageOptio
     /** @var StorefrontHomepageLayoutHtmlBag $bag */
     $bag = $ref->newInstanceWithoutConstructor();
     $key = $bag->logicalKey('Weline_Theme::theme/frontend/layouts/homepage/default.phtml');
-    self::assertStringContainsString('theme.homepage_layout.html.v25.', $key);
+    // v27: 外壳 bag 从「仅首页」泛化为「按 page_type」，key 里带页面类型。
+    self::assertStringContainsString('theme.layout_html.v27.', $key);
     self::assertStringContainsString('.homepage.default', $key);
+    $productsKey = $bag->logicalKey('Weline_Theme::theme/frontend/layouts/products/default.phtml');
+    self::assertStringContainsString('.products.default', $productsKey);
 }
 
 private function assert_BlogLayoutHtmlBag_testPolicyUsesPublishedProjectionPoolAndVariesLangCurrency(): void

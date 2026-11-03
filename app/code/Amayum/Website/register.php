@@ -18,5 +18,6 @@ Register::register(
         'Weline_Seo',
         'Weline_Smtp',
         'Weline_ModuleRouter',
+        'Weline_UrlManager',
     ],
 );

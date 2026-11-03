@@ -6,9 +6,15 @@ namespace Weline\Promotion\Controller;
 
 use Weline\Framework\Context;
 use Weline\Framework\Router\RouterInterface;
+use Weline\Framework\View\ModulePublicRouteInterface;
 
-final class Router implements RouterInterface
+final class Router implements RouterInterface, ModulePublicRouteInterface
 {
+    public static function handles(string $normalizedPath): bool
+    {
+        return true;
+    }
+
     private const PUBLIC_ROUTE_PREFIX = 'promotion';
     private const FIXED_ALIASES = [
         'promotion' => 'promotion',

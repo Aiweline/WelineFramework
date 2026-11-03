@@ -151,7 +151,31 @@ final class FiberOutputBuffer
         self::$fiberBufferStacks[$fiber] = $stack;
     }
 
+    /**
+     * Page HTML leaves the runtime through this method for every pipeline. The global
+     * regions are appended here as the last step, so a page can never be streamed without
+     * them whichever renderer (compiled layout, solidified artefact, source fallback)
+     * produced the markup.
+     */
     public static function endCapture(): string
+    {
+        return self::withGlobalRegions(self::endCaptureRaw());
+    }
+
+    private static function withGlobalRegions(string $html): string
+    {
+        if (!str_contains($html, '<head') || !str_contains($html, '</body>')) {
+            return $html;
+        }
+        try {
+            return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Runtime\GlobalRegionInjectorInterface::class)
+                ->ensure($html, 'frontend');
+        } catch (\Throwable) {
+            return $html;
+        }
+    }
+
+    private static function endCaptureRaw(): string
     {
         if (!Runtime::isPersistent()) {
             return self::endNativeBaselineCapture(self::$nonPersistentCaptureBaselines);

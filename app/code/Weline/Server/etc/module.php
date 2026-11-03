@@ -4,11 +4,16 @@ return [
     "name" => 'Weline_Server',
     "version" => '2.0.240',
     "requires" => [
+        'Weline_Acl' => '*',
+        'Weline_Database' => '*',
         'Weline_Framework' => '*',
         'Weline_Backend' => '*',
+        'Weline_Maintenance' => '*',
     ],
     "optional" => [
         'Weline_AppStore' => '*',
+        'Weline_Theme' => '*',
+        'Weline_Websites' => '*',
     ],
     "provides" => [
         \Weline\Framework\Runtime\RuntimeEdgeCacheInvalidatorInterface::class => \Weline\Server\Api\Runtime\RuntimeEdgeCacheInvalidator::class,

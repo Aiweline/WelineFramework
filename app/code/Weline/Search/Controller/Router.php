@@ -5,11 +5,17 @@ declare(strict_types=1);
 namespace Weline\Search\Controller;
 
 use Weline\Framework\Router\RouterInterface;
+use Weline\Framework\View\ModulePublicRouteInterface;
 
 /** Owns the Search module's public storefront search route. */
-final class Router implements RouterInterface
+final class Router implements RouterInterface, ModulePublicRouteInterface
 {
     private const INDEX_ROUTE = 'search/frontend';
+
+    public static function handles(string $normalizedPath): bool
+    {
+        return $normalizedPath === 'search';
+    }
 
     /**
      * @inheritDoc

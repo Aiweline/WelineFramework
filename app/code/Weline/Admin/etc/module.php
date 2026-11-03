@@ -12,7 +12,10 @@ return [
     ],
     "optional" => [
         'Weline_Captcha' => '*',
+        'Weline_FileManager' => '*',
         'Weline_Search' => '*',
+        'Weline_Theme' => '*',
+        'Weline_Websites' => '*',
     ],
     "provides" => [
         \Weline\Admin\Api\Notification\SystemNotificationDirectoryInterface::class => \Weline\Admin\Service\SystemNotificationDirectory::class,

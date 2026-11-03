@@ -9,6 +9,7 @@ return [
         'Weline_Framework' => '*',
         'Weline_Backend' => '*',
         'Weline_I18n' => '*',
+        'Weline_Mail' => '*',
         'Weline_Taglib' => '*',
         'Weline_Widget' => '*',
         'Weline_SystemConfig' => '*',

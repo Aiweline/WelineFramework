@@ -6,9 +6,9 @@ namespace Weline\Framework\Setup\Console\Setup\Schema;
 
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
-use Weline\Framework\Database\Schema\SchemaCheckpointDriftInspector;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Setup\Schema\SchemaDriftInspectorInterface;
 
 /**
  * Read-only Schema checkpoint drift check for local/CI use.
@@ -34,8 +34,8 @@ class Check extends CommandAbstract
         $moduleFilter = $modules === [] ? null : $modules;
 
         try {
-            /** @var SchemaCheckpointDriftInspector $inspector */
-            $inspector = ObjectManager::getInstance(SchemaCheckpointDriftInspector::class);
+            /** @var SchemaDriftInspectorInterface $inspector */
+            $inspector = ObjectManager::getInstance(SchemaDriftInspectorInterface::class);
             $report = $inspector->inspect($moduleFilter);
         } catch (\Throwable $e) {
             if ($json) {

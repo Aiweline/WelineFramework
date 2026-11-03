@@ -5,6 +5,7 @@ return [
     "version" => '1.1.22',
     "requires" => [
         'Weline_Backend' => '*',
+        'Weline_Database' => '*',
         'Weline_Eav' => '*',
         'Weline_Queue' => '>=1.2.5',
         'Weline_SystemConfig' => '*',

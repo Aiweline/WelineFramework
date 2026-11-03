@@ -81,8 +81,8 @@ layoutType=account/orders，option=default → layouts/account/orders/default.ph
 }
 </style>
     <w:hook>seo::head</w:hook>
-</head>
-<body>
+<!--@weline-global:head:begin--><?= \Weline\Theme\Region\GlobalRegion::render('head') ?><!--@weline-global:head:end--></head>
+<body><!--@weline-global:body_open:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_open') ?><!--@weline-global:body_open:end-->
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
@@ -161,5 +161,5 @@ layoutType=account/orders，option=default → layouts/account/orders/default.ph
     <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
     <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
-</body>
+<!--@weline-global:body_end:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_end') ?><!--@weline-global:body_end:end--></body>
 </html>

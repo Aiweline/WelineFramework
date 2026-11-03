@@ -49,6 +49,17 @@ lane=engineering
 
 **顺序钉死**：`Impl/Write → 真机 Accept（UC/WB-OP/e2e）→ Brief Closeout`。「通过即开发」只放开施工，不放开宣称完成。
 
+### 2.1 本地开发流程（HARD · 用户指定：先 debug(PHP mock) → 最后 ego 实际验收）
+
+**本地开发按此顺序，缺一不可：**
+
+1. **debug（PHP 脚本 mock 测试）**：定位/前期验证用 `debug` 技能，本地 PHP 脚本 mock 请求逐层二分（脚本落 `dev/debug/`），产出根因或观测值；**不**用浏览器反复试探。
+2. **实现 + 单测**：按 `tdd`（红→绿→重构），跑 `php bin/w phpunit:run --phpunit`。
+3. **真机 WB-OP**：涉及 Web/UI 时，禁缓存导航 → 真点选 → 截图 Read 审图。
+4. **最后 ego 实际验收**：收口阶段用 **`ego-browser` 实际验收用例**（真实路径点选/通路验收），跑完冻结 UC 闭环后才能汇审宣称完成。
+
+> 顺序铁律：`debug(php mock) → 实现/单测 → 真机 WB-OP → ego 实际验收`。「先 debug 后 ego」；未跑 ego 实际验收不能收口。
+
 ## 3. 已消重对照（审查结论）
 
 | 曾重复 / 易混 | 正确处理 |

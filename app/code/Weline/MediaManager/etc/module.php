@@ -5,6 +5,7 @@ return [
     "version" => '1.3.10',
     "requires" => [
         'Weline_Backend' => '*',
+        'Weline_Database' => '*',
         'Weline_FileManager' => '>=1.1.5',
         'Weline_Framework' => '>=2.5.0',
         'Weline_Storage' => '>=1.2.0',

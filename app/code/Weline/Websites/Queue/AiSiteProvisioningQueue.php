@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Queue;
 
+use Weline\Queue\Api\QueueConsumerInterface;
+use Weline\Queue\Api\QueueStatus;
+use Weline\Queue\Api\QueueTaskContextInterface;
 use Weline\Queue\DeadWorkerRecoveryPatchQueueInterface;
 use Weline\Queue\Exception\QueueDeferredCompletionException;
 use Weline\Queue\Model\Queue;
-use Weline\Queue\QueueInterface;
 use Weline\Websites\Service\AiSiteProvisioningJobHandler;
 
-class AiSiteProvisioningQueue implements QueueInterface, DeadWorkerRecoveryPatchQueueInterface
+class AiSiteProvisioningQueue implements QueueConsumerInterface, DeadWorkerRecoveryPatchQueueInterface
 {
     private const MAX_DEAD_WORKER_RECOVERIES = 3;
     private const HOSTS_AUTHORIZATION_WAIT_KEY = '_hosts_authorization_wait_v1';
@@ -55,7 +57,7 @@ class AiSiteProvisioningQueue implements QueueInterface, DeadWorkerRecoveryPatch
         return (string)__('域名准备与 AI Plan/Build 并行；域名未完成时只阻断 Publish。');
     }
 
-    public function validate(Queue &$queue): bool
+    public function validate(QueueTaskContextInterface $queue): bool
     {
         $content = $this->decodeContent($queue);
         $requestId = \trim((string)($content['request_id'] ?? ''));
@@ -75,7 +77,7 @@ class AiSiteProvisioningQueue implements QueueInterface, DeadWorkerRecoveryPatch
         return true;
     }
 
-    public function execute(Queue &$queue): string
+    public function execute(QueueTaskContextInterface $queue): string
     {
         $content = $this->decodeContent($queue);
         $requestId = (string)($content['request_id'] ?? '');
@@ -189,7 +191,7 @@ class AiSiteProvisioningQueue implements QueueInterface, DeadWorkerRecoveryPatch
     }
 
     /** @return array<string, mixed> */
-    private function decodeContent(Queue $queue): array
+    private function decodeContent(QueueTaskContextInterface $queue): array
     {
         $content = $queue->getContent();
         if (\is_array($content)) {
@@ -228,7 +230,7 @@ class AiSiteProvisioningQueue implements QueueInterface, DeadWorkerRecoveryPatch
             $domain,
         ]);
         $result = (string)\json_encode([
-            'status' => Queue::status_pending,
+            'status' => QueueStatus::PENDING,
             'authorization_pending' => true,
             'target_domain' => $domain,
             'not_before' => $notBefore,

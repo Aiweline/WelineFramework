@@ -6,6 +6,7 @@ return [
     "requires" => [
         'Weline_Admin' => '*',
         'Weline_Backend' => '*',
+        'Weline_Framework' => '*',
         'Weline_SystemConfig' => '*',
     ],
     "optional" => [

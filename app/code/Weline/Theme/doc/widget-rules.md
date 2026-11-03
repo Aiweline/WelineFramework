@@ -585,3 +585,25 @@ $isExclusive = in_array($slotId, $exclusiveSlots, true);
 | `app/code/Weline/Theme/Controller/Backend/ThemeEditor.php` | 编辑器控制器 |
 | `app/code/Weline/Widget/Service/WidgetRegistry.php` | 部件注册表 |
 | `app/code/Weline/Theme/view/statics/js/theme-editor.js` | 前端编辑器逻辑 |
+
+## 全局内容已迁出部件体系（2026-11-02，权威）
+
+以下 10 个 chrome 容器与 9 个部件**不再是"槽 + 部件"**，改由全局区片段承接（见
+[全局区片段契约.md](./全局区片段契约.md)）。仍按旧方式挂槽属于回潮，会被守卫跳过：
+
+| 原容器 | 现归属 |
+|---|---|
+| `header-pixel-bootstrap` | `base.head.analytics.01-pixel`（eager，内联） |
+| `storefront-float-start` | `base.body_end.ops.04-store-music`、`base.body_end.ops.05-app-download` |
+| `storefront-float-end` | `base.body_end.ops.02-cs-float` |
+| `storefront-float-side` | `base.body_end.marketing.01-affiliate` |
+| `storefront-float-middle-start` | `base.body_end.marketing.02-social` |
+| `storefront-tail-chrome` | `base.body_end.ops.01-compare` / `02-b2b-mini-cart` / `03-shipping-tail`、`base.body_end.consent.01-banner` |
+| `storefront-float-top-start/top-center/top-end/bottom-center` | 保留为挂载点，当前无片段 |
+
+规则：
+
+- 这些部件从模板里删掉 `@widget.default_injections` / `@widget.slot` / `@widget.position`（或置空）；**删声明不等于删已物化放置**，旧放置由渲染守卫跳过。
+- 部件体系只保留**页面内容位**（`design-product-main`、`product-*`、`list-filters`、`featured-products`、hero / 推荐位）与主题自带内容（`theme-storefront-tail`）。
+- 新增全站基础设施时，正确做法是加一个 `view/theme/base/{region}/{group}/` 片段，而不是再加一个 chrome 槽。
+

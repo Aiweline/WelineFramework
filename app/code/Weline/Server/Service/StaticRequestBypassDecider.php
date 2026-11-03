@@ -135,6 +135,8 @@ final class StaticRequestBypassDecider
             || $path === 'geo-feed.xml'
             || $path === '.well-known/tdmrep.json'
             || $path === '.well-known/trust.txt'
+            || $path === '.well-known/ai-catalog.json'
+            || $path === '.well-known/ard.json'
             || \str_starts_with($path, 'sitemaps/');
     }
 

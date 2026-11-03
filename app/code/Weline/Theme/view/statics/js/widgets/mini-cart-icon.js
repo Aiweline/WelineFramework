@@ -1729,13 +1729,135 @@
         return {
             drawer: root.querySelector('[data-mini-cart-drawer]'),
             overlay: root.querySelector('[data-mini-cart-overlay]'),
-            trigger: root.querySelector('[data-mini-cart-trigger]'),
+            trigger: root.querySelector('[data-mini-cart-trigger]') || globalTrigger(root),
         };
     }
 
+    // 设计主题自有 chrome 的触发按钮在根节点外：按 aria-controls 指回本根（无则取第一个声明）。
+    function globalTrigger(root) {
+        if (!root || !document.querySelector) {
+            return null;
+        }
+        var id = String(root.getAttribute('id') || '');
+        if (id !== '') {
+            try {
+                var scoped = document.querySelector('[data-mini-cart-trigger][aria-controls="' + id + '"]');
+                if (scoped) {
+                    return scoped;
+                }
+            } catch (e) {
+                // 非法 id 选择器：退回全局第一个。
+            }
+        }
+        return document.querySelector('[data-mini-cart-trigger][aria-controls]')
+            || document.querySelector('[data-mini-cart-trigger-global]');
+    }
+
+    /**
+     * 声明式展开：主题部件只要在元素上声明 data-mini-cart-open，点击即展开迷你购物车。
+     *
+     * 抽屉壳不随页面 SSR 下发，只有「声明了属性」的元素由本脚本按事件委托认领，
+     * 点击后才取壳 → 水合 → 打开。设计主题自有 chrome（页头购物袋、促销条 CTA 等）
+     * 不需要知道抽屉 DOM 在哪，也不需要 aria-controls 指回宿主。
+     *
+     * 委托绑在 document 上（capture=false）：水合后新增的声明元素同样生效，
+     * MutationObserver 不会因为重新绑定而反复触发。宿主开关仍是 MiniCart.open()：
+     * 多根页面（商品页 + 页头）只打开第一个可见根，避免同时开两个抽屉。
+     */
+    var openRequestAttr = 'data-mini-cart-open';
+
+    function openRequestedTarget(event) {
+        if (!event || !event.target || typeof event.target.closest !== 'function') {
+            return null;
+        }
+        try {
+            return event.target.closest('[' + openRequestAttr + ']');
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function bindDeclarativeOpen() {
+        if (document.documentElement.getAttribute('data-mini-cart-open-bound') === '1') {
+            return;
+        }
+        document.documentElement.setAttribute('data-mini-cart-open-bound', '1');
+        document.addEventListener('click', function (event) {
+            if (event.defaultPrevented || event.button > 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+            }
+            var target = openRequestedTarget(event);
+            if (!target) {
+                return;
+            }
+            event.preventDefault();
+            requestOpenFromTrigger(target);
+        });
+    }
+
+    function requestOpenFromTrigger(trigger) {
+        var opts = {};
+        var mode = String(trigger && trigger.getAttribute ? trigger.getAttribute('data-mini-cart-open') : '').trim();
+        if (mode !== '' && mode !== '1' && mode !== 'open' && mode !== 'toggle') {
+            opts.cartType = mode;
+        }
+        if (mode === 'toggle') {
+            var current = rootsForOpen()[0] || null;
+            if (current && isDrawerOpen(current)) {
+                setDrawerOpen(current, false);
+                return;
+            }
+        }
+        openFirstRoot(opts);
+    }
+
+    function rootsForOpen() {
+        var roots = [];
+        document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
+            if (isDemoChromeOnly(root)) {
+                return;
+            }
+            // 隐藏宿主（布局预览 / 后台画布）不抢展开权。
+            if (root.getAttribute('hidden') !== null || root.getAttribute('aria-hidden') === 'true') {
+                return;
+            }
+            roots.push(root);
+        });
+        return roots;
+    }
+
+    function openFirstRoot(opts) {
+        var roots = rootsForOpen();
+        if (!roots.length) {
+            return;
+        }
+        var root = roots[0];
+        if (opts && opts.cartType) {
+            applyCartTypeAttr(root, { cart_type: normalizeCartType(opts.cartType) });
+        }
+        setDrawerOpen(root, true);
+    }
+
     function setDrawerOpen(root, open) {
+        if (open && root && !root.querySelector('[data-mini-cart-drawer]')) {
+            // 壳尚未挂载：先取壳 → 绑抽屉事件 → 再打开，禁止对空挂载点切抽屉状态。
+            if (root.getAttribute('data-mini-cart-shell-pending') === '1') {
+                return;
+            }
+            root.setAttribute('data-mini-cart-shell-pending', '1');
+            mountShell(root).then(function () {
+                root.removeAttribute('data-mini-cart-shell-pending');
+                if (root.querySelector('[data-mini-cart-drawer]')) {
+                    bindDrawer(root);
+                    setDrawerOpen(root, true);
+                }
+            });
+            return;
+        }
         if (open) {
             ensureDrawerCss();
+            // 首次点击才水合：抽屉事件挂在壳内部节点上，打开前必须已绑定。
+            bindDrawer(root);
         }
         var els = drawerElements(root);
         root.classList.toggle(openClass, open);
@@ -1831,14 +1953,22 @@
 
     function bindDrawer(root) {
         var els = drawerElements(root);
-        if (!els.drawer || !els.trigger) {
+        // 抽屉节点缺失（壳未水合）时不绑；触发按钮可以缺席 —— 声明式展开
+        // （data-mini-cart-open）走 document 委托，不依赖 root 内部的 trigger。
+        if (!els.drawer) {
             return;
         }
+        if (els.drawer.getAttribute('data-mini-cart-drawer-bound') === '1') {
+            return;
+        }
+        els.drawer.setAttribute('data-mini-cart-drawer-bound', '1');
 
-        els.trigger.addEventListener('click', function (event) {
-            event.preventDefault();
-            setDrawerOpen(root, !isDrawerOpen(root));
-        });
+        if (els.trigger) {
+            els.trigger.addEventListener('click', function (event) {
+                event.preventDefault();
+                setDrawerOpen(root, !isDrawerOpen(root));
+            });
+        }
 
         root.querySelectorAll('[data-mini-cart-close]').forEach(function (button) {
             button.addEventListener('click', function () {
@@ -2746,6 +2876,156 @@
      * paintCache=false：MutationObserver 仅发现新根并绑定；禁止重绘摘要。
      * 否则 applySummary 的 childList 变更会再次触发 observer → 同步死循环卡死页面。
      */
+    // 抽屉壳异步挂载：页面 HTML 只带空挂载点，壳由带版本号的端点取一次后存在浏览器本地。
+    var shellCachePrefix = 'weline.mini-cart.shell.v1:';
+    var shellCacheMaxBytes = 200 * 1024;
+
+    function shellVersion(root) {
+        var host = root ? root.querySelector('[data-mini-cart-shell-host]') : null;
+        var fromDom = host ? String(host.getAttribute('data-mini-cart-shell-version') || '') : '';
+        if (fromDom) {
+            return fromDom;
+        }
+        var cfg = window.__WelineThemeConfig || (window.Weline && window.Weline.config) || {};
+        return String(cfg.assetVersion || cfg.generationUid || cfg.deployVersion || 'dev');
+    }
+
+    function shellCacheScope() {
+        var cfg = window.__WelineThemeConfig || (window.Weline && window.Weline.config) || {};
+        var site = window.site || {};
+        var website = String(cfg.websiteId || site.website_id || site.websiteId || '');
+        var locale = String(cfg.currentLang || site.currentLang || '');
+        return website + ':' + locale;
+    }
+
+    function shellCacheKey(scope, version) {
+        return shellCachePrefix + scope + ':' + version;
+    }
+
+    function readShellCache(key) {
+        try {
+            var html = window.localStorage ? window.localStorage.getItem(key) : null;
+            if (!html || html.length > shellCacheMaxBytes || html.indexOf('data-mini-cart-drawer') < 0) {
+                return '';
+            }
+            return html;
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function writeShellCache(key, html) {
+        try {
+            if (!window.localStorage || !html || html.length > shellCacheMaxBytes) {
+                return;
+            }
+            window.localStorage.setItem(key, html);
+        } catch (e) {
+            // 隐私模式/配额不足时退化为每次请求壳，不阻断抽屉。
+        }
+    }
+
+    // 只保留当前版本一份壳：版本号变化即清旧键，避免本地缓存无限堆积。
+    function pruneShellCache(scope, keepKey) {
+        try {
+            if (!window.localStorage) {
+                return;
+            }
+            var scopePrefix = shellCachePrefix + scope + ':';
+            var stale = [];
+            for (var i = 0; i < window.localStorage.length; i += 1) {
+                var key = window.localStorage.key(i);
+                if (key && key.indexOf(scopePrefix) === 0 && key !== keepKey) {
+                    stale.push(key);
+                }
+            }
+            stale.forEach(function (key) {
+                window.localStorage.removeItem(key);
+            });
+        } catch (e) {
+            // 读不到本地存储不影响当前页挂载。
+        }
+    }
+
+    function shellEndpointUrl(version) {
+        var base = '/theme/frontend/widget/shell';
+        var url = '';
+        try {
+            if (window.Weline && window.Weline.Url && typeof window.Weline.Url.resolve === 'function') {
+                url = String(window.Weline.Url.resolve(base, { type: 'frontend' }) || '');
+            }
+        } catch (e) {
+            url = '';
+        }
+        if (!url) {
+            url = base;
+        }
+        var sep = url.indexOf('?') >= 0 ? '&' : '?';
+        return url + sep + 'code=mini-cart-icon&v=' + encodeURIComponent(version);
+    }
+
+    function fetchShellHtml(url) {
+        if (typeof window.fetch !== 'function') {
+            return Promise.resolve('');
+        }
+        return window.fetch(url, {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' }
+        }).then(function (response) {
+            if (!response || !response.ok) {
+                return '';
+            }
+            return response.json().then(function (payload) {
+                return payload && typeof payload.html === 'string' ? payload.html : '';
+            }, function () {
+                return '';
+            });
+        });
+    }
+
+    function applyShellHtml(host, html) {
+        if (!host || !html || html.indexOf('data-mini-cart-drawer') < 0) {
+            return false;
+        }
+        host.innerHTML = html;
+        host.removeAttribute('hidden');
+        host.setAttribute('data-mini-cart-shell-mounted', '1');
+        // 皮肤/第三方观察者在壳挂载后再接线，避免它们对着空挂载点绑定。
+        window.dispatchEvent(new CustomEvent('weshop:mini-cart:shell-mounted'));
+        return true;
+    }
+
+    function mountShell(root) {
+        var host = root ? root.querySelector('[data-mini-cart-shell-host]') : null;
+        if (!host || host.getAttribute('data-mini-cart-shell-mounted') === '1') {
+            return Promise.resolve();
+        }
+        if (host.__welineShellPromise) {
+            return host.__welineShellPromise;
+        }
+        var version = shellVersion(root);
+        var scope = shellCacheScope();
+        var key = shellCacheKey(scope, version);
+        var cached = readShellCache(key);
+        if (cached && applyShellHtml(host, cached)) {
+            return Promise.resolve();
+        }
+        var promise = fetchShellHtml(shellEndpointUrl(version)).then(function (html) {
+            if (html && applyShellHtml(host, html)) {
+                writeShellCache(key, html);
+                pruneShellCache(scope, key);
+            }
+            return null;
+        }).catch(function () {
+            return null;
+        }).then(function (value) {
+            host.__welineShellPromise = null;
+            return value;
+        });
+        host.__welineShellPromise = promise;
+        return promise;
+    }
+
     function bootMiniCartRoots(options) {
         options = options || {};
         var paintCache = options.paintCache !== false;
@@ -2757,9 +3037,11 @@
                 return;
             }
             root.setAttribute('data-w-mini-cart-init', '1');
-            bindDrawer(root);
             bindLineActions(root);
+            // 首页只绑徽标/摘要，不取壳：抽屉壳由点击（data-mini-cart-open 或
+            // MiniCart.open()）触发 mountShell，避免水合后的壳在首屏参与文档流。
             if (paintCache) {
+                applyCachedSummaryToRoots();
                 // Soft paint may hydrate, but always revalidate against Cookie/DB authority.
                 scheduleCartSync(root);
                 return;
@@ -2839,6 +3121,8 @@
         }
         window.Weline.MiniCart.__booted = true;
         clearAllCheckoutNavigationState();
+        // 声明式展开必须先于任何取壳：data-mini-cart-open 是纯属性契约，不依赖抽屉 DOM。
+        bindDeclarativeOpen();
         bootMiniCartRoots({ paintCache: true });
         bindGlobalNavigationActions();
         observeMiniCartRoots();

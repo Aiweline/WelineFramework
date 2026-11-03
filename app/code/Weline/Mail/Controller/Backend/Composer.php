@@ -68,8 +68,10 @@ final class Composer extends BackendController
         $canPick = $userId === 1;
         if (!$canPick && $userId > 0) {
             try {
-                $ctx = \Weline\Backend\Model\BackendUser::getAclContext($userId);
-                $roleId = (int)($ctx['role_id'] ?? 0);
+                $ctx = ObjectManager::getInstance(
+                    \Weline\Backend\Api\Auth\BackendUserContextProviderInterface::class
+                )->find($userId);
+                $roleId = (int)($ctx?->getRoleId() ?? 0);
                 if ($roleId > 0) {
                     $canPick = ObjectManager::getInstance(
                         \Weline\Acl\Api\Authorization\ResourceAuthorizationServiceInterface::class
@@ -88,9 +90,11 @@ final class Composer extends BackendController
 
         $email = '';
         try {
-            $user = ObjectManager::getInstance(\Weline\Backend\Model\BackendUser::class)->load($userId);
-            if ($user->getId()) {
-                $email = strtolower(trim((string)$user->getEmail()));
+            $user = ObjectManager::getInstance(
+                \Weline\Backend\Api\User\BackendUserAdministrationInterface::class
+            )->find($userId);
+            if ($user !== null) {
+                $email = strtolower(trim($user->getEmail()));
             }
         } catch (\Throwable) {
         }

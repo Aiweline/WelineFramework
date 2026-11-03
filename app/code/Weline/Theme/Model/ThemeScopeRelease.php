@@ -22,6 +22,11 @@ final class ThemeScopeRelease extends Model
 
     public const STATUS_EFFECTIVE = 'effective';
     public const STATUS_CONFLICT = 'conflict';
+    /**
+     * 草稿基线快照：只作为草稿 revision 的 parent 供补丁校验，**不是**发布版本。
+     * 读取方按 STATUS_EFFECTIVE 过滤，草稿因此不会伪装成已发布内容。
+     */
+    public const STATUS_BASELINE = 'baseline';
 
     #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'Release ID')]
     public const schema_fields_ID = 'release_id';

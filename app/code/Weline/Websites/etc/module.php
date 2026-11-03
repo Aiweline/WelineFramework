@@ -11,8 +11,11 @@ return [
         'Weline_Currency' => '*',
         'Weline_Cron' => '*',
         'Weline_DataTable' => '*',
+        'Weline_Database' => '*',
+        'Weline_Eav' => '*',
         'Weline_Framework' => '*',
         'Weline_I18n' => '*',
+        'Weline_Queue' => '*',
         'Weline_SystemConfig' => '*',
     ],
     "optional" => [
@@ -22,8 +25,11 @@ return [
         'Weline_Product' => '*',
         'Weline_Theme' => '*',
         'Weline_Seo' => '*',
+        'Weline_Smtp' => '*',
     ],
     "provides" => [
+        \Weline\Framework\Runtime\StorefrontWebsiteDataProviderInterface::class
+            => \Weline\Websites\Integration\Framework\StorefrontWebsiteDataProvider::class,
         \Weline\Websites\Api\Theme\ThemeApplicationRepositoryInterface::class => \Weline\Websites\Service\OrmThemeApplicationRepository::class,
         \Weline\Websites\Api\Theme\ThemeApplicationInterface::class => \Weline\Websites\Service\ThemeApplicationService::class,
         \Weline\Websites\Api\WebsiteTargetLookupInterface::class => \Weline\Websites\Api\WebsiteTargetLookup::class,

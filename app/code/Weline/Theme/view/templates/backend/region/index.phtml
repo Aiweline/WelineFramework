@@ -1,0 +1,130 @@
+<?php
+/**
+ * 全局区面板：三区贡献项列表 + 开关 + 配置入口。
+ *
+ * 数据面在 `Weline\Theme\Service\Region\GlobalRegionConfigService`，渲染侧读同一棵
+ * `theme/base_contributions`；本页只做展示与开关/配置的两个 POST 动作。
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var list<array{id:string,region:string,group:string,name:string,source:string,widget_code:string,eager:bool,enabled:bool,config:array<string,mixed>}> $items
+ */
+$h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$items = is_array($items ?? null) ? $items : [];
+$regions = ['head' => 'head（页头）', 'body_open' => 'body_open（body 后）', 'body_end' => 'body_end（尾部）'];
+$byRegion = [];
+foreach ($items as $item) {
+    $byRegion[(string)$item['region']][] = $item;
+}
+$endpoint = '/theme/backend/region';
+?>
+<div class="w-theme-region-panel">
+    <p class="w-theme-region-panel__hint">
+        全站基础设施（像素 / Cookie 同意条 / 客服浮层 / 对比栏 / 迷你车 / 配送尾 / 进店音乐 / App 下载 / 联盟 / 社媒）
+        走全局区片段，位置由主题结构决定；这里只管开关与配置。
+    </p>
+
+    <?php foreach ($regions as $region => $label): ?>
+        <section class="w-theme-region-panel__region" data-region="<?= $h($region) ?>">
+            <h3><?= $h($label) ?></h3>
+            <?php if (empty($byRegion[$region])): ?>
+                <p class="w-theme-region-panel__empty"><?= $h(__('该区暂无片段')) ?></p>
+                <?php continue; ?>
+            <?php endif; ?>
+            <table class="w-theme-region-panel__table">
+                <thead>
+                <tr>
+                    <th><?= $h(__('片段')) ?></th>
+                    <th><?= $h(__('组')) ?></th>
+                    <th><?= $h(__('加载')) ?></th>
+                    <th><?= $h(__('来源')) ?></th>
+                    <th><?= $h(__('部件')) ?></th>
+                    <th><?= $h(__('开关')) ?></th>
+                    <th><?= $h(__('配置')) ?></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($byRegion[$region] as $item): ?>
+                    <tr data-fragment-id="<?= $h($item['id']) ?>">
+                        <td><code><?= $h($item['id']) ?></code></td>
+                        <td><?= $h($item['group']) ?></td>
+                        <td><?= $item['eager'] ? $h(__('内联（eager）')) : $h(__('异步水合')) ?></td>
+                        <td><?= $h($item['source']) ?></td>
+                        <td><?= $h($item['widget_code'] !== '' ? $item['widget_code'] : '-') ?></td>
+                        <td>
+                            <label>
+                                <input type="checkbox"
+                                       data-region-toggle
+                                       data-id="<?= $h($item['id']) ?>"
+                                       <?= $item['enabled'] ? 'checked' : '' ?>>
+                            </label>
+                        </td>
+                        <td>
+                            <button type="button"
+                                    class="btn btn-secondary"
+                                    data-region-config
+                                    data-id="<?= $h($item['id']) ?>"
+                                    data-config="<?= $h(json_encode($item['config'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?>">
+                                <?= $h(__('编辑')) ?>
+                            </button>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </section>
+    <?php endforeach; ?>
+</div>
+
+<script>
+(function () {
+    var endpoint = <?= json_encode($endpoint) ?>;
+    function post(path, payload) {
+        var body = new URLSearchParams();
+        Object.keys(payload).forEach(function (key) { body.append(key, payload[key]); });
+        return fetch(endpoint + path, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest'},
+            body: body.toString()
+        }).then(function (r) { return r.json(); });
+    }
+
+    document.querySelectorAll('[data-region-toggle]').forEach(function (box) {
+        box.addEventListener('change', function () {
+            post('/toggle', {id: box.getAttribute('data-id'), enabled: box.checked ? 1 : 0})
+                .then(function (res) {
+                    if (res && res.code !== 0) {
+                        box.checked = !box.checked;
+                        window.alert(res.msg || 'failed');
+                    }
+                });
+        });
+    });
+
+    document.querySelectorAll('[data-region-config]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = btn.getAttribute('data-id');
+            var current = btn.getAttribute('data-config') || '{}';
+            var next = window.prompt('配置 JSON（' + id + '）', current);
+            if (next === null) {
+                return;
+            }
+            var parsed;
+            try {
+                parsed = JSON.parse(next);
+            } catch (e) {
+                window.alert('JSON 解析失败');
+                return;
+            }
+            post('/config', {id: id, config: JSON.stringify(parsed)})
+                .then(function (res) {
+                    if (!res || res.code !== 0) {
+                        window.alert((res && res.msg) || 'failed');
+                        return;
+                    }
+                    btn.setAttribute('data-config', JSON.stringify(parsed));
+                });
+        });
+    });
+})();
+</script>

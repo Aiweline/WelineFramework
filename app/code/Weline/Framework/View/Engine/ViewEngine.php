@@ -50,7 +50,25 @@ final class ViewEngine implements ViewEngineInterface
      */
     public function capture(string $logical, array $data = []): string
     {
-        return $this->template->fetchHtml($logical, $data);
+        return $this->withGlobalRegions($logical, $this->template->fetchHtml($logical, $data));
+    }
+
+    /**
+     * V2 is the engine the storefront actually renders through, so the legacy Template
+     * hooks never run for these pages. Global regions are appended here instead: additive,
+     * idempotent, and limited to page layouts that produce a full document.
+     */
+    private function withGlobalRegions(string $logical, string $html): string
+    {
+        if (!str_contains($logical, 'layouts/') || !str_contains($html, '<head') || !str_contains($html, '</body>')) {
+            return $html;
+        }
+        try {
+            return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Runtime\GlobalRegionInjectorInterface::class)
+                ->ensure($html, 'frontend');
+        } catch (\Throwable) {
+            return $html;
+        }
     }
 
     /**
@@ -61,11 +79,25 @@ final class ViewEngine implements ViewEngineInterface
         $identity = $this->template->shortEngineRouteIdentity($logical);
         TemplateRenderRouteTrace::armIfRequested();
         TemplateRenderRouteTrace::begin('fetch_stream', $identity);
+        // Page layouts are streamed straight to the output buffer, so they are captured
+        // here to append the global regions. Only full documents are touched.
+        $capture = str_contains($logical, 'layouts/');
+        if ($capture) {
+            ob_start();
+        }
         try {
             $this->template->addSourceModuleForEngine($logical);
             $this->template->streamCompiledFile($this->resolve($logical), $data);
+        } catch (\Throwable $error) {
+            if ($capture) {
+                echo (string)ob_get_clean();
+            }
+            throw $error;
         } finally {
             TemplateRenderRouteTrace::end('fetch_stream', $identity);
+        }
+        if ($capture) {
+            echo $this->withGlobalRegions($logical, (string)ob_get_clean());
         }
     }
 

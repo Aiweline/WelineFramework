@@ -18,6 +18,7 @@ return [
         'Weline_Payment' => '*',
         'Weline_Seo' => '*',
         'Weline_Shipping' => '*',
+        'Weline_Smtp' => '*',
         'Weline_SystemConfig' => '*',
         'Weline_Theme' => '*',
         'Weline_Widget' => '*',
@@ -28,5 +29,6 @@ return [
         \Weline\Customer\Api\View\AccountSidebarProjectionProviderInterface::class => \Weline\Customer\Service\AccountSidebarProjectionProvider::class,
         'template_cache_policy.Weline_Customer' => \Weline\Customer\Api\View\TemplateCachePolicyProvider::class,
         'view_warmup_contribution.Weline_Customer' => \Weline\Customer\Api\View\ViewWarmupContributionProvider::class,
+        'theme.public_route.customer' => \Weline\Customer\Controller\Router::class,
     ],
 ];

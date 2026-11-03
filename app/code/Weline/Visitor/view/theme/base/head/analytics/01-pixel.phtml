@@ -1,0 +1,38 @@
+<?php
+/**
+ * 店面像素引导 · 全局区 head/analytics 片段（本身就是一个部件）。
+ *
+ * base 也是部件：保留 `@widget.*` 元数据，运营可在面板里关掉它或改配置；
+ * 只是声明方式改成路径推导（丢文件进 base 目录即生效），不再依赖主题槽。
+ *
+ * 直接调用像素引导服务产出标记，不再经由 `templates/frontend/widgets/*` 间接层。
+ * 默认注入参数清空：位置由全局区决定，避免与主题槽双写。
+ *
+ * @widget.code {storefront-pixel-bootstrap}
+ * @widget.cache {3600}
+ * @widget.share {true}
+ * @widget.name {店面像素引导}
+ * @widget.description {页头像素引导（eager）；由全局区 head/analytics 供位。}
+ * @widget.type {header}
+ * @widget.area {frontend}
+ * @widget.position {[]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {}
+ * @widget.supports {["storefront-pixel-bootstrap","layout-header-pixel-bootstrap","pixel-bootstrap"]}
+ * @widget.default_injections {[]}
+ * @global-region.eager {true}
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Visitor\Service\PixelBootstrapHtmlService;
+
+try {
+    /** @var PixelBootstrapHtmlService $bootstrap */
+    $bootstrap = ObjectManager::getInstance(PixelBootstrapHtmlService::class);
+    echo '<div data-widget-code="storefront-pixel-bootstrap" data-testid="storefront-pixel-bootstrap"'
+        . ' data-w-component="storefront-pixel-bootstrap">';
+    echo $bootstrap->render(['eager' => true]);
+    echo '</div>';
+} catch (\Throwable) {
+    // 引导失败时不阻断页头渲染；body-end 兜底路径仍存在。
+}

@@ -310,6 +310,8 @@ class StoreMusicSettings
             'default_volume',
             'avatar_spin',
             'waveform_default',
+            // 来源标记：只有「已发布/编辑器」给的配置才带它，用于区分注解默认值。
+            '__weline_config_source',
         ];
         $bag = [];
         $hit = false;
@@ -346,6 +348,14 @@ class StoreMusicSettings
     {
         if ($fromTemplate === null) {
             return null;
+        }
+        // 明确来自「已发布配置/编辑器」的配置必须原样生效：这里丢掉 enabled=false
+        // 会把运营在后台关掉的进店音乐又开回来（实测就是这么复现的）。
+        if (!empty($fromTemplate['__weline_config_source'])) {
+            $bag = $fromTemplate;
+            unset($bag['__weline_config_source']);
+
+            return $bag === [] ? null : $bag;
         }
         $tracks = self::tracksFromWidgetConfig($fromTemplate['tracks'] ?? null);
         $enabledOn = \array_key_exists('enabled', $fromTemplate)

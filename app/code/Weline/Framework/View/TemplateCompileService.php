@@ -135,6 +135,17 @@ final class TemplateCompileService
             if ($releaseLocales && $previousLocale !== null && $previousLocale !== $locale) {
                 Parser::releaseLocaleWorkerCaches($previousLocale);
             }
+            if ($previousLocale !== null && $previousLocale !== $locale && Template::inlineGlobalRegionsAtCompileEnabled()) {
+                // 全局区展开内容与语种相关：切 locale 时必须重置，否则会把上一语种的文案烘进产物。
+                Template::resetCompileGlobalRegionCache();
+                try {
+                    \Weline\Framework\Manager\ObjectManager::getInstance(
+                        \Weline\Framework\Runtime\GlobalRegionInjectorInterface::class
+                    )->resetRegions();
+                } catch (\Throwable) {
+                    // 无主题模块时无需重置。
+                }
+            }
             $previousLocale = $locale;
             $this->applyLocaleCurrency($locale, $currency);
             if ($unit['kind'] === 'pinned') {

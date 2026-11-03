@@ -60,10 +60,20 @@ final class ThemeLayoutEntityMaterializer
             if (is_array($configs['layout'] ?? null)) { $localeMeta[$locale] = $configs['layout']; }
         }
         $source = $this->withTemplateParams($source, $templateParams, $localeMeta);
+        // Global regions are appended additively: the layout keeps every byte it authored,
+        // only the three render calls are inserted. A layout that lost <head>/<body> throws
+        // here on purpose, so the bake fails instead of shipping a page without global content.
+        $source = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Region\GlobalRegionSourceRewriter::class
+        )->rewrite($source);
         $candidates = [$path => $this->metadata($source, [
             'origin' => $origin, 'identity' => $identity->toArray(),
             'layout_type' => $layoutType, 'layout_option' => $layoutOption,
             'target_type' => $targetType, 'target_id' => $targetId,
+            // Must stay exactly ThemeLayoutEntityPageInputDigest::forOrigin($origin):
+            // ThemeLayoutEntityRequestSolidifyGate::derivedPageOriginStale() compares this
+            // against forOrigin() alone, so appending anything here marks every page
+            // permanently stale and pins the storefront to the source-template fallback.
             'input_digest' => ThemeLayoutEntityPageInputDigest::forOrigin($origin),
         ])];
         $visited = [];

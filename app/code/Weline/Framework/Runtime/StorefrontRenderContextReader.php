@@ -13,6 +13,13 @@ use Weline\Framework\Context;
  */
 final class StorefrontRenderContextReader
 {
+    private static ?StorefrontWebsiteDataProviderInterface $websiteDataProvider = null;
+
+    public static function setWebsiteDataProvider(?StorefrontWebsiteDataProviderInterface $provider): void
+    {
+        self::$websiteDataProvider = $provider;
+    }
+
     public static function get(): ?StorefrontRenderContext
     {
         return StorefrontRenderContext::current();
@@ -42,10 +49,12 @@ final class StorefrontRenderContextReader
             return $context->websiteLocal;
         }
         try {
-            if (!\class_exists(\Weline\Websites\Data\WebsiteData::class) || !Context::hasCurrent()) {
+            if (!Context::hasCurrent()) {
                 return null;
             }
-            $rows = \Weline\Websites\Data\WebsiteData::localRowsForWebsite(RequestContext::getWelineWebsiteId());
+            $provider = self::$websiteDataProvider
+                ?? \Weline\Framework\Manager\ObjectManager::getInstance(StorefrontWebsiteDataProviderInterface::class);
+            $rows = $provider->localRowsFor(RequestContext::getWelineWebsiteId());
 
             return $rows === [] ? null : $rows;
         } catch (\Throwable) {

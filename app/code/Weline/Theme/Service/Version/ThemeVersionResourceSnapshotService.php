@@ -311,6 +311,18 @@ final class ThemeVersionResourceSnapshotService
             'theme_version_id' => $identity->themeVersionId, 'content_revision' => $identity->contentRevision,
             'resource_identity_hash' => $context->identityHash(),
         ]);
+        // 同一 (版本, revision, 资源) 可能有多行（旧的 package_default 行 + 新写入的草稿行）。
+        // 必须取「最新意图」那行，否则发布永远读到旧编辑（实测 2026-11-02：intent 2224 压过 4216）。
+        if (\count($rows) > 1) {
+            \usort($rows, static function (array $a, array $b): int {
+                $byIntent = (int)($b['intent_revision_id'] ?? 0) <=> (int)($a['intent_revision_id'] ?? 0);
+                if ($byIntent !== 0) {
+                    return $byIntent;
+                }
+
+                return (int)($b['snapshot_id'] ?? 0) <=> (int)($a['snapshot_id'] ?? 0);
+            });
+        }
         $snapshot = $rows[0] ?? null;
         $key = $snapshot === null ? [] : json_decode((string)($snapshot['resource_key_json'] ?? '{}'), true);
         if ($snapshot === null || !empty($key['package_default'])) {

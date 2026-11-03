@@ -8,6 +8,7 @@ return [
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Frontend' => '*',
+        'Weline_Product' => '*',
         'Weline_Theme' => '*',
         'Weline_Widget' => '*',
         'Weline_Payment' => '>=1.8.0',

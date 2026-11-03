@@ -12,8 +12,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--weline-space-1);
-    padding: var(--weline-space-2) var(--weline-space-1);
+    /* 默认主题有 --weline-space-*；缺少这组 token 的主题（如 hanfu）会退化成 gap:normal，
+     * 图标就贴在一起。给回退值，保持与默认主题同一套间距语义。 */
+    gap: var(--weline-space-1, 0.5rem);
+    padding: var(--weline-space-2, 0.75rem) var(--weline-space-1, 0.5rem);
     transform: translateY(-50%);
     color: var(--weline-theme-text);
     background: var(--weline-theme-surface-raised);
@@ -29,7 +31,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--weline-space-1);
+    gap: var(--weline-space-1, 0.5rem);
 }
 
 .w-social-float__link {

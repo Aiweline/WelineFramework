@@ -5,15 +5,18 @@ return [
     "version" => '1.1.65',
     "requires" => [
         'Weline_Backend' => '*',
+        'Weline_Captcha' => '*',
         'Weline_Framework' => '*',
         'Weline_SystemConfig' => '*',
         'Weline_Taglib' => '*',
+        'Weline_Websites' => '*',
     ],
     "optional" => [
         'Weline_Ops' => '*',
         'Weline_Dashboard' => '*',
         'Weline_Frontend' => '*',
         'Weline_Server' => '*',
+        'Weline_Smtp' => '*',
     ],
     "provides" => [
         'template_cache_policy.Weline_Visitor' => \Weline\Visitor\Api\View\TemplateCachePolicyProvider::class,

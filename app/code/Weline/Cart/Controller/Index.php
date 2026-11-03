@@ -7,7 +7,7 @@ namespace Weline\Cart\Controller;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
-use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Api\I18n\WidgetTranslationInterface;
 
 /**
  * Storefront cart page.
@@ -28,14 +28,14 @@ class Index extends FrontendController
         $this->request->setGet('page_type', 'cart');
         $this->request->setGet('layout_type', 'cart');
         $this->request->setGet('layout_option', 'default');
-        $this->request->setGet('theme_page_title', WidgetI18n::label('购物车'));
+        $this->request->setGet('theme_page_title', $this->t('购物车'));
 
-        $this->assign('page_title', WidgetI18n::label('购物车'));
-        $this->assign('title', WidgetI18n::label('购物车'));
+        $this->assign('page_title', $this->t('购物车'));
+        $this->assign('title', $this->t('购物车'));
         $this->assign('seo', [
             'page_type' => 'cart',
-            'title' => WidgetI18n::label('购物车'),
-            'description' => WidgetI18n::label('查看已选商品、调整规格数量并进入结算。'),
+            'title' => $this->t('购物车'),
+            'description' => $this->t('查看已选商品、调整规格数量并进入结算。'),
             'robots' => 'noindex,follow',
         ]);
         $this->assign('cart', $cart);
@@ -45,11 +45,16 @@ class Index extends FrontendController
             'showHeader' => true,
             'showFooter' => true,
             'class' => 'weline-cart-page',
-            'message' => WidgetI18n::label('您的购物车是空的'),
+            'message' => $this->t('您的购物车是空的'),
         ];
         $this->assign('meta', $meta);
 
         return $this->fetch('Weline_Cart::templates/frontend/cart/index.phtml');
+    }
+
+    private function t(string $source): string
+    {
+        return ObjectManager::getInstance(WidgetTranslationInterface::class)->label($source);
     }
 
     /**

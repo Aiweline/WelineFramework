@@ -11,8 +11,8 @@ $title = (string)($meta['title'] ?? __('迷你购物车'));
 <head>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <?php // mini-cart-drawer.css：由 chrome bake→head，预览布局勿再 @static ?>
-</head>
-<body class="mini-cart-layout-preview">
+<!--@weline-global:head:begin--><?= \Weline\Theme\Region\GlobalRegion::render('head') ?><!--@weline-global:head:end--></head>
+<body class="mini-cart-layout-preview"><!--@weline-global:body_open:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_open') ?><!--@weline-global:body_open:end-->
 <main class="mini-cart-layout" data-layout="mini-cart" id="mini-cart-layout-main"
       data-weline-load="miniCartExtras">
     <div class="mini-cart-drawer mini-cart-drawer--layout-preview is-open" aria-hidden="false">
@@ -71,5 +71,5 @@ $title = (string)($meta['title'] ?? __('迷你购物车'));
 }
 </style>
 <?php // miniCartExtras：由主节点 data-weline-load 声明，禁止 @static 直引 ?>
-</body>
+<!--@weline-global:body_end:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_end') ?><!--@weline-global:body_end:end--></body>
 </html>

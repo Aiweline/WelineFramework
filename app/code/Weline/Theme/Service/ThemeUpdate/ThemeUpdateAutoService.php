@@ -4,24 +4,19 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\ThemeUpdate;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Service\LayoutEntity\ThemeLayoutOriginWatchService;
 
 /**
  * 自动收敛入口：`theme:update auto` 与发布后 cron 共用。
  *
- * 两种模式（按 `system.deploy`）：
- * - **dev**：委托给既有的开发环境自动固化/编译（{@see ThemeLayoutOriginWatchService}），
- *   就地刷新（文件即产物），与 `theme_layout_origin_watch` cron 完全同一实现；
- * - **非 dev（prod 等）**：走「更新代次」——有发布脏标记时构建新代次 → 校验 → 翻指针。
+ * 单一模式（不区分 dev/prod，所有部署环境同一条路径）：有发布脏标记时
+ * 构建新代次 → 校验 → 翻指针；无脏标记跳过。
  */
 final class ThemeUpdateAutoService
 {
     public function __construct(
         private readonly ThemeUpdateBuildService $builder,
         private readonly ThemeUpdateBatchService $batches,
-        private readonly ThemeLayoutOriginWatchService $originWatch,
         private readonly ThemeUpdateFlightRunner $flights = new ThemeUpdateFlightRunner(),
     ) {
     }
@@ -42,38 +37,25 @@ final class ThemeUpdateAutoService
             return ['mode' => 'unknown', 'skipped' => 'theme_id_invalid'];
         }
 
-        // dev：与「开发环境自动固化编译」同一实现（就地刷新，不产代次）
-        if ($this->deployMode() === 'dev') {
-            if ($dryRun) {
-                return ['mode' => 'dev', 'dry_run' => true];
-            }
-
-            return $this->flights->execute('origin-watch', function (string $batchId) use ($themeId): array {
-                unset($batchId);
-                $report = $this->originWatch->run();
-                // 就地固化只换文件，必须再推进一次「静态发布代次」，否则缓存键与 ?v= 不动，
-                // 旧 HTML 会继续指向被回收的 bundle（2026-11-01 掉样式事故）。
-                try {
-                    $report['static_build'] = $this->batches->refreshInPlaceStaticBuild($themeId);
-                } catch (\Throwable $e) {
-                    $report['static_build'] = [
-                        'changed' => false,
-                        'static_build' => '',
-                        'reason' => 'error: ' . $e->getMessage(),
-                    ];
-                }
-                $this->flights->finishProcessing('origin-watch');
-
-                return ['mode' => 'dev', 'report' => $report];
-            });
-        }
-
-        // 非 dev：发布后原子切换
         $scope = ThemeUpdateFlight::scopeForTheme($themeId);
         $dirty = ThemeUpdateRuntime::isDirty($themeId);
         $waiting = $this->flights->activeBatchId($scope) !== '' || $this->flights->tailBatchId($scope) !== '';
         if (!$force && !$dirty && !$waiting) {
-            return ['mode' => 'batch', 'skipped' => 'no_dirty'];
+            if ($dryRun) {
+                return ['mode' => 'batch', 'skipped' => 'no_dirty'];
+            }
+            // 无变更也要跑消费侧校验：否则「什么都没重建」同样会报成功，
+            // 而现网可能正在发一份没有皮肤 CSS 的 head（2026-11-02 事故）。
+            $check = $this->builder->checkHeadPackLeaves($themeId);
+            if (($check['ok'] ?? false) !== true) {
+                return [
+                    'mode' => 'batch',
+                    'skipped' => 'verify_failed_current',
+                    'check' => $check,
+                ];
+            }
+
+            return ['mode' => 'batch', 'skipped' => 'no_dirty', 'check' => $check];
         }
         if ($dryRun) {
             return [
@@ -157,15 +139,6 @@ final class ThemeUpdateAutoService
         \sort($ids);
 
         return $ids;
-    }
-
-    private function deployMode(): string
-    {
-        try {
-            return (string)(Env::system('deploy') ?? '');
-        } catch (\Throwable) {
-            return '';
-        }
     }
 
     /** 退避默认分钟数。 */

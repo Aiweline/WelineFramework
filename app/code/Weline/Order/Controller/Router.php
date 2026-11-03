@@ -9,12 +9,18 @@ use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\RouterInterface;
+use Weline\Framework\View\ModulePublicRouteInterface;
 
 /**
  * 公共 /orders/track 等路径降级到账户订单（Router 层 302，不依赖生成路由表）。
  */
-final class Router implements RouterInterface
+final class Router implements RouterInterface, ModulePublicRouteInterface
 {
+    public static function handles(string $normalizedPath): bool
+    {
+        return true;
+    }
+
     private const TRACK_PATHS = [
         'orders/track',
         'order/track',

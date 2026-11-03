@@ -449,7 +449,6 @@ $stats = [
     'requests' => 0,
 ];
 $diagnosticLogBudget = 32;
-$homepageKeepWarmFiber = null;
 
 $listener = null;
 $listener = new \EventListener(
@@ -1068,7 +1067,6 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
     &$ipcReceivedShutdown,
     $childMasterGuard,
     $fiberScheduler,
-    &$homepageKeepWarmFiber,
     $runtime,
     $runtimeError,
     $asyncBizAdapters,
@@ -1222,7 +1220,7 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
         }
         $policyDrainReply = \Weline\Server\Service\Policy\WorkerPolicyControl::pollAfterApplicationDrain(
             $activeRequests,
-            $homepageKeepWarmFiber instanceof \Fiber && !$homepageKeepWarmFiber->isTerminated() ? 1 : 0,
+            0,
             $pendingPolicyResponses
         );
         if ($policyDrainReply !== null) {
@@ -1256,48 +1254,10 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
     }
 
     $homepageMemoryPressure = \memory_get_usage(true) >= (int)($maxMemoryBytes * 0.70);
-    $homepageKeepWarmMayRun = !$shouldExit
-        && !$isMaintenanceWorker
-        && !$ipcDraining
-        && !$ipcReceivedShutdown
-        && $workerLoopStartedSent
-        && $connections === []
-        && $activeRequests === 0
-        && !$homepageMemoryPressure;
-    if ($homepageKeepWarmMayRun) {
+    if (!$shouldExit) {
         // EventBuffer owns the libevent loop. Advance cooperative timers only
-        // while the worker remains idle so keep-warm never competes with traffic.
+        // while the worker remains idle so hydration never competes with traffic.
         $fiberScheduler->tick(null, 2.0);
-        if ($homepageKeepWarmFiber instanceof \Fiber && $homepageKeepWarmFiber->isTerminated()) {
-            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($homepageKeepWarmFiber);
-            $homepageKeepWarmFiber = null;
-        }
-    }
-    if ($homepageKeepWarmMayRun
-        && $homepageKeepWarmFiber === null
-        && \Weline\Server\Service\Policy\WorkerPolicyControl::isApplicationGateOpen()
-        && $runtime instanceof \Weline\Server\Runtime\WlsRuntime
-        && $runtime->shouldScheduleHomepageKeepWarm(0, false, false)
-    ) {
-        $fiberScheduler->registerFiber();
-        $homepageKeepWarmFiber = new \Fiber(static function () use ($runtime, $fiberScheduler): void {
-            $self = \Fiber::getCurrent();
-            try {
-                $runtime->runHomepageKeepWarmCycle();
-            } finally {
-                if ($self instanceof \Fiber) {
-                    \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($self);
-                }
-                $fiberScheduler->unregisterFiber();
-            }
-        });
-        try {
-            $homepageKeepWarmFiber->start();
-        } catch (\Throwable $e) {
-            $fiberScheduler->unregisterFiber();
-            $homepageKeepWarmFiber = null;
-            \Weline\Server\Log\WlsLogger::warning_('[WorkerWarmup] EventBuffer homepage keep-warm start failed: ' . $e->getMessage());
-        }
     }
 
     if (!$shouldExit) {

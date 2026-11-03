@@ -415,8 +415,8 @@ final class CurrencySwitcherIslandBuilder implements ProcessSharedInterface
 
         $escape = static fn(mixed $value): string => \htmlspecialchars((string)$value, \ENT_QUOTES, 'UTF-8');
         $i18n = static function (string $source): string {
-            if (\class_exists(\Weline\Theme\Helper\WidgetI18n::class)) {
-                return \Weline\Theme\Helper\WidgetI18n::label($source);
+            if (\class_exists(\Weline\Theme\Api\I18n\WidgetTranslationInterface::class)) {
+                return ObjectManager::getInstance(\Weline\Theme\Api\I18n\WidgetTranslationInterface::class)->label($source);
             }
 
             return $source;
@@ -628,8 +628,8 @@ final class CurrencySwitcherIslandBuilder implements ProcessSharedInterface
         $rejected = $notice->rejectedCode();
         $uri = $this->visitorUri();
         $safe = static fn (string $value): string => \htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-        $placeholder = \class_exists(\Weline\Theme\Helper\WidgetI18n::class)
-            ? \Weline\Theme\Helper\WidgetI18n::label('搜索货币')
+        $placeholder = \class_exists(\Weline\Theme\Api\I18n\WidgetTranslationInterface::class)
+            ? ObjectManager::getInstance(\Weline\Theme\Api\I18n\WidgetTranslationInterface::class)->label('搜索货币')
             : (string) __('搜索货币');
         $html = '<div class="w-currency-switcher" data-currency-switcher data-currency-surface="dialog">'
             . '<div class="w-currency-switcher__menu" role="menu" aria-label="' . $safe($placeholder) . '">'

@@ -9,13 +9,13 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeUpdateBatch;
 use Weline\Theme\Model\ThemeUpdatePointer;
 use Weline\Theme\Model\WelineTheme;
-use Weline\Theme\Service\ThemeHeadCssDuplicateInspector;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateAutoService;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateBuildService;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateFlight;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateFlightRunner;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdatePointerPlanner;
+use Weline\Theme\Service\Warmup\StorefrontFpcPrewarmer;
 
 /**
  * theme:update —— 主题更新代次的查看 / 切换 / 回滚 / 回收。
@@ -29,8 +29,10 @@ use Weline\Theme\Service\ThemeUpdate\ThemeUpdatePointerPlanner;
  *   php bin/w theme:update rollback -t hanfu [--dry-run]
  *   php bin/w theme:update gc       -t hanfu [--keep 2] [--dry-run]
  *
- * 不带子命令 = 增量收敛（ThemeUpdateAutoService）：无发布变更直接跳过，绝不无条件 purge 重固。
- * `-f/--force` 才强制整体重建；需要只构建不切换用 `build` 子命令。
+ * 不带子命令 = 增量收敛（ThemeUpdateAutoService）：无发布变更也要跑消费侧校验（头部皮肤包），绝不无条件重固。
+ * `-f/--force` = 删除**本次目标范围/版本**的固化产物后全量重建。默认只处理当前激活版本；
+ * `--scope` 限定范围层级；`--all` 才按库内配置重建该主题全部范围的各自版本。不动其它范围与历史代次。
+ * 需要只构建不切换用 `build` 子命令。
  * status/list 只查看。切换/回滚只改指针行（CAS by epoch）并写 Env，不 purge、不需要维护模式。
  *
  * 2026-10-28：老命令 `theme:upgrade`（无条件 purge 全部布局固化物 + 全量 FPC/CDN 清，实测 3.5~17 分钟）
@@ -154,22 +156,6 @@ class Update extends AbstractConsole
                     return;
                 }
                 $mode = (string)($result['mode'] ?? '');
-                if ($mode === 'dev') {
-                    if ($dryRun) {
-                        $this->printing->note(__('dry-run：dev 模式将走「开发环境自动固化编译」（与 theme_layout_origin_watch 同一实现）'));
-                        return;
-                    }
-                    $report = (array)($result['report'] ?? []);
-                    $this->printing->success(__('dev 模式已就地固化/编译：scanned=%{1} changed=%{2} solidified=%{3} static=%{4} cache_cleared=%{5}', [
-                        (string)($report['themes_scanned'] ?? 0),
-                        (string)($report['changed'] ?? 0),
-                        (string)($report['solidified'] ?? 0),
-                        (string)($report['static_published'] ?? 0),
-                        (string)($report['cache_cleared'] ?? 0),
-                    ]));
-                    $this->assertHeadCssNoDuplicateLeaf($themeId);
-                    return;
-                }
                 if (!empty($result['dry_run'])) {
                     $this->printing->note(__('dry-run：将重建并切换主题 #%{1} 的更新代次（dirty=%{2} force=%{3}）', [
                         (string)$themeId,
@@ -190,8 +176,11 @@ class Update extends AbstractConsole
                     return;
                 }
                 if (($result['skipped'] ?? '') === 'no_dirty') {
-                    $this->printing->note(__('主题 #%{1} 无发布变更（无脏标记），跳过。', [(string)$themeId]));
+                    $this->printHeadPackCheck((array)($result['check'] ?? []), (string)$themeId);
                     return;
+                }
+                if (($result['skipped'] ?? '') === 'verify_failed_current') {
+                    $this->failOnHeadPackCheck((array)($result['check'] ?? []), (string)$themeId);
                 }
                 if (($result['skipped'] ?? '') === 'verify_failed') {
                     throw new ConsoleException(__('构建校验未通过，未切换：') . (string)($result['batch_id'] ?? ''));
@@ -232,8 +221,9 @@ class Update extends AbstractConsole
                 '--keep <n>' => 'GC 时额外保留的历史代次数量，默认 ' . ThemeUpdatePointerPlanner::DEFAULT_KEEP,
                 '--no-purge-artifacts' => '手动 gc 时跳过「清理引用已删代次的编译产物/缓存」（快，但可能残留）',
                 '--dry-run' => '只打印将要做什么，不落库',
-                '-f, --force' => '忽略脏标记，强制完整重建并切换（默认增量：无脏标记跳过，有脏标记只重建受影响布局）',
+                '-f, --force' => '删除本次目标范围/版本的固化产物后全量重建（默认只当前激活版本；配 --all 才按库内配置重建该主题所有版本），不影响其它范围与历史代次',
                 '-l, --layout <type>' => 'build 时只固化指定布局（如 homepage）',
+                '--scope <canonical>' => '只处理该范围层级的主题更新（如 default.default.default）；默认=各范围当前激活版本，配合 --all 处理该范围全部版本',
                 '--skip-static' => 'build 时跳过静态批次目录',
                 '--skip-entities' => 'build 时跳过模板产物固化',
             ],
@@ -279,21 +269,28 @@ class Update extends AbstractConsole
     private function applyUpdate(string $themeName, array $options, bool $dryRun): void
     {
         $themeId = $this->requireThemeId($themeName);
-        // 短选项 -f 在 CLI 里以空串值落地，必须用 isset 判定（!empty 会漏掉 -f）。
-        $force = \array_key_exists('force', $options) || \array_key_exists('f', $options);
+        // -f 与 --force 在 parseOptions 里已归一成 force，且值为 true。
+        $force = !empty($options['force']);
+        $websiteId = (int)($options['website'] ?? 0);
+        $area = (string)($options['area'] ?? ThemeUpdateBatchService::AREA_FRONTEND);
         $buildOptions = $this->buildOptionsFrom($options);
-        $explicitTargets = $buildOptions['layouts'] !== [] || !empty($buildOptions['all_versions']);
-        // dev 模式没有代次可切：一律走就地固化/编译（与 theme_layout_origin_watch 同一实现），
-        // 只有显式 -l/--all 这种"定向构建代次"才走 batch build。
-        $devMode = $this->deployMode() === 'dev';
-        $fullBuild = !$devMode && ($force || $explicitTargets || !$this->hasAnyBatch($themeId));
-        if ($devMode && $explicitTargets) {
-            $fullBuild = true;
+        if (($buildOptions['scope'] ?? '') !== '') {
+            $this->assertScopeExists($themeId, (string)$buildOptions['scope'], $area);
         }
+        if ($force) {
+            // -f = 完全删除存量并全部重建：不播种旧静态/旧实体，不限布局，不跳过任何一步。
+            $buildOptions['fresh'] = true;
+            $buildOptions['layouts'] = [];
+            $buildOptions['skip_static'] = false;
+            $buildOptions['skip_entities'] = false;
+        }
+        $explicitTargets = $buildOptions['layouts'] !== [] || !empty($buildOptions['all_versions']);
+        // 所有部署环境同一条路径：强制/定向/首次 → 完整 build + promote；否则走增量收敛。
+        $fullBuild = $force || $explicitTargets || !$this->hasAnyBatch($themeId);
 
         if ($dryRun) {
             $this->printing->note(match (true) {
-                $devMode => __('dry-run：dev 模式将就地固化/编译主题 %{1}（无变更则零工作）', [$themeName]),
+                $force => __('dry-run：-f 将删除主题 %{1} 的全部存量代次并完整重建、切换', [$themeName]),
                 $fullBuild => __('dry-run：将完整构建并切换主题 %{1}', [$themeName]),
                 default => __('dry-run：主题 %{1} 走增量收敛（无脏标记则跳过；强制重建用 -f）', [$themeName]),
             });
@@ -309,11 +306,16 @@ class Update extends AbstractConsole
             /** @var ThemeUpdateBatchService $service */
             $service = ObjectManager::getInstance(ThemeUpdateBatchService::class);
             $state = $service->promote($batchId);
+            // 本代次已进入下一步：清掉 flight 的 active 号，否则下次运行会重复 promote 同一代次
+            // （theme_update_batch_already_current）。
+            ObjectManager::getInstance(ThemeUpdateFlightRunner::class)
+                ->finishProcessing(ThemeUpdateFlight::scopeForTheme($themeId));
             $this->printing->success(__('已切到代次 %{1}（epoch=%{2}）', [
                 (string)($state['current'] ?? $batchId),
                 (string)($state['epoch'] ?? 0),
             ]));
             $this->failOnPostSwitchErrors($state);
+            $this->prewarmStorefrontAfterUpdate($options);
 
             return;
         }
@@ -322,24 +324,9 @@ class Update extends AbstractConsole
         $auto = ObjectManager::getInstance(ThemeUpdateAutoService::class);
         $result = $auto->run($themeId, false, false);
         $mode = (string)($result['mode'] ?? '');
-        // dev 模式无代次概念：就地固化/编译（与 theme_layout_origin_watch 同一实现），
-        // 必须单独收口，否则会掉进下面的「已切到代次」分支打出空代次。
-        if ($mode === 'dev') {
-            $report = (array)($result['report'] ?? []);
-            $this->printing->success(__('dev 模式已就地固化/编译：scanned=%{1} changed=%{2} solidified=%{3} static=%{4} cache_cleared=%{5}', [
-                (string)($report['themes_scanned'] ?? 0),
-                (string)($report['changed'] ?? 0),
-                (string)($report['solidified'] ?? 0),
-                (string)($report['static_published'] ?? 0),
-                (string)($report['cache_cleared'] ?? 0),
-            ]));
-            $this->assertHeadCssNoDuplicateLeaf($themeId);
-
-            return;
-        }
         $skipped = (string)($result['skipped'] ?? '');
         if ($skipped === 'no_dirty') {
-            $this->printing->note(__('主题 #%{1} 无发布变更（无脏标记），已跳过，未做任何重固；需要强制重建请加 -f/--force。', [$themeId]));
+            $this->printHeadPackCheck((array)($result['check'] ?? []), (string)$themeId);
 
             return;
         }
@@ -355,6 +342,9 @@ class Update extends AbstractConsole
             ]));
 
             return;
+        }
+        if ($skipped === 'verify_failed_current') {
+            $this->failOnHeadPackCheck((array)($result['check'] ?? []), (string)$themeId);
         }
         if ($skipped === 'verify_failed') {
             throw new ConsoleException(__('构建校验未通过，未切换：') . (string)($result['batch_id'] ?? ''));
@@ -375,6 +365,7 @@ class Update extends AbstractConsole
             (string)($state['current'] ?? $batchId),
             (string)($state['epoch'] ?? 0),
         ]));
+        $this->prewarmStorefrontAfterUpdate($options);
         $this->failOnPostSwitchErrors($state);
     }
 
@@ -390,23 +381,53 @@ class Update extends AbstractConsole
         $layoutList = \is_array($layouts)
             ? \array_values($layouts)
             : \array_values(\array_filter(\explode(',', (string)$layouts)));
+        // 范围层级（canonical scope，如 default.default.default）：只处理该范围当前激活版本。
+        $scope = \trim((string)($options['scope'] ?? ''));
+        if ($scope !== '' && \preg_match('/^[A-Za-z0-9_.|:-]+$/D', $scope) !== 1) {
+            throw new ConsoleException(__('--scope 格式不合法：%{1}（示例 default.default.default）', [$scope]));
+        }
 
         return [
             'layouts' => \array_values(\array_filter(\array_map('strval', $layoutList), static fn(string $v): bool => $v !== '')),
+            'scope' => $scope,
             'skip_static' => !empty($options['skip-static']),
             'skip_entities' => !empty($options['skip-entities']),
             'all_versions' => !empty($options['all']),
         ];
     }
 
-    /** 当前部署模式：dev 时代次机制不适用（就地固化/编译）。 */
-    private function deployMode(): string
+    /**
+     * 范围层级校验：`--scope` 必须是该主题已存在的 canonical scope
+     * （如 default.default.default），否则明确报错并列出可用范围。
+     */
+    private function assertScopeExists(int $themeId, string $scope, string $area): void
     {
-        try {
-            return (string)(\Weline\Framework\App\Env::system('deploy') ?? '');
-        } catch (\Throwable) {
-            return '';
+        /** @var \Weline\Theme\Model\ThemeScopeVersion $model */
+        $model = ObjectManager::getInstance(\Weline\Theme\Model\ThemeScopeVersion::class);
+        $found = $model->reset()->clearData()->clearQuery()
+            ->where('theme_id', $themeId)
+            ->where('scope', $scope)
+            ->where('area', $area)
+            ->select()->fetchArray();
+        if ((array)$found !== []) {
+            return;
         }
+        $all = $model->reset()->clearData()->clearQuery()
+            ->where('theme_id', $themeId)
+            ->where('area', $area)
+            ->select()->fetchArray();
+        $scopes = [];
+        foreach ((array)$all as $row) {
+            $value = \trim((string)(\is_array($row) ? ($row['scope'] ?? '') : ''));
+            if ($value !== '') {
+                $scopes[$value] = $value;
+            }
+        }
+        throw new ConsoleException(__('主题 #%{1} 没有范围 %{2} 的版本；可用范围：%{3}', [
+            (string)$themeId,
+            $scope,
+            $scopes === [] ? '-' : \implode(', ', \array_slice(\array_values($scopes), 0, 10)),
+        ]));
     }
 
     /** 该主题是否已有任何更新代次（首次产出才允许走完整构建）。 */
@@ -432,6 +453,9 @@ class Update extends AbstractConsole
         /** @var ThemeUpdateFlightRunner $flights */
         $flights = ObjectManager::getInstance(ThemeUpdateFlightRunner::class);
         $scope = ThemeUpdateFlight::scopeForTheme($themeId);
+        // 强制重建必须拿到新的代次号：上一轮 promote 过的 active 号留着会被复用，
+        // 于是 promote 直接报 theme_update_batch_already_current。这里先清 active。
+        $flights->finishProcessing($scope);
         $result = $flights->execute(
             $scope,
             function (string $batchId) use ($builder, $themeId, $buildOptions): array {
@@ -464,37 +488,114 @@ class Update extends AbstractConsole
         return $batchId;
     }
 
-    /** @return array<string,mixed> */
+    /**
+     * 解析 --long / -s 两种写法（help() 里声明的短选项都必须真的生效）。
+     *
+     * @return array<string,mixed>
+     */
     private function parseOptions(array $argv): array
     {
+        // 短选项 → 规范名（与 help() 声明一致）
+        $aliases = ['h' => 'help', 't' => 'theme', 'f' => 'force', 'l' => 'layout'];
+        // 布尔开关：不得把后面的位置参数当成值吞掉
+        $booleans = ['help', 'force', 'dry-run', 'all', 'skip-static', 'skip-entities', 'no-purge-artifacts'];
         $options = [];
         $count = \count($argv);
         for ($i = 0; $i < $count; $i++) {
             $arg = (string)$argv[$i];
-            if (!\str_starts_with($arg, '--')) {
+            if (\str_starts_with($arg, '--')) {
+                $key = \substr($arg, 2);
+            } elseif (\preg_match('/^-([A-Za-z])$/', $arg, $m) === 1) {
+                $key = $aliases[$m[1]] ?? $m[1];
+            } else {
                 continue;
             }
-            $key = \substr($arg, 2);
             $value = true;
             if (\str_contains($key, '=')) {
                 [$key, $value] = \explode('=', $key, 2);
-            } elseif (isset($argv[$i + 1]) && !\str_starts_with((string)$argv[$i + 1], '-')) {
+            } elseif (!\in_array($key, $booleans, true)
+                && isset($argv[$i + 1])
+                && !\str_starts_with((string)$argv[$i + 1], '-')) {
                 $value = (string)$argv[$i + 1];
                 $i++;
             }
             $options[$key] = $value;
-        }
-        // 兼容 -t hanfu
-        for ($i = 0; $i < $count; $i++) {
-            if ((string)$argv[$i] === '-t' && isset($argv[$i + 1])) {
-                $options['theme'] = (string)$argv[$i + 1];
-            }
         }
 
         return $options;
     }
 
     /** @param array<string,mixed> $state promote/rollback 结果 */
+    /**
+     * 换代后立刻预热店面 FPC：新产物第一次渲染最贵（实测 /products 230–380ms），
+     * 让第一批真实访客直接吃 HIT；失败只提示，不影响换代结果。
+     *
+     * @param array<string,mixed> $options
+     */
+    private function prewarmStorefrontAfterUpdate(array $options): void
+    {
+        if (!empty($options['no-prewarm'])) {
+            return;
+        }
+        try {
+            /** @var StorefrontFpcPrewarmer $prewarmer */
+            $prewarmer = ObjectManager::getInstance(StorefrontFpcPrewarmer::class);
+            // 显式指定站点：--prewarm=<host>；--prewarm=1 走自动解析（CLI 常解析不到）。
+            $explicit = $options['prewarm'] ?? null;
+            $host = \is_string($explicit) && $explicit !== '' && $explicit !== '1'
+                ? \trim($explicit)
+                : $prewarmer->resolveHost();
+            if ($host === '') {
+                $this->printing->note(__('跳过 FPC 预热：未解析到站点 Host（可用 --prewarm=<域名>）'));
+
+                return;
+            }
+            // 换代后布局固化通常是 pending：此时页面会走「原始源回退」且被禁止进共享缓存
+            // （实测 x-weline-shared-cache-forbidden: theme_layout_solidify_fallback_origin，
+            // 首屏 233–1350ms）。先把队列跑完，再预热，部署完第一批访客才是 HIT。
+            try {
+                /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySolidifyQueue $queue */
+                $queue = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySolidifyQueue::class);
+                if ($queue->hasPendingJobs()) {
+                    $drained = $queue->drainPendingJobs(16);
+                    $this->printing->note(__('布局固化：') . \json_encode($drained, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+                }
+            } catch (\Throwable $e) {
+                $this->printing->warning(__('布局固化未完成：') . $e->getMessage());
+            }
+
+            // 命令结束后 CliCommandExecutedObserver 会触发 WLS 代码重载并清缓存，
+            // 因此预热必须排在重载之后：默认派生一个延迟进程（--prewarm-delay=0 可改为内联）。
+            $delay = isset($options['prewarm-delay']) ? (int)$options['prewarm-delay'] : 15;
+            if ($delay > 0) {
+                $cmd = 'sleep ' . $delay . ' && ' . \escapeshellarg(PHP_BINARY)
+                    . ' ' . \escapeshellarg(BP . 'bin/w') . ' theme:fpc-prewarm'
+                    . ' --site=' . \escapeshellarg($host)
+                    . ' --website=' . (string)(int)($options['website'] ?? 0)
+                    . ' --limit=' . (string)(int)($options['prewarm-limit'] ?? 6)
+                    // 只靠 sleep 会与重载赛跑：再等 Worker 真就绪（x-wls-warmup-status: ready）才开跑。
+                    . ' --wait-ready=' . (string)(int)($options['prewarm-wait-ready'] ?? 90);
+                \exec($cmd . ' > /dev/null 2>&1 &');
+                $this->printing->note(__('已排队预热店面 FPC（%{1}s 后执行，避开代码重载）：', [(string)$delay]) . $host);
+
+                return;
+            }
+
+            $this->printing->note(__('预热店面 FPC：') . $host);
+            $paths = $prewarmer->discoverPaths((int)($options['website'] ?? 0), (int)($options['prewarm-limit'] ?? 6));
+            $result = $prewarmer->run($host, $paths);
+            foreach ($result['details'] as $row) {
+                $this->printing->printing(\sprintf('  %-4s %-6d %7.1fms %s', $row['status'] === 200 ? 'OK' : 'FAIL', $row['status'], $row['ms'], $row['path']));
+            }
+            $this->printing->note(__('预热完成：') . $result['ok'] . '/' . $result['total']);
+            if ($result['failed'] !== []) {
+                $this->printing->warning(__('预热失败：') . \implode(', ', $result['failed']));
+            }
+        } catch (\Throwable $e) {
+            $this->printing->warning(__('预热跳过：') . $e->getMessage());
+        }
+    }
+
     private function failOnPostSwitchErrors(array $state): void
     {
         $errors = (array)($state['post_switch_errors'] ?? []);
@@ -508,48 +609,43 @@ class Update extends AbstractConsole
     }
 
     /**
-     * DEV 断言：头部 CSS 不得重复投递（PACK_OVERLAY 已合并主题叶）。
+     * 无脏标记时的收口：不重建，但必须当场证明现网头部皮肤包还能产出。
      *
-     * 只在 DEV 生效：PROD 发版与运行时一律不因它失败（用户 2026-10-28 指定）。
-     * duplicate 级直接让命令非零退出；guard_unsafe / late_override 只打印警告。
+     * @param array<string,mixed> $check
      */
-    private function assertHeadCssNoDuplicateLeaf(int $themeId): void
+    private function printHeadPackCheck(array $check, string $themeId): void
     {
-        if (\defined('PROD') && \PROD) {
-            return;
+        if (($check['skipped'] ?? '') !== '') {
+            $this->printing->warning(__('头部皮肤包检查跳过（%{1}），不能算通过。', [(string)$check['skipped']]));
+        } else {
+            $this->printing->note(__('头部皮肤包校验通过：leaves=%{1}', [(string)($check['leaves'] ?? 0)]));
         }
-        try {
-            /** @var ThemeHeadCssDuplicateInspector $inspector */
-            $inspector = ObjectManager::getInstance(ThemeHeadCssDuplicateInspector::class);
-            $findings = $inspector->inspectTheme($themeId, 'frontend');
-        } catch (\Throwable $e) {
-            $this->printing->warning(__('头部 CSS 重复检查跳过：%{1}', [$e->getMessage()]));
-            return;
+        $this->printing->note(__('主题 #%{1} 无发布变更（无脏标记），未重固；需要强制重建请加 -f/--force。', [$themeId]));
+    }
+
+    /**
+     * 头部皮肤包（消费侧）校验未过：不是“没变”，是现网会缺皮肤 CSS，必须非零退出。
+     *
+     * @param array<string,mixed> $check
+     */
+    private function failOnHeadPackCheck(array $check, string $themeId): void    {
+        foreach ((array)($check['missing'] ?? []) as $missing) {
+            $this->printing->error(__('头部皮肤包缺叶：%{1}', [(string)$missing]));
         }
-        if ($findings === []) {
-            return;
+        if (($check['reason'] ?? '') === 'overlay_manifest_empty') {
+            $this->printing->error(__('头部皮肤包清单为空（theme_path=%{1}）', [(string)($check['theme_path'] ?? '')]));
         }
-        $hard = $inspector->hardFindings($findings);
-        foreach ($findings as $finding) {
-            if (($finding['severity'] ?? '') === ThemeHeadCssDuplicateInspector::SEVERITY_DUPLICATE) {
-                continue;
-            }
-            $this->printing->warning($inspector->format([$finding]));
+        if (($check['error'] ?? '') !== '') {
+            $this->printing->error(__('头部皮肤包检查异常：%{1}', [(string)$check['error']]));
         }
-        if ($hard === []) {
-            return;
-        }
-        $this->printing->error(__('头部 CSS 重复投递（这些叶已在 PACK_OVERLAY 里）：'));
-        $this->printing->error($inspector->format($hard));
         throw new ConsoleException(__(
-            '头部 CSS 重复投递 %{1} 处：删掉 layout/page 里的重复叶，或改用 overlayLeavesForCurrentRequest() 做守卫后重跑。',
-            [(string)\count($hard)]
+            '主题 #%{1} 头部皮肤包校验未通过：页面会只拿到 tokens+storefront，没有皮肤 CSS。修好清单/叶文件后重跑。',
+            [$themeId]
         ));
     }
 
     private function requireThemeId(string $themeName): int
-    {
-        if ($themeName === '') {
+    {        if ($themeName === '') {
             throw new ConsoleException(__('请用 -t/--theme 指定主题名，例如 -t hanfu'));
         }
         /** @var WelineTheme $theme */

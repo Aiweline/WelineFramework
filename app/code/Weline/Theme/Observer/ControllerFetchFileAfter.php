@@ -306,6 +306,10 @@ class ControllerFetchFileAfter implements ObserverInterface
                 'content_len' => \strlen($renderedHtml),
                 'has_account_sidebar' => $this->htmlHasAccountSidebar($renderedHtml),
             ]);
+            // Single handoff for both the bag path and the direct layout-chain path, so the
+            // global regions land even when the storefront HTML never reaches the finalizer.
+            $renderedHtml = ObjectManager::getInstance(\Weline\Theme\Region\GlobalRegionHtmlInjector::class)
+                ->ensure((string)$renderedHtml, 'frontend');
             $eventData->setData('content', $renderedHtml);
             $eventData->setData('fileName', $finalLayoutTemplate);
             TemplateRenderRouteTrace::mark('controller_fetch', 'return', [

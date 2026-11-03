@@ -47,38 +47,13 @@ final class QueryBinFpcDiskPublisher
         array $params,
         string $hostWithScheme,
     ): ?string {
-        $provider = \strtolower(\trim($provider));
-        $operation = \trim($operation);
-
-        if (
-            $operation === 'filteredListingPage'
-            && (
-                $provider === 'product_storefront'
-                || $provider === 'product'
-                || \str_contains($provider, 'product')
-            )
-            && \class_exists(\Weline\Product\Service\StorefrontListingFpcQueryKeys::class)
-        ) {
-            return \Weline\Product\Service\StorefrontListingFpcQueryKeys::canonicalStorefrontUriFromBinQueryParams(
-                $params,
-                $hostWithScheme,
-            );
+        try {
+            return \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Http\Fpc\BinQueryCanonicalUriResolverInterface::class
+            )->canonicalStorefrontUriFromBinQueryParams($provider, $operation, $params, $hostWithScheme);
+        } catch (\Throwable) {
+            // 无业务模块提供归一化器时（纯 CMS 站），QueryBin FPC 不产 canonical URI。
+            return null;
         }
-
-        if (
-            $operation === 'search'
-            && (
-                $provider === 'search'
-                || \str_contains($provider, 'search')
-            )
-            && \class_exists(\Weline\Search\Service\StorefrontSearchFpcQueryKeys::class)
-        ) {
-            return \Weline\Search\Service\StorefrontSearchFpcQueryKeys::canonicalStorefrontUriFromBinQueryParams(
-                $params,
-                $hostWithScheme,
-            );
-        }
-
-        return null;
     }
 }

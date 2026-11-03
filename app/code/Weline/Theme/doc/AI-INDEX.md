@@ -62,6 +62,7 @@
 
 ## doc 目录
 
+- `app/code/Weline/Theme/doc/全局区片段契约.md`（base 片段声明、默认异步 + eager、四层开关与配置、禁止回潮守卫、验证口径）
 - `app/code/Weline/Theme/doc/HTML-lang属性BCP-47规范.md`
 - `app/code/Weline/Theme/doc/Hook使用指南.md`
 - `app/code/Weline/Theme/doc/Hook点位索引.md`

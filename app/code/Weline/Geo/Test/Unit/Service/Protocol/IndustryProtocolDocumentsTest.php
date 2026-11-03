@@ -78,6 +78,44 @@ class IndustryProtocolDocumentsTest extends TestCase
         self::assertStringContainsString('https://shop.example/.well-known/tdmrep.json', $html);
         self::assertStringContainsString('https://shop.example/llms.txt', $html);
         self::assertStringContainsString('Shop &amp; Co', $html);
+        self::assertStringContainsString('rel="ard"', $html);
+        self::assertStringContainsString('https://shop.example/.well-known/ard.json', $html);
+        self::assertStringContainsString('rel="ai-catalog"', $html);
+        self::assertStringContainsString('https://shop.example/.well-known/ai-catalog.json', $html);
+    }
+
+    public function testAiCatalogJsonMatchesArdManifestSchema(): void
+    {
+        $body = IndustryProtocolDocuments::aiCatalogJson([
+            [
+                'identifier' => 'urn:air:shop.example:catalog:product-1',
+                'displayName' => 'Product 1',
+                'type' => 'application/web-page+json',
+                'url' => 'https://shop.example/product-1',
+                'representativeQueries' => ['buy product 1', 'product 1 reviews'],
+            ],
+        ], 'https://shop.example');
+
+        $decoded = json_decode($body, true);
+        self::assertSame('1.0', $decoded['specVersion'] ?? null);
+        self::assertNotEmpty($decoded['entries']);
+        $entry = $decoded['entries'][0];
+        foreach (['identifier', 'displayName', 'type'] as $required) {
+            self::assertArrayHasKey($required, $entry);
+        }
+        self::assertArrayHasKey('url', $entry);
+        self::assertArrayNotHasKey('data', $entry, 'value-or-reference: exactly one of url/data');
+        self::assertMatchesRegularExpression('/^urn:air:[a-zA-Z0-9.-]+(:[a-zA-Z0-9._-]+)+$/', $entry['identifier']);
+        self::assertSame('shop.example', $decoded['host']['displayName'] ?? null);
+    }
+
+    public function testAiCatalogJsonWithoutEntriesAndBaseUrlStaysValid(): void
+    {
+        $decoded = json_decode(IndustryProtocolDocuments::aiCatalogJson([], ''), true);
+
+        self::assertSame('1.0', $decoded['specVersion'] ?? null);
+        self::assertSame([], $decoded['entries']);
+        self::assertArrayNotHasKey('host', $decoded);
     }
 
     public function testProtocolPathsAreRoutedAndNotTreatedAsStaticFiles(): void
@@ -96,6 +134,8 @@ class IndustryProtocolDocumentsTest extends TestCase
             '.well-known/trust.txt',
             'llms.txt',
             'llms-full.txt',
+            '.well-known/ai-catalog.json',
+            '.well-known/ard.json',
         ] as $path) {
             self::assertArrayHasKey($path, $routes, $path);
             self::assertFalse(\weline_is_static_file_path('/' . $path), $path);
@@ -104,6 +144,8 @@ class IndustryProtocolDocumentsTest extends TestCase
 
         self::assertSame('geo/protocol/llms', $routes['ai.txt']);
         self::assertSame('geo/protocol/llms', $routes['license.xml']);
+        self::assertSame('geo/protocol/llms', $routes['.well-known/ai-catalog.json']);
+        self::assertSame('geo/protocol/llms', $routes['.well-known/ard.json']);
         self::assertNotSame($routes['llms-full.txt'], $routes['ai.txt']);
     }
 }

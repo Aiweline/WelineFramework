@@ -1,0 +1,101 @@
+<?php
+/**
+ * @meta.name {default="Weline UI 2.0 热销榜单布局",name="Weline UI 2.0 热销榜单布局"}
+ * @meta.description {default="Best sellers page shell: product grid with title slot.",name="热销榜单页壳层"}
+ * @param.title {default="热销推荐",name="页面标题"}
+ * @param.meta_title {default="",name="SEO标题",description="SEO标题，留空时回退页面标题；有实体SEO时不覆盖实体"}
+ * @param.meta_description {default="",name="SEO描述",description="SEO描述，用于搜索结果和社交摘要；有实体SEO时不覆盖实体"}
+ * @param.content {default="",name="主要内容"}
+ * @param.showHeader {default=true,name="显示顶部"}
+ * @param.showFooter {default=true,name="显示页脚"}
+ * @param.class {default="",name="额外 Weline CSS 类"}
+ */
+/** @var \Weline\Framework\View\Template $this */
+$meta = is_array($this->getData('meta')) ? $this->getData('meta') : [];
+$showHeader = ($meta['showHeader'] ?? true) !== false;
+$showFooter = ($meta['showFooter'] ?? true) !== false;
+$rawContent = (string)($this->getData('meta.content') ?: $this->getData('content') ?: ($meta['content'] ?? ''));
+$contentTemplate = (string)($this->getData('meta.contentTemplate') ?: ($meta['contentTemplate'] ?? ''));
+$extraClasses = array_values(array_filter(
+    preg_split('/\s+/', trim((string)($meta['class'] ?? ''))) ?: [],
+    static fn(string $class): bool => preg_match('/^w-[a-z0-9_-]+$/', $class) === 1
+));
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-w-area="frontend" data-theme-preference="light" data-theme="light">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::best_sellers::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
+<!--@weline-global:head:begin--><?= \Weline\Theme\Region\GlobalRegion::render('head') ?><!--@weline-global:head:end--></head>
+<body id="top"><!--@weline-global:body_open:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_open') ?><!--@weline-global:body_open:end-->
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::best_sellers::body-start</w:hook>
+
+    <div class="w-frontend-shell <?= htmlspecialchars(implode(' ', $extraClasses), ENT_QUOTES, 'UTF-8') ?>">
+        <w:slot id="page-top" name="Page top" accept="layout-page-top,announcement,banner,content" multiple="true" append="true" position="content" class="w-frontend-page-top">
+            <w:hook>Weline_Theme::frontend::layouts::best_sellers::page-top</w:hook>
+        </w:slot>
+
+        <?php if ($showHeader): ?>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        <?php endif; ?>
+
+        <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+        <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+
+        <main class="w-frontend-main" id="main-content" data-layout="best_sellers">
+            <div class="w-container w-frontend-page">
+                <w:slot id="content-before" name="Content before" accept="layout-content-before,layout-best-sellers-before,banner,content,container" multiple="true" append="true" position="content" class="w-frontend-content-before">
+                    <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+                    <w:hook>Weline_Theme::frontend::layouts::best_sellers::content-before</w:hook>
+                </w:slot>
+
+                <w:slot id="content" name="Best sellers" accept="layout-best-sellers-content,product,category,content,container,banner,carousel" reject="header,footer" multiple="true" position="content" class="w-frontend-content">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::best_sellers::content
+                        <else/>
+                        <?php if (trim($rawContent) !== ''): ?>
+                            <?= $rawContent ?>
+                        <?php elseif ($contentTemplate !== ''): ?>
+                            <?= $this->fetch($contentTemplate) ?>
+                        <?php else: ?>
+                            <div class="w-frontend-default-stack" weline-code="theme.layouts.best_sellers.widget_stack">
+                                <w:widget type="content" name="section-heading" />
+                                <w:widget type="product" name="product-grid" />
+                            </div>
+                        <?php endif; ?>
+                    </w:hook>
+                </w:slot>
+
+                <w:slot id="content-after" name="Content after" accept="layout-content-after,layout-best-sellers-after,banner,content,container" multiple="true" append="true" position="content" class="w-frontend-content-after">
+                    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+                </w:slot>
+            </div>
+        </main>
+
+        <?php if ($showFooter): ?>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        <?php endif; ?>
+
+        <w:slot id="page-bottom" name="Page bottom" accept="layout-page-bottom,announcement,banner,content" multiple="true" append="true" position="content" class="w-frontend-page-bottom">
+            <w:hook>Weline_Theme::frontend::layouts::best_sellers::page-bottom</w:hook>
+        </w:slot>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::best_sellers::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end-dynamic</w:hook>
+    <w:hook>seo::footer</w:hook>
+<!--@weline-global:body_end:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_end') ?><!--@weline-global:body_end:end--></body>
+</html>
+
+<!-- incremental-probe 1793603639 -->

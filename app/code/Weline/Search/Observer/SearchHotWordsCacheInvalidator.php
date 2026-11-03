@@ -6,8 +6,8 @@ namespace Weline\Search\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Theme\Observer\ControllerFetchFileBefore;
-use Weline\Theme\Service\SlotRendererService;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ThemeRuntimeCacheResetInterface;
 
 /**
  * Clears theme/widget runtime caches after hot-word scope cache invalidation.
@@ -20,7 +20,10 @@ final class SearchHotWordsCacheInvalidator implements ObserverInterface
             return;
         }
 
-        ControllerFetchFileBefore::clearRuntimeCache();
-        SlotRendererService::clearProcessMemoryCache();
+        try {
+            ObjectManager::getInstance(ThemeRuntimeCacheResetInterface::class)->clearRuntimeCaches();
+        } catch (\Throwable) {
+            // 无主题模块时无运行时缓存可清。
+        }
     }
 }

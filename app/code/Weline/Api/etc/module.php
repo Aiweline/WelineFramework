@@ -7,6 +7,7 @@ return [
         'Weline_Acl' => '*',
         'Weline_Admin' => '*',
         'Weline_Backend' => '*',
+        'Weline_Frontend' => '*',
         'Weline_Framework' => '*',
     ],
     "optional" => [

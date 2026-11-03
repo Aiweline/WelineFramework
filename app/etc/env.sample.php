@@ -293,17 +293,9 @@ return [
             'runtime_log_file' => 'var/log/wls/runtime.log',
             'timing_log_file' => 'var/log/wls/timing.log',
         ],
-        // READY 已完成首页与动态请求硬门禁；READY 后的 registry 二次预载默认关闭，
-        // 仅当实例确有额外 registry 贡献且配置了可执行角色时显式开启。
-        'worker_bootstrap_warmup' => false,
-        // Worker READY 后错峰协程执行主题/分类/store 等 observer 预热；显式 false/0/off 可关闭。
-        'worker_deferred_bootstrap_warmup' => true,
-        'worker_bootstrap_observer_warmup' => false,
-        'worker_deferred_bootstrap_roles' => ['maintenance'],
         // 首页由 Worker READY gate 预热：共享锁只允许一个 Worker 冷构建，其他 Worker 拉取到进程缓存。
         // 运行期保温只读取仍有效的 shared FPC，不会在业务 Worker 内触发冷渲染。
         'worker' => [
-            'fpc_buildahead_roles' => ['maintenance'],
             // 完整业务页在 READY 后异步预热，避免启动渲染占用 Worker 的 IPC READY 通道。
             // 需要严格启动门禁时再显式设为 true。
             'dynamic_ready_gate_enabled' => false,
@@ -316,30 +308,8 @@ return [
             // 留空由各店面模块通过 FpcWarmupProviderInterface 发布真实公开路径。
             'dynamic_ready_gate_paths' => [],
             'dynamic_ready_gate_max_paths' => 1,
-            // 选定业务 Worker READY 后仅在本地 listener 预热一个公开店面路径，
-            // 通过统一 FPC 构建与命中探针填充共享/进程缓存；不会占用 READY 握手。
-            'storefront_deferred_warmup_enabled' => false,
-            // 后台与动态首渲染会构建完整页面，默认关闭；仅在有独立维护 Worker 和内存预算时显式开启。
+            // 后台首渲染会构建完整页面，默认关闭；仅在有独立维护 Worker 和内存预算时显式开启。
             'backend_deferred_warmup_enabled' => false,
-            'dynamic_deferred_warmup_enabled' => false,
-            'storefront_deferred_warmup_max_paths' => 6,
-            'storefront_deferred_warmup_peer_wait_ms' => 5000,
-            // 只有指定 Worker 执行冷构建，其余 Worker 复用共享 FPC；设为 0 可恢复全 Worker 预热。
-            'storefront_deferred_warmup_owner_worker_id' => 1,
-            // UC-deferred done 之后：默认站 + 有界本机多站（ActiveCertificateDomains）袋/FPC 作用域数。
-            // 含默认站；1–8；多站 Host 与 FPC authority 对齐。
-            'storefront_deferred_warmup_max_websites' => 3,
-            // UC-deferred done 之后：按启用 locale×主推 currency 有界种 homepage critical 轻袋（禁 full×locales）。
-            // 不计入 done≤5s 必跑墙钟；0=跳过；elapsed_cap 超限 → locale_bag_prime_truncated。
-            'storefront_locale_bag_prime_max_locales' => 8,
-            'storefront_locale_bag_prime_elapsed_cap_ms' => 8000,
-            // UC-deferred done 之后：主推语 × 非默认 currency 有界种 chrome/card 轻袋。
-            'storefront_currency_bag_prime_max_currencies' => 4,
-            'storefront_currency_bag_prime_elapsed_cap_ms' => 6000,
-            // UC-deferred done 之后：有界密封首页导航形 `/categories`+`/category/**` FPC（禁抢 critical 墙钟）。
-            // 0=跳过；elapsed_cap 超限 → category_surface_prime_truncated。
-            'storefront_category_surface_prime_max_paths' => 8,
-            'storefront_category_surface_prime_elapsed_cap_ms' => 20000,
             // READY 前每个业务 Worker 必须完成真实首页动态渲染并建立缓存。
             // dynamic_target_ms 默认是发布性能门禁，不作为进程存活条件；仅诊断时显式开启严格阻断。
             'dynamic_ready_gate_fail_open' => true,
@@ -351,8 +321,6 @@ return [
             // null=自动按 public_origin 过滤；true=显式预热全部注册站点；false=关闭。
             'warm_registered_website_hosts' => null,
             'homepage_warmup_peer_wait_ms' => 3000,
-            'homepage_keep_warm_enabled' => true,
-            'homepage_keep_warm_interval_sec' => 300,
             // First-Render/Warmup/Controller-Cache 等动态观测头；缺省仅 deploy=dev，生产建议 false
             'dynamic_observability_headers_enabled' => false,
         ],

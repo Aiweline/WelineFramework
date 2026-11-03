@@ -9,6 +9,10 @@ return [
         'Weline_SystemConfig' => '*',
     ],
     "optional" => [
+        'Weline_Admin' => '*',
+        'Weline_Maintenance' => '*',
+        'Weline_Smtp' => '*',
+        'Weline_Theme' => '*',
         'Weline_Websites' => '*',
     ],
     "provides" => [

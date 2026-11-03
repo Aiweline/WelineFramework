@@ -6,18 +6,24 @@ return [
     'name' => 'Weline_Product',
     'version' => '1.1.31',
     'requires' => [
+        'Weline_Acl' => '*',
+        'Weline_Backend' => '*',
         'Weline_Catalog' => '*',
         'Weline_DataTable' => '*',
         'Weline_Framework' => '*',
+        'Weline_I18n' => '*',
+        'Weline_Tax' => '*',
         'Weline_Websites' => '*',
         'Weline_Eav' => '*',
         'Weline_FileManager' => '*',
     ],
     'optional' => [
+        'Weline_Affiliate' => '*',
         'Weline_Ai' => '*',
         'Weline_Queue' => '>=1.2.5',
         'Weline_Api' => '*',
         'Weline_DeveloperWorkspace' => '*',
+        'Weline_B2B' => '*',
         'Weline_Cart' => '*',
         'Weline_Customer' => '*',
         'Weline_Inventory' => '*',
@@ -32,10 +38,24 @@ return [
         'Weline_Mail' => '*',
         'Weline_Theme' => '*',
         'Weline_Shipping' => '*',
+        'Weline_Currency' => '*',
+        'Weline_Payment' => '*',
+        'Weline_Search' => '*',
+        'Weline_Smtp' => '*',
+        'Weline_Cdn' => '*',
+        'Weline_RecentlyViewed' => '*',
+        'Weline_Server' => '*',
+        'Weline_Filters' => '*',
         'Weline_EditorManager' => '*',
         'Weline_CKEditorEditorManager' => '*',
     ],
     'provides' => [
+        \Weline\Framework\Http\Fpc\BinQueryCanonicalUriResolverInterface::class
+            => \Weline\Product\Integration\Framework\BinQueryCanonicalUriResolver::class,
+        'theme.public_route.product'
+            => \Weline\Product\Controller\Router::class,
+        'worker_preload_provider.Weline_Product_CategoryTree'
+            => \Weline\Product\Service\Preload\CategoryTreeWarmupPreloadProvider::class,
         'view_warmup_contribution.Weline_Product'
             => \Weline\Product\Api\View\ViewWarmupContributionProvider::class,
         'storefront_hot_cache_bag_warmup.Weline_Product'

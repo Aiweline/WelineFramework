@@ -6,6 +6,7 @@ return [
     'requires' => [
         'Weline_Dropship',
         'Weline_SystemConfig',
+        'Weline_TranslationService',
     ],
     'optional' => [],
     'provides' => [],

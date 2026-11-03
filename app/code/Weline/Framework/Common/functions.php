@@ -112,6 +112,8 @@ if (!function_exists('weline_is_static_file_path')) {
         $nestedProtocolFiles = [
             '.well-known/tdmrep.json',
             '.well-known/trust.txt',
+            '.well-known/ai-catalog.json',
+            '.well-known/ard.json',
         ];
         $protocolPath = \strtolower($path);
         if (

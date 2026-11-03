@@ -211,3 +211,20 @@ node head-budget.mjs --json               # 机器可读输出
 ```
 
 基线字段（每页）：`headExternalMax` / `headJsBytesMax`（解码字节，稳定口径）/ `lcpMsMax`（3 次中位数 ×1.5，下限 3000ms）。
+
+## 全局区片段与 head 预算（2026-11-02，权威）
+
+全局区（base contributions）默认**异步**：页面只输出占位 `<div data-global-region-async …>` 与一次内联水合器，
+标记由浏览器空闲时取回。对 head 预算只影响两类：
+
+| 类别 | 对 head 的影响 | 判定口径 |
+|---|---|---|
+| 异步片段（consent / 客服浮层 / 对比栏 / B2B / 配送尾 / 进店音乐 / App 下载 / 联盟 / 社媒） | **不进 head**、不进首屏 JS 字节 | 只计「水合器（约 3KB 内联）」 |
+| eager 片段（`@global-region.eager {true}`，当前仅像素引导） | 立刻进 head / 首屏执行 | 计入 `headJsBytesMax`，必须保持单条 |
+
+规则：
+
+1. 新增全站基础设施默认写成**异步片段**；确需首屏执行才加 `@global-region.eager {true}`，并在本文登记其预算。
+2. 水合器必须与该区的异步占位**同生**（不能用跨调用的静态标记控制只输出一次），细节见 `全局区片段契约.md` §3。
+3. 预算复核口径不变：仍以 pierced 请求响应体为样本，统计 head 内联 + 外链解码字节。
+

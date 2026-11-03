@@ -5,7 +5,9 @@ return [
     "version" => '1.1.16',
     "requires" => [
         'Weline_Backend' => '*',
+        'Weline_SystemConfig' => '*',
         'Weline_Theme' => '*',
+        'Weline_Websites' => '*',
         'Weline_Marketing' => '>=1.1.4',
     ],
     "optional" => [

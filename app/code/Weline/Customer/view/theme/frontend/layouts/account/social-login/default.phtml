@@ -288,8 +288,8 @@ layoutType=account/social-login，option=default → layouts/account/social-logi
         }
     </style>
     <w:hook>seo::head</w:hook>
-</head>
-<body class="account-auth-layout<?= $showHeader || $showFooter ? ' account-auth-layout--with-chrome' : '' ?>">
+<!--@weline-global:head:begin--><?= \Weline\Theme\Region\GlobalRegion::render('head') ?><!--@weline-global:head:end--></head>
+<body class="account-auth-layout<?= $showHeader || $showFooter ? ' account-auth-layout--with-chrome' : '' ?>"><!--@weline-global:body_open:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_open') ?><!--@weline-global:body_open:end-->
     <w:hook>seo::body</w:hook>
     <?php if ($showHeader): ?>
         <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
@@ -373,5 +373,5 @@ layoutType=account/social-login，option=default → layouts/account/social-logi
     <w:hook>Weline_Theme::frontend::layouts::account::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end-dynamic</w:hook>
-</body>
+<!--@weline-global:body_end:begin--><?= \Weline\Theme\Region\GlobalRegion::render('body_end') ?><!--@weline-global:body_end:end--></body>
 </html>

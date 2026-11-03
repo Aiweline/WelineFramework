@@ -7,6 +7,7 @@ return [
         'Weline_Backend' => '*',
         'Weline_Customer' => '*',
         'Weline_Framework' => '*',
+        'Weline_I18n' => '*',
         'Weline_Smtp' => '*',
         'Weline_SystemConfig' => '*',
         'Weline_Theme' => '*',

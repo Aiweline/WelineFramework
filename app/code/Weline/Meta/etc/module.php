@@ -10,6 +10,7 @@ return [
         'Weline_SystemConfig' => '*',
     ],
     "optional" => [
+        'Weline_Theme' => '*',
     ],
     "provides" => [
         \Weline\Meta\Api\MetadataRepositoryInterface::class => \Weline\Meta\Service\Repository\MetadataRepository::class,

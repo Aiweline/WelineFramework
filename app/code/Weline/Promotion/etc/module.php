@@ -24,5 +24,7 @@ return [
     'provides' => [
         'schedule_window_utc_migration.Weline_Promotion'
             => \Weline\Promotion\Api\Runtime\ScheduleWindowUtcMigrationContribution::class,
+        'theme.public_route.promotion'
+            => \Weline\Promotion\Controller\Router::class,
     ],
 ];

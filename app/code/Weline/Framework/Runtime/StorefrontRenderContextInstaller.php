@@ -43,6 +43,11 @@ final class StorefrontRenderContextInstaller
         self::$processSnapshotCache = [];
     }
 
+    public function __construct(
+        private readonly ?StorefrontWebsiteDataProviderInterface $websiteData = null,
+    ) {
+    }
+
     /**
      * Build one snapshot for a scope triple and store it in the process cache.
      *
@@ -287,11 +292,9 @@ final class StorefrontRenderContextInstaller
             return null;
         }
         try {
-            if (!\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
-                return null;
-            }
+            $provider = $this->websiteData ?? ObjectManager::getInstance(StorefrontWebsiteDataProviderInterface::class);
             /** @var list<array{local_code?:string,name?:string,description?:string}> $rows */
-            $rows = \Weline\Websites\Data\WebsiteData::localRowsForWebsite($websiteId);
+            $rows = $provider->localRowsFor($websiteId);
 
             return $rows;
         } catch (\Throwable) {

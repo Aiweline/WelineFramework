@@ -10,6 +10,7 @@ return [
         'Weline_Queue' => '*',
         'Weline_Websites' => '*',
         'Weline_Currency' => '*',
+        'Weline_Theme' => '*',
         'Weline_Api' => '*',
     ],
 ];

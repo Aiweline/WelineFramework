@@ -6,6 +6,7 @@ return [
     "requires" => [
         'Weline_Customer' => '*',
         'Weline_Framework' => '*',
+        'Weline_Frontend' => '*',
     ],
     "optional" => [
     ],

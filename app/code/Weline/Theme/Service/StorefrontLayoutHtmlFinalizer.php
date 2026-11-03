@@ -73,6 +73,16 @@ final class StorefrontLayoutHtmlFinalizer
         } catch (\Throwable) {
         }
 
+        try {
+            // Fallback placement only: pages that reached the compiler already carry the
+            // anchors, so this is a no-op for them. It exists because the solidify gate can
+            // render the original design layout straight from source, bypassing the compiler.
+            TemplateRenderRouteTrace::mark('layout_finalizer', 'global_regions');
+            $html = ObjectManager::getInstance(\Weline\Theme\Region\GlobalRegionHtmlInjector::class)
+                ->ensure($html, $area);
+        } catch (\Throwable) {
+        }
+
         return $html;
     }
 

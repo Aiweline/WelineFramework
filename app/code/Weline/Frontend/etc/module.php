@@ -12,6 +12,7 @@ return [
     ],
     "optional" => [
         'Weline_Ai' => '*',
+        'Weline_Server' => '*',
         'Weline_UrlManager' => '*',
         'Weline_Websites' => '*',
     ],
@@ -20,6 +21,7 @@ return [
         \Weline\Frontend\Api\User\FrontendUserAdministrationInterface::class => \Weline\Frontend\Service\FrontendUserAdministration::class,
         \Weline\Ai\Api\Billing\BillingAccountProviderInterface::class => \Weline\Frontend\Integration\Ai\FrontendBillingAccountProvider::class,
         \Weline\Theme\Api\View\FrontendThemeModePreferenceProviderInterface::class => \Weline\Frontend\Integration\Theme\FrontendThemeModePreferenceProvider::class,
+        \Weline\Framework\Runtime\StorefrontGenerationIdentityInterface::class => \Weline\Frontend\Integration\Framework\StorefrontGenerationIdentityProvider::class,
         'deploy.flat_static.Weline_Frontend' => \Weline\Frontend\Api\Deploy\FlatStaticRuntimeFilesProvider::class,
         'request_resetter.Weline_Frontend' => \Weline\Frontend\Api\Runtime\RequestResetter::class,
     ],

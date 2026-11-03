@@ -6,6 +6,8 @@ return [
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_BackendActivity' => '*',
+        'Weline_Database' => '*',
+        'Weline_SystemConfig' => '*',
         'Weline_Theme' => '>=2.1.0',
         'Weline_Websites' => '*',
     ],

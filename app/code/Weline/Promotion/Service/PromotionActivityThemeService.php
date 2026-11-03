@@ -951,6 +951,23 @@ final class PromotionActivityThemeService
     private function resolveLocalizedCopy(int $themeId, array $fallback): array
     {
         $locale = trim((string)(WelineEnv::getLangLocal() ?: WelineEnv::getLang() ?: 'zh_Hans_CN'));
+
+        // 请求级 memo：同一页面 header/导航/活动卡片会对同一主题重复取本地化文案
+        // （冷态实测单条 find 130ms）。同请求同主题+语种只查一次；写路径
+        // （saveLocalizedCopy）不受影响——写后同请求内本 memo 会短暔回读旧值，
+        // 但管理端保存后必然整页刷新，可接受。
+        $memoKey = 'promotion.theme_local_copy.' . \sha1($themeId . '|' . $locale);
+        try {
+            if (\Weline\Framework\Runtime\Context::hasCurrent()) {
+                $memo = \Weline\Framework\Runtime\RequestContext::get($memoKey);
+                if (\is_array($memo)) {
+                    return $memo;
+                }
+            }
+        } catch (\Throwable) {
+            // memo 不可用退化为直查。
+        }
+
         $local = clone $this->themeLocal;
         $local->clear()
             ->where(PromotionActivityThemeLocal::schema_fields_ID, $themeId)
@@ -1038,6 +1055,16 @@ final class PromotionActivityThemeService
                 if ($copy['entry_action_label'] === '') {
                     $copy['entry_action_label'] = trim((string)$fallbackLocal->getData(PromotionActivityThemeLocal::schema_fields_ENTRY_ACTION_LABEL));
                 }
+            }
+        }
+
+        if (isset($memoKey)) {
+            try {
+                if (\Weline\Framework\Runtime\Context::hasCurrent()) {
+                    \Weline\Framework\Runtime\RequestContext::set($memoKey, $copy);
+                }
+            } catch (\Throwable) {
+                // 缓存失败不影响本次结果。
             }
         }
 

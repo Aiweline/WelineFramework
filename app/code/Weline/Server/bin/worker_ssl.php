@@ -5257,7 +5257,6 @@ $sharedRuntimeConnectionWarmupStarted = false;
 $sharedRuntimeConnectionWarmupNotBefore = wlsWorkerMonotonicNow()
     + 0.10
     + ((($workerId * 53) % 700) / 1000);
-$homepageKeepWarmFiber = null;
 $processL1HydrateFiber = null;
 $attackLogNextFlushCheckAt = 0.0;
 $darwinSharedAcceptCooldownEnabled = \PHP_OS_FAMILY === 'Darwin'
@@ -5717,7 +5716,6 @@ while (true) {
     }
     // ========== Homepage keep-warm / Process L1 Hydrate (idle, low priority) ==========
     foreach ([
-        'homepageKeepWarmFiber',
         'processL1HydrateFiber',
         'deferredWarmupFiber',
         'sharedRuntimeConnectionWarmupFiber',
@@ -5738,10 +5736,7 @@ while (true) {
         && !$ipcReceivedShutdown
         && empty($pendingHandshakes)
         && $homepageKeepWarmFiber === null
-        && \Weline\Server\Service\Policy\WorkerPolicyControl::isApplicationGateOpen()
-        && ($homepageProofRecoveryDue
-            || (!wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, null, $http2PendingRequests)
-                && $runtime->shouldScheduleHomepageKeepWarm($activeRequests, $ipcDraining, $homepageMemoryPressure)))
+        && $homepageProofRecoveryDue
     ) {
         $fiberScheduler->registerFiber();
         $homepageKeepWarmFiber = new \Fiber(static function () use ($runtime, $fiberScheduler, $homepageProofRecoveryDue): void {
@@ -5758,8 +5753,6 @@ while (true) {
                     $proofMessage = '[WorkerWarmup] homepage proof recovery '
                         . (\json_encode($proofSummary) ?: '{}');
                     $proofSummary['ok'] ? WlsLogger::info_($proofMessage) : WlsLogger::warning_($proofMessage);
-                } else {
-                    $runtime->runHomepageKeepWarmCycle();
                 }
             } finally {
                 if ($self instanceof \Fiber) {
@@ -7608,7 +7601,6 @@ while (true) {
     if ($ipcClient !== null && $ipcClient->isConnected()) {
         $policyTrackedFibers = \count($activeFibers);
         foreach ([
-            $homepageKeepWarmFiber,
             $processL1HydrateFiber ?? null,
             $deferredWarmupFiber ?? null,
             $sharedRuntimeConnectionWarmupFiber ?? null,
@@ -12012,6 +12004,31 @@ function wlsSslCanonicalStaticResponse(
     return $staticResponse;
 }
 
+function wlsInjectGlobalRegions(string $httpResponse): string
+{
+    $sep = \strpos($httpResponse, "\r\n\r\n");
+    if ($sep === false) {
+        return $httpResponse;
+    }
+    $header = \substr($httpResponse, 0, $sep + 4);
+    $body = \substr($httpResponse, $sep + 4);
+    if ($body === '' || !\str_contains($body, '<head') || !\str_contains($body, '</body>')) {
+        return $httpResponse;
+    }
+    if (\preg_match('/\r\nContent-Encoding:\s*(?!identity)/i', $header) === 1) {
+        return $httpResponse;
+    }
+    try {
+        $body = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Region\GlobalRegionHtmlInjector::class)
+            ->ensure($body, 'frontend');
+    } catch (\Throwable) {
+        return $httpResponse;
+    }
+    $replaced = \preg_replace('/(\r\nContent-Length:\s*)\d+/i', '${1}' . \strlen($body), $header, 1);
+
+    return (\is_string($replaced) ? $replaced : $header) . $body;
+}
+
 function handleRequest(
     string $rawRequest,
     ?\Weline\Server\Runtime\WlsRuntime $runtime,
@@ -12195,7 +12212,7 @@ function handleRequest(
                 if (\session_status() === PHP_SESSION_ACTIVE) {
                     \session_write_close();
                 }
-                return $streamedMarker;
+                return wlsInjectGlobalRegions($streamedMarker);
             }
             throw $runtimeFailure;
         }
@@ -12207,7 +12224,7 @@ function handleRequest(
             if (\session_status() === PHP_SESSION_ACTIVE) {
                 \session_write_close();
             }
-            return $streamedMarker;
+            return wlsInjectGlobalRegions($streamedMarker);
         }
         wlsResetLongRunningExecutionLimit();
         
@@ -12419,7 +12436,7 @@ function handleRequest(
             }
         }
         
-        return $httpString;
+        return wlsInjectGlobalRegions($httpString);
         
     } catch (\Throwable $e) {
         // 302 等响应终止为正常控制流，不记错误

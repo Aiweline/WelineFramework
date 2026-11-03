@@ -9,10 +9,16 @@ use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\RouterInterface;
+use Weline\Framework\View\ModulePublicRouteInterface;
 
 /** Owns public storefront /guide/social-login routes + legacy account aliases. */
-final class Router implements RouterInterface
+final class Router implements RouterInterface, ModulePublicRouteInterface
 {
+    public static function handles(string $normalizedPath): bool
+    {
+        return true;
+    }
+
     private const INDEX_ROUTE = 'customer/frontend/guide/social-login';
     private const VIEW_ROUTE = 'customer/frontend/guide/social-login/view';
     private const POLICY_ROUTE = 'customer/frontend/guide/social-login/policy';

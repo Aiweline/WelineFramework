@@ -40,7 +40,6 @@ use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Cache\TemplateCachePolicyRegistry;
-use Weline\Framework\View\Engine\EngineFlags;
 use Weline\Framework\View\Engine\HookRuntime;
 use Weline\Framework\View\Engine\ViewEngine;
 use Weline\Framework\View\Helper\EmbeddedPageTitle;
@@ -59,6 +58,15 @@ class Template extends DataObject implements RequestLocalInterface
      * @var array<string, string>
      */
     private static array $processTemplateContextKey = [];
+
+    /**
+     * 编译期展开全局区（head/body_open/body_end）：仅在发布/固化编译上下文开启，
+     * 展开后 compiled 产物不再每次请求调用 GlobalRegion::render()。
+     */
+    private static bool $inlineGlobalRegionsAtCompile = false;
+
+    /** @var array<string, string> 本次编译上下文内按 region 缓存的渲染结果（按 locale 重置） */
+    private static array $compileGlobalRegionHtml = [];
 
     use TraitTemplate;
 
@@ -1232,7 +1240,12 @@ class Template extends DataObject implements RequestLocalInterface
         $memoKey = null;
         if ($module_name === '' || $module_name === null) {
             $origin = $this->activeSourceOrigin;
-            $memoKey = 'view.fetch_file:' . $fileName . '|' . $origin;
+            // 必须带语言/币种：发布编译在同一进程里连续编译多个 locale，
+            // 少了这两维会把上一个 locale 的 compiled 路径（如 bg_BG）当成当前 locale 的产物复用，
+            // 实测把 bg_BG 的 hook include 写进 bn_BD 产物 → include 目标不存在、hook 内容丢失。
+            $memoKey = 'view.fetch_file:' . $fileName . '|' . $origin
+                . '|lang:' . RequestContext::getWelineUserLang()
+                . '|cur:' . RequestContext::getWelineUserCurrency();
             $memoized = RequestContext::get($memoKey);
             if (\is_string($memoized) && $memoized !== '' && \is_file($memoized)) {
                 return $memoized;
@@ -1276,6 +1289,8 @@ class Template extends DataObject implements RequestLocalInterface
             throw new Exception('Unable to read template source: ' . $tplFile);
         }
 
+        $content = $this->applyGlobalRegionContract($tplFile, $content);
+
         $compiled = $this->compileSourceBytes($comFileName, $content, $tplFile, '');
         if ($sourceMtime > 0) {
             $this->rememberFetchFileIdentity($compiled, $sourceMtime, $sourceSize, $sourceCtime, $sourceIno);
@@ -1296,7 +1311,115 @@ class Template extends DataObject implements RequestLocalInterface
         return (string)json_encode(
             $this->eventsManager->getEventObservers('Weline_Framework_Template::before_compile'),
             JSON_PARTIAL_OUTPUT_ON_ERROR
-        );
+        ) . '|global_region_inline:' . (self::inlineGlobalRegionsAtCompileEnabled() ? '1' : '0')
+            . '|bake_template_tags:' . (\getenv('WELINE_BAKE_TEMPLATE_TAGS') === '1' ? '1' : '0')
+            // 烘焙形态变了（如加运行时兜底）必须让旧 compiled 失效，否则缓存产物永远停在旧形态。
+            . '|hook_inliner:' . (\class_exists(\Weline\Framework\View\HookCompiledPhpInliner::class)
+                ? \Weline\Framework\View\HookCompiledPhpInliner::COMPILE_SIGNATURE
+                : 'none');
+    }
+
+    /** 发布/固化编译期是否把全局区渲染进 compiled 产物（默认关，运行时编译不开）。 */
+    public static function setInlineGlobalRegionsAtCompile(bool $enabled): void
+    {
+        self::$inlineGlobalRegionsAtCompile = $enabled;
+        self::$compileGlobalRegionHtml = [];
+    }
+
+    public static function inlineGlobalRegionsAtCompileEnabled(): bool
+    {
+        if (self::$inlineGlobalRegionsAtCompile) {
+            return true;
+        }
+
+        return \getenv('WELINE_INLINE_GLOBAL_REGIONS') === '1';
+    }
+
+    /** 跨进程编译（locale worker）在切换 locale 时重置渲染缓存，避免串语种。 */
+    public static function resetCompileGlobalRegionCache(): void
+    {
+        self::$compileGlobalRegionHtml = [];
+    }
+
+    /**
+     * 把 compiled 里的 `GlobalRegion::render('<region>')` 调用替换成编译期渲染好的 HTML。
+     * 渲染失败/为空时保留原调用，运行时兜底逻辑不受影响。
+     */
+    private function inlineGlobalRegionsInCompiled(string $compiled): string
+    {
+        if (!\str_contains($compiled, 'GlobalRegion::render(')) {
+            return $compiled;
+        }
+        foreach (['head', 'body_open', 'body_end'] as $region) {
+            $needle = "\\Weline\\Theme\\Region\\GlobalRegion::render('" . $region . "')";
+            if (!\str_contains($compiled, $needle)) {
+                continue;
+            }
+            if (!\array_key_exists($region, self::$compileGlobalRegionHtml)) {
+                $html = '';
+                try {
+                    $html = \Weline\Framework\Manager\ObjectManager::getInstance(
+                        \Weline\Framework\Runtime\GlobalRegionInjectorInterface::class
+                    )->render($region);
+                } catch (\Throwable $error) {
+                    if (\function_exists('w_log_warning')) {
+                        \w_log_warning('[template-compile] global region inline failed: ' . $error->getMessage(), [
+                            'region' => $region,
+                        ]);
+                    }
+                    $html = '';
+                }
+                self::$compileGlobalRegionHtml[$region] = $html;
+            }
+            $html = self::$compileGlobalRegionHtml[$region];
+            if ($html === '') {
+                continue;
+            }
+            $compiled = (string)\str_replace('<?= ' . $needle . ' ?>', $html, $compiled);
+            $compiled = (string)\str_replace('<?=' . $needle . '?>', $html, $compiled);
+        }
+
+        return $compiled;
+    }
+
+    /**
+     * 编译期把 `getHook()` 调用烘成贡献者 compiled 的 include（发布/固化编译专用）。
+     *
+     * 与 GlobalRegion 内联不同，这里**不冻结 HTML**：产物仍是 include 语句，
+     * 运行时执行贡献者模板，登录态/购物车等个性化不受影响，只是省掉事件派发与查找。
+     */
+    private function bakeCompiledHookCalls(string $compiled): string
+    {
+        if (!\str_contains($compiled, 'getHook(')
+            || !\class_exists(\Weline\Framework\View\HookCompiledPhpInliner::class)) {
+            return $compiled;
+        }
+        $pattern = '/<\?=\s*\$this->getHook\(\s*\'([^\']+)\'\s*\)\s*\?>/';
+        if (\preg_match_all($pattern, $compiled, $matches, PREG_SET_ORDER) < 1) {
+            return $compiled;
+        }
+        // 先收集再替换：回调里禁止触发模板编译（会递归），统一在循环外做。
+        $memo = [];
+        foreach ($matches as $match) {
+            $call = (string)$match[0];
+            if (isset($memo[$call])) {
+                continue;
+            }
+            $name = (string)$match[1];
+            try {
+                $php = \Weline\Framework\View\HookCompiledPhpInliner::tryEmit($name, []);
+            } catch (\Throwable) {
+                $php = null;
+            }
+            $memo[$call] = \is_string($php) && $php !== '' ? $php : $call;
+        }
+        foreach ($memo as $call => $replacement) {
+            if ($replacement !== $call) {
+                $compiled = (string)\str_replace($call, $replacement, $compiled);
+            }
+        }
+
+        return $compiled;
     }
 
     /**
@@ -1384,6 +1507,12 @@ class Template extends DataObject implements RequestLocalInterface
             $filename .= '.phtml';
         }
 
+        // Layout sources also reach the compiler through this pinned/virtual-source entry
+        // (theme layout snapshots), so the global-region contract has to be applied here
+        // too — otherwise the same layout compiles with or without anchors depending on
+        // which entry produced it.
+        $sourceBytes = $this->applyGlobalRegionContract($originPath !== '' ? $originPath : $logicalPath, $sourceBytes);
+
         $sourceHash = null;
         // Direct virtual-source calls may reuse a logical name while supplying different bytes.
         if (($this->pinnedSources[$logicalPath] ?? null) === [$sourceBytes, $originPath, $contextKey]) {
@@ -1405,12 +1534,53 @@ class Template extends DataObject implements RequestLocalInterface
             : md5(md5($sourceBytes) . '|' . strlen($sourceBytes) . '|' . Taglib::COMPILER_GENERATION) . '-' . strlen($sourceBytes);
     }
 
+    /**
+     * Page layouts carry three global-region anchors that the compiler appends itself.
+     *
+     * Runs for every template compile but only acts on frontend page layouts: backend,
+     * email and module templates never gain anchors. A layout that lost <head>/<body>
+     * makes the rewrite throw, so the compile fails instead of silently serving a page
+     * without global content; fragment layouts opt out with the `@weline-global:skip`
+     * marker. The rewrite is purely additive and idempotent.
+     */
+    private function applyGlobalRegionContract(string $originPath, string $sourceBytes): string
+    {
+        try {
+            $rewriter = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\View\GlobalRegionContractInterface::class
+            );
+
+            return $rewriter->applyContract($originPath, $sourceBytes);
+        } catch (\RuntimeException $error) {
+            // Never take the site down over a missing anchor: a hook partial or a fragment
+            // layout can legitimately reach this path. The contract is enforced where it
+            // belongs — the theme build checks — while runtime degrades to "no global
+            // regions" and leaves an actionable line in the log.
+            \Weline\Framework\App\Env::log(
+                'theme/global_region_contract_error',
+                $error->getMessage() . ' @ ' . $originPath,
+            );
+
+            return $sourceBytes;
+        }
+    }
+
     private function compileSourceBytes(string $baseCompiledPath, string $sourceBytes, string $originPath, string $contextKey, ?string $sourceHash = null): string
     {
         if (\defined('DEV') && DEV) {
             // Theme spec gate: a non-compliant theme template must fail here, while
             // editing, not later in PageSpeed. Throws ThemeSpecViolationException.
-            \Weline\Theme\Service\Spec\ThemeSpecValidator::assertFileForDev($originPath);
+            // 主题模块未安装时没有规格门禁（provider 解析失败即跳过）。
+            try {
+                $gate = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Framework\View\ThemeSpecGateInterface::class
+                );
+            } catch (\Throwable) {
+                $gate = null;
+            }
+            if ($gate !== null) {
+                $gate->assertFileForDev($originPath);
+            }
         }
         $sourceHash ??= $this->sourceBytesDigest($sourceBytes);
         // S2-A：模板级白名单（默认关闭）。只有显式配置 engine.templates 命中时才走 v3；
@@ -1485,6 +1655,15 @@ class Template extends DataObject implements RequestLocalInterface
             }
         } finally {
             $this->activeSourceOrigin = $previousOrigin;
+        }
+        // 发布/固化编译期：把全局区展开成静态 HTML，运行时不再逐请求渲染。
+        if (self::inlineGlobalRegionsAtCompileEnabled()) {
+            $compiled = $this->inlineGlobalRegionsInCompiled($compiled);
+        }
+        // 发布/固化编译期：把 getHook 回显调用烘成贡献者 compiled include，
+        // 运行时不再走事件派发（产物仍是 include，不做 HTML 快照，个性化不丢）。
+        if (\getenv('WELINE_BAKE_TEMPLATE_TAGS') === '1') {
+            $compiled = $this->bakeCompiledHookCalls($compiled);
         }
         if ($shadowSource !== null) {
             $this->shadowCompare($shadowSource, $originPath, $compiled);
@@ -1804,45 +1983,13 @@ class Template extends DataObject implements RequestLocalInterface
      * Nested (already inside FiberOutputBuffer capture): stream into the current
      * frame with no nested capture and return '' — for `<?= $this->fetch() ?>`.
      * Top-level / explicit string needs: use {@see fetchHtml} (always captures).
-     * When {@see EngineFlags::isV2Enabled()} (default), delegates to {@see ViewEngine}.
+     * Always delegates to {@see ViewEngine} (v2 is the only engine; legacy path removed).
      *
      * @param array<string, mixed> $data
      */
     public function fetch(string $fileName, array $data = [])
     {
-        if (EngineFlags::isV2Enabled()) {
-            return ViewEngine::for($this)->fetch($fileName, $data);
-        }
-
-        return $this->fetchLegacy($fileName, $data);
-    }
-
-    /**
-     * Legacy fetch path (rollback when view.engine.v2=false).
-     *
-     * @param array<string, mixed> $data
-     */
-    private function fetchLegacy(string $fileName, array $data = [])
-    {
-        if (FiberOutputBuffer::hasActiveCapture()) {
-            // Identity costs ~1.1 µs (three regexes); only build it when the route
-            // trace is actually on, and reuse it for the matching end() call.
-            $routeIdentity = TemplateRenderRouteTrace::isRequested()
-                ? $this->shortRenderRouteIdentity($fileName)
-                : '';
-            TemplateRenderRouteTrace::armIfRequested();
-            TemplateRenderRouteTrace::begin('fetch_stream', $routeIdentity);
-            try {
-                $this->addSourceModuleToRequest(DataInterface::dir_type_TEMPLATE, $fileName);
-                $this->streamCompiledFile($this->getFetchFile($fileName), $data);
-
-                return '';
-            } finally {
-                TemplateRenderRouteTrace::end('fetch_stream', $routeIdentity);
-            }
-        }
-
-        return $this->fetchHtml($fileName, $data);
+        return ViewEngine::for($this)->fetch($fileName, $data);
     }
 
     public function fetchModuleThemeHtml(string $fileName, array $data = []): string
@@ -2292,13 +2439,8 @@ class Template extends DataObject implements RequestLocalInterface
     private function isI18nInlineEditActiveForBodyEndCache(): bool
     {
         try {
-            if (!\class_exists(\Weline\I18n\Service\InlineEdit\InlineEditSession::class)) {
-                return false;
-            }
-            /** @var \Weline\I18n\Service\InlineEdit\InlineEditSession $session */
-            $session = ObjectManager::getInstance(\Weline\I18n\Service\InlineEdit\InlineEditSession::class);
-
-            return $session->isActive($this->request);
+            return ObjectManager::getInstance(\Weline\Framework\View\InlineEditRenderingInterface::class)
+                ->isActive($this->request);
         } catch (\Throwable) {
             return false;
         }
@@ -2315,11 +2457,11 @@ class Template extends DataObject implements RequestLocalInterface
         } catch (\Throwable) {
         }
         try {
-            if (\class_exists(\Weline\Theme\Helper\ThemeData::class)) {
-                $theme = \Weline\Theme\Helper\ThemeData::getCurrentTheme();
-                if ($theme !== null && \method_exists($theme, 'getId')) {
-                    return (string)(int)$theme->getId();
-                }
+            $themeId = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Runtime\ThemeIdProviderInterface::class
+            )->currentThemeId();
+            if ($themeId !== null && $themeId > 0) {
+                return (string)$themeId;
             }
         } catch (\Throwable) {
         }
@@ -3529,16 +3671,8 @@ class Template extends DataObject implements RequestLocalInterface
             $hookFiles = $hooker->getHook($name);
         }
 
-        $soloHook = null;
-        foreach ($hookFilesWithMeta as $module => $meta) {
-            if (!empty($meta['solo'])) {
-                $soloHook = $module;
-                break;
-            }
-        }
-        if ($soloHook !== null && isset($hookFiles[$soloHook])) {
-            $hookFiles = [$soloHook => $hookFiles[$soloHook]];
-        }
+        // solo 语义集中在 HookReader::applySolo()，与其它渲染入口共用同一份规则。
+        $hookFiles = \Weline\Framework\Hook\Config\HookReader::applySolo($hookFiles, $hookFilesWithMeta);
 
         if ($hookFiles !== [] && \method_exists(\Weline\Framework\Phrase\Parser::class, 'prefetchGlobalDictionaryModules')) {
             $dictionaryModules = [];

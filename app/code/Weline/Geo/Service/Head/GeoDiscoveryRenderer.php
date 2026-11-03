@@ -106,7 +106,21 @@ class GeoDiscoveryRenderer
         }
         try {
             if (is_object($template) && isset($template->request)) {
-                return rtrim((string) $template->request->getBaseUrl(), '/') . '/' . ltrim($url, '/');
+                $base = rtrim((string) $template->request->getBaseUrl(), '/');
+                if ($base !== '') {
+                    return $base . '/' . ltrim($url, '/');
+                }
+                // Empty base URL (head-chrome request objects): fall through to the
+                // website's public base URL below so discovery links stay absolute.
+                // A relative href (e.g. "/llms.txt") here drops every head link.
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            $website = $this->websiteResolver->currentWebsite();
+            $candidate = rtrim(trim((string) ($website->url ?? '')), '/');
+            if ($candidate !== '' && preg_match('#^https?://#i', $candidate) === 1) {
+                return $candidate . '/' . ltrim($url, '/');
             }
         } catch (\Throwable) {
         }

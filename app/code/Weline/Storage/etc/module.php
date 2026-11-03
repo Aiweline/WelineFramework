@@ -4,6 +4,7 @@ return [
     "name" => 'Weline_Storage',
     "version" => '1.2.2',
     "requires" => [
+        'Weline_Database' => '*',
         'Weline_Framework' => '>=2.5.0',
     ],
     "optional" => [

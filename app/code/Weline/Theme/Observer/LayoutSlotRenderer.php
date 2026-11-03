@@ -210,7 +210,6 @@ class LayoutSlotRenderer implements ObserverInterface
                 try {
                     /** @var PreviewBootstrapAssetInjector $injector */
                     $injector = ObjectManager::getInstance(PreviewBootstrapAssetInjector::class);
-
                     return $injector->inject($html);
                 } catch (\Throwable) {
                     return $html;
