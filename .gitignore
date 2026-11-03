@@ -338,3 +338,8 @@ app/code/Weline/Social/view/statics/downloads/*.zip
 # Agent 截图/配图工作产物（本地验收用，不进 Git）
 /.screenshots/
 /vibe_images/
+
+# 个人简历等本地文档（永不入库）
+*zou_wancai_resume*
+*resume_en/
+untitled
