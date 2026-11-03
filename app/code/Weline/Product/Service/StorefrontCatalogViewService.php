@@ -1219,16 +1219,16 @@ final class StorefrontCatalogViewService
         $allowedProductIds = $filterIds !== [] ? \array_fill_keys($filterIds, true) : [];
 
         if ($maxRows !== null && $filterIds === []) {
-            // Cold path: page size tracks remaining need; do not floor at 24.
-            //
-            // 先只做「分页取 offer 行」这一件便宜的事，把所有页攒齐后再**一次性**进
-            // snapshot/pricing/surface 全流程。之前每页 128 行都各自完整跑一遍
-            // build（实测 CLI 全冷两页把定价+surface 做了两轮，占 2.0s 里的 98%）。
+            // Cold path：一条 SQL 直接取（listPublishedRepresentativePage 单次
+            // 上限 500 行，站内目录 ≤500 时一次到位）。只有超过 500 才需要
+            // keyset 续读——此时也只攒 offer 行，snapshot/定价/surface 全流程
+            // 在攒齐后统一跑一轮（此前每页 128 行各自完整跑一遍 build，
+            // 两页把定价+surface 重复做两轮，占全冷 2.0s 的 98%）。
             $prepared = [];
             $afterOfferId = 0;
             $page = [];
             do {
-                $pageSize = max(1, min(128, $maxRows - count($prepared)));
+                $pageSize = min(500, max(1, $maxRows - count($prepared)));
                 $page = $this->offers->listPublishedRepresentativePage($websiteId, $pageSize, $afterOfferId);
                 if ($page === []) {
                     break;
