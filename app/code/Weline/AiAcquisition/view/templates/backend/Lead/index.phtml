@@ -17,8 +17,8 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
 ?>
 <css>Weline_AiAcquisition::css/backend/acquisition.css</css>
 <a id="acq-run-url" href="@backend-url{'ai_acquisition/backend/run'}" hidden></a>
-<a id="acq-lead-mail-url" href="@backend-url{'ai_acquisition/backend/lead_mail'}" hidden></a>
-<a id="acq-lead-convert-url" href="@backend-url{'ai_acquisition/backend/lead_convert/convert'}" hidden></a>
+<a id="acq-lead-mail-url" href="@backend-url{'ai_acquisition/backend/lead-mail'}" hidden></a>
+<a id="acq-lead-convert-url" href="@backend-url{'ai_acquisition/backend/lead-convert/convert'}" hidden></a>
 
 <div class="acq-intro">
     <div class="acq-intro__copy">
@@ -710,9 +710,11 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
         body.innerHTML = '<p class="w-text" data-tone="muted" data-size="sm">加载中…</p>';
         modal.hidden = false;
         document.body.classList.add('acq-modal-open');
+        // 后台 window.fetch 被 Weline.Api worker 劫持且同路径 MAX_IN_FLIGHT=1；HTML 片段加载必须绕过，否则连点「联系」会报 too many in-flight。
         fetch(leadMailUrl + (leadMailUrl.indexOf('?') === -1 ? '?' : '&') + 'lead_id=' + encodeURIComponent(leadId), {
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin'
+            credentials: 'same-origin',
+            __welineNativeFetch: true
         }).then(function (response) {
             return response.text().then(function (text) { return { ok: response.ok, text: text }; });
         }).then(function (result) {
@@ -750,7 +752,8 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
             fetch(leadConvertUrl + separator + 'lead_id=' + encodeURIComponent(leadId), {
                 method: 'POST',
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                credentials: 'same-origin'
+                credentials: 'same-origin',
+                __welineNativeFetch: true
             }).then(function (response) {
                 return response.json().then(function (data) { return { ok: response.ok, data: data }; });
             }).then(function (result) {

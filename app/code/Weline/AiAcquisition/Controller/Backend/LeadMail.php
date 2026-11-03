@@ -24,6 +24,9 @@ final class LeadMail extends BackendController
 {
     private const DEFAULT_ACCOUNT_EMAIL = 'contact@changanhanfu.com';
 
+    /** 弹窗/AJAX 只回片段，禁后台壳布局，避免把整页导航嵌进 modal。 */
+    protected ?string $layoutType = null;
+
     #[Acl('Weline_AiAcquisition::lead_mail', '线索邮件沟通', 'message', '打开线索邮件弹窗与往来时间线', 'Weline_AiAcquisition::lead_list')]
     public function index(): string
     {
