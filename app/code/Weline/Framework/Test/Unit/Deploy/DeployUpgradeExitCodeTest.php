@@ -51,4 +51,29 @@ final class DeployUpgradeExitCodeTest extends TestCase
             '观察者失败时必须写回 generation_promote_failed=true'
         );
     }
+
+    public function testPublishFileEmitsJsCompanionMin(): void
+    {
+        $src = (string)\file_get_contents(BP . 'app/code/Weline/Framework/Console/Console/Deploy/Upgrade.php');
+        self::assertStringContainsString(
+            'deploy-js-companion-min-v1',
+            $src,
+            'publishFile 必须带 companion .min.js 标记'
+        );
+        self::assertStringContainsString(
+            'publishJsCompanionMin',
+            $src,
+            'publishFile 必须调用 publishJsCompanionMin'
+        );
+        self::assertMatchesRegularExpression(
+            '/function\s+publishJsCompanionMin\s*\(/',
+            $src,
+            '必须定义 publishJsCompanionMin'
+        );
+        self::assertMatchesRegularExpression(
+            '/\\.min\\.\$1|\\.min\\.(js\|mjs)/',
+            $src,
+            'companion 路径必须写成 .min.js / .min.mjs'
+        );
+    }
 }

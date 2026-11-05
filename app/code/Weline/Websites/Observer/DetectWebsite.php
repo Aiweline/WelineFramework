@@ -115,6 +115,10 @@ class DetectWebsite implements
         self::$processValueCache = [];
         self::$processValueCacheExpiresAt = [];
         self::$processCacheVersion = '';
+        // 检测结果全部由这两份目录快照推导而来：只清检测缓存、不清目录快照，
+        // 就会用陈旧的站点/域名行重新推导出一份看似全新的检测缓存。
+        Website::clearCatalogRowsCache();
+        WebsiteDomain::clearCatalogRowsCache();
     }
 
     public function resolveWebsiteCode(string $fullUri): ?string

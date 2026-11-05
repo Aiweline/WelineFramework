@@ -44,11 +44,16 @@ class Shell extends FrontendController
                 \trim((string)$this->request->getParam('s', '')),
             ) ?? [];
 
-            // 片段内容随「已发布配置」变化，不能让浏览器长期缓存：
-            // 之前 max-age=600 把「关闭态」的壳缓存住了，运营再打开也看不到（实测）。
+            // 片段内容随「已发布配置」变化；登录态无关的片段按 TTL 缓存（浏览器 + CDN）。
+            // TTL 取片段 @global-region.cache，缺省用部件 async_cache；为 0 时保持 no-store。
+            $ttl = \Weline\Theme\Region\GlobalRegion::fragmentCacheTtl($fragmentId);
+            $cacheControl = $ttl > 0
+                ? 'public, max-age=' . $ttl . ', s-maxage=' . $ttl . ', stale-while-revalidate=' . $ttl
+                : 'no-store, max-age=0';
+
             return $this->respond(
                 \Weline\Theme\Region\GlobalRegion::renderFragment($fragmentId, $overrides),
-                'no-store, max-age=0',
+                $cacheControl,
             );
         }
 

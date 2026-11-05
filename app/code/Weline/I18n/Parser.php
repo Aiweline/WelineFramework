@@ -27,8 +27,13 @@ class Parser
 
     public static function preloadWorkerDictionaries(): void
     {
-        // Intentionally lazy: the request route and rendered module sources are
-        // the authoritative preload manifest.
+        // The dictionary file layer is framework-owned: FrameworkPhraseParser
+        // warms the bounded global layer at Worker boot and leaves module
+        // dictionaries to the first request that renders them (route-scoped, for
+        // RSS). This bridge owns nothing of its own; delegating keeps every
+        // "preload dictionaries" entry point answering the same question instead
+        // of silently doing nothing.
+        FrameworkPhraseParser::preloadWorkerDictionaries();
     }
 
     public static function clearWorkerCaches(): void

@@ -8,6 +8,7 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Theme\Service\Version\ThemeScopeVersionWidgetDecisionService;
 
 /**
  * Immutable install/uninstall decision frozen with a content revision.
@@ -108,5 +109,22 @@ final class ThemeScopeVersionWidgetDecision extends Model
         if (!$this->getId() && !$this->getData(self::schema_fields_CREATE_TIME)) {
             $this->setData(self::schema_fields_CREATE_TIME, \date('Y-m-d H:i:s'));
         }
+    }
+
+    /**
+     * Decisions are held in process memory by
+     * {@see ThemeScopeVersionWidgetDecisionService::listUninstallOmissions()},
+     * so a newly written row must drop that memo.
+     */
+    public function save_after()
+    {
+        parent::save_after();
+        ThemeScopeVersionWidgetDecisionService::clearProcessCaches();
+    }
+
+    public function delete_after(): void
+    {
+        parent::delete_after();
+        ThemeScopeVersionWidgetDecisionService::clearProcessCaches();
     }
 }

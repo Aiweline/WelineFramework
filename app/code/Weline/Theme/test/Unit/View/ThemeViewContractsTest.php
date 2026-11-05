@@ -1965,6 +1965,8 @@ private function assert_StorefrontFloatLayer_testFloatLayerCssOwnsStickyClearanc
     self::assertStringContainsString('#weline-consent-banner:not([hidden])', $css);
     self::assertStringContainsString('--weline-consent-banner-clearance', $css);
     self::assertStringContainsString('is-edge-collapsed', $css);
+    self::assertStringNotContainsString('calc(-100% + 24px)', $css);
+    self::assertStringNotContainsString('calc(100% - 24px)', $css);
     self::assertStringContainsString('.w-storefront-float-edge__dismiss', $css);
     self::assertStringContainsString('storefront-float-dismiss-contrast-v1', $css);
     self::assertStringContainsString('.w-storefront-float-edge__recall', $css);
@@ -2003,6 +2005,9 @@ private function assert_StorefrontFloatLayer_testFloatLayerJsOwnsEdgeDockLocalSt
     self::assertStringContainsString('translateX(100%)', $criticalCss);
     self::assertStringContainsString("classList.toggle('is-edge-collapsed'", $js);
     self::assertStringContainsString('removeProperty(\'transform\')', $js);
+    self::assertStringContainsString('storefront-float-collapse-inline-children-v1', $js);
+    self::assertStringNotContainsString('calc(-100% + 24px)', $js);
+    self::assertStringNotContainsString('slotEl.style.transform = base', $js);
     self::assertStringContainsString('bindCsOpenClearsEndTransform', $js);
     self::assertStringContainsString('endHasOpenCustomerService', $js);
     self::assertStringNotContainsString("style.transform = 'translateX(0)'", $js);

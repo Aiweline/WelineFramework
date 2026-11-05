@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Currency',
-    "version" => '1.0.30',
+    "version" => '1.0.31',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
@@ -20,5 +20,7 @@ return [
         \Weline\Currency\Api\CurrencyCatalogInterface::class => \Weline\Currency\Service\Repository\CurrencyCatalog::class,
         'localization_provider.Weline_Currency' => \Weline\Currency\Api\Localization\LocalizationProvider::class,
         'process_cache_resetter.Weline_Currency' => \Weline\Currency\Api\Runtime\ProcessCacheResetter::class,
+        'worker_preload_provider.Weline_Currency'
+            => \Weline\Currency\Service\Preload\CurrencyCatalogPreloadProvider::class,
     ],
 ];

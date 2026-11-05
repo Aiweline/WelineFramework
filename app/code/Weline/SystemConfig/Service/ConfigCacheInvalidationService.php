@@ -297,6 +297,10 @@ final class ConfigCacheInvalidationService
         array $fallbackLocales,
     ): void {
         SystemConfig::clearProcessCache($area, $module);
+        // 跨进程失效：本进程的快照/进程仓上面已经丢了，但 WLS 的其它 worker 是
+        // 长驻进程，静态快照不会自己失效。推进 `system_config` 池上的整表快照代次，
+        // 各 worker 下次读取时比对不一致即重建（否则“配置改了不生效”）。
+        SystemConfig::bumpTableSnapshotGeneration();
         SystemConfigSecurityHeaderPolicyOverrideProvider::clearProcessCache();
         if ($module === 'Weline_Payment' || $module === 'WeShop_Payment') {
             if (\class_exists(\Weline\Payment\Service\PaymentMethodManager::class)) {

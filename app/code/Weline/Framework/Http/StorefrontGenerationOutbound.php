@@ -35,7 +35,9 @@ final class StorefrontGenerationOutbound
             // Industry discovery docs (.well-known/ard.json, ai-catalog, …) must stay
             // Set-Cookie-free: ARD/Lighthouse validators treat identity cookies as a
             // non-cacheable agent response and report "could not be loaded".
-            if (self::isIndustryProtocolPath()) {
+            if ($response->getHeader('X-Weline-Protocol-Document') !== null
+                || self::isIndustryProtocolPath()
+            ) {
                 return;
             }
 
@@ -129,27 +131,54 @@ final class StorefrontGenerationOutbound
     /**
      * Industry protocol documents that agents fetch as discovery manifests.
      * Cookie minting here breaks ARD validators and Cloudflare edge caching.
+     *
+     * ProtocolRouteRewrite maps these public paths onto geo/protocol/llms before
+     * dispatch, so the router path alone no longer matches; consult the original
+     * request URI as well.
      */
     private static function isIndustryProtocolPath(): bool
     {
+        static $documents = [
+            '/.well-known/ard.json' => true,
+            '/.well-known/ai-catalog.json' => true,
+            '/.well-known/tdmrep.json' => true,
+            '/.well-known/trust.txt' => true,
+            '/ai.txt' => true,
+            '/license.xml' => true,
+            '/trust.txt' => true,
+            '/llms.txt' => true,
+            '/llms-full.txt' => true,
+        ];
+
+        $candidates = [];
         try {
             $request = ObjectManager::getInstance(Request::class);
-            if (!($request instanceof Request)) {
-                return false;
+            if ($request instanceof Request) {
+                $candidates[] = (string)$request->getUrlPath();
             }
-            $path = \strtolower(\trim((string)(\parse_url($request->getUrlPath(), \PHP_URL_PATH) ?: ''), '/'));
-            return $path === '.well-known/ard.json'
-                || $path === '.well-known/ai-catalog.json'
-                || $path === '.well-known/tdmrep.json'
-                || $path === '.well-known/trust.txt'
-                || $path === 'ai.txt'
-                || $path === 'license.xml'
-                || $path === 'trust.txt'
-                || $path === 'llms.txt'
-                || $path === 'llms-full.txt';
         } catch (\Throwable) {
-            return false;
+            // Fall through to server variables.
         }
+        $candidates[] = (string)WelineEnv::server('WELINE_FULL_REQUEST_URI', '');
+        $candidates[] = (string)WelineEnv::server('REQUEST_URI', '');
+        $candidates[] = (string)WelineEnv::server('HTTP_X_ORIGINAL_URI', '');
+
+        foreach ($candidates as $candidate) {
+            $candidate = \trim($candidate);
+            if ($candidate === '') {
+                continue;
+            }
+            if (\preg_match('#^https?://#i', $candidate) === 1) {
+                $candidate = (string)(\parse_url($candidate, \PHP_URL_PATH) ?: '');
+            }
+            $candidate = (string)(\parse_url($candidate, \PHP_URL_PATH) ?: $candidate);
+            $path = '/' . \strtolower(\trim($candidate, '/'));
+            if ($path !== '/' && isset($documents[$path])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function ensureVaryCookie(Response $response): void

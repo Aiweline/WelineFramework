@@ -257,6 +257,90 @@ final class SystemConfigReadWriteCacheTest extends TestCase
         self::assertSame('new', $this->map()['title']);
     }
 
+    public function testCommittedInvalidationAdvancesCrossProcessSnapshotGeneration(): void
+    {
+        $key = $this->snapshotGenerationKey();
+        $before = $this->sharedSnapshotGeneration();
+        $service = (new \ReflectionClass(ConfigCacheInvalidationService::class))->newInstanceWithoutConstructor();
+        (new \ReflectionMethod($service, 'invalidateNow'))->invoke($service, self::MODULE, self::AREA, self::SCOPE, 'default', ['title'], [], []);
+
+        self::assertSame(
+            $before + 1,
+            $this->sharedSnapshotGeneration(),
+            'write path must advance the cross-process table snapshot generation',
+        );
+    }
+
+    public function testProcessTableSnapshotServesWithoutDatabaseRead(): void
+    {
+        // 对照组：代次未变时，整表快照就是权威，请求期一条库读都不该发生。
+        $this->config->rows = [];
+        $this->seedProcessTableSnapshot([$this->row('title', 'from-snapshot', 1)]);
+
+        $rows = $this->config->getConfigByModule(self::MODULE, self::AREA, self::SCOPE, 'default');
+
+        self::assertSame('from-snapshot', $rows[0][SystemConfig::schema_fields_VALUE] ?? null);
+        self::assertSame(0, $this->config->moduleReads, 'a valid table snapshot must answer without SQL');
+    }
+
+    public function testExternalWorkerWriteInvalidatesProcessTableSnapshot(): void
+    {
+        // A 进程写、B 进程读：写侧只推进**共享**代次，B 的静态快照原封不动。
+        // 没有代次比对时，B 会拿旧快照证明“配置没变”（配置改了不生效）。
+        $this->config->rows = [$this->row('title', 'from-db', 2)];
+        $this->seedProcessTableSnapshot([$this->row('title', 'from-snapshot', 1)]);
+        \w_cache('system_config')->setCustom(
+            $this->snapshotGenerationKey(),
+            $this->sharedSnapshotGeneration() + 1,
+        );
+
+        $rows = $this->config->getConfigByModule(self::MODULE, self::AREA, self::SCOPE, 'default');
+
+        self::assertSame('from-db', $rows[0][SystemConfig::schema_fields_VALUE] ?? null);
+        self::assertGreaterThan(0, $this->config->moduleReads, 'a stale snapshot must not answer after an external write');
+    }
+
+    public function testCompleteTableSnapshotSkipsExactProbesForMultiCandidateScopeChain(): void
+    {
+        // 复刻 Weline_Seo 商家信息读取：多候选 scope 链（__store__ → default）+ 该模块
+        // 在库里没有配置。模块级 marker 只覆盖单组 scope/locale，命中不了这种调用形状，
+        // 整表快照有效时必须由快照证明“缺失”，否则每个 key 会逐 scope×locale 探针。
+        $this->config->rows = [];
+        $this->seedProcessTableSnapshot([$this->row('title', 'from-snapshot', 1)]);
+
+        $first = $this->config->resolveConfig('seo/missing', self::MODULE, self::AREA, 'default.__store__.default', 'default', 'fallback');
+        $second = $this->config->resolveConfig('seo/missing', self::MODULE, self::AREA, 'default.default.default', 'default', 'fallback');
+
+        self::assertFalse($first['found']);
+        self::assertFalse($second['found']);
+        self::assertSame('fallback', $first['value']);
+        self::assertSame(0, $this->config->singleReads, 'a valid table snapshot must prove absence across every scope candidate');
+        self::assertSame(0, $this->config->moduleReads, 'a valid table snapshot must answer without SQL');
+    }
+
+    /** @param list<array<string, mixed>> $rows */
+    private function seedProcessTableSnapshot(array $rows): void
+    {
+        $snapshot = [];
+        foreach ($rows as $row) {
+            $snapshot[$row['area']][$row['module']][$row['scope']][$row['locale']][] = $row;
+        }
+        $snapshotProperty = new \ReflectionProperty(SystemConfig::class, 'tableSnapshot');
+        $generationProperty = new \ReflectionProperty(SystemConfig::class, 'tableSnapshotGeneration');
+        $snapshotProperty->setValue(null, $snapshot);
+        $generationProperty->setValue(null, $this->sharedSnapshotGeneration());
+    }
+
+    private function snapshotGenerationKey(): string
+    {
+        return (string)(new \ReflectionClassConstant(SystemConfig::class, 'TABLE_SNAPSHOT_GENERATION_KEY'))->getValue();
+    }
+
+    private function sharedSnapshotGeneration(): int
+    {
+        return (int)(\w_cache('system_config')->getCustom($this->snapshotGenerationKey()) ?? 0);
+    }
+
     public function testBuildCacheOpsEmitsDualPoolKeysForFrameworkObserver(): void
     {
         $ops = ObjectManager::getInstance(ConfigCacheInvalidationService::class)->buildCacheOps(

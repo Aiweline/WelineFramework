@@ -43,10 +43,6 @@ class ConnectionPool
     /** 预算硬上限（秒）：任何配置都不得把单次同步等待重新拉回 30 秒量级。 */
     private const MAX_ACQUIRE_TIMEOUT_SECONDS = 30.0;
 
-    /** 池满等待的退避区间（微秒）：固定 1ms 切片在长预算下会自旋数万次。 */
-    private const POOL_FULL_WAIT_BASE_SLICE_US = 1_000;
-    private const POOL_FULL_WAIT_MAX_SLICE_US = 100_000;
-
     /**
      * 池中队列元素：PDO 或 array{connection: PDO, last_used: float}（新格式带 last_used）
      * @var array<string, array{pool: \SplQueue, in_use: array, max_size: int, current_size: int}> 连接池存储
@@ -786,16 +782,28 @@ class ConnectionPool
             }
             $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
         }
-        $deadline = \microtime(true) + \max(0.0, $acquireTimeoutSeconds);
-        $waitSliceUs = self::POOL_FULL_WAIT_BASE_SLICE_US;
+        // No pool-full wait (2026-11-04, user decision: no request-path waits).
+        //
+        // This used to sleep in an exponential-backoff loop (1ms → 100ms slices)
+        // for up to $acquireTimeoutSeconds — default 2s, capped at 30s — hoping a
+        // lease would come back. Under crawl load the pool is full *because* every
+        // Worker is already parked: waiting cannot create capacity, it only parks
+        // more Fibres and pushes latency past every Nginx/client timeout. Measured
+        // on changanhanfu: all four Workers at active_requests=4 with 15s client
+        // timeouts, while `storefront.cache.builder` ran 62s inside one request.
+        //
+        // The loop body below is unchanged and still runs exactly once: the deadline
+        // is pinned to "now", so the first `$remainingUs <= 0` check breaks before
+        // any usleep() and any re-entry skips straight out. One idle dequeue, one
+        // stale-entry refill, one create-when-under-max attempt — then a genuine
+        // miss fails fast with the diagnostic ConnectionPoolExhaustedException
+        // instead of parking the request and starving the Worker.
+        $deadline = \microtime(true) - 1.0;
         do {
             $remainingUs = (int) \floor(($deadline - \microtime(true)) * 1_000_000);
             if ($remainingUs <= 0) {
                 break;
             }
-            SchedulerSystem::usleep(\min($waitSliceUs, $remainingUs));
-            // 退避：长预算下若沿用固定 1ms 切片，会自旋数万次并与业务争抢 CPU。
-            $waitSliceUs = \min($waitSliceUs * 2, self::POOL_FULL_WAIT_MAX_SLICE_US);
             if (!$pool['pool']->isEmpty()) {
                 $item = $pool['pool']->dequeue();
                 $connection = is_array($item) ? $item['connection'] : $item;

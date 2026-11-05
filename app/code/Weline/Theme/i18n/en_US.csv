@@ -692,6 +692,7 @@ id属性不能为空,id属性不能为空
 "Missing preview token","Missing preview token"
 "Preview token is invalid or expired","Preview token is invalid or expired"
 "Theme published","Theme published"
+全局区,全局区
 主题管理,"Theme management"
 请选择主题,"Please select a theme"
 主题不存在,"Theme does not exist"
@@ -823,6 +824,8 @@ CSS变量配置无效,"Invalid CSS variable configuration"
 更新,Update
 主题注册失败！,"Topic registration failed!"
 布局收集失败:,"Layout collection failed:"
+"Collapse float","Collapse float"
+"Expand float","Expand float"
 "Theme 版本修订头身份无效。","Invalid Theme version revision-header identity."
 "Theme 版本修订 kind 无效。","Invalid Theme version revision kind."
 "Theme 版本部件决定身份无效。","Invalid Theme version widget-decision identity."
@@ -880,33 +883,47 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-内容标题,"Section title"
+"WelineFramework Admin","WelineFramework Admin"
+面包屑,"bread crumbs"
+请先保存网站后，再为本站选择店面主题。,"Save the website first, then choose a storefront theme for this site."
+"本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。","本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。"
+"当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。"
+本站已配置专属主题应用引用。,本站已配置专属主题应用引用。
+本站范围尚无已发布主题版本；可在主题编辑器发布后再选。,"No published theme version for this website scope yet. Publish in the theme editor first."
+在主题编辑器中打开当前店面主题,在主题编辑器中打开当前店面主题
+请先选择前台主题后再打开编辑器,请先选择前台主题后再打开编辑器
+分类,Classification
+"Page %{1} of %{2}","Page %{1} of %{2}"
+分类展示图,"Category showcase image"
+查看全部,"View all"
+查看更多,"View more"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
 官方社交媒体,"Official social media"
-面包屑,"bread crumbs"
-分类,Classification
-分类展示图,"Category showcase image"
-查看全部,"View all"
 商品,Products
 查看商品图,"View product image"
 查看规格图,"View spec images"
 减少数量,"Decrease quantity"
 数量,Quantity
 增加数量,"Increase quantity"
+正在加载购物车...,"Loading cart..."
+收起明细,"Collapse details"
+小计,Subtotal
+迷你购物车金额小计,"Mini-cart money summary"
+去结算,"Proceed to Checkout"
+查看购物车,"View cart"
 购物车是空的,"Shopping cart is empty"
 "浏览%1 %2件商品","Browse %1 · %2 items"
 零售车,零售车
 批发车,批发车
 继续购物,"Continue shopping"
-小计,Subtotal
-去结算,"Proceed to Checkout"
 正在前往结算...,"Proceeding to checkout..."
-查看购物车,"View cart"
 税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
 运费将在结算时计算,"Shipping calculated at checkout"
 税费,Tax
-正在加载购物车...,"Loading cart..."
 正在更新购物车...,"Updating cart..."
 商品小计,"Goods subtotal"
 本次应付定金,"Deposit due now"
@@ -916,30 +933,14 @@ FAQ/常见问题,FAQ
 自动优惠,"Automatic discount"
 "还差 %1 包邮","You're %1 away from free shipping"
 已享包邮,"You've unlocked free shipping"
-收起明细,"Collapse details"
 展开明细,"Expand details"
 零售,Retail
-迷你购物车金额小计,"Mini-cart money summary"
 关闭通知,"Close notification"
-全部商品,"Shop All"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-查看更多,"View more"
-"Page %{1} of %{2}","Page %{1} of %{2}"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
 卡片底部,"Card Bottom"
 拖入按钮或操作区,"Drag into button or action area"
 加载中,loading
-"WelineFramework Admin","WelineFramework Admin"
-"Search results","Search results"
-搜索,Search
-"Search · 检索","Search · 检索"
-寻衣,寻衣
-Search…,Search…
-搜索筛选,"Search and filter"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 概览,Overview
@@ -1024,6 +1025,7 @@ ERROR,ERROR
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
+搜索,Search
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
 导航菜单,"Navigation menu"
@@ -1120,6 +1122,7 @@ Weline,Weline
 时,Hour
 分,Minute
 秒,Second
+内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
@@ -1157,6 +1160,7 @@ Logo,Logo
 请使用微信扫描二维码分享,"Please scan the QR code with WeChat to share"
 上一条,Previous
 下一条,Next
+全部商品,"Shop All"
 面包屑导航,Breadcrumbs
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 订单跟踪,"Order Tracking"
@@ -1218,11 +1222,6 @@ Logo,Logo
 "共 %{1} 条","Total %{1} items"
 "您好, 登录","Hello, login"
 "登录 / 注册",Login/Register
-请先保存网站后，再为本站选择店面主题。,"Save the website first, then choose a storefront theme for this site."
-"本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。","本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。"
-"当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。"
-本站已配置专属主题应用引用。,本站已配置专属主题应用引用。
-本站范围尚无已发布主题版本；可在主题编辑器发布后再选。,"No published theme version for this website scope yet. Publish in the theme editor first."
 请先保存渠道后，再为本渠选择店面主题。,请先保存渠道后，再为本渠选择店面主题。
 "本渠店面主题写入渠道范围应用引用；未配置时继承商店/网站或 Theme 默认。","本渠店面主题写入渠道范围应用引用；未配置时继承商店/网站或 Theme 默认。"
 "当前显示为继承上级或 Theme 默认；保存时选择主题将写入本渠专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本渠专属应用引用。"
@@ -1566,13 +1565,19 @@ AI目录加载失败,"AI directory loading failed"
 预览图,"Preview image"
 中...,middle...
 刷新失败,"Refresh Failed"
+该区暂无片段,该区暂无片段
+片段,片段
+组,组
+加载,Loading
+来源,Source
+开关,开关
+内联（eager）,内联（eager）
+异步水合,异步水合
 店面主题,"Storefront theme"
 已发布版本,"Published version"
 当前生效,"Currently active"
 范围,Scope
 打开主题编辑器,打开主题编辑器
-在主题编辑器中打开当前店面主题,在主题编辑器中打开当前店面主题
-请先选择前台主题后再打开编辑器,请先选择前台主题后再打开编辑器
 "Theme 布局身份无效。","The Theme layout identity is invalid."
 布局语言代码无效：%{1},"Invalid layout language code: %{1}"
 "Theme 布局读取失败。","The Theme layout could not be read."
@@ -1671,7 +1676,6 @@ AI目录加载失败,"AI directory loading failed"
 从当前版本移除,"Remove from current version"
 同槽重复部件,"Same-slot duplicate widget"
 "请卸载其中一处（layout 内嵌与 default_injections 二选一，或在主题编辑器删一份）","Remove one copy (layout vs default_injections XOR"
-来源,Source
 槽,Slot
 未知,未知
 "类型化布局值解析缺少冻结的 locale_code。","Typed layout value resolution requires a frozen locale_code."
@@ -1935,6 +1939,17 @@ AI目录加载失败,"AI directory loading failed"
 "产品布局定时边界处理完成：%{1} 条","Product layout schedule boundary processing completed: %{1} items"
 产品布局定时边界处理失败：%{1},"Product layout schedule boundary processing failed: %{1}"
 模板编译文件生成失败：%{1},"Template compilation file generation failed: %{1}"
+"预热店面 FPC：按站点 Host 依次请求热门页，写入整页缓存","预热店面 FPC：按站点 Host 依次请求热门页，写入整页缓存"
+"不带 --site 时用绑定域名；不带 --paths 时自动发现首页/列表/Top 分类/热度 PDP。请求打 127.0.0.1 并带 Host 头","不带 --site 时用绑定域名；不带 --paths 时自动发现首页/列表/Top 分类/热度 PDP。请求打 127.0.0.1 并带 Host 头"
+"没有可用的站点 Host：请用 --site=<域名> 指定","没有可用的站点 Host：请用 --site=<域名> 指定"
+"没有要预热的路径：请用 --paths=/a,/b","没有要预热的路径：请用 --paths=/a,/b"
+"等待 %{1}s（避开代码重载）后开始预热…","等待 %{1}s（避开代码重载）后开始预热…"
+布局固化：,布局固化：
+布局固化未完成：,布局固化未完成：
+预热站点：,预热站点：
+路径数：,路径数：
+完成：,完成：
+失败：,失败：
 "Weline UI 审计：扫描 %{1} 个文件","Weline UI Audit: Scan %{1} files"
 "Weline UI 审计通过","Weline UI audit passed"
 "Weline UI 审计失败：%{1} 项违规","Weline UI audit failed: %{1} violations"
@@ -1958,28 +1973,36 @@ AI目录加载失败,"AI directory loading failed"
 "dry-run：将删除 %{1}","dry-run：将删除 %{1}"
 "已回收 %{1} 个代次：%{2}","已回收 %{1} 个代次：%{2}"
 已有更新在进行，本次已并入最后一次，不会并行再做一份。,已有更新在进行，本次已并入最后一次，不会并行再做一份。
-"dry-run：dev 模式将走「开发环境自动固化编译」（与 theme_layout_origin_watch 同一实现）","dry-run：dev 模式将走「开发环境自动固化编译」（与 theme_layout_origin_watch 同一实现）"
-"dev 模式已就地固化/编译：scanned=%{1} changed=%{2} solidified=%{3} static=%{4} cache_cleared=%{5}","dev 模式已就地固化/编译：scanned=%{1} changed=%{2} solidified=%{3} static=%{4} cache_cleared=%{5}"
 "dry-run：将重建并切换主题 #%{1} 的更新代次（dirty=%{2} force=%{3}）","dry-run：将重建并切换主题 #%{1} 的更新代次（dirty=%{2} force=%{3}）"
 "主题 #%{1} 上次构建失败，退避中（重试时间 %{2}），本次跳过。","主题 #%{1} 上次构建失败，退避中（重试时间 %{2}），本次跳过。"
 "系统更新（setup:upgrade）正在运行，本次跳过；脏标记保留，升级结束后再跑 theme:update。","系统更新（setup:upgrade）正在运行，本次跳过；脏标记保留，升级结束后再跑 theme:update。"
-"主题 #%{1} 无发布变更（无脏标记），跳过。","主题 #%{1} 无发布变更（无脏标记），跳过。"
 构建校验未通过，未切换：,构建校验未通过，未切换：
 "已切到代次 %{1}（epoch=%{2}）","已切到代次 %{1}（epoch=%{2}）"
 未知子命令：,未知子命令：
 "构建并切换主题更新代次；status 只查看（不 purge、不需要维护模式）","构建并切换主题更新代次；status 只查看（不 purge、不需要维护模式）"
-"dry-run：dev 模式将就地固化/编译主题 %{1}（无变更则零工作）","dry-run：dev 模式将就地固化/编译主题 %{1}（无变更则零工作）"
+"dry-run：-f 将删除主题 %{1} 的全部存量代次并完整重建、切换","dry-run：-f 将删除主题 %{1} 的全部存量代次并完整重建、切换"
 "dry-run：将完整构建并切换主题 %{1}","dry-run：将完整构建并切换主题 %{1}"
 "dry-run：主题 %{1} 走增量收敛（无脏标记则跳过；强制重建用 -f）","dry-run：主题 %{1} 走增量收敛（无脏标记则跳过；强制重建用 -f）"
-"主题 #%{1} 无发布变更（无脏标记），已跳过，未做任何重固；需要强制重建请加 -f/--force。","主题 #%{1} 无发布变更（无脏标记），已跳过，未做任何重固；需要强制重建请加 -f/--force。"
+"--scope 格式不合法：%{1}（示例 default.default.default）","--scope 格式不合法：%{1}（示例 default.default.default）"
+"主题 #%{1} 没有范围 %{2} 的版本；可用范围：%{3}","主题 #%{1} 没有范围 %{2} 的版本；可用范围：%{3}"
 开始构建新代次（不会影响线上）…,开始构建新代次（不会影响线上）…
 代次：%{1},代次：%{1}
 构建校验未通过，代次不会上线：,构建校验未通过，代次不会上线：
+"跳过 FPC 预热：未解析到站点 Host（可用 --prewarm=<域名>）","跳过 FPC 预热：未解析到站点 Host（可用 --prewarm=<域名>）"
+"已排队预热店面 FPC（%{1}s 后执行，避开代码重载）：","已排队预热店面 FPC（%{1}s 后执行，避开代码重载）："
+"预热店面 FPC：","预热店面 FPC："
+预热完成：,预热完成：
+预热失败：,预热失败：
+预热跳过：,预热跳过：
 切换后清理失败：%{1},切换后清理失败：%{1}
 代次已切换，但缓存/边缘清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。,代次已切换，但缓存/边缘清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。
-"头部 CSS 重复检查跳过：%{1}","头部 CSS 重复检查跳过：%{1}"
-"头部 CSS 重复投递（这些叶已在 PACK_OVERLAY 里）：","头部 CSS 重复投递（这些叶已在 PACK_OVERLAY 里）："
-"头部 CSS 重复投递 %{1} 处：删掉 layout/page 里的重复叶，或改用 overlayLeavesForCurrentRequest() 做守卫后重跑。","头部 CSS 重复投递 %{1} 处：删掉 layout/page 里的重复叶，或改用 overlayLeavesForCurrentRequest() 做守卫后重跑。"
+头部皮肤包检查跳过（%{1}），不能算通过。,头部皮肤包检查跳过（%{1}），不能算通过。
+头部皮肤包校验通过：leaves=%{1},头部皮肤包校验通过：leaves=%{1}
+"主题 #%{1} 无发布变更（无脏标记），未重固；需要强制重建请加 -f/--force。","主题 #%{1} 无发布变更（无脏标记），未重固；需要强制重建请加 -f/--force。"
+头部皮肤包缺叶：%{1},头部皮肤包缺叶：%{1}
+头部皮肤包清单为空（theme_path=%{1}）,头部皮肤包清单为空（theme_path=%{1}）
+头部皮肤包检查异常：%{1},头部皮肤包检查异常：%{1}
+"主题 #%{1} 头部皮肤包校验未通过：页面会只拿到 tokens+storefront，没有皮肤 CSS。修好清单/叶文件后重跑。","主题 #%{1} 头部皮肤包校验未通过：页面会只拿到 tokens+storefront，没有皮肤 CSS。修好清单/叶文件后重跑。"
 "请用 -t/--theme 指定主题名，例如 -t hanfu","请用 -t/--theme 指定主题名，例如 -t hanfu"
 未找到主题：,未找到主题：
 "该主题尚无更新代次。构建并切换请执行：theme:update -t %{1}","该主题尚无更新代次。构建并切换请执行：theme:update -t %{1}"
@@ -2313,6 +2336,28 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "主题ID: %{1} [%{2}]: %{3}","Theme ID: %{1} [%{2}]: %{3}"
 提示：请在后台主题列表页面刷新浏览器页面以查看新生成的预览图,"Tip: Please refresh the browser page on the backend theme list page to view the newly generated preview image."
 批量生成所有主题的预览图,"Batch generate preview images for all themes"
+"按变更文件执行 CDN 渐进失效（默认 dry-run；--live 才真发请求）","按变更文件执行 CDN 渐进失效（默认 dry-run；--live 才真发请求）"
+"--live 需要站点配置 cdn.purge.zones 里对应 host 的 endpoint/token","--live 需要站点配置 cdn.purge.zones 里对应 host 的 endpoint/token"
+请给出至少一个变更文件路径,请给出至少一个变更文件路径
+"请用 --sites=a.test,b.test 给出目标站点","请用 --sites=a.test,b.test 给出目标站点"
+共享失效（全站）,共享失效（全站）
+"无需 HTML 失效","无需 HTML 失效"
+影响面：,影响面：
+模式：,模式：
+"LIVE（会真的打 CDN）","LIVE（会真的打 CDN）"
+dry-run（不发请求）,dry-run（不发请求）
+"无需 purge（静态改动走 ?v=）","无需 purge（静态改动走 ?v=）"
+批次,批次
+zone,zone
+模式,模式
+目标数,目标数
+示例目标,示例目标
+"预热 URL：","预热 URL："
+"dry-run 结束：加 --live 才会真正执行 purge","dry-run 结束：加 --live 才会真正执行 purge"
+已完成批次：,已完成批次：
+"熔断：连续失败达阈值，已停止；续跑点 =","熔断：连续失败达阈值，已停止；续跑点 ="
+失败批次：,失败批次：
+"；续跑点 =","；续跑点 ="
 当前主题:,"Current theme:"
 安装状态:已安装！,"Installation status: Installed!"
 激活状态:,"Activation status:"
@@ -2320,8 +2365,29 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 正在压缩备份文件...,"Compressing backup file..."
 当前主题未安装：卸载失败！,"Current theme not installed: uninstall failed!"
 卸载主题,"Uninstall Theme"
+"查看全局区片段契约状态（启用项 / eager / 部件 code / 水合端点）","查看全局区片段契约状态（启用项 / eager / 部件 code / 水合端点）"
+只看某个区,只看某个区
+没有找到全局区片段,没有找到全局区片段
+合计,total
+"片段 id","片段 id"
+区,区
+"部件 code","部件 code"
+"水合端点：/theme/frontend/widget/shell?fragment=<片段 id>（只渲染已启用片段）","水合端点：/theme/frontend/widget/shell?fragment=<片段 id>（只渲染已启用片段）"
 "已合编 theme=%{id} area=%{area} hash=%{hash} empty=%{empty}","Compiled theme=%{id} area=%{area} hash=%{hash} empty=%{empty}"
 "主题整盘合编结束，共 %{n} 次","The theme compilation is completed, a total of %{n} times"
+"冷渲染画像：穿章 + 面板 cookie 打一次冷请求，解析 timing.log 输出热点","冷渲染画像：穿章 + 面板 cookie 打一次冷请求，解析 timing.log 输出热点"
+"--clear-fpc=1 会先清掉整页缓存，确保测到的是真冷渲染","--clear-fpc=1 会先清掉整页缓存，确保测到的是真冷渲染"
+"curl 初始化失败","curl 初始化失败"
+"本次不是 200（维护模式或准入会给 503）；下面是日志里最近的同路径记录，不代表本次","本次不是 200（维护模式或准入会给 503）；下面是日志里最近的同路径记录，不代表本次"
+"本次没有产生新画像：请求命中了整页缓存或未达记录阈值。加 --cold-restart=1 可重启 Worker 后测真冷，或换一个未预热的路径","本次没有产生新画像：请求命中了整页缓存或未达记录阈值。加 --cold-restart=1 可重启 Worker 后测真冷，或换一个未预热的路径"
+模板热点（自耗时降序，注意为嵌套值）：,模板热点（自耗时降序，注意为嵌套值）：
+慢查询：,慢查询：
+"按变更文件判定 CDN 失效影响面（共享 / 精确页面 / 静态）","按变更文件判定 CDN 失效影响面（共享 / 精确页面 / 静态）"
+"只做判定，不执行 purge","只做判定，不执行 purge"
+共享失效：全站页面,共享失效：全站页面
+静态资源走内容哈希（?v=）：,静态资源走内容哈希（?v=）：
+变更文件,变更文件
+判定,判定
 "Weline UI bundle 声明无效","Weline UI bundle declaration is invalid"
 "Weline UI bundle 输出路径无效或重复：%{1}","Weline UI bundle output path is invalid or duplicate: %{1}"
 "Weline UI ES Module 依赖存在循环：%{1}","Weline UI ES Module dependency exists in a cycle: %{1}"
@@ -2341,6 +2407,20 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 "主题规范校验（head 预算 / 首屏图 / 字体 / SEO 单一出口）！","主题规范校验（head 预算 / 首屏图 / 字体 / SEO 单一出口）！"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+"Search results","Search results"
+"Search · 检索","Search · 检索"
+寻衣,寻衣
+Search…,Search…
+搜索筛选,"Search and filter"
+"dry-run：dev 模式将走「开发环境自动固化编译」（与 theme_layout_origin_watch 同一实现）","dry-run：dev 模式将走「开发环境自动固化编译」（与 theme_layout_origin_watch 同一实现）"
+"dev 模式已就地固化/编译：scanned=%{1} changed=%{2} solidified=%{3} static=%{4} cache_cleared=%{5}","dev 模式已就地固化/编译：scanned=%{1} changed=%{2} solidified=%{3} static=%{4} cache_cleared=%{5}"
+"主题 #%{1} 无发布变更（无脏标记），跳过。","主题 #%{1} 无发布变更（无脏标记），跳过。"
+"dry-run：dev 模式将就地固化/编译主题 %{1}（无变更则零工作）","dry-run：dev 模式将就地固化/编译主题 %{1}（无变更则零工作）"
+"主题 #%{1} 无发布变更（无脏标记），已跳过，未做任何重固；需要强制重建请加 -f/--force。","主题 #%{1} 无发布变更（无脏标记），已跳过，未做任何重固；需要强制重建请加 -f/--force。"
+"头部 CSS 重复检查跳过：%{1}","头部 CSS 重复检查跳过：%{1}"
+"头部 CSS 重复投递（这些叶已在 PACK_OVERLAY 里）：","头部 CSS 重复投递（这些叶已在 PACK_OVERLAY 里）："
+"头部 CSS 重复投递 %{1} 处：删掉 layout/page 里的重复叶，或改用 overlayLeavesForCurrentRequest() 做守卫后重跑。","头部 CSS 重复投递 %{1} 处：删掉 layout/page 里的重复叶，或改用 overlayLeavesForCurrentRequest() 做守卫后重跑。"
 "404 静态发布已跳过（%{reason}）","404 静态发布已跳过（%{reason}）"
 "404 静态发布已关闭（setup.static_publish=never）","404 静态发布已关闭（setup.static_publish=never）"
 "404 静态产物未变化，跳过后台 404 发布","404 静态产物未变化，跳过后台 404 发布"
@@ -2419,7 +2499,6 @@ CSS变量配置,"CSS variable configuration"
 系统,system
 主题配置,"Theme Settings"
 Scope,Scope
-加载,Loading
 暂无可用色盘,"No color palettes available"
 展开/收缩预览,"Expand/Collapse preview"
 亮色,"bright color"
@@ -2913,7 +2992,6 @@ Product,Product
 订单摘要,"Order summary"
 "摘要 slot，可由结账模块写入真实商品行与金额。","Summary slot, the real product line and amount can be written by the checkout module."
 配送,Delivery
-合计,total
 订单提交失败,"Order submission failed"
 很抱歉，您的订单提交失败，请稍后重试。,"We're sorry, your order submission failed. Please try again later."
 错误代码：,"Error code:"

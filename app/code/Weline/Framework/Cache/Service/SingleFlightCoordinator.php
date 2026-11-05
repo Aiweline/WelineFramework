@@ -24,13 +24,11 @@ use Weline\Framework\Cache\Contract\AtomicCacheAdapterInterface;
 use Weline\Framework\Cache\Contract\SingleFlightInterface;
 use Weline\Framework\Runtime\ProcessSharedInterface;
 use Weline\Framework\Runtime\Runtime;
-use Weline\Framework\Runtime\SchedulerSystem;
 
 class SingleFlightCoordinator implements SingleFlightInterface, ProcessSharedInterface
 {
     private const POOL_IDENTITY = 'single_flight';
     private const HASH_ALG = 'xxh3';
-    private const WAIT_SLICE_US = 20_000;
 
     /**
      * 进程内持有标记（key => token），用于CLI锁以及WLS同Worker重复请求的快速短路。
@@ -69,31 +67,28 @@ class SingleFlightCoordinator implements SingleFlightInterface, ProcessSharedInt
 
     public function acquire(string $key, int $timeoutMs = 1500, int $ttlSeconds = 30): ?string
     {
+        // Non-blocking (2026-11-04, user decision: no request-path locks or waits).
+        //
+        // This used to poll tryAcquire() every 20ms until $timeoutMs elapsed, and
+        // storefront policies passed budgets up to 20000ms (StorefrontCatalogCache
+        // Coordinator), plus 5000/3000/2500ms elsewhere. Under crawl load every
+        // follower burned a Worker fibre asleep on a lock it usually never won, and
+        // the site parked: measured on changanhanfu with active_requests=4 on all
+        // four Workers while clients hit 15s timeouts.
+        //
+        // A caller that misses the lock now proceeds immediately and does the work
+        // itself. Duplicate work beats a parked Worker — the Worker is the scarce
+        // resource, not the cache entry. $timeoutMs stays in the signature so call
+        // sites and CachePolicy keep working; it is deliberately ignored.
+        unset($timeoutMs);
+
         // TTL 秒数向上取整：亚秒级预算（如 200ms）若截断为 0，在带滑动过期
         // 的共享存储上会退化成默认长 TTL 的永不过期锁占位。
         $ttlSeconds = (int)\max(1, \ceil($ttlSeconds));
         $token = $this->generateToken();
-        $deadlineNs = $timeoutMs > 0 ? (\hrtime(true) + ($timeoutMs * 1_000_000)) : 0;
-
-        do {
-            if ($this->tryAcquire($key, $token, $ttlSeconds)) {
-                return $token;
-            }
-
-            if ($timeoutMs <= 0) {
-                return null;
-            }
-
-            $remainingNs = $deadlineNs - \hrtime(true);
-            if ($remainingNs <= 0) {
-                return null;
-            }
-
-            SchedulerSystem::usleep((int)\min(
-                self::WAIT_SLICE_US,
-                (int)\max(1, \intdiv($remainingNs, 1_000)),
-            ));
-        } while (\hrtime(true) < $deadlineNs);
+        if ($this->tryAcquire($key, $token, $ttlSeconds)) {
+            return $token;
+        }
 
         return null;
     }

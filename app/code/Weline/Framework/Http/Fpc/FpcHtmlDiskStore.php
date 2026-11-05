@@ -694,6 +694,26 @@ final class FpcHtmlDiskStore
     }
 
     /**
+     * 按站点（host）定向清理 FPC html-disk：只删当前 live 代次下该 host 的整棵树。
+     *
+     * @param list<string> $hosts Host keys as stored under live/{host}/ (no scheme).
+     */
+    public static function purgeHosts(array $hosts): void
+    {
+        $stop = self::writeBaseRoot();
+        foreach ($hosts as $host) {
+            $host = \strtolower(\trim((string)$host));
+            if ($host === '' || \preg_match('/^[a-z0-9._:-]+$/Di', $host) !== 1) {
+                continue;
+            }
+            $hostRoot = $stop . \DIRECTORY_SEPARATOR . $host;
+            if (\is_dir($hostRoot)) {
+                self::purgeTree($hostRoot);
+            }
+        }
+    }
+
+    /**
      * Whole-tree soft invalidate: flip live to a new empty generation.
      * Previous live becomes `previous` (rollback). Older gens are GC'd.
      */

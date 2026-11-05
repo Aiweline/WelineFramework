@@ -13,6 +13,7 @@ use Weline\Theme\Service\ThemeApplicationUsageService;
 use Weline\Theme\Service\ThemeScopeVersionService;
 use Weline\Theme\Service\ThemeStorefrontSlugFpcPublisher;
 use Weline\Widget\Model\WidgetRegistryEntry;
+use Weline\Widget\Service\DefaultInjectionPlanRepository;
 
 /**
  * Dev-only: watch bound theme PHTML + CSS/JS + external module widget sources, then rebake/publish.
@@ -43,6 +44,21 @@ final class ThemeLayoutOriginWatchService
     private const MODULE_STATIC_MAX_FILES_PER_MODULE = 800;
     private const CACHE_CLEAR_REASON = 'theme_layout_origin_watch';
     private const CACHE_CLEAR_REASON_ASSETS = 'theme_layout_origin_watch_assets';
+
+    /**
+     * 部件台账快照分桶键：`generated/widgets.php` 的 mtime+size。
+     *
+     * 台账（w_widget_registry_entry）只在重新采集部件时同步，而采集必写这个文件；
+     * 文件 mtime 是跨 Worker 共享的就地信号，读它比查库便宜三个数量级，
+     * 也不需要为「部件目录」另建一套命名空间代次。
+     */
+    private static string $ledgerGeneration = '';
+
+    /** @var array<string, list<string>|null> "type|code" → 台账声明注入的布局类型 */
+    private static array $ledgerLayoutTypes = [];
+
+    /** @var list<array<string, mixed>>|null 声明了默认注入的部件（Widget 模块仓库的声明） */
+    private static ?array $ledgerDeclarations = null;
 
     public function __construct(
         private readonly ThemeApplicationUsageService $themeApplicationUsage,
@@ -729,14 +745,35 @@ final class ThemeLayoutOriginWatchService
         if ($type === '' || $code === '') {
             return null;
         }
+        $this->ensureLedgerSnapshotFresh();
+        $memoKey = $type . '|' . $code;
+        if (\array_key_exists($memoKey, self::$ledgerLayoutTypes)) {
+            return self::$ledgerLayoutTypes[$memoKey];
+        }
+
+        return self::$ledgerLayoutTypes[$memoKey] = $this->loadLayoutTypesFromWidgetLedger($type, $code);
+    }
+
+    /**
+     * 未被缓存的台账查询（渲染期每个部件都会问一次，单次约 0.27ms）。
+     *
+     * @return list<string>|null
+     */
+    private function loadLayoutTypesFromWidgetLedger(string $type, string $code): ?array
+    {
         try {
             /** @var WidgetRegistryEntry $model */
             $model = ObjectManager::getInstance(WidgetRegistryEntry::class);
+            // 只投影本次循环要用的列：整行会连带 registry_json 等大字段。
             $rows = (clone $model)->clearQuery()->clearData()
                 ->where(WidgetRegistryEntry::schema_fields_IS_ACTIVE, 1)
                 ->where(WidgetRegistryEntry::schema_fields_WIDGET_TYPE, $type)
                 ->where(WidgetRegistryEntry::schema_fields_WIDGET_CODE, $code)
-                ->select()
+                ->select(implode(',', [
+                    WidgetRegistryEntry::schema_fields_HAS_DEFAULT_INJECTIONS,
+                    WidgetRegistryEntry::schema_fields_DEFAULT_INJECTIONS_JSON,
+                    WidgetRegistryEntry::schema_fields_REGISTRY_JSON,
+                ]))
                 ->fetchArray();
         } catch (\Throwable) {
             return null;
@@ -744,10 +781,7 @@ final class ThemeLayoutOriginWatchService
         if (!\is_array($rows) || $rows === []) {
             return null;
         }
-        if (!\array_is_list($rows) && (
-            isset($rows[WidgetRegistryEntry::schema_fields_WIDGET_CODE])
-            || isset($rows[WidgetRegistryEntry::schema_fields_ID])
-        )) {
+        if (!\array_is_list($rows)) {
             $rows = [$rows];
         }
 
@@ -802,6 +836,59 @@ final class ThemeLayoutOriginWatchService
         }
 
         return \array_keys($types);
+    }
+
+    /**
+     * 台账快照分桶：`generated/widgets.php` 变了就整桶丢弃重读。
+     */
+    private function ensureLedgerSnapshotFresh(): void
+    {
+        $generation = $this->widgetLedgerGeneration();
+        if (self::$ledgerGeneration === $generation) {
+            return;
+        }
+        self::$ledgerGeneration = $generation;
+        self::$ledgerLayoutTypes = [];
+        self::$ledgerDeclarations = null;
+    }
+
+    /** 采集信号：`generated/widgets.php` 的 mtime+size（跨 Worker 共享，读一次 ~0.01ms）。 */
+    private function widgetLedgerGeneration(): string
+    {
+        $file = \defined('BP') ? BP . 'generated' . DIRECTORY_SEPARATOR . 'widgets.php' : '';
+        if ($file === '' || !\is_file($file)) {
+            return 'no-registry-file';
+        }
+
+        return (string)(int)@\filemtime($file) . ':' . (string)(int)@\filesize($file);
+    }
+
+    /**
+     * 声明了默认注入的部件（布局类型取自它们的声明）。
+     *
+     * “台账里哪些部件声明了默认注入”属于 Widget 模块，权威是按 `DefaultInjectionPlanRepository`，
+     * 它已经自带实例 memo 与 `clearMemo()` 失效口。本类再自己 select 一遍整行（含 registry_json）
+     * 就是同一事实的第二条读路径：实测这种整行扫描单次 8.0ms，且一次请求里会被两处各查一次。
+     * 这里只负责一件事：采集代次变了→让 owner 的 memo 失效并重读一次。
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function activeInjectionDeclarations(): array
+    {
+        $this->ensureLedgerSnapshotFresh();
+        if (self::$ledgerDeclarations !== null) {
+            return self::$ledgerDeclarations;
+        }
+        try {
+            $plans = ObjectManager::getInstance(DefaultInjectionPlanRepository::class);
+            // 代次刚变：owner 的实例 memo 也可能是旧代次的。
+            $plans->clearMemo();
+
+            return self::$ledgerDeclarations = $plans->listDeclarations(null);
+        } catch (\Throwable) {
+            // 不写快照：下一请求还能重试。
+            return [];
+        }
     }
 
     /**
@@ -1545,26 +1632,11 @@ final class ThemeLayoutOriginWatchService
                     }
                 }
             }
-            /** @var WidgetRegistryEntry $model */
-            $model = ObjectManager::getInstance(WidgetRegistryEntry::class);
-            $rows = (clone $model)->clearQuery()->clearData()
-                ->where(WidgetRegistryEntry::schema_fields_IS_ACTIVE, 1)
-                ->where(WidgetRegistryEntry::schema_fields_HAS_DEFAULT_INJECTIONS, 1)
-                ->select()
-                ->fetchArray();
-            if (!\is_array($rows)) {
-                $rows = [];
-            }
-            if (!\array_is_list($rows) && $rows !== []) {
-                $rows = [$rows];
-            }
-            foreach ($rows as $row) {
-                if (!\is_array($row)) {
+            foreach ($this->activeInjectionDeclarations() as $declaration) {
+                if (!\is_array($declaration)) {
                     continue;
                 }
-                $injections = $this->decodeInjectionList(
-                    $row[WidgetRegistryEntry::schema_fields_DEFAULT_INJECTIONS_JSON] ?? null
-                );
+                $injections = (array)($declaration['default_injections'] ?? []);
                 if ($injections === []) {
                     continue;
                 }
@@ -1593,9 +1665,9 @@ final class ThemeLayoutOriginWatchService
                     continue;
                 }
                 $push(
-                    (string)($row[WidgetRegistryEntry::schema_fields_WIDGET_MODULE] ?? 'Weline_Theme'),
-                    (string)($row[WidgetRegistryEntry::schema_fields_WIDGET_TYPE] ?? ''),
-                    (string)($row[WidgetRegistryEntry::schema_fields_WIDGET_CODE] ?? ''),
+                    (string)($declaration['module'] ?? 'Weline_Theme'),
+                    (string)($declaration['type'] ?? ''),
+                    (string)($declaration['code'] ?? ''),
                 );
             }
         } catch (\Throwable) {

@@ -23,22 +23,41 @@ class Website extends Model
      * 全部站点的纯数组快照（进程内驻留，只查一次）。
      *
      * 见 {@see WebsiteDomain::fetchCatalogRows()}：站点目录是只读配置，匹配逻辑
-     * 只需要数组字段，不需要模型对象，也不需要按请求 clone。
+     * 只需要数组字段，不需要模型对象，也不需要按请求 clone。首次读库，之后命中
+     * 静态快照；网站写路径（save_after / delete_after）与
+     * {@see WebsiteData::clearProcessCache()} 会显式丢弃它。
+     *
+     * 注意：这里**不能**在查询前去取 `Url::websiteParserSitesVersion()` 做版本守卫——
+     * 那会触发 Url 解析器刷新，而刷新本身可能回调本站目录读取，造成重入。
      *
      * @return array<int, array<string, mixed>>
      */
+    /** @var array<int, array<string, mixed>>|null 进程内驻留的站点目录快照 */
+    private static ?array $catalogRows = null;
+
     public static function fetchCatalogRows(): array
     {
+        if (self::$catalogRows !== null) {
+            return self::$catalogRows;
+        }
+
         try {
             $model = w_obj(self::class);
             $rows = $model->clearData()->clearQuery()
                 ->select()
                 ->fetchArray();
-
-            return \is_array($rows) ? \array_values($rows) : [];
         } catch (\Throwable) {
+            // 读失败不写快照：一次瞬时失败不能把“空站点目录”永久粘进进程。
             return [];
         }
+
+        return self::$catalogRows = \is_array($rows) ? \array_values($rows) : [];
+    }
+
+    /** 丢弃进程内站点目录快照（网站写路径 / 进程缓存重置）。 */
+    public static function clearCatalogRowsCache(): void
+    {
+        self::$catalogRows = null;
     }
 
     /** 默认网站 ID，保留给安装兜底站点，不分配给普通业务站点 */
@@ -188,6 +207,9 @@ class Website extends Model
     public function save_after()
     {
         parent::save_after();
+        // 本表自己的进程目录快照先丢：即使下一步的 invalidation service 没接上，
+        // 也不能让同进程后续读继续用旧行。
+        self::clearCatalogRowsCache();
         try {
             if ($this->hasData(self::schema_fields_ID)) {
                 ObjectManager::getInstance(WebsiteCacheInvalidationService::class)->invalidateWebsite(
@@ -212,6 +234,7 @@ class Website extends Model
     public function delete_after(): void
     {
         parent::delete_after();
+        self::clearCatalogRowsCache();
         try {
             if ($this->invalidationDeletedCode !== null) {
                 ObjectManager::getInstance(WebsiteCacheInvalidationService::class)->invalidateDeletedWebsite(

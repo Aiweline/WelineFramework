@@ -33,6 +33,8 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
             LayoutDependencyTracker::clearCache();
             RuntimeTemplateMaterializer::clearProcessCache();
             ThemeContextService::clearProcessCache();
+            \Weline\Theme\Model\WelineTheme::clearCatalogRowsCache();
+            \Weline\Theme\Service\ThemeComponentCatalog::clearProcessSnapshot();
             \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
             Template::clearProcessViewFileCache();
             TemplateFragmentOutputCache::resetProcessCaches();
@@ -49,6 +51,7 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
             LayoutDependencyTracker::clearCache();
             RuntimeTemplateMaterializer::clearProcessCache();
             ThemeContextService::clearProcessCache();
+            \Weline\Theme\Service\ThemeComponentCatalog::clearProcessSnapshot();
             \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
             Template::clearProcessViewFileCache();
             TemplateFragmentOutputCache::resetProcessCaches();
@@ -136,6 +139,7 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
         LayoutDependencyTracker::clearCache();
         RuntimeTemplateMaterializer::clearProcessCache();
         ThemeContextService::clearProcessCache();
+        \Weline\Theme\Service\ThemeComponentCatalog::clearProcessSnapshot();
         \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
         Template::clearProcessViewFileCache();
         TemplateFragmentOutputCache::resetProcessCaches();

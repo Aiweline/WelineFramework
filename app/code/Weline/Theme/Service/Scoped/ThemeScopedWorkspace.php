@@ -7,6 +7,7 @@ namespace Weline\Theme\Service\Scoped;
 use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\App\Env;
+use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
 use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Event\ResourceChange\ResourceChangeFactory;
 use Weline\Framework\Event\ResourceChange\ResourceRevisionService;
@@ -30,6 +31,7 @@ use Weline\Theme\Model\ThemeScopeRevision;
 use Weline\Theme\Model\ThemeScopeWorkspace;
 use Weline\Theme\Service\LayoutContentValidationRegistry;
 use Weline\Theme\Service\ThemePageTypeResolver;
+use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 
 /** Canonical per-path draft, merge and immutable release service. */
 final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, ThemePublishedSnapshotReaderInterface
@@ -2440,7 +2442,22 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             ThemeScopeRelease::schema_fields_PUBLISHED_AT => \date('Y-m-d H:i:s'),
         ])->save();
 
+        // 发布行是「已发布部件配置」的唯一数据源：写入即推进被发布作用域的 Theme 命名空间代次，
+        // 让每个 Worker 的进程快照按代次重建，而不依赖调用方记得清缓存。
+        $this->bumpScopeThemeGeneration($context);
+
         return $release;
+    }
+
+    /** 发布行写入后推进该作用域的 Theme 命名空间代次（失败不回滚业务写入）。 */
+    private function bumpScopeThemeGeneration(ThemeEditorContext $context): void
+    {
+        try {
+            $namespace = ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)
+                ->scopeThemeNamespace(ObjectManager::getInstance(NamespacePath::class), $context->scope->identity);
+            ObjectManager::getInstance(NamespaceGenerationInterface::class)->bump($namespace);
+        } catch (\Throwable) {
+        }
     }
 
     /** @return list<ThemePatchCommand> */

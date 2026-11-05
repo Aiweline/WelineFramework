@@ -54,6 +54,183 @@ class WelineTheme extends Model
     public const schema_fields_UPDATE_TIME = 'update_time';
 //    protected $table = Install::table_THEME; # 如果需要设置特殊表名 需要加前缀
     private ?WelineTheme $theme = null;
+
+    /**
+     * 主题目录代次命名空间：任何主题行写入即 bump，跨 Worker 立即失效目录快照。
+     */
+    public const CATALOG_GENERATION_NAMESPACE = 'global/storefront/theme/catalogue';
+
+    /** @var list<array<string, mixed>>|null 进程内驻留的主题目录快照（13 行量级） */
+    private static ?array $catalogRows = null;
+
+    /** @var array<int, array<string, mixed>>|null 主键索引，避免每次请求重建 */
+    private static ?array $catalogById = null;
+
+    /** 快照建立时的代次指纹；代次变化即整袋作废 */
+    private static string $catalogGeneration = '';
+
+    /**
+     * 主题目录快照：进程内驻留，代次变化才回库。
+     *
+     * 布局解析每请求都要拿主题行及其 parent 链（设计层覆盖判定、父主题
+     * published 继承、主题 code 派生）。主题目录是全局事实、行数固定且极小，
+     * 属于「Worker 起动期一次装载、请求期零库读」的数据，不需要每请求重查
+     * w_weline_theme。
+     *
+     * 失效：{@see self::CATALOG_GENERATION_NAMESPACE} 由 {@see self::save_after()} /
+     * {@see self::delete_after()} bump；代次指纹按请求冻结（同命名空间请求内只读一次），
+     * 本方法每请求只做一次比较，代次未变即直接返回进程袋。
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function fetchCatalogRows(): array
+    {
+        $generation = self::catalogGeneration();
+        if (self::$catalogRows !== null && self::$catalogGeneration === $generation) {
+            return self::$catalogRows;
+        }
+
+        $rows = [];
+        try {
+            $rows = w_obj(self::class)->clearData()->clearQuery()->select()->fetchArray();
+        } catch (\Throwable) {
+            // 读取失败不覆盖既有快照，也不把空目录钉进进程。
+            return self::$catalogRows ?? [];
+        }
+        $rows = \is_array($rows) ? \array_values($rows) : [];
+
+        if ($generation === '') {
+            // 代次不可得（活跃事务中 / 命名空间读取失败）：不把快照钉进进程。
+            self::$catalogRows = null;
+            self::$catalogById = null;
+            self::$catalogGeneration = '';
+
+            return $rows;
+        }
+
+        self::$catalogRows = $rows;
+        self::$catalogById = null;
+        self::$catalogGeneration = $generation;
+
+        return $rows;
+    }
+
+    /**
+     * 目录行（按主键）：命中进程袋时零库读。
+     *
+     * @return array<string, mixed>
+     */
+    public static function catalogRow(int $themeId): array
+    {
+        if ($themeId < 1) {
+            return [];
+        }
+
+        return self::catalogIndex()[$themeId] ?? [];
+    }
+
+    /**
+     * 目录里 name 精确匹配的第一行（模块默认主题目录行查询用）。
+     *
+     * @return array<string, mixed>
+     */
+    public static function catalogRowByName(string $name, ?string $moduleName = null): array
+    {
+        foreach (self::fetchCatalogRows() as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            if ((string)($row[self::schema_fields_NAME] ?? '') !== $name) {
+                continue;
+            }
+            if ($moduleName !== null
+                && (string)($row[self::schema_fields_MODULE_NAME] ?? '') !== $moduleName
+            ) {
+                continue;
+            }
+
+            return $row;
+        }
+
+        return [];
+    }
+
+    /**
+     * 目录里 path 精确匹配的第一行（静态资源发布按 theme 路径反查主题用）。
+     *
+     * @return array<string, mixed>
+     */
+    public static function catalogRowByPath(string $path): array
+    {
+        $normalized = \trim(\str_replace('\\', '/', $path), '/');
+        if ($normalized === '') {
+            return [];
+        }
+        foreach (self::fetchCatalogRows() as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            // 与 SQL 等值语义保持一致：不做归一化宽松匹配。
+            if ((string)($row[self::schema_fields_PATH] ?? '') === $normalized) {
+                return $row;
+            }
+        }
+
+        return [];
+    }
+
+    /** 丢弃进程内主题目录快照（写入路径 / 进程缓存重置）。 */
+    public static function clearCatalogRowsCache(): void
+    {
+        self::$catalogRows = null;
+        self::$catalogById = null;
+        self::$catalogGeneration = '';
+    }
+
+    /** 发布主题目录失效：代次 +1，其他 Worker 下一次比较即可看到。 */
+    public static function bumpCatalogGeneration(): void
+    {
+        try {
+            ObjectManager::getInstance(\Weline\Framework\Cache\Contract\NamespaceGenerationInterface::class)
+                ->bump(self::CATALOG_GENERATION_NAMESPACE);
+        } catch (\Throwable) {
+            // 代次发布是优化：写入本身已完成，不因失效通道失败而回滚。
+        }
+        self::clearCatalogRowsCache();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private static function catalogIndex(): array
+    {
+        if (self::$catalogById !== null) {
+            return self::$catalogById;
+        }
+
+        $byId = [];
+        foreach (self::fetchCatalogRows() as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $id = (int)($row[self::schema_fields_ID] ?? 0);
+            if ($id > 0) {
+                $byId[$id] = $row;
+            }
+        }
+
+        return self::$catalogById = $byId;
+    }
+
+    private static function catalogGeneration(): string
+    {
+        try {
+            $fingerprint = ObjectManager::getInstance(\Weline\Framework\Cache\Contract\NamespaceGenerationInterface::class)
+                ->fingerprint([self::CATALOG_GENERATION_NAMESPACE]);
+        } catch (\Throwable) {
+            return '';
+        }
+
+        return \is_string($fingerprint) ? $fingerprint : '';
+    }
     /**
      * 解析当前区域主题（兼容旧名 getActiveTheme）。
      * 权威：ThemeContextService::resolveTheme → 注册 Default；不再读 is_active_*。
@@ -237,6 +414,21 @@ class WelineTheme extends Model
             $parentTheme = ObjectManager::make(WelineTheme::class);
             return $parentTheme->setData($cached);
         }
+        // 目录快照优先：父主题行与自身同属 w_weline_theme，而该表已由 Worker
+        // preload 全量装进进程袋（fetchCatalogRows）。此前这里直接 load() 回落查库，
+        // 使每个新 Worker 的首个店面请求都要为「拿父主题」付一次库读，
+        // 尽管同一份行就在进程内存里。代次失效由目录写入路径负责，快照不会过旧。
+        $catalogRow = self::catalogRow((int)$parentId);
+        if ($catalogRow !== []) {
+            /** @var WelineTheme $parentTheme */
+            $parentTheme = ObjectManager::make(WelineTheme::class);
+            $parentTheme->setData($catalogRow);
+            if ($parentTheme->getId()) {
+                $this->_cache->set($cacheKey, $parentTheme->getData(), static::cache_TIME);
+
+                return $parentTheme;
+            }
+        }
         // 从数据库加载
         try {
             /** @var WelineTheme $parentTheme */
@@ -330,6 +522,10 @@ class WelineTheme extends Model
     {
         // Any in-request row memo captured before this write must not be reused.
         self::bumpLoadMemoGeneration();
+        // 主题目录快照 + 代次：本 Worker 立即失效，其他 Worker 下一次代次比较即可看到。
+        self::bumpCatalogGeneration();
+        // 请求间驻留的运行时主题行（ThemeContextService L1/L2）也必须跟着失效。
+        \Weline\Theme\Service\ThemeContextService::invalidateSharedCache();
         if (!$this->getId()) {
             return;
         }
@@ -341,6 +537,8 @@ class WelineTheme extends Model
     public function delete_after()
     {
         self::bumpLoadMemoGeneration();
+        self::bumpCatalogGeneration();
+        \Weline\Theme\Service\ThemeContextService::invalidateSharedCache();
         parent::delete_after();
     }
 /**

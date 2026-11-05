@@ -149,6 +149,29 @@ final class GlobalRegion
     }
 
     /**
+     * 片段水合内容的缓存 TTL（秒）：0 = 不缓存（登录态/会话相关片段必须为 0）。
+     */
+    public static function fragmentCacheTtl(string $fragmentId): int
+    {
+        $fragmentId = \trim($fragmentId);
+        if ($fragmentId === '') {
+            return 0;
+        }
+        self::registerDefaults();
+        foreach (self::$providers as $provider) {
+            if (!$provider instanceof FragmentRegionProvider) {
+                continue;
+            }
+            $ttl = $provider->ttlFor($fragmentId);
+            if ($ttl > 0) {
+                return $ttl;
+            }
+        }
+
+        return 0;
+    }
+
+    /**
      * True when an enabled global-region fragment takes over this widget code.
      *
      * Base contributions moved here keep their widget identity (`@widget.code`), so

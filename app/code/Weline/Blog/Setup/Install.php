@@ -23,6 +23,8 @@ final class Install implements InstallInterface
         /** @var BlogCategoryAttributeEntity $entity */
         $entity = ObjectManager::getInstance(BlogCategoryAttributeEntity::class);
         $modelSetup->putModel($entity);
+        // putModel only binds the model; value tables are created in install().
+        $entity->install($modelSetup, $context);
 
         ObjectManager::getInstance(BlogCategoryEavBootstrap::class)->ensureCategorySchema();
         ObjectManager::getInstance(BlogCategoryLocaleSyncService::class)->syncExistingCategories();

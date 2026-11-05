@@ -243,19 +243,25 @@ final class ThemeLayoutEntityWidgetRenderer
             }
         }
 
-        /** @var WelineTheme $themeModel */
-        $themeModel = ObjectManager::getInstance(WelineTheme::class);
-        $loaded = clone $themeModel;
-        $loaded->load($themeId);
-        if ((int)$loaded->getId() !== $themeId) {
-            if (RequestContext::isInitialized()) {
-                RequestContext::set($cacheKey, false);
-            }
+        // 主题目录已在进程袋：请求期按 id 取行不回库（写入路径代次 bump 失效）。
+        $row = WelineTheme::catalogRow($themeId);
+        if ($row !== []) {
+            $snapshot = $row;
+        } else {
+            /** @var WelineTheme $themeModel */
+            $themeModel = ObjectManager::getInstance(WelineTheme::class);
+            $loaded = clone $themeModel;
+            $loaded->load($themeId);
+            if ((int)$loaded->getId() !== $themeId) {
+                if (RequestContext::isInitialized()) {
+                    RequestContext::set($cacheKey, false);
+                }
 
-            return null;
+                return null;
+            }
+            $snapshot = $this->themeRowSnapshot($loaded);
         }
 
-        $snapshot = $this->themeRowSnapshot($loaded);
         if (RequestContext::isInitialized()) {
             RequestContext::set($cacheKey, $snapshot);
         }

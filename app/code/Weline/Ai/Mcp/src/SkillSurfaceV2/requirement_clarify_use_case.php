@@ -19,6 +19,7 @@ return [
         '需求澄清', '澄清需求', '用例规格', '用例设计', '写用例', 'EARS',
         'clarify', 'use case', 'use-case', 'speckit', 'kiro', '规格澄清',
         '用户故事', '验收标准', '非目标', '主成功路径', 'UC-', 'covers_use_cases',
+        '需求不清楚', '需求不明确', '还不清楚', '先澄清', '澄清',
     ],
     'authoritative_skill' => 'weline-req-clarify',
     'authoritative_doc' => 'dev/ai-command/ai/需求澄清与用例规格.md',

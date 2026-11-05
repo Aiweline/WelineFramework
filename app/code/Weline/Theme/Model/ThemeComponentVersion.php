@@ -177,4 +177,20 @@ class ThemeComponentVersion extends Model
         $decoded = json_decode($value, true);
         return is_array($decoded) ? $decoded : [];
     }
+
+    /**
+     * 版本行是 {@see \Weline\Theme\Service\ThemeComponentCatalog} 进程袋的数据源之一
+     * （VirtualThemeComponentSource 读最新版本覆盖部件定义），写后 bump 主题目录代次。
+     */
+    public function save_after()
+    {
+        WelineTheme::bumpCatalogGeneration();
+        parent::save_after();
+    }
+
+    public function delete_after()
+    {
+        WelineTheme::bumpCatalogGeneration();
+        parent::delete_after();
+    }
 }

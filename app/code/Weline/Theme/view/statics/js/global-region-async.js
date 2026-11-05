@@ -14,9 +14,106 @@
     var SELECTOR = '[data-global-region-async]';
     var state = { started: false, queue: [], running: 0, limit: 2 };
 
+    var CACHE_PREFIX = 'weline.region.cache.';
+
+    /**
+     * 缓存作用域：部件 id + 语言前缀 + 币种 + 发布代次（不含页面路径）。
+     * 同一部件在不同页面是同一份内容，TTL 内不应重复回源。
+     */
+    function cacheScope(node, url) {
+        var id = node.getAttribute('data-global-region-async') || '';
+        var cur = '';
+        var version = '';
+        try {
+            var parsed = new URL(url, window.location.origin);
+            cur = parsed.searchParams.get('cur') || '';
+            version = parsed.searchParams.get('v') || '';
+        } catch (e) {
+            // 解析失败就用空维度，退化到按部件 id 缓存。
+        }
+        var match = String(url).match(/^\/([a-z]{2}_[A-Za-z]{2,8})\//);
+        var locale = match ? match[1] : '';
+
+        return [id, locale, cur, version].join('|');
+    }
+
+    function readCache(key, ttl) {
+        if (ttl <= 0) {
+            return '';
+        }
+        try {
+            var raw = window.localStorage.getItem(CACHE_PREFIX + key);
+            if (!raw) {
+                return '';
+            }
+            var parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed.html !== 'string' || !parsed.exp) {
+                return '';
+            }
+            if (Number(parsed.exp) <= Date.now()) {
+                window.localStorage.removeItem(CACHE_PREFIX + key);
+                return '';
+            }
+            return parsed.html;
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function writeCache(key, html, ttl) {
+        if (ttl <= 0 || !html) {
+            return;
+        }
+        try {
+            window.localStorage.setItem(
+                CACHE_PREFIX + key,
+                JSON.stringify({ html: html, exp: Date.now() + ttl * 1000 })
+            );
+        } catch (e) {
+            // 配额满 / 隐私模式禁用：忽略，下次照常回源。
+        }
+    }
+
+    function paint(node, html) {
+        if (!html) {
+            return;
+        }
+        node.innerHTML = html;
+        node.hidden = false;
+        // 片段的 CSS/JS 必须搬到 head：主题的浮动层脚本会把槽位内容重新包一层
+        // （w-storefront-float-edge__chrome），留在槽里的 <link>/<script> 会被丢掉，
+        // 表现就是组件出来了但没有样式。
+        hoistAssets(node);
+        // 水合进来的部件声明的模块必须在这里激活：
+        // weline.js 的 data-weline-load 扫描只在 DOMContentLoaded 跑一次，
+        // 异步注入的部件永远赶不上那一轮（进店音乐 / 悬浮客服点不动就是这个原因）。
+        activateDeclaredModules(node);
+        // 槽位收起状态由主题浮动层脚本按 localStorage 恢复：这里只通报「已填充」，
+        // 不强行展开（收起后必须等用户点唤出才出现）。
+        var slot = node.closest('[data-global-region-float]');
+        if (slot) {
+            slot.dispatchEvent(new CustomEvent('weline:float-slot-filled', { bubbles: true }));
+            // 通知浮动层按 localStorage 收敛一次；禁止本文件再改 is-edge-* class。
+            requestFloatLayerSync();
+        }
+    }
+
     function hydrate(node) {
         var url = node.getAttribute('data-global-region-endpoint') || '';
         if (!url) {
+            node.removeAttribute('data-global-region-async');
+            return;
+        }
+        var ttl = parseInt(node.getAttribute('data-global-region-ttl') || '0', 10) || 0;
+        // 同一个部件同一个 URL 的内容在 TTL 内不会变：本地命中就不再回源，
+        // 避免每翻一个页面都把全局部件重新请求一遍。
+        // 缓存键不含页面路径（同一部件在不同页面是同一份内容），只保留
+        // 部件 id + 币种 + 发布代次；语言由 URL 前缀决定，仍在内容里生效，
+        // 但各语言页面彼此独立缓存（见 cacheScope）。
+        var cacheKey = cacheScope(node, url);
+        var cached = readCache(cacheKey, ttl);
+        if (cached) {
+            paint(node, cached);
             node.removeAttribute('data-global-region-async');
             return;
         }
@@ -37,24 +134,8 @@
                     // Plain HTML response: keep it as-is.
                 }
                 if (html) {
-                    node.innerHTML = html;
-                    node.hidden = false;
-                    // 片段的 CSS/JS 必须搬到 head：主题的浮动层脚本会把槽位内容重新包一层
-                    // （w-storefront-float-edge__chrome），留在槽里的 <link>/<script> 会被丢掉，
-                    // 表现就是组件出来了但没有样式。
-                    hoistAssets(node);
-                    // 水合进来的部件声明的模块必须在这里激活：
-                    // weline.js 的 data-weline-load 扫描只在 DOMContentLoaded 跑一次，
-                    // 异步注入的部件永远赶不上那一轮（进店音乐 / 悬浮客服点不动就是这个原因）。
-                    activateDeclaredModules(node);
-                    // 浮层槽位在「空的时候」会被浮动层 JS 收敛成 is-edge-collapsed；
-                    // 内容补进来之后必须展开，否则组件虽然水合了却看不见（右下角客服即此例）。
-                    var slot = node.closest('[data-global-region-float]');
-                    if (slot) {
-                        slot.classList.remove('is-edge-collapsed');
-                        slot.classList.add('is-edge-expanded');
-                        slot.dispatchEvent(new CustomEvent('weline:float-slot-filled', { bubbles: true }));
-                    }
+                    writeCache(cacheKey, html, ttl);
+                    paint(node, html);
                 }
                 node.removeAttribute('data-global-region-async');
             })
@@ -177,43 +258,77 @@
             document.body.appendChild(layer);
         }
         for (var i = 0; i < slots.length; i++) {
-            layer.appendChild(slots[i]);
-            keepSlotExpanded(slots[i]);
+            adoptSlot(slots[i], layer);
+        }
+        // 槽位收起/展开只由 storefront-float-layer 按 localStorage 裁决。
+        // 这里禁止再挂 class MutationObserver 去抢 is-edge-*（会与 syncDock 死循环）。
+        // Marker: storefront-float-no-keep-expanded-observer-v1
+        requestFloatLayerSync();
+    }
+
+    function requestFloatLayerSync() {
+        var api = window.WelineStorefrontFloatLayer;
+        if (api && typeof api.sync === 'function') {
+            try {
+                api.sync();
+            } catch (e) {
+                /* ignore */
+            }
+            return;
+        }
+        // 浮动层脚本可能还在懒加载：等一帧再试一次即可，不要轮询。
+        if (typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(function () {
+                var late = window.WelineStorefrontFloatLayer;
+                if (late && typeof late.sync === 'function') {
+                    try {
+                        late.sync();
+                    } catch (e2) {
+                        /* ignore */
+                    }
+                }
+            });
         }
     }
 
     /**
-     * 主题的浮动层 JS 会把「初始化时为空」的槽位收敛成 is-edge-collapsed，之后即使内容补进来
-     * 也不会自己展开（右下角客服看不见就是这个原因）。这里在内容水合后保持展开，
-     * 但尊重用户的主动收起（点了收起按钮就不再干预）。
+     * 片段自带的浮层槽只有 `data-global-region-float="start|side|…"`，
+     * 缺主题的定位 class/data-float-* 就会被 absolute 定位到容器左上角
+     * （表现：下载 App、分销跑到顶部）。这里按方向补齐主题槽位契约。
      */
-    function keepSlotExpanded(slot) {
-        if (!slot || typeof MutationObserver === 'undefined') {
+    function adoptSlot(slot, layer) {
+        var dir = (slot.getAttribute('data-global-region-float') || '').trim();
+        if (!dir) {
+            layer.appendChild(slot);
             return;
         }
-        var busy = false;
-        var apply = function () {
-            if (busy || slot.dataset.regionUserCollapsed === '1') {
-                return;
-            }
-            if (slot.querySelector('[data-global-region-async]')) {
-                return; // 还没水合，先不动
-            }
-            if (slot.classList.contains('is-edge-collapsed')) {
-                busy = true;
-                slot.classList.remove('is-edge-collapsed');
-                slot.classList.add('is-edge-expanded');
-                busy = false;
-            }
-        };
-        slot.addEventListener('click', function (event) {
-            var target = event.target;
-            if (target && target.closest && target.closest('[data-edge-dismiss], .w-storefront-float-edge__dismiss')) {
-                slot.dataset.regionUserCollapsed = '1';
-            }
-        }, true);
-        new MutationObserver(apply).observe(slot, { attributes: true, attributeFilter: ['class'] });
-        apply();
+        slot.classList.add('w-storefront-float-layer__slot');
+        slot.classList.add('w-storefront-float-layer__slot--' + dir);
+        if (!slot.getAttribute('data-slot-id')) {
+            slot.setAttribute('data-slot-id', 'storefront-float-' + dir);
+        }
+        if (!slot.getAttribute('data-float-slot')) {
+            slot.setAttribute('data-float-slot', dir);
+        }
+        if (!slot.getAttribute('data-float-dock')) {
+            slot.setAttribute('data-float-dock', dockFor(dir));
+        }
+        layer.appendChild(slot);
+    }
+
+    function dockFor(dir) {
+        switch (dir) {
+            case 'start':
+            case 'middle-start':
+            case 'top-start':
+                return 'left';
+            case 'top-center':
+                return 'up';
+            case 'bottom-center':
+                return 'down';
+            default:
+                return 'right';
+        }
     }
 
     function scan() {

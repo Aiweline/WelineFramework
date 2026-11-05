@@ -283,12 +283,11 @@ class App
 
     public function applyParsedUrl(array $parse): void
     {
-        // Step profiling always runs. Each mark costs one microtime() (~0.1 µs);
-        // with 22 marks that is ~2 µs for the whole stage, and without it
-        // applyParsedUrl was a black box — the caller could only see one 28 ms
-        // number with no way to tell which step owned it. TraceGate span
-        // recording keeps its own flag so the trace panel is unaffected.
-        $applyUrlProfileEnabled = true;
+        // Stage totals are always produced by RequestPipeline
+        // (process_url_parse_ms), so this stage can never be a black box. The 22
+        // per-step samples below only run while the trace panel is armed: they
+        // allocate an array on every request whose content nobody reads.
+        $applyUrlProfileEnabled = TraceGate::isArmed();
         $applyUrlProfile = [];
         $applyUrlLast = \microtime(true);
         $markApplyUrlStep = static function (string $name, array $meta = []) use (&$applyUrlProfile, &$applyUrlLast, $applyUrlProfileEnabled): void {

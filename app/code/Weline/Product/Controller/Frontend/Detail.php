@@ -40,8 +40,8 @@ final class Detail extends FrontendController
 
     public function index(): string
     {
-        $slug = strtolower(trim((string)$this->request->getParam('slug', '')));
-        $productId = (int)$this->request->getParam('id', 0);
+        $slug = \Weline\Product\Http\ProductRouteIdentity::slug($this->request);
+        $productId = \Weline\Product\Http\ProductRouteIdentity::productId($this->request);
 
         $offers = [];
         if ($slug !== '') {

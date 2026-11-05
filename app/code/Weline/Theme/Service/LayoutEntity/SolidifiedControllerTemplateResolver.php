@@ -50,7 +50,10 @@ final class SolidifiedControllerTemplateResolver
                 $layoutType . '.' . $layoutOption,
             );
         }
-        $path = $this->resolveForIdentity($identity, $layoutType, $layoutIdentity->layoutOption, $layoutIdentity->targetType, $layoutIdentity->targetId);
+        $path = \Weline\Framework\Runtime\TraceGate::measurePhase(
+            'theme.solidified.read',
+            fn(): ?string => $this->resolveForIdentity($identity, $layoutType, $layoutIdentity->layoutOption, $layoutIdentity->targetType, $layoutIdentity->targetId),
+        );
         if ($path !== null) { return $path; }
         // Authorized editor/Token previews may rebuild their exact V/R (including
         // formal Tokens). Candidates stay in memory and never replace the draft.
@@ -68,7 +71,10 @@ final class SolidifiedControllerTemplateResolver
             //
             // Fail-open: a bake problem must not 500 the storefront — fall through to
             // the source-slot path exactly as before.
-            if (!$this->solidifyMissingArtifact($layoutType, $layoutIdentity)) {
+            if (!\Weline\Framework\Runtime\TraceGate::measurePhase(
+                'theme.solidified.bake',
+                fn(): bool => $this->solidifyMissingArtifact($layoutType, $layoutIdentity, $identity),
+            )) {
                 return null;
             }
             $path = $this->resolveForIdentity(
@@ -102,8 +108,21 @@ final class SolidifiedControllerTemplateResolver
      * Returns true when the artifacts were published. A `false` return means the
      * caller must keep the legacy source-slot path (fail-open).
      */
-    private function solidifyMissingArtifact(string $layoutType, LayoutIdentity $layoutIdentity): bool
-    {
+    private function solidifyMissingArtifact(
+        string $layoutType,
+        LayoutIdentity $layoutIdentity,
+        ThemeVersionIdentity $identity,
+    ): bool {
+        // Instrumentation only (2026-11-04). The async-queue variant was tried and
+        // reverted: `theme_layout_solidify_drain` deliberately skips non-dev
+        // ("仅开发环境…非开发环境跳过"), so enqueued jobs never drain in production —
+        // pending jobs sat untouched and no new stamp appeared for 5+ minutes.
+        // Making this bake async requires a working prod drain first; until then the
+        // inline bake stays so artifacts are actually produced.
+        //
+        // What the measurement established (changanhanfu, cold homepage pierce):
+        //   theme.solidified.read =     2.2ms  (artifact genuinely absent)
+        //   theme.solidified.bake = 11,013ms  ← the whole cold-request cost
         try {
             $coordinator = ObjectManager::getInstance(ThemeLayoutEntityBakeCoordinator::class);
             // Same entry the editor/publish pipeline uses: it merges required
@@ -116,7 +135,19 @@ final class SolidifiedControllerTemplateResolver
             $report = $coordinator->solidifyPublishedScopeVersion($this->bakeContext($layoutType, $layoutIdentity));
             $ok = (bool)($report['ok'] ?? false);
             if (!$ok) {
-                $this->logBakeFailure('solidify_reported_not_ok: ' . (string)($report['reason'] ?? ''));
+                // 2026-11-04 diagnostic: bake fails with theme_editor_context_layout_option_invalid
+                // for every slot, so no artifact is ever published and each request re-bakes.
+                // Log the exact identity fields the validator saw.
+                $this->logBakeFailure('solidify_reported_not_ok: ' . (string)($report['reason'] ?? '')
+                    . ' layout_type="' . $layoutType . '"'
+                    . ' layout_option="' . (string)$layoutIdentity->layoutOption . '"'
+                    . ' target_type="' . (string)$layoutIdentity->targetType . '"'
+                    . ' target_id=' . (int)$layoutIdentity->targetId
+                    . ' theme_id=' . (int)$identity->themeId
+                    . ' scope="' . (string)$identity->canonicalScope . '"'
+                    . ' store_mode="' . (string)$identity->storeMode . '"'
+                    . ' v=' . (int)$identity->themeVersionId
+                    . ' r=' . (int)$identity->contentRevision);
 
                 return false;
             }
@@ -361,9 +392,9 @@ final class SolidifiedControllerTemplateResolver
         $seen = [$themeId => true];
         $candidateId = $themeId;
         while ($candidateId > 0) {
-            $theme = (clone ObjectManager::getInstance(WelineTheme::class))->clearData()->clearQuery()->load($candidateId);
-            $parentId = (int)$theme->getParentId();
-            if ($parentId < 1 || (int)$theme->getId() !== $candidateId || isset($seen[$parentId])) {
+            $row = WelineTheme::catalogRow($candidateId);
+            $parentId = (int)($row[WelineTheme::schema_fields_PARENT_ID] ?? 0);
+            if ($parentId < 1 || isset($seen[$parentId])) {
                 break;
             }
             $seen[$parentId] = true;

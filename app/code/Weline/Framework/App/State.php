@@ -663,7 +663,13 @@ class State extends DataObject
 
         $map = [];
         try {
-            $codes = ObjectManager::getInstance(LocalizationProviderRegistry::class)->preferredLanguageCodes();
+            $registry = ObjectManager::getInstance(LocalizationProviderRegistry::class);
+            // 可用语言取所有 provider 的并集：早期解析时网站作用域可能尚未就绪，
+            // 只取“首个非空 provider”会把已安装语言判成非法，导致 /ja_JP/ 等回落默认语。
+            $codes = $registry->availableLanguageCodes();
+            if ($codes === []) {
+                $codes = $registry->preferredLanguageCodes();
+            }
             foreach (self::normalizeLanguageCodeList($codes) as $code) {
                 $map[strtolower($code)] = true;
             }

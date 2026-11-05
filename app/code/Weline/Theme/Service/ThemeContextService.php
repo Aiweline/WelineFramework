@@ -293,10 +293,13 @@ class ThemeContextService implements ThemeContextProviderInterface
                 if ((int)$theme->getId() === $catalogId && $this->themeSupportsArea($theme, $area)) {
                     return $theme;
                 }
-                $loaded = $this->newThemeModel();
-                $loaded->load($catalogId);
-                if ((int)$loaded->getId() === $catalogId && $this->themeSupportsArea($loaded, $area)) {
-                    return $loaded;
+                // 目录行已在进程袋中：换库读为快照读取（写入路径代次失效）。
+                $row = WelineTheme::catalogRow($catalogId);
+                if ($row !== []) {
+                    $loaded = $this->newThemeModel()->setData($row);
+                    if ((int)$loaded->getId() === $catalogId && $this->themeSupportsArea($loaded, $area)) {
+                        return $loaded;
+                    }
                 }
             }
             $module = $this->buildModuleDefaultTheme($area);

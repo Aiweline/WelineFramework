@@ -763,6 +763,7 @@ try {
     $fixtureIndex->close();
 
     $indexTools = [
+        'code_graph_query',
         'get_indexed_document',
         'get_skill',
         'health',
@@ -778,7 +779,7 @@ try {
     $names = array_column($definitions, 'name');
     $sortedNames = $names;
     sort($sortedNames);
-    check($sortedNames === $indexTools, 'compact tool surface equals the nine index/knowledge tools');
+    check($sortedNames === $indexTools, 'compact tool surface equals the ten index/knowledge tools');
     check(ToolService::VERSION === '0.13.30', 'tool service version is 0.13.30');
     check(str_contains(substr(ToolService::instructions(), 0, 512), 'prepare_project'), 'first 512 instruction characters contain prepare_project');
     check(str_contains(ToolService::instructions(), 'resolve_task_context'), 'instructions mention resolve_task_context');
@@ -1031,7 +1032,7 @@ try {
     $enabled = $mcpConfig['mcpServers']['weline-project-intelligence']['enabled_tools'] ?? [];
     $sortedEnabled = is_array($enabled) ? $enabled : [];
     sort($sortedEnabled);
-    check($sortedEnabled === $indexTools, 'generated plugin enabled_tools equals the nine index/knowledge tools');
+    check($sortedEnabled === $indexTools, 'generated plugin enabled_tools equals the ten index/knowledge tools');
 
     $fakeCodex = $temporary . '/fake-codex.sh';
     $fakeCodexLog = $temporary . '/fake-codex.log';
@@ -1126,7 +1127,7 @@ SH);
     $protocolTools = array_column($responses[2]['result']['tools'] ?? [], 'name');
     $sortedProtocolTools = $protocolTools;
     sort($sortedProtocolTools);
-    check($sortedProtocolTools === $indexTools, 'protocol tools/list equals the nine index/knowledge tools');
+    check($sortedProtocolTools === $indexTools, 'protocol tools/list equals the ten index/knowledge tools');
     $resourceUris = array_column($responses[3]['result']['resources'] ?? [], 'uri');
     check($resourceUris === [], 'protocol resources/list is empty');
     $healthContent = $responses[4]['result']['content'] ?? [];

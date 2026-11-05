@@ -56,6 +56,66 @@ final class McpSkillCatalog
     ];
 
     /**
+     * 组合路由兜底分：高于泛词命中（0.30 / 0.50），低于专有长词命中（0.70）。
+     */
+    private const BUNDLE_SCORE = 0.60;
+
+    /**
+     * 组合路由：单靠触发词只能命中零散词，复合需求必须按施工面补齐同组技能。
+     *
+     * when 命中任意关键词即触发；also 非空时须至少命中其中一个（同组近义词）。
+     * add 里的技能若已被触发词命中，分数抬到不低于 BUNDLE_SCORE（组合面必选）。
+     *
+     * @var list<array{id:string, when:list<string>, also?:list<string>, add:list<string>}>
+     */
+    private const ROUTING_BUNDLES = [
+        // 模板 + 用户可见文案：补齐模板 i18n 规范
+        [
+            'id' => 'template_i18n',
+            'when' => ['phtml', '模板', 'partial'],
+            'also' => ['文案', '翻译', 'i18n', '文字'],
+            'add' => ['template_i18n'],
+        ],
+        // 翻译/文案/语言包：补齐模块 CSV 门禁
+        [
+            'id' => 'i18n_csv',
+            'when' => ['翻译', '文案', 'i18n', 'csv', '词典', '语言包'],
+            'add' => ['module_i18n_csv'],
+        ],
+        // 漏译/非中文环境露中文：补齐翻译工程师巡检
+        [
+            'id' => 'i18n_leak',
+            'when' => ['露中文', '露英文', '英文环境', '非中文环境', '漏译', 'locale leak'],
+            'add' => ['translation_engineer'],
+        ],
+        // 后台管理面：补齐后台 UI 与 Taglib 控件规范
+        [
+            'id' => 'admin_ui',
+            'when' => ['后台', 'admin', '管理页', '管理后台'],
+            'add' => ['frontend_development', 'taglib_ui_control'],
+        ],
+        // 列表/表单/筛选器（需带后台语境）：补齐后台 UI 与 Taglib 控件规范
+        [
+            'id' => 'admin_crud',
+            'when' => ['列表', '表单', '筛选器', '增删改查'],
+            'also' => ['后台', '管理', 'admin'],
+            'add' => ['frontend_development', 'taglib_ui_control'],
+        ],
+        // 部件：补齐前端开发基座
+        [
+            'id' => 'widget_base',
+            'when' => ['部件', 'widget', '轮播'],
+            'add' => ['frontend_development'],
+        ],
+        // 主题/CSS/视觉刻度：补齐设计品味判断层
+        [
+            'id' => 'theme_taste',
+            'when' => ['主题', 'css', '样式', '颜色', '间距', '排版', 'token'],
+            'add' => ['design_taste'],
+        ],
+    ];
+
+    /**
      * Policy block for prepare_project.agent_guidance.mcp_skills.
      *
      * @return array<string, mixed>
@@ -1215,7 +1275,9 @@ final class McpSkillCatalog
     }
 
     /**
-     * Match skills for a task query (trigger / name / alias / id substring scoring).
+     * Match skills for a task query（触发词权重 + 词边界 + 组合路由 + 负向词）.
+     *
+     * 结果额外携带 matched_triggers / routing_source，便于 AI 判断"为什么选它"。
      *
      * @return list<array<string, mixed>>
      */
@@ -1232,53 +1294,202 @@ final class McpSkillCatalog
             $listAll = true;
             $taskLower = '';
         }
-        $scored = [];
 
-        foreach (self::definitions($repository) as $skill) {
-            $score = 0.0;
+        $definitions = self::definitions($repository);
+        $byId = [];
+        foreach ($definitions as $definition) {
+            $byId[(string) $definition['skill_id']] = $definition;
+        }
+
+        $scored = [];
+        $matched = [];
+
+        foreach ($definitions as $skill) {
+            $skillId = (string) $skill['skill_id'];
             if ($listAll || $taskLower === '') {
-                $score = $listAll ? 1.0 : 0.05;
-            } else {
-                $haystack = mb_strtolower(implode("\n", [
-                    (string) $skill['skill_id'],
-                    (string) $skill['name'],
-                    (string) $skill['description'],
-                    implode(' ', $skill['aliases'] ?? []),
-                    implode(' ', $skill['triggers'] ?? []),
-                    (string) ($skill['module'] ?? ''),
-                    (string) ($skill['relative_path'] ?? ''),
-                ]), 'UTF-8');
-                if (str_contains($haystack, $taskLower)) {
-                    $score += 1.0;
+                $row = self::publicSkill($skill, $includeContent);
+                $row['score'] = $listAll ? 1.0 : 0.05;
+                $row['matched_triggers'] = [];
+                $row['routing_source'] = 'list';
+                $scored[] = $row;
+                $matched[$skillId] = true;
+                continue;
+            }
+            if (self::hasExcludedTrigger($skill, $taskLower)) {
+                continue;
+            }
+
+            $score = 0.0;
+            $hits = [];
+            $haystack = mb_strtolower(implode("\n", [
+                $skillId,
+                (string) $skill['name'],
+                (string) $skill['description'],
+                implode(' ', $skill['aliases'] ?? []),
+                implode(' ', $skill['triggers'] ?? []),
+                (string) ($skill['module'] ?? ''),
+                (string) ($skill['relative_path'] ?? ''),
+            ]), 'UTF-8');
+            if (mb_strlen($taskLower, 'UTF-8') >= 4 && str_contains($haystack, $taskLower)) {
+                $score += 1.0;
+            }
+            foreach ($skill['triggers'] ?? [] as $trigger) {
+                $trigger = mb_strtolower(trim((string) $trigger), 'UTF-8');
+                if ($trigger !== '' && self::triggerMatches($taskLower, $trigger)) {
+                    $score += self::triggerWeight($trigger);
+                    $hits[] = $trigger;
                 }
-                foreach ($skill['triggers'] ?? [] as $trigger) {
-                    $trigger = mb_strtolower(trim((string) $trigger), 'UTF-8');
-                    if ($trigger !== '' && str_contains($taskLower, $trigger)) {
-                        $score += 0.55;
-                    }
+            }
+            foreach ($skill['aliases'] ?? [] as $alias) {
+                $alias = mb_strtolower(trim((string) $alias), 'UTF-8');
+                if ($alias !== '' && (str_contains($taskLower, $alias) || $taskLower === $alias)) {
+                    $score += 0.85;
                 }
-                foreach ($skill['aliases'] ?? [] as $alias) {
-                    $alias = mb_strtolower(trim((string) $alias), 'UTF-8');
-                    if ($alias !== '' && (str_contains($taskLower, $alias) || $taskLower === $alias)) {
-                        $score += 0.85;
-                    }
-                }
-                $id = mb_strtolower((string) $skill['skill_id'], 'UTF-8');
-                if ($id !== '' && (str_contains($taskLower, $id) || $taskLower === $id)) {
-                    $score += 0.9;
-                }
+            }
+            $id = mb_strtolower($skillId, 'UTF-8');
+            if ($id !== '' && (str_contains($taskLower, $id) || $taskLower === $id)) {
+                $score += 0.9;
             }
             if ($score <= 0.0) {
                 continue;
             }
+
             $row = self::publicSkill($skill, $includeContent);
             $row['score'] = round($score, 6);
+            $row['matched_triggers'] = array_values(array_unique($hits));
+            $row['routing_source'] = 'trigger';
             $scored[] = $row;
+            $matched[$skillId] = true;
         }
 
-        usort($scored, static fn (array $a, array $b): int => ($b['score'] <=> $a['score']));
+        if (!$listAll && $taskLower !== '') {
+            foreach (self::ROUTING_BUNDLES as $bundle) {
+                if (!self::bundleApplies($bundle, $taskLower)) {
+                    continue;
+                }
+                foreach ($bundle['add'] as $addId) {
+                    if (!isset($byId[$addId])) {
+                        continue;
+                    }
+                    if (self::hasExcludedTrigger($byId[$addId], $taskLower)) {
+                        continue;
+                    }
+                    $source = 'bundle:' . (string) $bundle['id'];
+                    if (isset($matched[$addId])) {
+                        // 组合面必选：已由触发词命中但分数偏低时，抬到兜底分（不覆盖更高的专有词分）。
+                        foreach ($scored as $i => $row) {
+                            if ((string) $row['skill_id'] !== $addId) {
+                                continue;
+                            }
+                            if ((float) $row['score'] < self::BUNDLE_SCORE) {
+                                $scored[$i]['score'] = self::BUNDLE_SCORE;
+                                $scored[$i]['routing_source'] = $source;
+                            }
+                            break;
+                        }
+                        continue;
+                    }
+                    $row = self::publicSkill($byId[$addId], $includeContent);
+                    $row['score'] = self::BUNDLE_SCORE;
+                    $row['matched_triggers'] = [];
+                    $row['routing_source'] = $source;
+                    $scored[] = $row;
+                    $matched[$addId] = true;
+                }
+            }
+        }
+
+        usort($scored, static function (array $a, array $b): int {
+            $byScore = $b['score'] <=> $a['score'];
+            if ($byScore !== 0) {
+                return $byScore;
+            }
+            // 同分时：直接触发词命中优先于组合补齐（bundle 只是兜底）
+            $aBundle = str_starts_with((string) ($a['routing_source'] ?? ''), 'bundle:');
+            $bBundle = str_starts_with((string) ($b['routing_source'] ?? ''), 'bundle:');
+            if ($aBundle !== $bBundle) {
+                return $aBundle ? 1 : -1;
+            }
+
+            return strcmp((string) $a['skill_id'], (string) $b['skill_id']);
+        });
 
         return array_slice($scored, 0, $limit);
+    }
+
+    /**
+     * 触发词命中判定：纯 ASCII 触发词按词边界匹配，避免 ui 命中 build、csv 命中 csvxxx。
+     */
+    private static function triggerMatches(string $taskLower, string $trigger): bool
+    {
+        if (preg_match('/^[a-z0-9_]+$/', $trigger) === 1) {
+            return preg_match('/(?<![a-z0-9_])' . preg_quote($trigger, '/') . '(?![a-z0-9_])/u', $taskLower) === 1;
+        }
+
+        return str_contains($taskLower, $trigger);
+    }
+
+    /**
+     * 触发词权重：越具体越高；泛词（ui / 翻译 / 部件 / css）降权，避免淹没专有词。
+     */
+    private static function triggerWeight(string $trigger): float
+    {
+        $length = mb_strlen($trigger, 'UTF-8');
+        if (preg_match('/^[\x20-\x7E]+$/', $trigger) === 1) {
+            // 英文按 2 字符≈1 个汉字折算，保持中英触发词同尺度。
+            $length = (int) ceil($length / 2);
+        }
+        if ($length <= 2) {
+            return 0.30;
+        }
+        if ($length <= 4) {
+            return 0.50;
+        }
+
+        return 0.70;
+    }
+
+    /**
+     * @param array<string, mixed> $skill
+     */
+    private static function hasExcludedTrigger(array $skill, string $taskLower): bool
+    {
+        foreach ($skill['exclude_triggers'] ?? [] as $exclude) {
+            $exclude = mb_strtolower(trim((string) $exclude), 'UTF-8');
+            if ($exclude !== '' && str_contains($taskLower, $exclude)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array{id:string, when:list<string>, also?:list<string>, add:list<string>} $bundle
+     */
+    private static function bundleApplies(array $bundle, string $taskLower): bool
+    {
+        $hit = false;
+        foreach ($bundle['when'] as $keyword) {
+            if (mb_strpos($taskLower, mb_strtolower($keyword, 'UTF-8')) !== false) {
+                $hit = true;
+                break;
+            }
+        }
+        if (!$hit) {
+            return false;
+        }
+        $also = $bundle['also'] ?? [];
+        if ($also === []) {
+            return true;
+        }
+        foreach ($also as $keyword) {
+            if (mb_strpos($taskLower, mb_strtolower($keyword, 'UTF-8')) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -1367,6 +1578,7 @@ final class McpSkillCatalog
             'aliases' => array_values(array_unique(array_filter($aliases, static fn (string $a): bool => $a !== ''))),
             'surface_id' => $surfaceId,
             'triggers' => $triggers,
+            'exclude_triggers' => self::stringList($surface['exclude_triggers'] ?? null),
             'authoritative_docs' => $docs,
             'norms' => $norms,
             'verification_commands' => is_array($surface['verification_commands'] ?? null)

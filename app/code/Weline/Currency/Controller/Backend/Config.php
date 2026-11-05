@@ -55,12 +55,12 @@ class Config extends BackendController
             $this->assign('last_import_time', $this->config->getLastImportTime());
             
             // 获取所有已启用的货币列表，用于基准货币选择
-            $currencyModel = ObjectManager::getInstance(\Weline\Currency\Model\Currency::class);
-            $currencies = $currencyModel->clear()
-                ->where(\Weline\Currency\Model\Currency::schema_fields_STATUS, 1)
-                ->order('code', 'ASC')
-                ->select()
-                ->fetchArray();
+            $currencies = \Weline\Currency\Data\CurrencyData::getCurrencies();
+            \usort(
+                $currencies,
+                static fn(array $left, array $right): int =>
+                    (string)($left['code'] ?? '') <=> (string)($right['code'] ?? ''),
+            );
             $this->assign('available_currencies', $currencies);
             
             // 格式化最后导入时间

@@ -43,8 +43,22 @@ final class ThemeScopeVersionService
     private const RESOLVED_BAG = 'theme.scope_version.resolved';
     private const RESOLVED_BAG_MAX = 4096;
 
+    /**
+     * 进程内版本行袋：身份列快照 + 原始 chrome JSON。
+     *
+     * RESOLVED_BAG 只记 version id，命中之后仍要 {@see self::loadVersionById()} 回库取行，
+     * 固化后的店面请求因此每请求重读 w_theme_scope_version。行内容只随 scope 版本代次
+     * 变化，代次由 {@see self::GENERATION_NAMESPACE} 承载、每次写入即 bump，故袋键带代次
+     * 指纹即可 —— 代次一变旧键自然不可达，不需要额外的失效钩子。
+     */
+    private const ROW_BAG = 'theme.scope_version.row_bag';
+    private const ROW_BAG_MAX = 4096;
+
     /** @var array<string, mixed> */
     private static array $processResolved = [];
+
+    /** @var array<string, array{snapshot:array<string,mixed>,chrome:mixed}> */
+    private static array $processRowBag = [];
 
     public function __construct(
         private readonly ThemeScopeVersion $versionModel,
@@ -917,7 +931,11 @@ final class ThemeScopeVersionService
         $this->rememberChromeFromRaw($versionId, $row[ThemeScopeVersion::schema_fields_CHROME_PAYLOAD_JSON] ?? null);
         $snapshot = $this->versionRowSnapshotFromArray($row);
         RequestContext::set($cacheKey, ['snapshot' => $snapshot]);
-        $this->rememberVersionRowSnapshot($versionId, $snapshot);
+        $this->rememberVersionRowSnapshot(
+            $versionId,
+            $snapshot,
+            $row[ThemeScopeVersion::schema_fields_CHROME_PAYLOAD_JSON] ?? null,
+        );
 
         return $this->hydrateVersionFromSnapshot($snapshot);
     }
@@ -1033,6 +1051,36 @@ final class ThemeScopeVersionService
             }
         }
 
+        // Process-wide row bag: the settled storefront request path must not read the
+        // layout ledger again. Serving the row (and re-seeding the chrome decode memo
+        // exactly like the database path does) keeps `getChromePayload()` non-empty
+        // without a query.
+        $rowBagKey = $this->rowBagKey($versionId);
+        if ($rowBagKey !== null) {
+            $rowBag = &DictionaryCacheNamespace::processBag(
+                self::ROW_BAG,
+                self::$processRowBag,
+                self::ROW_BAG_MAX,
+            );
+            if (\array_key_exists($rowBagKey, $rowBag)) {
+                $entry = $rowBag[$rowBagKey];
+                $snapshot = \is_array($entry) && \is_array($entry['snapshot'] ?? null) ? $entry['snapshot'] : [];
+                if ($snapshot !== []) {
+                    $this->rememberChromeFromRaw($versionId, $entry['chrome'] ?? null);
+                    if (RequestContext::isInitialized()) {
+                        RequestContext::set($rowKey, $snapshot);
+                    }
+                    $version = $this->hydrateVersionFromSnapshot($snapshot);
+
+                    return $this->versionMatchesOwner($version, $themeId, $scope, $storeMode, $area)
+                        ? $version
+                        : null;
+                }
+                // 无法识别的脏条目：删掉并回落权威读取。
+                unset($rowBag[$rowBagKey]);
+            }
+        }
+
         try {
             $version = clone $this->versionModel;
             $version->reset()->clearData()->load($versionId);
@@ -1057,7 +1105,11 @@ final class ThemeScopeVersionService
                 $versionId,
                 $version->getData(ThemeScopeVersion::schema_fields_CHROME_PAYLOAD_JSON),
             );
-            $this->rememberVersionRowSnapshot($versionId, $this->versionRowSnapshot($version));
+            $this->rememberVersionRowSnapshot(
+                $versionId,
+                $this->versionRowSnapshot($version),
+                $version->getData(ThemeScopeVersion::schema_fields_CHROME_PAYLOAD_JSON),
+            );
 
             return null;
         }
@@ -1065,7 +1117,11 @@ final class ThemeScopeVersionService
             $versionId,
             $version->getData(ThemeScopeVersion::schema_fields_CHROME_PAYLOAD_JSON),
         );
-        $this->rememberVersionRowSnapshot($versionId, $this->versionRowSnapshot($version));
+        $this->rememberVersionRowSnapshot(
+            $versionId,
+            $this->versionRowSnapshot($version),
+            $version->getData(ThemeScopeVersion::schema_fields_CHROME_PAYLOAD_JSON),
+        );
         // Cold path: return the loaded model (chrome string may remain on this
         // instance). Later hits hydrate identity-only bags + chrome decode memo.
 
@@ -1306,6 +1362,30 @@ final class ThemeScopeVersionService
         return $fingerprint . '|' . $resolvedKey;
     }
 
+    /**
+     * 行袋键：同一主题代次指纹 + version id。
+     *
+     * 不额外做请求级备忘：{@see NamespaceGenerationInterface::fingerprint()} 内部已按请求
+     * 冻结快照、并在本地提交时 advance，再叠一层会看不到同请求内的 bump。
+     */
+    private function rowBagKey(int $versionId): ?string
+    {
+        if ($versionId < 1) {
+            return null;
+        }
+        try {
+            $fingerprint = ObjectManager::getInstance(NamespaceGenerationInterface::class)
+                ->fingerprint([self::GENERATION_NAMESPACE]);
+        } catch (\Throwable) {
+            return null;
+        }
+        if ($fingerprint === '') {
+            return null;
+        }
+
+        return $fingerprint . '|' . $versionId;
+    }
+
     private function hydrateResolvedVersion(
         mixed $cached,
         int $themeId,
@@ -1385,12 +1465,36 @@ final class ThemeScopeVersionService
         return \array_values(\array_unique($ids));
     }
 
-    private function rememberVersionRowSnapshot(int $versionId, array $snapshot): void
+    /**
+     * 记住版本行：请求快照 + 进程行袋。
+     *
+     * 袋条目必须带原始 chrome JSON：{@see ThemeScopeVersion::ensureChromePayloadMemo()}
+     * 在快照命中时拿不到 `chrome_payload_json` 会退化为空 chrome，而 DB 路径正是靠
+     * {@see self::rememberChromeFromRaw()} 重新播种 decode 备忘；进程袋命中时同理。
+     *
+     * @param array<string, mixed> $snapshot
+     */
+    private function rememberVersionRowSnapshot(int $versionId, array $snapshot, mixed $rawChrome = null): void
     {
-        if ($versionId < 1 || !RequestContext::isInitialized()) {
+        if ($versionId < 1) {
             return;
         }
-        RequestContext::set(self::ROW_CACHE_PREFIX . $versionId, $snapshot);
+        if (RequestContext::isInitialized()) {
+            RequestContext::set(self::ROW_CACHE_PREFIX . $versionId, $snapshot);
+        }
+        if ($snapshot === []) {
+            return;
+        }
+        $rowBagKey = $this->rowBagKey($versionId);
+        if ($rowBagKey === null) {
+            return;
+        }
+        $rowBag = &DictionaryCacheNamespace::processBag(
+            self::ROW_BAG,
+            self::$processRowBag,
+            self::ROW_BAG_MAX,
+        );
+        $rowBag[$rowBagKey] = ['snapshot' => $snapshot, 'chrome' => $rawChrome];
     }
 
     /**

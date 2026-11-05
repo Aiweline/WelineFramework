@@ -240,8 +240,8 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
             return '';
         }
         try {
-            $theme = (clone ObjectManager::getInstance(WelineTheme::class))->clearData()->clearQuery()->load($themeId);
-            $path = \str_replace('\\', '/', \trim((string)$theme->getData('path')));
+            $row = WelineTheme::catalogRow($themeId);
+            $path = \str_replace('\\', '/', \trim((string)($row[WelineTheme::schema_fields_PATH] ?? '')));
 
             return $path === '' ? '' : \basename($path);
         } catch (\Throwable) {
@@ -276,9 +276,9 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
         while ($candidateId > 0 && !isset($seen[$candidateId])) {
             $seen[$candidateId] = true;
             $chain[] = $candidateId;
-            $theme = (clone ObjectManager::getInstance(WelineTheme::class))->clearData()->clearQuery()->load($candidateId);
-            $parentId = (int)$theme->getParentId();
-            if ($parentId < 1 || (int)$theme->getId() !== $candidateId) {
+            $row = WelineTheme::catalogRow($candidateId);
+            $parentId = (int)($row[WelineTheme::schema_fields_PARENT_ID] ?? 0);
+            if ($parentId < 1) {
                 break;
             }
             $candidateId = $parentId;

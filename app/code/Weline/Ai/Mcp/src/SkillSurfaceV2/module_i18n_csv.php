@@ -18,6 +18,9 @@ return [
         'csv', 'i18n:collect', 'en_us', 'zh_hans_cn', '翻译文件', '词典', 'collect',
         '国际化', 'locale', '语言包', '翻译', 'translate', '默认语言', '英文环境',
     ],
+    'exclude_triggers' => [
+        '不要翻译', '无需翻译', '不用翻译', '不需要翻译', '无需 i18n', '不改文案',
+    ],
     'authoritative_doc' => 'app/code/Weline/I18n/doc/模块翻译CSV规范.md',
     'authoritative_docs' => [
         'app/code/Weline/I18n/doc/模块翻译CSV规范.md',

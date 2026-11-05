@@ -6,8 +6,16 @@ namespace Weline\I18n\Api\Localization;
 
 use Weline\Framework\App\Localization\LocalizationProviderInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Model\Locals;
+use Weline\I18n\Service\ActiveLocaleCodeProvider;
 
+/**
+ * I18n 的语言目录能力实现：只做「哪一问」到「谁来答」的映射。
+ *
+ * 已安装/已启用语言的读取权威是 {@see ActiveLocaleCodeProvider}（进程袋 + 命名空间代次
+ * 失效 + 预热入口）。本类早期自带一套 `Locals` 全表查询，等于给同一事实开了第二条读路径：
+ * 冷 Worker 首请求实测多付 2.2–3.3ms，且两条路径的失效点不在一处。这里全部委派，
+ * 不再本地查库。
+ */
 final class LocalizationProvider implements LocalizationProviderInterface
 {
     public function priority(): int
@@ -17,7 +25,7 @@ final class LocalizationProvider implements LocalizationProviderInterface
 
     public function languageCodes(): array
     {
-        return $this->codesWhereInstalled(true);
+        return $this->activeLocales()->getInstalledActiveCodes();
     }
 
     public function currencyCodes(): array
@@ -37,13 +45,12 @@ final class LocalizationProvider implements LocalizationProviderInterface
 
     public function supportsLanguage(string $code): ?bool
     {
-        $local = $this->model()->clear()
-            ->where(Locals::schema_fields_CODE, $code)
-            ->where(Locals::schema_fields_IS_INSTALL, 1)
-            ->where(Locals::schema_fields_IS_ACTIVE, 1)
-            ->find()
-            ->fetch();
-        return (bool)$local->getId();
+        $code = \trim($code);
+        if ($code === '') {
+            return false;
+        }
+
+        return isset($this->activeLocales()->getInstalledActiveCodeMap()[\strtolower($code)]);
     }
 
     public function supportsCurrency(string $code): ?bool
@@ -53,29 +60,11 @@ final class LocalizationProvider implements LocalizationProviderInterface
 
     public function installedLanguageCodes(): ?array
     {
-        return $this->codesWhereInstalled(false);
+        return $this->activeLocales()->getInstalledCodes();
     }
 
-    /** @return list<string> */
-    private function codesWhereInstalled(bool $activeOnly): array
+    private function activeLocales(): ActiveLocaleCodeProvider
     {
-        $query = $this->model()->clear()->where(Locals::schema_fields_IS_INSTALL, 1);
-        if ($activeOnly) {
-            $query->where(Locals::schema_fields_IS_ACTIVE, 1);
-        }
-        $rows = $query->select()->fetchArray();
-        $codes = [];
-        foreach ((array)$rows as $row) {
-            if (is_array($row) && trim((string)($row[Locals::schema_fields_CODE] ?? '')) !== '') {
-                $codes[] = (string)$row[Locals::schema_fields_CODE];
-            }
-        }
-
-        return $codes;
-    }
-
-    private function model(): Locals
-    {
-        return ObjectManager::getInstance(Locals::class);
+        return ObjectManager::getInstance(ActiveLocaleCodeProvider::class);
     }
 }

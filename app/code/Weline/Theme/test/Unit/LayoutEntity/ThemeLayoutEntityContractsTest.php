@@ -2090,10 +2090,13 @@ private function assert_ThemeLayoutEntityFormalScopedPurge_testDrainPathForbidsC
 
 private function assert_ThemeLayoutEntityOwnerLockTimeout_testOwnerLockWaitIsAtLeastTwoMinutes(): void
 {
+    // 2026-11-04: the owner flock is gone. The timeout contract is inverted on
+    // purpose — a request-path wait is exactly what must not come back.
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/LayoutEntity/ThemeLayoutEntityOwnerLock.php');
-    self::assertStringContainsString('120_000_000_000', $src);
-    self::assertStringNotContainsString('10_000_000_000', $src);
-    self::assertStringContainsString('theme_layout_owner_lock_timeout', $src);
+    self::assertStringNotContainsString('120_000_000_000', $src);
+    self::assertStringNotContainsString('theme_layout_owner_lock_timeout', $src);
+    self::assertStringNotContainsString('flock(', $src);
+    self::assertStringContainsString('return $callback();', $src);
 }
 
 private string $origin_ThemeLayoutEntityPageInputDigest;

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Console\Theme;
 
 use Weline\Framework\Console\CommandInterface;
+use Weline\Framework\Http\Fpc\FpcPierceStamp;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Runtime\PanelTraceCookie;
 
@@ -258,10 +259,14 @@ class ColdProfile implements CommandInterface
 
     private function pierceSecret(): string
     {
-        $file = BP . 'generated/framework/fpc_pierce_secret';
-        $secret = \is_file($file) ? \trim((string)@\file_get_contents($file)) : '';
-
-        return $secret;
+        // 唯一权威是 FpcPierceStamp：env(wls.fpc_pierce_secret) 优先、密钥文件兜底。
+        // 直接读 generated 文件会拿到**过期值**（env 与边缘 map 已换新章而文件没跟上），
+        // 于是“带着章”的请求其实打不穿 FPC，本命令永远输出“没有产生新画像”。
+        try {
+            return FpcPierceStamp::readSecret();
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     private function resolveHost(): string

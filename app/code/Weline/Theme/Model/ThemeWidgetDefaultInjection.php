@@ -10,6 +10,7 @@ use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Api\Layout\LayoutIdentityHasher;
+use Weline\Theme\Service\WidgetDefaultInjectionService;
 
 #[Table(comment: 'Theme widget default injection handled records')]
 #[Index(name: 'uk_theme_widget_default_injection', columns: ['layout_identity_hash'], type: 'UNIQUE')]
@@ -103,5 +104,23 @@ class ThemeWidgetDefaultInjection extends Model
             $this->setData(self::schema_fields_CREATED_AT, $now);
         }
         $this->setData(self::schema_fields_UPDATED_AT, $now);
+    }
+
+    /**
+     * The ledger is held in process memory by its reader
+     * ({@see WidgetDefaultInjectionService::uninstalledInjectionsForVersion()}),
+     * so every write here must drop that snapshot: a `user_deleted@{V}` row that
+     * was just written is exactly the fact the storefront render reads back.
+     */
+    public function save_after()
+    {
+        parent::save_after();
+        WidgetDefaultInjectionService::clearProcessCaches();
+    }
+
+    public function delete_after(): void
+    {
+        parent::delete_after();
+        WidgetDefaultInjectionService::clearProcessCaches();
     }
 }

@@ -62,39 +62,19 @@ private function assert_CacheClearCommand_testNonForceSkipsPermanentPools(): voi
 private function assert_CacheClearCommand_testDoesNotSoftPullThemeStorefrontFpcWarmerFqcn(): void
 {
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework/Cache' . '/Console/Cache/Clear.php');
+    // 预热已从 cache:clear 移除：清缓存只做失效，预热统一交给 cron 定时任务。
     self::assertStringNotContainsString('StorefrontFpcWarmer', $source);
-    self::assertStringContainsString('StorefrontWarmupOrchestrator', $source);
-    self::assertStringContainsString('runAfterClear', $source);
-    self::assertStringNotContainsString('warmUp(\'fpc\')', $source);
-    self::assertStringContainsString('warmUp(\'website\')', $source);
-    self::assertStringContainsString("warmUp('weline_theme_layout_entity_published_projection')", $source);
-    self::assertStringContainsString("warmUp('product')", $source);
-    self::assertStringContainsString("warmUp('search')", $source);
-    self::assertStringNotContainsString('SearchProjectionScopeCacheWarmer', $source);
-    self::assertStringNotContainsString('HomepageShelfOffersLocaleCacheWarmer', $source);
-    self::assertStringNotContainsString('SearchQueryResultTipCacheWarmer', $source);
-    self::assertStringNotContainsString('PlpFilterOffersLightCacheWarmer', $source);
-    // Chrome reseeds via fresh subprocess (pool arg) — not in-process warmUp FQCN.
-    self::assertTrue(\str_contains($source, "warmUp('weline_theme_storefront_chrome')") || \str_contains($source, 'cache:warm --pool=weline_theme_storefront_chrome'), 'Clear must reseed chrome pool via warmUp or cache:warm subprocess');
-    self::assertStringNotContainsString('StorefrontChromeLocaleCacheWarmer', $source);
-    // Multi-warmer pools must print Registry details (not one aggregate count).
-    self::assertStringContainsString('function reportWarmUpDetails', $source);
-    self::assertStringContainsString("\$result['details']", $source);
-    self::assertStringContainsString('warmed_l2_hit', $source);
-    self::assertStringContainsString('缓存预热 %{1} warmed=%{2}', $source);
-    // Partial Clear warm must not be printed as unqualified success.
-    self::assertStringContainsString('warm_partial=1', $source);
-    self::assertStringContainsString('host=unresolved', $source);
-    self::assertStringContainsString('gate_miss:', $source);
-    self::assertStringContainsString('->warning($line)', $source);
-    // W6 / P-orch-warm-honesty: machine markers + fail-closed exit when fpc:warmed=0.
-    // Ready/maintenance ready ≠ FPC HIT; chrome gate_ok must not fake mix-ready.
-    self::assertStringContainsString('fpc_warm_ok=', $source);
-    self::assertStringContainsString('storefront_mix_ready=', $source);
-    self::assertStringContainsString('禁止假绿', $source);
-    self::assertStringContainsString('chrome/袋 gate_ok 不可冒充整页 FPC', $source);
+    self::assertStringNotContainsString('StorefrontWarmupOrchestrator', $source);
+    self::assertStringNotContainsString('runAfterClear', $source);
+    self::assertStringNotContainsString('warmStorefrontFpcAfterClear', $source);
+    self::assertStringNotContainsString('warmUp(', $source);
+    self::assertStringNotContainsString('cache:warm --pool=', $source);
+    self::assertStringContainsString('预热由 cron 定时任务按构建世代执行', $source);
+    self::assertTrue(
+        \is_file('/Users/weline/Project/Official/框架/app/code/Weline/Framework/Cron/StorefrontWarmup.php'),
+        '预热必须由 cron 定时任务承接'
+    );
     self::assertMatchesRegularExpression('/return \$fpcWarmOk \? 0 : 2;/', $source);
-    self::assertStringContainsString('no Theme FQCN soft-pull', $source);
 }
 
 private function assert_CacheClearCommand_testForceClearsPermanentPools(): void
@@ -133,6 +113,10 @@ private function broadcasterStub_CacheClearCommand(): RuntimeControlBroadcasterI
             return ['success' => true, 'completed' => true, 'message' => 'ok'];
         }
         public function cacheClearAndWait(?string $instanceName = null, float $timeout = 5.0): array
+        {
+            return ['success' => true, 'completed' => true, 'message' => 'ok'];
+        }
+        public function reloadAsync(?string $instanceName = null, string $reloadType = 'code', float $timeout = 5.0): array
         {
             return ['success' => true, 'completed' => true, 'message' => 'ok'];
         }

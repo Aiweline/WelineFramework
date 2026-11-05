@@ -83,6 +83,17 @@ final class CriticalRuntimeClassPreloadProvider implements WorkerPreloadProvider
         'Weline_Framework_Template::after_render',
         'Weline_Framework_Query::before_execute',
         'Weline_Framework_Query::after_execute',
+        // Dispatched by RequestPipeline::execute before URL parsing, on every
+        // request; the maintenance gate runs first (sort=-999).
+        'Weline_Framework::App::pre_route_gate',
+        // Dispatched once per Template::fetch. The first dispatch measured
+        // 45.04 ms cold (theme/preview resolution) against 0.12 ms afterwards,
+        // and a storefront fetches dozens of templates per request.
+        'Weline_Framework_View::resolve_theme_cache_suffix',
+        // Every full-page-cache hit decorates the stored response through this.
+        'Weline_Framework_Fpc::cache_hit_response',
+        // FPM final-response decoration: the last observer chain of the request.
+        'Weline_Framework_Http::response_ready',
     ];
 
     /**
@@ -95,19 +106,14 @@ final class CriticalRuntimeClassPreloadProvider implements WorkerPreloadProvider
     private const HOT_QUERY_PROVIDERS = ['websites'];
 
     /**
-     * Observer classes instantiated at boot.
+     * Default Website scope used to prime the FPC serve gate.
      *
-     * Registering an event only resolves its observer list; the observer object
-     * itself (and its constructor dependency graph) is still built on the first
-     * dispatch. Storefront application-context observers measured 8–11 ms of
-     * first-dispatch cost inside applyParsedUrl, on every cold Worker.
-     *
-     * @var list<string>
+     * These are part of the framework's own default-scope contract; importing a
+     * module model (Website::ID_DEFAULT / CODE_DEFAULT) from here would make the
+     * framework build-time dependent on Weline_Websites.
      */
-    private const HOT_OBSERVER_CLASSES = [
-        'Weline\Websites\Observer\InstallThemeApplicationContext',
-        'Weline\SystemConfig\Observer\InstallBackendThemeApplicationContext',
-    ];
+    private const DEFAULT_WEBSITE_ID = 0;
+    private const DEFAULT_WEBSITE_CODE = 'default';
 
 
     public function code(): string
@@ -224,19 +230,18 @@ final class CriticalRuntimeClassPreloadProvider implements WorkerPreloadProvider
         //    path (router, controller, template hooks). Cold construction pulls in
         //    Scanner (23 ms) and the event cache pool; first observer lookup costs
         //    another ~2.9 ms before its per-event cache warms.
+        //
+        //    Observers are resolved from the event registry, never from a
+        //    hardcoded class list: the framework owns which of *its own* events
+        //    are hot, the owning module owns which class observes them.
         if ($this->step('events', static function (): void {
-            if (\class_exists(\Weline\Framework\Event\EventsManager::class)) {
-                /** @var \Weline\Framework\Event\EventsManager $eventsManager */
-                $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-                foreach (self::HOT_EVENTS as $eventName) {
-                    $eventsManager->getEventObservers($eventName);
-                }
+            if (!\class_exists(\Weline\Framework\Event\EventsManager::class)) {
+                return;
             }
-            // Build the hot observer objects themselves, not just their lists.
-            foreach (self::HOT_OBSERVER_CLASSES as $observerClass) {
-                if (\class_exists($observerClass)) {
-                    ObjectManager::getInstance($observerClass);
-                }
+            /** @var \Weline\Framework\Event\EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+            foreach (self::HOT_EVENTS as $eventName) {
+                self::warmEventObservers($eventsManager, $eventName);
             }
         }, $detail)) {
             $items++;
@@ -277,10 +282,10 @@ final class CriticalRuntimeClassPreloadProvider implements WorkerPreloadProvider
             // Prime the policy snapshot + path policy for the storefront root;
             // the snapshot is the expensive part and is process-static afterwards.
             $identity = \Weline\Framework\Runtime\ScopeIdentity::channel(
-                0,
-                'default',
-                \Weline\Websites\Model\Website::CODE_DEFAULT,
-                \Weline\Websites\Model\Website::CODE_DEFAULT,
+                self::DEFAULT_WEBSITE_ID,
+                self::DEFAULT_WEBSITE_CODE,
+                self::DEFAULT_WEBSITE_CODE,
+                self::DEFAULT_WEBSITE_CODE,
                 \Weline\Framework\Runtime\ScopeIdentity::MODE_NORMAL,
             );
             $fpc->warmServeGateData($identity);
@@ -333,6 +338,42 @@ final class CriticalRuntimeClassPreloadProvider implements WorkerPreloadProvider
     {
         // Pure class warm-up: nothing generated is cached here, only code identity.
         return ['code'];
+    }
+
+    /**
+     * Resolve one hot event's observer list and build each observer object.
+     *
+     * Registering an event only resolves its list; the observer object itself
+     * (and its constructor dependency graph) is still built on the first
+     * dispatch — measured 8–45 ms per observer on a cold Worker. Building them
+     * here moves that cost into worker boot instead of the first request.
+     *
+     * Fail-open per observer: a module that installs an unbuildable observer
+     * must not stop the rest of the warm-up or block Worker READY.
+     */
+    private static function warmEventObservers(
+        \Weline\Framework\Event\EventsManager $eventsManager,
+        string $eventName
+    ): void {
+        $observers = $eventsManager->getEventObservers($eventName);
+        if (!\is_array($observers)) {
+            return;
+        }
+
+        foreach ($observers as $observer) {
+            if (!\is_array($observer)) {
+                continue;
+            }
+            $instance = \ltrim(\trim((string)($observer['instance'] ?? '')), '\\');
+            if ($instance === '' || !\class_exists($instance)) {
+                continue;
+            }
+            try {
+                ObjectManager::getInstance($instance);
+            } catch (\Throwable) {
+                // The dispatch path keeps its own fail-open handling.
+            }
+        }
     }
 
     /**

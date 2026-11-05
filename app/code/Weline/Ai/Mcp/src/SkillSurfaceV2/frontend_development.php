@@ -20,7 +20,7 @@ return [
         'UI', 'ui', 'frontend-design', '样式', '颜色', '间距',
         'css', 'CSS', 'stylesheet', 'prototype', '原型',
         'BinQuery', 'query-bin', 'Weline.Api', 'fetch', 'axios',
-        '文案', '翻译', 'i18n', 'csv', '中文', '双语', 'zh_Hans', 'en_US',
+        '文案', '翻译', 'i18n', '中文', '双语',
     ],
     'authoritative_skill' => 'weline-theme-development',
     'required_companion_skills' => [

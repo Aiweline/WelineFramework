@@ -192,6 +192,12 @@ class Router implements RouterInterface
             }
         }
 
+        // 模块 Router 的运行时映射（如站点模块的固定页面）不进 generated 路由表；
+        // Theme 兜底不得把这些公开路径抢成主题壳布局。
+        if (self::moduleOwnedRuntimeRoute($normalizedPath)) {
+            return;
+        }
+
         // Reverse-infer layout/option from public path via layout_resolve (no alias table).
         // Slug entity routes stay on module controllers; only fixed Theme shells land on Policy.
         try {
@@ -362,6 +368,46 @@ class Router implements RouterInterface
      * shell-only fallback and must not consume those aliases before the
      * module router gets a chance to resolve them.
      */
+    /**
+     * 模块自有公开路由（运行时映射，不进 generated 路由表）。
+     *
+     * Theme 只做壳层兜底：任一已安装模块 Router 认领该路径时必须让位，
+     * 否则 layout_resolve 会把模块页面（如 /contact）抢成默认主题布局。
+     */
+    private static function moduleOwnedRuntimeRoute(string $normalizedPath): bool
+    {
+        try {
+            $routers = ObjectManager::getInstance(
+                \Weline\ModuleRouter\Config\ModuleRouterReader::class
+            )->read();
+        } catch (\Throwable) {
+            return false;
+        }
+
+        foreach ($routers as $info) {
+            $class = (string)($info['class'] ?? '');
+            if ($class === '' || $class === self::class
+                || !\class_exists($class)
+                || !\is_subclass_of($class, RouterInterface::class)) {
+                continue;
+            }
+
+            try {
+                $path = $normalizedPath;
+                $rule = [];
+                $class::process($path, $rule);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if (!empty($rule['module'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static function isInstalledModuleOwnedPublicRoute(string $normalizedPath): bool
     {
         if (class_exists('Weline\\Product\\Controller\\Router')) {

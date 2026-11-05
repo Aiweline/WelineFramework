@@ -16,8 +16,8 @@ final class HardConstraintsSymbolDsl
 
     public const GLOSS_MAX = 64;
 
-    /** Raised 9200→9400 when browser_tab_group_identity entered the hot package (2026-10-20); 9400→9500 for no_error_masking_or_patch_workaround (2026-10-21); 9500→9700 for google_chrome_reuse_before_connect (2026-10-21); 9700→9900 for hosts_write_precheck_no_repeat_prompt + ego hot entries (2026-10-29); 9900→10300 for algorithm_understanding_pseudocode_report (2026-10-29); 10300→10600 for backup_requires_skill_keep_one_and_space_precheck + finding_reality_gate/param-writeback hot entries (2026-10-29); 10600→10800 for diagnosis_routes_to_debug_skill (2026-10-31 user decree, atoms Diag/Log/Code/Symptom). */
-    public const PACKAGE_TOKEN_BUDGET = 10800;
+    /** Raised 9200→9400 when browser_tab_group_identity entered the hot package (2026-10-20); 9400→9500 for no_error_masking_or_patch_workaround (2026-10-21); 9500→9700 for google_chrome_reuse_before_connect (2026-10-21); 9700→9900 for hosts_write_precheck_no_repeat_prompt + ego hot entries (2026-10-29); 9900→10300 for algorithm_understanding_pseudocode_report (2026-10-29); 10300→10600 for backup_requires_skill_keep_one_and_space_precheck + finding_reality_gate/param-writeback hot entries (2026-10-29); 10600→10800 for diagnosis_routes_to_debug_skill (2026-10-31 user decree, atoms Diag/Log/Code/Symptom); 10800→10900 (2026-11-05 user decree) — 预算计量口径修正后 estimated=10797 仅余 3 token，留出约 100 token 给后续热路径规则。 */
+    public const PACKAGE_TOKEN_BUDGET = 10900;
 
     public const EXPAND_IDS_MAX = 20;
 
@@ -96,10 +96,19 @@ final class HardConstraintsSymbolDsl
                 $findings[] = 'orphan_legend_atom:' . $sym;
             }
         }
+        // Compose exactly like HardConstraintsCatalog::package(): symbolRules() already
+        // includes operational ids via fullRuleIndex(), so fold operational out before
+        // adding the dedicated slot — otherwise they are counted twice.
+        $operational = self::symbolOperational();
+        $operSet = array_fill_keys(array_column($operational, 'id'), true);
+        $domainRules = array_values(array_filter(
+            self::symbolRules(),
+            static fn (array $row): bool => !isset($operSet[$row['id']])
+        ));
         $est = self::estimateTokens([
             'legend' => self::legend(),
-            'rules' => self::symbolRules(),
-            'mcp_operational' => self::symbolOperational(),
+            'rules' => $domainRules,
+            'mcp_operational' => $operational,
         ]);
         if ($est > self::PACKAGE_TOKEN_BUDGET) {
             $findings[] = 'token_budget_exceeded:' . $est;
@@ -175,12 +184,14 @@ final class HardConstraintsSymbolDsl
             'BatchScript' => ['gloss_zh' => '脚本批量替换/改写', 'rule_ids' => ['no_script_batch_replace']],
             'GitWipe' => ['gloss_zh' => 'checkout/restore/clean/stash擦脏', 'rule_ids' => ['preserve_dirty_workspace']],
             'ShellWrite' => ['gloss_zh' => 'shell写入绕过CAS', 'rule_ids' => ['preserve_dirty_workspace', 'no_script_batch_replace']],
+            'ImgCtx' => ['gloss_zh' => '图片字节进入会话/线程上下文', 'rule_ids' => ['no_inline_images_in_context']],
+            'ImgTmp' => ['gloss_zh' => '图片落tmp缓存目录按路径引用', 'rule_ids' => ['no_inline_images_in_context']],
             'COps' => ['gloss_zh' => '内容运营技能任务', 'rule_ids' => ['content_ops_skills_skip_mcp']],
             'Write' => ['gloss_zh' => '即将写仓', 'rule_ids' => ['architecture_grade_change_only']],
             'Arch' => ['gloss_zh' => 'mechanism∧owning∧¬do≥1', 'rule_ids' => ['architecture_grade_change_only']],
             'Prep' => ['gloss_zh' => 'prepare_project+遵守hard_constraints', 'rule_ids' => ['mcp_call_scope']],
             'SelfInstall' => ['gloss_zh' => '按ensure指引给自己宿主注册MCP', 'rule_ids' => ['mcp_call_scope']],
-            'Aoci' => ['gloss_zh' => 'cognition_rules(+overview若不可靠)', 'rule_ids' => ['cognition_complements_weline_mcp']],
+            'Aoci' => ['gloss_zh' => 'cognition_rules(+overview若不可靠)', 'rule_ids' => ['weline_cognition']],
             'WebTouch' => ['gloss_zh' => '触.phtml/CSS/主题/店面页', 'rule_ids' => ['browser_operator_self_test']],
             'WBOP' => ['gloss_zh' => 'Browser真机禁缓存+抹自动+点选+截图Read', 'rule_ids' => ['browser_operator_self_test']],
             'Curl5' => ['gloss_zh' => '打开前curl --max-time 5探活', 'rule_ids' => ['browser_operator_fail_closed_release']],
@@ -591,7 +602,7 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '产品/文章/主图等跳过prepare与技能索引',
                 'cluster' => '§P',
             ],
-            'cognition_complements_weline_mcp' => [
+            'weline_cognition' => [
                 'formula' => 'Eng→□Aoci∧¬(Aoci≢Prep)',
                 'gloss_zh' => 'prepare后须cognition_rules；Cognition不可替Weline门禁',
                 'cluster' => '§Ω',
@@ -632,7 +643,7 @@ final class HardConstraintsSymbolDsl
                 'cluster' => '§✓',
             ],
             'browser_automation_uses_ego' => [
-                'formula' => 'Browser→□Ego∧(¬Ego→⊥Auto)',
+                'formula' => 'BrOp→□Ego∧(¬Ego→⊥BrOp)',
                 'gloss_zh' => '浏览器默认ego；禁Chrome/Playwright摸页',
                 'cluster' => '§✓',
             ],
@@ -754,6 +765,11 @@ final class HardConstraintsSymbolDsl
             'no_script_batch_replace' => [
                 'formula' => 'FileChg→□OneFileEdit∧¬BatchScript|(BatchScript→⊥)',
                 'gloss_zh' => '逐文件Read+定点编辑；禁脚本批量替换改写',
+                'cluster' => '§P',
+            ],
+            'no_inline_images_in_context' => [
+                'formula' => '¬ImgCtx∧□ImgTmp',
+                'gloss_zh' => '图片禁进会话上下文；一律落tmp按路径引用',
                 'cluster' => '§P',
             ],
             'engineering_team_for_new_requirements' => [

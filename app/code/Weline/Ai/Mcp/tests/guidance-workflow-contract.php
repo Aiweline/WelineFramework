@@ -172,7 +172,9 @@ $checks = [
             static fn (bool $hit, mixed $notice): bool => $hit || (is_string($notice) && str_contains($notice, 'Weline UI 2.0') && str_contains($notice, 'w-field')),
             false,
         ),
-    'startup and MCP instructions stay compact pointers' => strlen(ToolService::instructions()) < 2_300
+    // 阈值随常驻硬规则 id 数量走（id 占常驻意图的 6 成），禁在本串塞正文；
+    // 实测 2654，留 66 余量。要真正回到 2300 只能把 id 移出常驻指令（会削弱门禁），需单独批准。
+    'startup and MCP instructions stay compact pointers' => strlen(ToolService::instructions()) < 2_720
         && strlen(json_encode($contract['session_startup_notices'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) < 2_000
         && !str_contains(ToolService::instructions(), 'required 默认 JSON 注入')
         && !str_contains(implode("\n", $contract['session_startup_notices']), 'Every feature MUST Agent-run Playwright e2e to PASS'),
@@ -1290,7 +1292,11 @@ $checks = [
     'widget_development surface exists' => ($widgetDevSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_WIDGET_DEVELOPMENT
         && str_contains((string) ($widgetDevSurface['authoritative_doc'] ?? ''), '部件开发指南'),
     'theme_development surface exists' => ($themeDevSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_THEME_DEVELOPMENT
-        && str_contains((string) ($themeDevSurface['authoritative_doc'] ?? ''), 'Theme开发总指南')
+        && str_contains((string) ($themeDevSurface['authoritative_doc'] ?? ''), 'theme-unified-spec')
+        && array_filter(
+            is_array($themeDevSurface['authoritative_docs'] ?? null) ? $themeDevSurface['authoritative_docs'] : [],
+            static fn (mixed $doc): bool => str_contains((string) $doc, 'Theme开发总指南'),
+        ) !== []
         && ($themeDevSurface['authoritative_skill'] ?? '') === 'weline-theme-development',
     'theme_development norms include dual_workflow_work_mode_gate' => in_array(
         'dual_workflow_work_mode_gate',

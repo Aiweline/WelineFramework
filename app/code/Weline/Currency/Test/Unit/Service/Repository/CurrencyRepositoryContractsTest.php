@@ -30,18 +30,28 @@ final class CurrencyRepositoryContractsTest extends TestCase
     private function contractChecks(): array
     {
         return [
-            'CurrencyCatalogProcessCache::testClearProcessCacheIsPublicAndResetsActiveBucket' => function () {
-            $this->assert_CurrencyCatalogProcessCache_testClearProcessCacheIsPublicAndResetsActiveBucket();
+            'CurrencyCatalogSingleAuthority::testCatalogueProjectsTheDataAuthorityAndOwnsNoQuery' => function () {
+            $this->assert_CurrencyCatalogSingleAuthority_testCatalogueProjectsTheDataAuthorityAndOwnsNoQuery();
         },
         ];
     }
 
-private function assert_CurrencyCatalogProcessCache_testClearProcessCacheIsPublicAndResetsActiveBucket(): void
+private function assert_CurrencyCatalogSingleAuthority_testCatalogueProjectsTheDataAuthorityAndOwnsNoQuery(): void
 {
-    $property = new \ReflectionProperty(CurrencyCatalog::class, 'activeCache');
-    $property->setValue(null, []);
-    self::assertIsArray($property->getValue(null));
+    $source = (string) \file_get_contents(__DIR__ . '/../../../../Service/Repository/CurrencyCatalog.php');
+
+    // 单一权威：启用币种只允许 CurrencyData 一条读路径（进程袋 → w_cache → DB）。
+    // 目录类只做 DTO 投影，再写 status 查询就会重新造出“两份成员/两种名称”的漂移。
+    self::assertStringContainsString('CurrencyData::getCurrencies()', $source);
+    self::assertStringNotContainsString('->select()', $source, 'CurrencyCatalog 不得再自带币种查询');
+    self::assertStringNotContainsString('fetchArray', $source, 'CurrencyCatalog 不得再自带币种查询');
+
+    // 失效契约保留：Currency 模型 hook 与 ProcessCacheResetter 都依赖它。
+    $clear = new \ReflectionMethod(CurrencyCatalog::class, 'clearProcessCache');
+    self::assertTrue($clear->isPublic());
+    self::assertTrue($clear->isStatic());
+    self::assertStringContainsString('CurrencyData::clearProcessCache()', $source);
+
     CurrencyCatalog::clearProcessCache();
-    self::assertNull($property->getValue(null));
 }
 }

@@ -231,6 +231,27 @@ final class FragmentRegionProvider implements GlobalRegionProviderInterface
     }
 
     /**
+     * 片段缓存 TTL（秒）：片段显式 @global-region.cache 优先，否则用部件的 async_cache。
+     */
+    public function ttlFor(string $fragmentId): int
+    {
+        foreach ($this->fragments() as $fragment) {
+            if ($fragment->id !== $fragmentId || !$this->enabled($fragment)) {
+                continue;
+            }
+            if ($fragment->cacheTtl > 0) {
+                return $fragment->cacheTtl;
+            }
+
+            return $fragment->widgetCode === ''
+                ? 0
+                : \Weline\Widget\Taglib\Widget::asyncCacheTtl('content', (string)$fragment->widgetCode);
+        }
+
+        return 0;
+    }
+
+    /**
      * Placeholder for a fragment that must not occupy the page's HTML.
      *
      * Global contributions are mostly invisible until the visitor needs them, so the page
@@ -247,10 +268,20 @@ final class FragmentRegionProvider implements GlobalRegionProviderInterface
         // w_url 可能已经带上查询串（本地开发穿章），因此用正确的分隔符拼接。
         $endpoint = self::localizedEndpoint($endpointBase);
         $separator = \str_contains($endpoint, '?') ? '&' : '?';
-        $url = $endpoint . $separator . 'fragment=' . \urlencode($fragment->id);
+        $query = ['fragment' => $fragment->id];
+        $currency = (string)(\Weline\Framework\Runtime\RequestContext::currency() ?? '');
+        if ($currency !== '') {
+            $query['cur'] = $currency;
+        }
+        $version = self::publishedVersionToken();
+        if ($version !== '') {
+            $query['v'] = $version;
+        }
+        $url = $endpoint . $separator . \http_build_query($query);
 
         return '<div data-global-region-async="' . \htmlspecialchars($fragment->id, ENT_QUOTES, 'UTF-8') . '"'
             . ' data-global-region-endpoint="' . \htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '"'
+            . ' data-global-region-ttl="' . (string)$this->ttlFor($fragment->id) . '"'
             . ' hidden></div>';
     }
 
@@ -261,6 +292,25 @@ final class FragmentRegionProvider implements GlobalRegionProviderInterface
      * 之前这里写死 `/theme/frontend/widget/shell`，水合请求丢了语言，
      * `/ar_SA/` 页面上的「下载 App」会渲染成中文（实测）。
      */
+    /**
+     * 发布代次：作为水合 URL 的缓存失效键（换版本即换 URL key）。
+     */
+    private static function publishedVersionToken(): string
+    {
+        try {
+            if (\class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
+                $resolved = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class
+                )->resolve();
+
+                return \trim((string)($resolved['themePublishedVersionId'] ?? ''));
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
+    }
+
     private static function localizedEndpoint(string $endpointBase): string
     {
         try {
@@ -315,6 +365,23 @@ final class FragmentRegionProvider implements GlobalRegionProviderInterface
             if ($fragment->id === $fragmentId && $this->enabled($fragment)) {
                 if ($overrides !== [] && $fragment->widgetCode !== '') {
                     self::rememberPageConfig($fragment->widgetCode, $overrides);
+                }
+
+                // 片段内容交给部件模块渲染（异步判定/模板都在 Weline_Widget），这里只提供放置上下文。
+                if ($fragment->widgetCode !== '') {
+                    $rendered = \Weline\Widget\Taglib\Widget::renderWidgetCode(
+                        'content',
+                        $fragment->widgetCode,
+                        $overrides,
+                        [
+                            'render_mode' => 'fragment',
+                            'region' => (string)$this->region,
+                            'fragment_id' => (string)$fragment->id,
+                        ],
+                    );
+                    if ($rendered !== '') {
+                        return $rendered;
+                    }
                 }
 
                 return \trim($this->renderFragmentWithCache($fragment, $overrides));

@@ -19,6 +19,7 @@ return [
         '技能引用优化', '技能压缩', '重复描述压缩', '技能镜瘦身', 'prompt optimization',
         'prompt engineer', 'prompt_increment', 'seat_skill_mirrors', 'prompt_optimization',
         'weline-prompt-optimization',
+        '提示词', 'prompt', '压缩提示词', '提示词瘦身',
     ],
     'authoritative_skill' => 'weline-prompt-optimization',
     'authoritative_doc' => 'dev/ai-command/ai/提示词优化.md',

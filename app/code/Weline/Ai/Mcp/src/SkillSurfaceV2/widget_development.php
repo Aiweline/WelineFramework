@@ -20,6 +20,7 @@ return [
         'placement', 'w:widget', '<w:widget', 'w:slot', 'account-social-login',
         '应用注入', '布局内嵌', '同身份 XOR', 'theme_layout_widget_owner',
         '必装永远存在', 'user_deleted', 'required_default_always_present',
+        '轮播', '轮播图', '规格图轮播',
     ],
     'authoritative_docs' => [
         'app/code/Weline/Theme/doc/部件开发指南.md',

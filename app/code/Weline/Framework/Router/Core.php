@@ -1640,6 +1640,13 @@ class Core
             $this->request->getResponse()->noRouter();
         }
         if (!is_file($filename)) {
+            # PSR-4 模块目录可能大写（Framework/View），静态 URL 约定小写 view：补一次大小写变体
+            $viewVariant = \str_replace(DS . 'view' . DS, DS . 'View' . DS, $filename);
+            if ($viewVariant !== $filename && is_file($viewVariant)) {
+                $filename = $viewVariant;
+            }
+        }
+        if (!is_file($filename)) {
             # 检测vendor目录的组件文件 
             $filename = VENDOR_PATH . trim($url, DS);
             if (!is_file($filename)) {
@@ -2233,14 +2240,85 @@ class Core
             && !$skipCacheDerivedResponseWrites
             && $fpcCoordinator->canPublishResponse($response, $this->request->getMethod() ?: 'GET')
         ) {
-            $fpcCoordinator->publishResponse(
-                $response,
-                $this->url,
-                $this->request->getRule(),
-                $this->router,
-                $this->routerGeneratedGetParams,
-                $this->request->getMethod() ?: 'GET'
-            );
+            // Publish after the response is on the wire (2026-11-04, user decision).
+            //
+            // publishResponse() writes the html-disk body, the shared FPC envelope,
+            // the gzip/br variants and the derived URL index — measured multi-second
+            // work on a 180KB storefront page, previously paid *inside* the request
+            // while the client waited. The user's call: fire the build and return,
+            // never let the response block on whether FPC succeeded.
+            //
+            // The lock is released in the outer finally, so the task must publish
+            // before that happens — it does: PostResponseTaskQueue drains right after
+            // the fibre completes the response, and publishResponse() itself re-checks
+            // canPublishResponse() and degrades to a plain miss if the entry moved on.
+            // A dropped task costs exactly one cache miss; a blocked Worker costs the site.
+            if (\class_exists(\Weline\Framework\Runtime\PostResponseTaskQueue::class)
+                && Runtime::isPersistent()
+            ) {
+                $publishCoordinator = $fpcCoordinator;
+                $publishResponse = $response;
+                $publishUrl = $this->url;
+                $publishRule = $this->request->getRule();
+                $publishRouter = $this->router;
+                $publishParams = $this->routerGeneratedGetParams;
+                $publishMethod = $this->request->getMethod() ?: 'GET';
+                $publishKey = 'fpc_publish|'
+                    . \substr(\sha1($publishUrl . '|' . $publishMethod), 0, 24);
+                try {
+                    \Weline\Framework\Runtime\PostResponseTaskQueue::enqueue(
+                        $publishKey,
+                        static function () use (
+                            $publishCoordinator,
+                            $publishResponse,
+                            $publishUrl,
+                            $publishRule,
+                            $publishRouter,
+                            $publishParams,
+                            $publishMethod
+                        ): void {
+                            try {
+                                $publishCoordinator->publishResponse(
+                                    $publishResponse,
+                                    $publishUrl,
+                                    $publishRule,
+                                    $publishRouter,
+                                    $publishParams,
+                                    $publishMethod
+                                );
+                            } catch (\Throwable $publishError) {
+                                // A failed publish is a cache miss, never a request error.
+                                \Weline\Framework\App\Env::log_warning(
+                                    'router/fpc_publish_async',
+                                    $publishError->getMessage()
+                                );
+                            }
+                        },
+                        0.0,
+                        \Weline\Framework\Runtime\PostResponseCaptureMode::None,
+                    );
+                } catch (\Throwable) {
+                    // Queue refused the task: fall back to an inline publish so the
+                    // entry is still produced, just at the old (blocking) cost.
+                    $fpcCoordinator->publishResponse(
+                        $response,
+                        $this->url,
+                        $this->request->getRule(),
+                        $this->router,
+                        $this->routerGeneratedGetParams,
+                        $this->request->getMethod() ?: 'GET'
+                    );
+                }
+            } else {
+                $fpcCoordinator->publishResponse(
+                    $response,
+                    $this->url,
+                    $this->request->getRule(),
+                    $this->router,
+                    $this->routerGeneratedGetParams,
+                    $this->request->getMethod() ?: 'GET'
+                );
+            }
         }
         // 兼容性：如果 url_cache_data 为空，也保存到旧的缓存键
         $routeProfileMark('fpc_publish');

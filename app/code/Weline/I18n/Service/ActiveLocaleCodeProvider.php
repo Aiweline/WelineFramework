@@ -23,8 +23,14 @@ class ActiveLocaleCodeProvider
     /** 进程袋身份（显式命名，禁止匿名登记）。 */
     private const BAG_INSTALLED_ACTIVE_CODES = 'i18n.active_locale.codes';
 
+    /** “已安装但未必启用”的列表：同一权威、同一失效点，键与上面分开。 */
+    private const BAG_INSTALLED_CODES = 'i18n.installed_locale.codes';
+
     /** @var array<string, list<string>> 进程级 installed+active 列表 */
     private static array $processInstalledActiveCodes = [];
+
+    /** @var array<string, list<string>> 进程级 installed（不要求 active）列表 */
+    private static array $processInstalledCodes = [];
 
     public function __construct(
         private readonly Locals $locals,
@@ -58,6 +64,7 @@ class ActiveLocaleCodeProvider
     public static function clearProcessCache(): void
     {
         self::$processInstalledActiveCodes = [];
+        self::$processInstalledCodes = [];
     }
 
     /**
@@ -65,14 +72,42 @@ class ActiveLocaleCodeProvider
      */
     public function getInstalledActiveCodes(): array
     {
-        $cacheKey = DictionaryCacheNamespace::cacheKey('installed-active-locales');
+        $cacheKey = DictionaryCacheNamespace::processScopeKey('installed-active-locales');
+        if ($cacheKey === '') {
+            return $this->loadCodesFromDb(true);
+        }
         if (isset(DictionaryCacheNamespace::processBag(self::BAG_INSTALLED_ACTIVE_CODES, self::$processInstalledActiveCodes, 128)[$cacheKey])) {
             return DictionaryCacheNamespace::processBag(self::BAG_INSTALLED_ACTIVE_CODES, self::$processInstalledActiveCodes, 128)[$cacheKey];
         }
 
-        $codes = $this->loadInstalledActiveCodesFromDb();
+        $codes = $this->loadCodesFromDb(true);
 
         return DictionaryCacheNamespace::processBag(self::BAG_INSTALLED_ACTIVE_CODES, self::$processInstalledActiveCodes, 128)[$cacheKey] = $codes;
+    }
+
+    /**
+     * Installed locales regardless of the active flag.
+     *
+     * Same authority, same memo, same invalidation point as
+     * {@see self::getInstalledActiveCodes()}; callers that need "installed but
+     * maybe disabled" (e.g. the storefront render-context catalogue) must not
+     * open a second read path onto `Locals`.
+     *
+     * @return list<string>
+     */
+    public function getInstalledCodes(): array
+    {
+        $cacheKey = DictionaryCacheNamespace::processScopeKey('installed-locales');
+        if ($cacheKey === '') {
+            return $this->loadCodesFromDb(false);
+        }
+        if (isset(DictionaryCacheNamespace::processBag(self::BAG_INSTALLED_CODES, self::$processInstalledCodes, 128)[$cacheKey])) {
+            return DictionaryCacheNamespace::processBag(self::BAG_INSTALLED_CODES, self::$processInstalledCodes, 128)[$cacheKey];
+        }
+
+        $codes = $this->loadCodesFromDb(false);
+
+        return DictionaryCacheNamespace::processBag(self::BAG_INSTALLED_CODES, self::$processInstalledCodes, 128)[$cacheKey] = $codes;
     }
 
     /**
@@ -80,12 +115,12 @@ class ActiveLocaleCodeProvider
      *
      * @return list<string>
      */
-    private function loadInstalledActiveCodesFromDb(): array
+    private function loadCodesFromDb(bool $activeOnly): array
     {
         $codes = [];
         $seen = [];
         try {
-            foreach ($this->fetchInstalledActiveCodesUnion() as $code) {
+            foreach ($this->fetchCodesUnion($activeOnly) as $code) {
                 $this->pushCode($codes, $seen, $code);
             }
 
@@ -94,10 +129,10 @@ class ActiveLocaleCodeProvider
             // Single-table absence / driver quirks: keep dual query-builder path.
         }
 
-        foreach ($this->fetchInstalledActiveRows($this->locale) as $code) {
+        foreach ($this->fetchRows($this->locale, $activeOnly) as $code) {
             $this->pushCode($codes, $seen, $code);
         }
-        foreach ($this->fetchInstalledActiveRows($this->locals) as $code) {
+        foreach ($this->fetchRows($this->locals, $activeOnly) as $code) {
             $this->pushCode($codes, $seen, $code);
         }
 
@@ -107,7 +142,7 @@ class ActiveLocaleCodeProvider
     /**
      * @return list<string>
      */
-    private function fetchInstalledActiveCodesUnion(): array
+    private function fetchCodesUnion(bool $activeOnly): array
     {
         if (!\method_exists($this->locale, 'getConnection') || !\method_exists($this->locale, 'getTable')
             || !\method_exists($this->locals, 'getTable')
@@ -122,12 +157,12 @@ class ActiveLocaleCodeProvider
         }
 
         $connector = $this->locale->getConnection()->getConnector();
+        $filter = ' WHERE (' . self::FIELD_IS_INSTALL . ' = 1)'
+            . ($activeOnly ? ' AND (' . self::FIELD_IS_ACTIVE . ' = 1)' : '');
         // Locale rows first, then Locals — PHP pushCode keeps first-seen casing/order.
-        $sql = 'SELECT ' . self::FIELD_CODE . ' FROM ' . $localeTable
-            . ' WHERE (' . self::FIELD_IS_INSTALL . ' = 1) AND (' . self::FIELD_IS_ACTIVE . ' = 1)'
+        $sql = 'SELECT ' . self::FIELD_CODE . ' FROM ' . $localeTable . $filter
             . ' UNION ALL '
-            . 'SELECT ' . self::FIELD_CODE . ' FROM ' . $localsTable
-            . ' WHERE (' . self::FIELD_IS_INSTALL . ' = 1) AND (' . self::FIELD_IS_ACTIVE . ' = 1)';
+            . 'SELECT ' . self::FIELD_CODE . ' FROM ' . $localsTable . $filter;
 
         $codes = [];
         foreach ($connector->query($sql)->fetchIterator() as $row) {
@@ -147,14 +182,14 @@ class ActiveLocaleCodeProvider
      * @param Locals|Locale $model
      * @return list<string>
      */
-    private function fetchInstalledActiveRows(Locals|Locale $model): array
+    private function fetchRows(Locals|Locale $model, bool $activeOnly): array
     {
         try {
-            $rows = $model->clearQuery()
-                ->where(self::FIELD_IS_INSTALL, 1)
-                ->where(self::FIELD_IS_ACTIVE, 1)
-                ->select(self::FIELD_CODE)
-                ->fetchArray();
+            $query = $model->clearQuery()->where(self::FIELD_IS_INSTALL, 1);
+            if ($activeOnly) {
+                $query->where(self::FIELD_IS_ACTIVE, 1);
+            }
+            $rows = $query->select(self::FIELD_CODE)->fetchArray();
         } catch (\Throwable) {
             return [];
         }

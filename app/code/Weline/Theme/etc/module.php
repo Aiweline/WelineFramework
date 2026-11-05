@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Theme',
-    "version" => '2.3.41',
+    "version" => '2.3.52',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '>=2.5.0',
@@ -56,6 +56,11 @@ return [
         // pays 113-306 ms to build it (measured on /best-sellers).
         'worker_preload_provider.Weline_Theme_StorefrontRender' =>
             \Weline\Theme\Service\Preload\StorefrontRenderWarmupPreloadProvider::class,
+        // Default-injection render inputs (published declaration plans, published
+        // version id, per-version uninstall rows) warmed before READY: the first
+        // render of each page type otherwise pays 3.28-10.42 ms of publication reads.
+        'worker_preload_provider.Weline_Theme_DefaultInjection' =>
+            \Weline\Theme\Service\Preload\DefaultInjectionLedgerPreloadProvider::class,
         \Weline\Theme\Api\DefaultThemeInterface::class => \Weline\Theme\Service\RegisteredDefaultTheme::class,
         \Weline\Framework\Runtime\DefaultThemeConfigProviderInterface::class => \Weline\Theme\Service\RegisteredDefaultTheme::class,
         'schedule_window_utc_migration.Weline_Theme'

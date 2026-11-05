@@ -58,6 +58,33 @@ class WidgetDefaultInjectionService
     }
 
     /**
+     * Process-local snapshot of the uninstall rows of the ledger.
+     *
+     * Why: `uninstalledInjectionsForVersion()` is a storefront *render* input —
+     * `RequiredDefaultInjectionRuntimeSafetyNet` decides required-slot XOR from
+     * it — and it re-ran `WHERE theme_id AND page_type AND source` in every
+     * Worker. Measured on this install: 0.64-1.84 ms per distinct (theme, page
+     * type), which the Worker paid inside its first render of that page type.
+     *
+     * The rows are one global publication fact (a `user_deleted@V` marker set),
+     * so they belong in process memory before READY rather than being queried
+     * per page type, exactly like the website / currency / locale catalogues.
+     *
+     * Invalidation: every write reaches this table through the model
+     * (`save()` / `delete()` → `save_after` / `delete_after`), which drops the
+     * snapshot. A theme republish also lands on a fresh `user_deleted@{V}`
+     * source key, so a stale snapshot can never suppress a newer version.
+     *
+     * @var array<string, list<array{slot_id:string,widget_module:string,widget_code:string}>>|null
+     */
+    private static ?array $uninstallSnapshot = null;
+
+    public static function clearProcessCaches(): void
+    {
+        self::$uninstallSnapshot = null;
+    }
+
+    /**
      * @return list<array<string,mixed>>
      */
     public function getMissingForLayout(
@@ -1382,6 +1409,84 @@ class WidgetDefaultInjectionService
     }
 
     /**
+     * Uninstall rows for one (theme, page type, published version), read from the
+     * process snapshot instead of the database.
+     *
+     * @return list<array{slot_id:string,widget_module:string,widget_code:string}>
+     */
+    private static function uninstallRows(int $themeId, string $pageType, int $versionId): array
+    {
+        $source = \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract::userDeletedSource($versionId);
+
+        return self::uninstallSnapshot()[$themeId . '|' . $pageType . '|' . $source] ?? [];
+    }
+
+    /**
+     * Load the uninstall rows of the ledger into process memory once.
+     *
+     * Only `user_deleted%` rows are kept: they are the sole rows this reader
+     * answers from, and dropping the `auto` / `existing` decisions keeps the
+     * snapshot bounded to the much smaller uninstall set.
+     *
+     * A failing read is NOT cached, so a transient database error cannot pin an
+     * empty snapshot for the life of the Worker.
+     *
+     * @return array<string, list<array{slot_id:string,widget_module:string,widget_code:string}>>
+     */
+    private static function uninstallSnapshot(): array
+    {
+        if (self::$uninstallSnapshot !== null) {
+            return self::$uninstallSnapshot;
+        }
+
+        try {
+            $fields = \implode(',', [
+                ThemeWidgetDefaultInjection::schema_fields_THEME_ID,
+                ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE,
+                ThemeWidgetDefaultInjection::schema_fields_SOURCE,
+                ThemeWidgetDefaultInjection::schema_fields_SLOT_ID,
+                ThemeWidgetDefaultInjection::schema_fields_WIDGET_MODULE,
+                ThemeWidgetDefaultInjection::schema_fields_WIDGET_CODE,
+            ]);
+            $rows = (clone ObjectManager::getInstance(ThemeWidgetDefaultInjection::class))
+                ->clearQuery()
+                ->clearData()
+                ->where(ThemeWidgetDefaultInjection::schema_fields_SOURCE, 'user_deleted%', 'like')
+                ->select($fields)
+                ->fetchArray();
+        } catch (\Throwable $e) {
+            w_log_error(
+                '读取默认注入卸载账本失败: ' . $e->getMessage(),
+                [],
+                'WidgetDefaultInjectionService'
+            );
+
+            return [];
+        }
+
+        $snapshot = [];
+        foreach (\is_array($rows) ? $rows : [] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $code = \trim((string)($row[ThemeWidgetDefaultInjection::schema_fields_WIDGET_CODE] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $key = (string)(int)($row[ThemeWidgetDefaultInjection::schema_fields_THEME_ID] ?? 0)
+                . '|' . \trim((string)($row[ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE] ?? ''))
+                . '|' . (string)($row[ThemeWidgetDefaultInjection::schema_fields_SOURCE] ?? '');
+            $snapshot[$key][] = [
+                'slot_id' => \trim((string)($row[ThemeWidgetDefaultInjection::schema_fields_SLOT_ID] ?? '')),
+                'widget_module' => \trim((string)($row[ThemeWidgetDefaultInjection::schema_fields_WIDGET_MODULE] ?? '')),
+                'widget_code' => $code,
+            ];
+        }
+
+        return self::$uninstallSnapshot = $snapshot;
+    }
+
+    /**
      * Storefront omissions for the published theme layout version only.
      * A plain `user_deleted` row without a version is not an uninstall of this version.
      *
@@ -1395,38 +1500,7 @@ class WidgetDefaultInjectionService
 
         $list = [];
         $seen = [];
-
-        try {
-            $rows = (clone $this->defaultInjectionRecord)->clearQuery()->clearData()
-                ->where(ThemeWidgetDefaultInjection::schema_fields_THEME_ID, $themeId)
-                ->where(ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE, trim($pageType))
-                ->where(
-                    ThemeWidgetDefaultInjection::schema_fields_SOURCE,
-                    \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract::userDeletedSource($versionId),
-                )
-                ->select()
-                ->fetchArray();
-        } catch (\Throwable) {
-            $rows = [];
-        }
-
-        $rows = \is_array($rows) ? $rows : [];
-        if ($rows !== [] && !isset($rows[0]) && isset($rows[ThemeWidgetDefaultInjection::schema_fields_ID])) {
-            $rows = [$rows];
-        }
-        foreach ($rows as $row) {
-            if (!\is_array($row)) {
-                continue;
-            }
-            $code = trim((string)($row[ThemeWidgetDefaultInjection::schema_fields_WIDGET_CODE] ?? ''));
-            if ($code === '') {
-                continue;
-            }
-            $item = [
-                'slot_id' => trim((string)($row[ThemeWidgetDefaultInjection::schema_fields_SLOT_ID] ?? '')),
-                'widget_module' => trim((string)($row[ThemeWidgetDefaultInjection::schema_fields_WIDGET_MODULE] ?? '')),
-                'widget_code' => $code,
-            ];
+        foreach (self::uninstallRows($themeId, trim($pageType), $versionId) as $item) {
             $key = \strtolower($item['slot_id'] . '|' . $item['widget_module'] . '|' . $item['widget_code']);
             if (isset($seen[$key])) {
                 continue;

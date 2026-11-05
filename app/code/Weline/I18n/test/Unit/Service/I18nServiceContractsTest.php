@@ -267,7 +267,7 @@ private function assert_ActiveLocaleProcessCache_testActiveLocaleUsesProcessStat
     self::assertStringContainsString('function clearProcessCache', $src);
     self::assertStringContainsString('self::clearProcessCache()', $src);
     self::assertStringContainsString('UNION ALL', $src);
-    self::assertStringContainsString('fetchInstalledActiveCodesUnion', $src);
+    self::assertStringContainsString('fetchCodesUnion', $src);
     self::assertStringNotContainsString('use Weline\\Framework\\Runtime\\RequestContext', $src);
     self::assertStringNotContainsString('i18n.installed_active_codes', $src);
     self::assertStringNotContainsString('RequestContext::set', $src);

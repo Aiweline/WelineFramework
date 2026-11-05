@@ -1001,6 +1001,11 @@ class WebsiteData
         self::$processDomainsByWebsiteId = [];
         self::$processLocalRowsByWebsiteId = [];
         self::$processSnapshotVersion = '';
+        // The raw table snapshots are the root of everything cached above; dropping
+        // them here keeps ONE invalidation entry point for the website scope instead
+        // of hoping every caller remembers the model-level caches too.
+        Website::clearCatalogRowsCache();
+        WebsiteDomain::clearCatalogRowsCache();
     }
 
     /**

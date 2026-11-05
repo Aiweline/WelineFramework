@@ -155,7 +155,7 @@ private function assert_ConfigEmbed_testModuleVersionMatchesRelease(): void
 {
     $module = include '/Users/weline/Project/Official/框架/app/code/Weline/SystemConfig' . '/etc/module.php';
     self::assertIsArray($module);
-    self::assertSame('1.3.70', $module['version'] ?? null);
+    self::assertSame('1.3.72', $module['version'] ?? null);
 }
 
 private function assert_ConfigEmbed_testCallbackPassesExplicitScopeAttributes(): void

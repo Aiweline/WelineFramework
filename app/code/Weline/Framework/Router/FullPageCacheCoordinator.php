@@ -51,9 +51,6 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 {
     private const LOCK_TTL_SECONDS = 60;
     private const LOCK_WAIT_TIMEOUT_MS = 50;
-    private const PERSISTENT_LOCK_WAIT_TIMEOUT_MS = 0;
-    private const LOCK_WAIT_STEP_MS = 20;
-    private const LOCK_WAIT_MAX_STEP_MS = 500;
     private const UNIFIED_CACHE_FPC_GZIP_B64_KEY = 'fpc_gzip_b64';
     private const UNIFIED_CACHE_FPC_BROTLI_B64_KEY = 'fpc_br_b64';
     private const UNIFIED_CACHE_FPC_BODY_FILE_KEY = 'fpc_body_file';
@@ -382,40 +379,22 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
     public function waitForPublishedResponse(string $method = 'GET', int $timeoutMs = self::LOCK_WAIT_TIMEOUT_MS): ?Response
     {
-        $method = $this->normalizeCacheMethod($method);
-        $timeoutMs = $this->resolvePublishedResponseWaitTimeoutMs($timeoutMs);
-        if ($timeoutMs <= 0) {
-            // Must read shared FPC, not process L1 only. A peer publisher can land
-            // the payload in shared while this Worker's L1 is still empty; processOnly
-            // then reports process-miss and forces a duplicate SSR (debug 70285b:
-            // hit_source=process-miss with shared_hit=true hydrate_ok=true).
-            return $this->getCachedResponse($method, false) ?? $this->getStaleCachedResponse($method);
-        }
+        // No peer-wait (2026-11-04, user decision: no request-path locks or waits).
+        //
+        // This used to poll the shared FPC every 20ms (backing off to 500ms) until
+        // `fpc_build_wait_timeout_ms` — capped at 60s — elapsed, burning a whole
+        // Worker fibre on the hope that some other Worker would publish. Measured
+        // on changanhanfu: `/id_ID/search?q=Layanan+pelanggan` spent 143,006ms
+        // inside one request while `storefront.cache.builder` accounted for only
+        // 61,989ms of it, and all four Workers sat at `active_requests=4` so the
+        // site answered curl with 15s timeouts.
+        //
+        // A follower that misses now reads whatever is published *right now* and
+        // otherwise renders for itself. Duplicate SSR beats a parked Worker: the
+        // Worker is the scarce resource, and Nginx/client give up long before 60s.
+        unset($timeoutMs);
 
-        $deadline = \microtime(true) + ($timeoutMs / 1000);
-        do {
-            $response = $this->getCachedResponse($method);
-            if ($response !== null) {
-                return $response;
-            }
-
-            $remainingMs = (int)\max(0, \ceil(($deadline - \microtime(true)) * 1000));
-            if ($remainingMs <= 0) {
-                break;
-            }
-
-            if (Runtime::isPersistent()) {
-                ConnectionPool::releaseCurrentOwnerIdleConnections();
-            }
-            SchedulerSystem::yieldDelay(\min(self::LOCK_WAIT_STEP_MS, $remainingMs));
-        } while (\microtime(true) < $deadline);
-
-        $response = $this->getCachedResponse($method) ?? $this->getStaleCachedResponse($method);
-        if ($response === null && $this->internalFpcWarmupMode() === 'prime') {
-            throw new \RuntimeException('Homepage warmup peer timed out waiting for the shared FPC publisher.');
-        }
-
-        return $response;
+        return $this->getCachedResponse($method, false) ?? $this->getStaleCachedResponse($method);
     }
 
     /**
@@ -428,53 +407,25 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         string $method = 'GET',
         int $timeoutMs = self::LOCK_WAIT_TIMEOUT_MS,
     ): array {
+        // No peer-wait (2026-11-04, user decision: no request-path locks or waits).
+        //
+        // Previously this looped: read shared FPC, try the build lock, sleep 20ms
+        // doubling to 500ms, until the deadline. Under crawl load every follower
+        // burned a fibre for the whole budget and still fell through to SSR.
+        // Now: one shared read, one non-blocking lock attempt, then hand back
+        // "no response, no lock" so the caller renders immediately.
+        unset($timeoutMs);
         $method = $this->normalizeBuildMethod($method);
-        $timeoutMs = $this->resolvePublishedResponseWaitTimeoutMs($timeoutMs);
-        $deadline = \microtime(true) + ($timeoutMs / 1000);
-        $waitStepMs = self::LOCK_WAIT_STEP_MS;
-        do {
-            $response = $this->getCachedResponse($method);
-            if ($response !== null) {
-                return ['response' => $response, 'lock' => null];
-            }
 
-            $lock = $this->acquireBuildLock($method);
-            if ($lock !== null) {
-                // A publisher may have landed its result between the read and
-                // the lock handoff. Prefer that result over a redundant build.
-                $response = $this->getCachedResponse($method);
-                if ($response !== null) {
-                    $this->releaseBuildLock($lock);
-                    return ['response' => $response, 'lock' => null];
-                }
-
-                return ['response' => null, 'lock' => $lock];
-            }
-
-            $remainingMs = (int)\max(0, \ceil(($deadline - \microtime(true)) * 1000));
-            if ($remainingMs <= 0) {
-                break;
-            }
-            // Many followers polling the same missing page every 20ms can
-            // monopolize a Worker and delay the sole publisher. Back off
-            // while continuing to probe often enough for a prompt handoff.
-            if (Runtime::isPersistent()) {
-                ConnectionPool::releaseCurrentOwnerIdleConnections();
-            }
-            SchedulerSystem::yieldDelay(\min($waitStepMs, $remainingMs));
-            $waitStepMs = \min($waitStepMs * 2, self::LOCK_WAIT_MAX_STEP_MS);
-        } while (\microtime(true) < $deadline);
-
-        $response = $this->getCachedResponse($method) ?? $this->getStaleCachedResponse($method);
+        $response = $this->getCachedResponse($method);
         if ($response !== null) {
             return ['response' => $response, 'lock' => null];
         }
 
-        // Publisher may have released between the last probe and the deadline.
-        // One final acquire avoids stranding every follower on wait_timeout while
-        // the lock is actually free (casual category cold-load stampede).
         $lock = $this->acquireBuildLock($method);
         if ($lock !== null) {
+            // A publisher may have landed its result between the read and
+            // the lock handoff. Prefer that result over a redundant build.
             $response = $this->getCachedResponse($method);
             if ($response !== null) {
                 $this->releaseBuildLock($lock);
@@ -486,33 +437,6 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
 
         return ['response' => null, 'lock' => null];
-    }
-
-    private function resolvePublishedResponseWaitTimeoutMs(int $timeoutMs): int
-    {
-        if ($timeoutMs === self::LOCK_WAIT_TIMEOUT_MS && $this->internalFpcWarmupMode() === 'prime') {
-            return \max(250, \min(10000, (int)Env::get('wls.worker.homepage_warmup_peer_wait_ms', 3000)));
-        }
-        if ($timeoutMs === self::LOCK_WAIT_TIMEOUT_MS && $this->internalStorefrontWarmupMode()) {
-            // A storefront deferred warmup is deliberately a cache builder.
-            // Let peers wait for the shared publisher instead of falling
-            // through after the normal 250ms persistent-request budget and
-            // rendering the same multi-megabyte page a second time.
-            return \max(500, \min(15000, (int)Env::get(
-                'wls.worker.storefront_deferred_warmup_peer_wait_ms',
-                5000
-            )));
-        }
-        if ($timeoutMs !== self::LOCK_WAIT_TIMEOUT_MS || !Runtime::isPersistent()) {
-            return \max(0, $timeoutMs);
-        }
-
-        $configured = (int)Env::get(
-            'wls.performance.fpc_build_wait_timeout_ms',
-            self::PERSISTENT_LOCK_WAIT_TIMEOUT_MS
-        );
-
-        return \min(\max(0, $configured), 60000);
     }
 
     /**

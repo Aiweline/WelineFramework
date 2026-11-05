@@ -15,10 +15,31 @@ use Weline\Theme\Service\ThemeScopeVersionService;
  */
 final class ThemeScopeVersionWidgetDecisionService
 {
+    /**
+     * Process-local memo of uninstall omissions, keyed by target version id.
+     *
+     * `listUninstallOmissions()` is called from the storefront render path
+     * (`WidgetDefaultInjectionService::uninstalledInjectionsForVersion()`), once
+     * per page type per Worker, and each call cost ~0.21 ms of ORM work against
+     * an unchanged immutable-decision table.
+     *
+     * Invalidation: decision rows are frozen per version and written only through
+     * {@see ThemeScopeVersionWidgetDecision} (whose `save_after` drops this memo);
+     * a republish also lands on a new version id, which is the memo key.
+     *
+     * @var array<int, list<array{slot_id:string,widget_module:string,widget_code:string,injection_key:string}>>|null
+     */
+    private static ?array $uninstallOmissionsMemo = null;
+
     public function __construct(
         private readonly ThemeScopeVersionWidgetDecision $decisionModel,
         private readonly ThemeVersionSnapshotBuilder $snapshots,
     ) {
+    }
+
+    public static function clearProcessCaches(): void
+    {
+        self::$uninstallOmissionsMemo = null;
     }
 
     /**
@@ -59,6 +80,10 @@ final class ThemeScopeVersionWidgetDecisionService
     {
         if ($themeVersionId < 1) {
             return [];
+        }
+
+        if (isset(self::$uninstallOmissionsMemo[$themeVersionId])) {
+            return self::$uninstallOmissionsMemo[$themeVersionId];
         }
 
         try {
@@ -106,6 +131,8 @@ final class ThemeScopeVersionWidgetDecisionService
                 'injection_key' => $injectionKey,
             ];
         }
+
+        self::$uninstallOmissionsMemo[$themeVersionId] = $list;
 
         return $list;
     }

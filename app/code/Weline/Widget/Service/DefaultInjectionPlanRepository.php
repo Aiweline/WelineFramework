@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Widget\Service;
 
+use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
+use Weline\Framework\Cache\Namespace\NamespacePath;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\Widget\Model\WidgetRegistryEntry;
 
 /**
@@ -14,6 +18,24 @@ use Weline\Widget\Model\WidgetRegistryEntry;
  */
 final class DefaultInjectionPlanRepository
 {
+    /**
+     * 进程袋：声明计划只在采集（widget:refresh / upgrade）时写，读却是渲染期每请求都要的
+     * 全局事实。旧实现靠实例 memo，但 ObjectManager 对未实现 ProcessSharedInterface 的类按
+     * 请求纤程建实例，memo 每请求必失；真机实测每请求 1 次 `widget_registry_entry`
+     * 全表扫描（`ThemeLayoutEntityRequestSolidifyGate::expectedInjectionFingerprint`）。
+     *
+     * 键 = 账本命名空间代次指纹 + area；写入方（WidgetRegistryRecordService::sync）在
+     * 有增/改/退订时 bump 同一命名空间，所以别的 Worker 也会重建。
+     *
+     * @var array<string, list<array<string, mixed>>>
+     */
+    private static array $processBag = [];
+
+    private const PROCESS_BAG = 'widget.default_injection_plan';
+
+    /** 前台/后台两个 area 已远超实际需要，留余量。 */
+    private const PROCESS_BAG_MAX = 8;
+
     /** @var list<array<string, mixed>>|null */
     private ?array $memo = null;
 
@@ -34,6 +56,21 @@ final class DefaultInjectionPlanRepository
         $areaKey = $area === null ? '' : trim($area);
         if ($this->memo !== null && $this->memoArea === $areaKey) {
             return $this->memo;
+        }
+
+        $bagKey = self::processBagKey($areaKey);
+        if ($bagKey !== null) {
+            $bag = &DictionaryCacheNamespace::processBag(
+                self::PROCESS_BAG,
+                self::$processBag,
+                self::PROCESS_BAG_MAX,
+            );
+            if (isset($bag[$bagKey])) {
+                $this->memo = $bag[$bagKey];
+                $this->memoArea = $areaKey;
+
+                return $this->memo;
+            }
         }
 
         try {
@@ -59,6 +96,7 @@ final class DefaultInjectionPlanRepository
         if (!is_array($rows) || $rows === []) {
             $this->memo = [];
             $this->memoArea = $areaKey;
+            self::remember($bagKey, []);
 
             return [];
         }
@@ -84,14 +122,59 @@ final class DefaultInjectionPlanRepository
 
         $this->memo = $declarations;
         $this->memoArea = $areaKey;
+        self::remember($bagKey, $declarations);
 
         return $declarations;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $declarations
+     */
+    private static function remember(?string $bagKey, array $declarations): void
+    {
+        if ($bagKey === null) {
+            return;
+        }
+        $bag = &DictionaryCacheNamespace::processBag(
+            self::PROCESS_BAG,
+            self::$processBag,
+            self::PROCESS_BAG_MAX,
+        );
+        $bag[$bagKey] = $declarations;
+    }
+
+    /**
+     * 进程袋键：账本命名空间代次指纹 + area。
+     *
+     * 读不到代次（事务内 / 生成服务不可用）时返回 null，调用方直读权威且不钉进进程。
+     */
+    private static function processBagKey(string $areaKey): ?string
+    {
+        try {
+            $fingerprint = ObjectManager::getInstance(NamespaceGenerationInterface::class)
+                ->fingerprint([
+                    ObjectManager::getInstance(NamespacePath::class)->global('widget', ['registry']),
+                ]);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!\is_string($fingerprint) || $fingerprint === '') {
+            return null;
+        }
+
+        return $fingerprint . '|' . $areaKey;
     }
 
     public function clearMemo(): void
     {
         $this->memo = null;
         $this->memoArea = null;
+    }
+
+    /** 清空进程袋（缓存重置 / 账本重建时由 ProcessCacheResetter 调用）。 */
+    public static function clearProcessBag(): void
+    {
+        self::$processBag = [];
     }
 
     /**

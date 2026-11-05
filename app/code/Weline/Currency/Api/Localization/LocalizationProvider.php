@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace Weline\Currency\Api\Localization;
 
 use Weline\Currency\Data\CurrencyData;
-use Weline\Currency\Model\Currency;
 use Weline\Framework\App\Localization\LocalizationProviderInterface;
-use Weline\Framework\Manager\ObjectManager;
 
 final class LocalizationProvider implements LocalizationProviderInterface
 {
@@ -29,19 +27,7 @@ final class LocalizationProvider implements LocalizationProviderInterface
                 $codes[] = (string)$row['code'];
             }
         }
-        if ($codes !== []) {
-            return $codes;
-        }
 
-        $rows = ObjectManager::getInstance(Currency::class)->clear()
-            ->where(Currency::schema_fields_STATUS, true)
-            ->select()
-            ->fetchArray();
-        foreach ((array)$rows as $row) {
-            if (is_array($row) && trim((string)($row[Currency::schema_fields_CODE] ?? '')) !== '') {
-                $codes[] = (string)$row[Currency::schema_fields_CODE];
-            }
-        }
         return $codes;
     }
 

@@ -21,6 +21,9 @@ return [
         'translation engineer', 'site i18n audit', '词典收集',
         'weline-translation-engineer',
     ],
+    'exclude_triggers' => [
+        '不要翻译', '无需翻译', '不用翻译', '不需要翻译', '无需 i18n', '不改文案',
+    ],
     'authoritative_skill' => 'weline-translation-engineer',
     'authoritative_doc' => 'dev/ai-command/ai/翻译工程师.md',
     'authoritative_docs' => [

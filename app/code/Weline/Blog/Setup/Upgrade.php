@@ -25,6 +25,8 @@ final class Upgrade implements UpgradeInterface
         /** @var BlogCategoryAttributeEntity $entity */
         $entity = ObjectManager::getInstance(BlogCategoryAttributeEntity::class);
         $modelSetup->putModel($entity);
+        // putModel only binds the model; value tables are created in install()/upgrade().
+        $entity->install($modelSetup, $context);
 
         /** @var LocalDescription $postLocal */
         $postLocal = ObjectManager::getInstance(LocalDescription::class);

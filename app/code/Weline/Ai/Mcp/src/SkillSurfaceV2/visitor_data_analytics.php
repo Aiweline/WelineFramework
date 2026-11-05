@@ -21,6 +21,7 @@ return [
         'data-pixel-event', 'data-visitor-event', 'data-cta-event', 'data-ga-event',
         'PixelEventVendor', '事件链', 'event_chain', '沙盒监视', 'GtmBridge',
         'GTM', 'GA4', 'dataLayer', '转化去重', '访客统计', '像素报表',
+        '转化率', '埋点', '访客报表', '流量统计', '转化报表',
     ],
     'authoritative_docs' => [
         'app/code/Weline/Visitor/doc/像素拓展使用指南.md',

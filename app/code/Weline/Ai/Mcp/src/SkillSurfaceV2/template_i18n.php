@@ -18,6 +18,9 @@ return [
         '__', 'lang', '翻译', 'i18n', 'phtml', '文案', 'csv',
         'en_us', 'zh_hans_cn', '@lang', 'ParseError',
     ],
+    'exclude_triggers' => [
+        '不要翻译', '无需翻译', '不用翻译', '不需要翻译', '无需 i18n', '不改文案',
+    ],
     'authoritative_doc' => 'app/code/Weline/I18n/doc/模块翻译CSV规范.md',
     'authoritative_docs' => [
         'app/code/Weline/I18n/doc/模块翻译CSV规范.md',

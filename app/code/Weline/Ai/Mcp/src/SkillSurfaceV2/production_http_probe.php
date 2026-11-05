@@ -18,6 +18,7 @@ return [
         '生产 curl', '线上 curl', '本机 curl 生产', 'curl 公网',
         'production probe', 'production http probe', 'production_http_probe',
         'weline-production-http-probe',
+        '502', '503', '521', '探活', '线上故障', '接口报错',
     ],
     'authoritative_skill' => 'weline-production-http-probe',
     'authoritative_doc' => 'dev/ai-command/ai/生产HTTP探活.md',

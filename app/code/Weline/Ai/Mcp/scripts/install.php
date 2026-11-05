@@ -222,6 +222,7 @@ function welineMcpWriteMarketplace(string $root, string $config, string $marketp
                     'get_skill',
                     'search_project_knowledge',
                     'get_indexed_document',
+                    'code_graph_query',
                     'health',
                 ],
             ],

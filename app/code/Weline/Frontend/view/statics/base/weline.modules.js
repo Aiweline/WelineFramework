@@ -33,6 +33,13 @@
             load: "eager",
             description: "AI 聊天页应用"
         },
+        widgetAsync: {
+            origin_paths: ["app/code/Weline/Widget/view/statics/js/widget-async.js"],
+            paths: ["Weline_Widget::js/widget-async.js"],
+            globalVar: "WelineWidgetAsync",
+            load: "defer",
+            description: "异步部件基类：占位扫描、统一片段请求、按 defer 加载部件模块"
+        },
         themePrepaint: {
             origin_paths: ["app/code/Weline/Theme/view/statics/ui/weline-theme-prepaint.js"],
             paths: ["Weline_Theme::ui/weline-theme-prepaint.js"],
@@ -76,8 +83,8 @@
             description: "迷你购物车 extras 页签交互"
         },
         miniCartIcon: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261102-async-shell1"],
-            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261102-async-shell1"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js"],
+            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js"],
             globalVar: "WelineMiniCartIcon",
             load: "eager",
             description: "迷你购物车图标与抽屉"
@@ -587,6 +594,13 @@
             globalVar: "WelineDaocharmsTown",
             load: "eager",
             description: "真实商品三维镇内选购"
+        },
+        appDownloadFloat: {
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js", "app/code/Weline/App/view/statics/js/widgets/app-download-async.js"],
+            paths: ["Weline_Theme::js/widgets/widget-assets-runtime.js", "Weline_App::js/widgets/app-download-async.js"],
+            globalVar: null,
+            load: "defer",
+            description: "下载 App 悬浮部件的异步模块（占位注入后接管二维码与版本水合）"
         },
         pointsCheckout: {
             origin_paths: ["app/code/Weline/Points/view/statics/js/points-discount.js?v=20261027-1"],

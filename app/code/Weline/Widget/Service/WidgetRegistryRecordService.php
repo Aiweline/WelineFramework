@@ -6,6 +6,8 @@ namespace Weline\Widget\Service;
 
 use Weline\Widget\Model\WidgetRegistryEntry;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
+use Weline\Framework\Cache\Namespace\NamespacePath;
 
 class WidgetRegistryRecordService
 {
@@ -67,6 +69,7 @@ class WidgetRegistryRecordService
             }
             $this->retireAbsentDefinitions($context['scan_coverage'] ?? [], $report);
             ($this->planRepository ?? ObjectManager::getInstance(DefaultInjectionPlanRepository::class))->clearMemo();
+            $this->bumpLedgerGeneration($report);
         } catch (\Throwable $e) {
             $report['db_available'] = false;
             $report['error'] = $e->getMessage();
@@ -74,6 +77,35 @@ class WidgetRegistryRecordService
         }
 
         return $report;
+    }
+
+    /**
+     * 账本变了，但请求期进程袋还钉着旧代次（默认注入计划按 `global/widget/registry` 代次取袋）。
+     * 只在本轮真有增/改/退订时 bump 一次，其余 Worker 下一个请求即重建；
+     * bump 失败只记日志，不推翻已经落库的同步结果。
+     *
+     * @param array<string,mixed> $report
+     */
+    private function bumpLedgerGeneration(array $report): void
+    {
+        if ((int)($report['created_count'] ?? 0) <= 0
+            && (int)($report['updated_count'] ?? 0) <= 0
+            && (int)($report['retired_count'] ?? 0) <= 0
+        ) {
+            return;
+        }
+
+        try {
+            ObjectManager::getInstance(NamespaceGenerationInterface::class)->bump(
+                ObjectManager::getInstance(NamespacePath::class)->global('widget', ['registry'])
+            );
+        } catch (\Throwable $e) {
+            w_log_error(
+                '默认注入计划账本代次 bump 失败: ' . $e->getMessage(),
+                [],
+                'WidgetRegistryEntry'
+            );
+        }
     }
 
     /** Only the scanner's completed module inventory can establish absence. */

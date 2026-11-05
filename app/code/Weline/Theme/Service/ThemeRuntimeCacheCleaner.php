@@ -638,7 +638,13 @@ final class ThemeRuntimeCacheCleaner
         }
     }
 
-    private function scopeThemeNamespace(NamespacePath $paths, ScopeIdentity $identity): string
+    /**
+     * Scope 的 Theme 命名空间（发布时 bump 的就是它）。
+     *
+     * public：已发布布局快照等跨请求进程快照需要拿同一个路径做代次键，
+     * 否则路径形状会在两处各写一遍并逐渐骸开。
+     */
+    public function scopeThemeNamespace(NamespacePath $paths, ScopeIdentity $identity): string
     {
         if ($identity->isGlobal()) {
             return $paths->global('storefront', ['theme']);

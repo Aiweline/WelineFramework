@@ -300,6 +300,23 @@ class Widget implements TaglibInterface
                 $params = \Weline\Theme\Helper\PolicyDocumentDefaults::hydrateParams($params);
             }
 
+            // 异步部件（@widget.async=true）：框架统一出空 SSR 标记，部件模板不参与首屏渲染。
+            // 编辑器 / 主题预览必须看得到真实部件，强制走同步 SSR。
+            $asyncModule = \trim((string)($widget['async_module'] ?? ''));
+            if (self::isAsyncWidget($widget) && !self::asyncStubSuppressed()) {
+                // 部件 CSS 必须随占位一起下发：部件 HTML 延后注入，样式不能等。
+                return self::asyncStyleTags($widget, $params, (string)($widget['template'] ?? ''))
+                    . self::renderAsyncStub(
+                    $type,
+                    $widgetCode,
+                    \trim((string)($spec['module'] ?? ($widget['module'] ?? ''))),
+                    $params,
+                    $asyncModule,
+                    (int)($widget['async_cache'] ?? 0),
+                    ($widget['async_module_defer'] ?? true) !== false,
+                );
+            }
+
             $blockClass = (string)($spec['block_class'] ?? '');
             $template = (string)($spec['template'] ?? '');
             $instanceTtl = \Weline\Widget\Cache\WidgetOutputCache::normalizeTtl($spec['cache'] ?? null);
@@ -390,6 +407,311 @@ class Widget implements TaglibInterface
             w_log_error('Widget runtime inline 渲染错误: ' . $e->getMessage(), [], 'WidgetTaglib');
 
             return '<!-- Widget 错误: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . ' -->';
+        }
+    }
+
+    /**
+     * 按部件身份渲染（部件模块统一入口，供放置层调用）：
+     * 异步部件出框架占位；同步部件由部件模块按自己的模板渲染。
+     *
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $context
+     */
+    public static function renderWidgetCode(
+        string $type,
+        string $code,
+        array $config = [],
+        array $context = [],
+    ): string {
+        $type = \trim($type) !== '' ? \trim($type) : 'content';
+        $code = \trim($code);
+        if ($code === '') {
+            return '';
+        }
+
+        $widget = ObjectManager::getInstance(WidgetData::class)->getWidget($type, $code);
+        if (!\is_array($widget)) {
+            return '';
+        }
+
+        // 全局区片段本身就是异步水合：水合端点要正文，不能再套一层占位。
+        $fragmentMode = (string)($context['render_mode'] ?? '') === 'fragment';
+        if (!$fragmentMode && empty($context['preview_mode']) && self::isAsyncWidget($widget)) {
+            return self::renderAsyncStub(
+                $type,
+                $code,
+                (string)($widget['module'] ?? ''),
+                $config,
+                \trim((string)($widget['async_module'] ?? '')),
+                (int)($widget['async_cache'] ?? 0),
+                ($widget['async_module_defer'] ?? true) !== false,
+            );
+        }
+
+        $template = (string)($widget['template'] ?? '');
+        if ($template === '') {
+            return '';
+        }
+
+        // 部件样式随内容一起下发（同一请求按 URL 去重）：全局区片段不再渲染片段自带的
+        // <css> 声明，样式必须由部件自己的 @widget.source 补齐，否则异步/片段模式会掉样式。
+        return self::asyncStyleTags($widget, $config, $template) . self::renderTemplate($template, $config);
+    }
+
+    /**
+     * 部件统一渲染入口：部件自己判定是否异步，同步时再调用 Theme 渲染引擎出 HTML。
+     *
+     * 槽位注入 / 全局区片段 / 编辑器预览都走这里，保证「异步只在 Weline_Widget 判定」，
+     * Theme 侧只负责把定义与配置交过来。
+     *
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $context
+     */
+    public static function renderPlaceable(
+        object $definition,
+        array $config = [],
+        ?object $theme = null,
+        array $context = [],
+    ): string {
+        $type = \trim((string)($definition->type ?? ''));
+        $code = \trim((string)($definition->code ?? ($definition->name ?? '')));
+        $module = \trim((string)($definition->module ?? ''));
+        if ($type === '' || $code === '') {
+            return '';
+        }
+
+        if (empty($context['preview_mode']) && !self::asyncStubSuppressed()) {
+            $widget = ObjectManager::getInstance(WidgetData::class)->getWidget($type, $code);
+            if (\is_array($widget) && self::isAsyncWidget($widget)) {
+                return self::renderAsyncStub(
+                    $type,
+                    $code,
+                    $module,
+                    $config,
+                    \trim((string)($widget['async_module'] ?? '')),
+                    (int)($widget['async_cache'] ?? 0),
+                    ($widget['async_module_defer'] ?? true) !== false,
+                );
+            }
+        }
+
+        if (!\class_exists(\Weline\Theme\Service\ThemeComponentRenderer::class)) {
+            return '';
+        }
+
+        return (string)ObjectManager::getInstance(\Weline\Theme\Service\ThemeComponentRenderer::class)
+            ->render($definition, $config, $theme, $context);
+    }
+
+    /**
+     * 异步片段缓存 TTL（秒）；0 = 不缓存。
+     */
+    public static function asyncCacheTtl(string $type, string $code): int
+    {
+        $widget = ObjectManager::getInstance(WidgetData::class)->getWidget(
+            \trim($type) !== '' ? \trim($type) : 'content',
+            \trim($code)
+        );
+
+        return \is_array($widget) ? \max(0, (int)($widget['async_cache'] ?? 0)) : 0;
+    }
+
+    /**
+     * 部件是否声明异步：{@see @widget.async} 为 true 且 {@see @widget.async_module} 非空。
+     * 半配置（只写 async 不写模块）按同步处理，避免首屏出空壳。
+     *
+     * @param array<string, mixed> $widget
+     */
+    public static function isAsyncWidget(array $widget): bool
+    {
+        return ($widget['async'] ?? false) === true
+            && \trim((string)($widget['async_module'] ?? '')) !== '';
+    }
+
+    /**
+     * 编辑器 / 主题预览 / 部件画布必须看到真实部件：此场景禁用异步占位，回退同步 SSR。
+     */
+    public static function asyncStubSuppressed(): bool
+    {
+        if (isset($_SERVER['WELINE_ASYNC_WIDGET_SSR']) && $_SERVER['WELINE_ASYNC_WIDGET_SSR'] === '1') {
+            return true;
+        }
+
+        try {
+            if (\class_exists(\Weline\Theme\Helper\PreviewManager::class)
+                && \Weline\Theme\Helper\PreviewManager::isPreviewMode()
+            ) {
+                return true;
+            }
+        } catch (\Throwable) {
+        }
+
+        foreach (['editor_mode', 'preview_mode', 'weline_editor', 'shell'] as $key) {
+            if (!isset($_GET[$key])) {
+                continue;
+            }
+            $value = \strtolower(\trim((string)$_GET[$key]));
+            if ($value !== '' && $value !== '0' && $value !== 'false') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 框架唯一异步占位结构（部件模块不得自定义）。
+     *
+     * @param array<string, mixed> $params
+     */
+    public static function renderAsyncStub(
+        string $type,
+        string $code,
+        string $module,
+        array $params,
+        string $asyncModule,
+        int $asyncCacheTtl,
+        bool $defer,
+        ?string $fragmentUrl = null,
+    ): string {
+        $config = [
+            'type' => $type,
+            'code' => $code,
+            'module' => $module,
+        ];
+        if ($params !== []) {
+            $config['params'] = $params;
+        }
+
+        $attributes = [
+            'data-widget-async' => '1',
+            'data-widget-code' => $code,
+            'data-widget-type' => $type,
+            'data-widget-module' => $module,
+            'data-widget-async-module' => $asyncModule,
+            'data-widget-async-defer' => $defer ? '1' : '0',
+            'data-widget-async-cache' => (string)\max(0, $asyncCacheTtl),
+            'data-widget-fragment' => $fragmentUrl !== null && $fragmentUrl !== ''
+                ? $fragmentUrl
+                : self::asyncFragmentUrl($type, $code),
+            // 基类加载器随占位声明：idle 才加载，首屏关键路径不带它。
+            'data-weline-load' => 'widgetAsync',
+            'data-weline-load-when' => 'idle',
+            'data-widget-config' => (string)\json_encode(
+                $config,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT
+            ),
+        ];
+
+        $html = '<div';
+        foreach ($attributes as $name => $value) {
+            $html .= ' ' . $name . '="' . \htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
+        }
+
+        return $html . '></div>';
+    }
+
+    /**
+     * 异步部件的样式随占位下发（同一请求内按 URL 去重，避免重复 <link>）。
+     *
+     * @param array<string, mixed> $widget
+     * @param array<string, mixed> $params
+     */
+    private static function asyncStyleTags(array $widget, array $params, string $templatePath): string
+    {
+        try {
+            $assets = (string)ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\WidgetAssetRenderer::class
+            )->render($widget, $params, $templatePath);
+        } catch (\Throwable) {
+            return '';
+        }
+
+        if ($assets === '' || !\preg_match_all('~<link\b[^>]*>~i', $assets, $matches)) {
+            return '';
+        }
+
+        $tags = '';
+        foreach ($matches[0] as $tag) {
+            if (!\preg_match('/\bhref=["\']([^"\']+)["\']/i', $tag, $hrefMatch)) {
+                continue;
+            }
+            $href = \html_entity_decode($hrefMatch[1], ENT_QUOTES, 'UTF-8');
+            if ($href === '') {
+                continue;
+            }
+            $tags .= $tag;
+        }
+
+        return $tags;
+    }
+
+    /**
+     * 异步片段地址：发布代次作为缓存失效键（主题/部件重新发布即换 v）。
+     */
+    public static function asyncFragmentUrl(string $type, string $code): string
+    {
+        $query = [
+            'type' => $type,
+            'code' => $code,
+        ];
+        $version = self::storefrontVersionToken();
+        if ($version !== '') {
+            $query['v'] = $version;
+        }
+
+        return '/widget/frontend/async?' . \http_build_query($query);
+    }
+
+    private static function storefrontVersionToken(): string
+    {
+        try {
+            if (\class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
+                $resolved = ObjectManager::getInstance(
+                    \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class
+                )->resolve();
+                $version = \trim((string)($resolved['themePublishedVersionId'] ?? ''));
+                if ($version !== '') {
+                    return $version;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
+    }
+
+    /**
+     * 片段端点专用：按同一套部件模板做 SSR（结构只维护一份，不写客户端模板）。
+     *
+     * @param array<string, mixed> $params
+     */
+    public static function renderAsyncFragment(string $type, string $code, array $params = []): string
+    {
+        /** @var WidgetData $widgetData */
+        $widgetData = ObjectManager::getInstance(WidgetData::class);
+        $widget = $widgetData->getWidget($type, $code);
+        if (!$widget || !self::isAsyncWidget($widget)) {
+            return '';
+        }
+
+        $widgetParams = \is_array($widget['params'] ?? null) ? $widget['params'] : [];
+        foreach ($widgetParams as $paramName => $paramConfig) {
+            if (!\array_key_exists($paramName, $params)) {
+                $params[$paramName] = \is_array($paramConfig) ? ($paramConfig['default'] ?? null) : null;
+            }
+        }
+
+        $previous = $_SERVER['WELINE_ASYNC_WIDGET_SSR'] ?? null;
+        $_SERVER['WELINE_ASYNC_WIDGET_SSR'] = '1';
+        try {
+            return self::renderWidget($widget, $params, '', '');
+        } finally {
+            if ($previous === null) {
+                unset($_SERVER['WELINE_ASYNC_WIDGET_SSR']);
+            } else {
+                $_SERVER['WELINE_ASYNC_WIDGET_SSR'] = $previous;
+            }
         }
     }
 

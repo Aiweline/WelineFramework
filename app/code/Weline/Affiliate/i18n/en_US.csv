@@ -81,6 +81,10 @@ settings,settings
 "Save affiliate data","Save affiliate data"
 "Open affiliate save route","Open affiliate save route"
 "mdi mdi-content-save-outline","mdi mdi-content-save-outline"
+我要推广,"Advertise with us"
+分销计划,"Affiliate program"
+进入分销中心需要登录。,"Sign in to open the affiliate center."
+进入分销中心,"Open affiliate center"
 我的分销,"My Affiliate"
 分销等级,"Affiliate level"
 佣金比例,"Commission rate"
@@ -90,14 +94,13 @@ settings,settings
 专属推广链接,"Referral link"
 复制链接,"Copy link"
 已复制,Copied
-进入分销中心需要登录。,"Sign in to open the affiliate center."
-进入分销中心,"Open affiliate center"
 启用中,Active
 已停用,Disabled
 分销数据暂时无法加载,"Affiliate data is temporarily unavailable."
 "分销 API 未初始化","Affiliate API is not initialized"
 分销员,Affiliate
 分销面板,"Affiliate panel"
+分享、转化与佣金,"Shares, conversions, and commission"
 加载中,Loading
 去登录,"Sign in"
 分享好物，赚取佣金,"Share finds, earn commission"
@@ -113,7 +116,6 @@ settings,settings
 复制,Copy
 分享,Share
 分享到社交平台,"Share to social platforms"
-分享、转化与佣金,"Shares, conversions, and commission"
 Affiliate,Affiliate
 分销中心,"Affiliate Center"
 当前访问范围,"Current scope"
@@ -235,8 +237,6 @@ SKU,SKU
 鍘熷洜,Reason
 提现金额,"Withdrawal amount"
 收款账号或备注,"Payment account or note"
-我要推广,"Advertise with us"
-分销计划,"Affiliate program"
 "配置写入当前作用范围；切换范围后页面会按新范围加载。网站规则默认向下覆盖店铺与渠道，下级单独保存后覆盖网站。关闭分销分享后商品详情不再展示该区块。保存后经 SystemConfig 变更事件清理店面配置缓存。","配置写入当前作用范围；切换范围后页面会按新范围加载。网站规则默认向下覆盖店铺与渠道，下级单独保存后覆盖网站。关闭分销分享后商品详情不再展示该区块。保存后经 SystemConfig 变更事件清理店面配置缓存。"
 在统一配置中心打开,"Open in unified config center"
 作用范围,Scope

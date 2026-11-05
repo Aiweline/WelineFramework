@@ -85,6 +85,66 @@ if ($previousTerm !== false) {
     putenv('TERM_PROGRAM=' . $previousTerm);
 }
 
+$zedEnvSnapshot = [
+    'CODEX_THREAD_ID' => getenv('CODEX_THREAD_ID'),
+    'CLAUDECODE' => getenv('CLAUDECODE'),
+    'CURSOR_AGENT' => getenv('CURSOR_AGENT'),
+    'CURSOR_EXTENSION_HOST_ROLE' => getenv('CURSOR_EXTENSION_HOST_ROLE'),
+    'TERM_PROGRAM' => getenv('TERM_PROGRAM'),
+];
+putenv('CODEX_THREAD_ID');
+putenv('CLAUDECODE');
+putenv('CURSOR_AGENT');
+putenv('CURSOR_EXTENSION_HOST_ROLE');
+putenv('TERM_PROGRAM=zed');
+$check(
+    welineMcpInstallDetectPrimaryHost([], [], null) === 'zed',
+    'TERM_PROGRAM=zed selects the zed host without other host env vars',
+);
+foreach ($zedEnvSnapshot as $zedEnvKey => $zedEnvValue) {
+    putenv($zedEnvValue === false ? $zedEnvKey : $zedEnvKey . '=' . $zedEnvValue);
+}
+
+$zedGuidance = welineMcpInstallResolveGuidance(dirname(__DIR__), 'zed');
+$check(
+    ($zedGuidance['primary_host'] ?? '') === 'zed'
+        && is_array($zedGuidance['hosts']['zed'] ?? null)
+        && ($zedGuidance['hosts']['zed']['schema_version'] ?? '') === 'zed-mcp-install.v1',
+    'zed is a first-class host entry with its own install envelope',
+);
+$zedProbe = is_array($zedGuidance['hosts']['zed']['host'] ?? null) ? $zedGuidance['hosts']['zed']['host'] : [];
+$check(
+    array_key_exists('ready', $zedProbe) && array_key_exists('config_path', $zedProbe),
+    'zed probe reports readiness plus the settings path without parsing JSONC',
+);
+$zedTargets = welineMcpInstallHostConfigTargets();
+$check(
+    str_contains((string) ($zedTargets['zed']['config'] ?? ''), '~/.config/zed/settings.json'),
+    'known targets document the Zed user-level JSONC settings path',
+);
+$zedPlan = welineMcpInstallZedInstallPlan('~/.config/zed/settings.json', WELINE_PROJECT_INTELLIGENCE_MCP_SERVER, [
+    'command' => 'php',
+    'args' => ['/tmp/learning-mcp'],
+    'cwd' => '/tmp/repo',
+    'env' => ['LEARNING_MCP_BOUND_REPOSITORY' => '/tmp/repo'],
+]);
+$check(
+    ($zedPlan['mode'] ?? '') === 'session_install'
+        && str_contains((string) ($zedPlan['summary'] ?? ''), '禁止整文件重写')
+        && str_contains((string) ($zedPlan['summary'] ?? ''), '保留')
+        && ($zedPlan['anchor'] ?? '') === '"context_servers": {',
+    'zed install plan forbids whole-file rewrite and protects JSONC comments',
+);
+$zedEntry = is_array($zedPlan['context_server_entry'][WELINE_PROJECT_INTELLIGENCE_MCP_SERVER] ?? null)
+    ? $zedPlan['context_server_entry'][WELINE_PROJECT_INTELLIGENCE_MCP_SERVER]
+    : [];
+$check(
+    isset($zedEntry['command'], $zedEntry['args'])
+        && !array_key_exists('cwd', $zedEntry)
+        && ($zedEntry['env']['LEARNING_MCP_BOUND_REPOSITORY'] ?? '') === '/tmp/repo',
+    'zed context_servers entry keeps command/args/env and drops unsupported cwd',
+);
+
 $decision = welineGuidanceReloadDecision(['kind' => 'codex_app_server', 'current' => false], false, true);
 $check(
     $decision['reload_required'] === false && $decision['plugin_refresh_deferred'] === true,
@@ -108,6 +168,7 @@ try {
     ), true, 512, JSON_THROW_ON_ERROR);
     $enabled = $configuration['mcpServers']['weline-project-intelligence']['enabled_tools'] ?? [];
     $expected = [
+        'code_graph_query',
         'get_indexed_document',
         'get_skill',
         'health',
@@ -120,7 +181,7 @@ try {
     ];
     $sortedEnabled = is_array($enabled) ? $enabled : [];
     sort($sortedEnabled);
-    $check($sortedEnabled === $expected, 'plugin enabled_tools equals the nine index/knowledge tools');
+    $check($sortedEnabled === $expected, 'plugin enabled_tools equals the ten index/knowledge tools');
 } finally {
     if (is_dir($temporary)) {
         $files = new RecursiveIteratorIterator(

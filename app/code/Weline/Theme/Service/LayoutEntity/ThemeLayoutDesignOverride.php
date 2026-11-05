@@ -24,7 +24,11 @@ final class ThemeLayoutDesignOverride
             return false;
         }
         try {
-            $theme = (clone ObjectManager::getInstance(WelineTheme::class))->clearData()->clearQuery()->load($themeId);
+            $row = WelineTheme::catalogRow($themeId);
+            if ($row === []) {
+                return false;
+            }
+            $theme = ObjectManager::make(WelineTheme::class)->setData($row);
             if ((int)$theme->getId() !== $themeId) {
                 return false;
             }

@@ -473,6 +473,9 @@ private function assert_ProductDetailTemplate_testDetailControllerOwnsTheNativeP
     self::assertStringContainsString("\$this->assign('meta_keywords', \$seoKeywords)", $controller);
     self::assertStringContainsString('publishedOffersForProduct($productId)', $controller);
     self::assertStringContainsString('publishedOffersBySlug($slug)', $controller);
+    self::assertStringContainsString('ProductRouteIdentity::slug', $controller);
+    self::assertStringContainsString('ProductRouteIdentity::productId', $controller);
+    self::assertStringNotContainsString('parse_url($uri', $controller);
     self::assertStringContainsString('carryResolvedIdentity', $controller);
     self::assertStringContainsString('renderUnavailableProduct', $controller);
     self::assertStringContainsString('unavailable.phtml', $controller);

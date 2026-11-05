@@ -21,6 +21,7 @@ return [
         'Webhook', 'webhook', '对账', 'reconcile', 'Payable', 'createPayment',
         'resumePayment', 'shell_token', 'payment-shell', 'provider-development',
         'Team:支付开发工程师', '支付方式对接', '对接支付', '支付模块',
+        '没付款', '付款失败', '支付失败', '付不了款', '下单未支付',
     ],
     'authoritative_docs' => [
         'app/code/Weline/Payment/doc/payment-shell.md',

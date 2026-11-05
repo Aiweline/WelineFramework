@@ -49,9 +49,9 @@ if ($mode === 'widget' || $mode === 'all') {
     $t = $read($template, '部件模板');
     $expect(str_contains($t, '@widget.code {social-float}'), '模板缺少 @widget.code {social-float}');
     $expect(str_contains($t, '@widget.page_layouts {["*"]}'), '模板必须声明 @widget.page_layouts {["*"]}');
-    $expect(str_contains($t, '@widget.slot {storefront-float-start}'), '模板必须声明 @widget.slot {storefront-float-start}');
+    $expect(str_contains($t, '@widget.slot {storefront-float-middle-start}'), '模板必须声明 @widget.slot {storefront-float-middle-start}');
     $expect(str_contains($t, '"layout_type":"*"'), 'default_injections 必须 layout_type 为 *');
-    $expect(str_contains($t, '"slot":"storefront-float-start"'), 'default_injections 必须注入 storefront-float-start');
+    $expect(str_contains($t, '"slot":"storefront-float-middle-start"'), 'default_injections 必须注入 storefront-float-middle-start');
     $expect(str_contains($t, '"required":true'), 'default_injections 必须 required=true（主题重写 footer 后仍注入）');
     $expect(str_contains($t, 'data-testid="footer-social-float"'), '模板缺少 data-testid="footer-social-float"');
     $expect(str_contains($t, 'data-weline-load="footerSocialFloat"'), '模板缺少 data-weline-load="footerSocialFloat"（异步加载触发器）');

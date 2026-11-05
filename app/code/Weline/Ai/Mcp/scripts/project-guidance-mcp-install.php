@@ -24,6 +24,8 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
     $inactiveHost = ['ready' => null, 'binary_found' => false, 'reason' => 'inactive_host_not_probed'];
     $cursorProbe = $primaryHost === 'cursor' ? welineMcpInstallProbeCursor($repoRoot) : $inactiveHost;
     $claudeProbe = $primaryHost === 'claude' ? welineMcpInstallProbeClaude($repoRoot) : $inactiveHost;
+    $inactiveZedHost = ['ready' => null, 'config_path' => null, 'reason' => 'inactive_host_not_probed'];
+    $zedProbe = $primaryHost === 'zed' ? welineMcpInstallProbeZed() : $inactiveZedHost;
 
     // Cursor project config: Weline only. Cognition lives in user ~/.cursor/mcp.json (single落点).
     $cursorWelineDocument = [
@@ -97,6 +99,18 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
                 ],
             ],
         ),
+        // Zed：用户级 settings.json 是 JSONC（// 注释 + 尾逗号），只允许锚点插入，禁止整文件重写。
+        'zed' => welineMcpInstallHostEnvelope(
+            'zed-mcp-install.v1',
+            $zedProbe,
+            ($zedProbe['ready'] ?? null) === true
+                ? null
+                : welineMcpInstallZedInstallPlan(
+                    (string) ($zedProbe['config_path'] ?? '~/.config/zed/settings.json'),
+                    $serverName,
+                    $serverConfig,
+                ),
+        ),
         // 宿主不在支持表内不等于无事可做：给出 Agent 自我注册的可执行步骤，
         // 否则换一个编辑器就会退化成「ensure 说 ready、会话里却一个工具都没有」。
         'unknown' => welineMcpInstallHostEnvelope(
@@ -128,6 +142,9 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
     $nextAction = 'Verify the current session exposes the required Weline tools, then call prepare_project. Local host guidance cannot observe the session tool catalog.';
     if ($primaryReady === false) {
         $nextAction = 'Execute host_mcp_install.hosts.' . $primaryHost . '.install.steps in this session (skip write_json when noop=true; do not ask the user to open Settings; do not Reload Window), rerun ensure-project-guidance, then prepare_project.';
+        if ($primaryHost === 'zed') {
+            $nextAction = 'Execute host_mcp_install.hosts.zed.install.steps[0] as a single anchor insertion right after "context_servers": { in the user-level Zed JSONC settings: keep the // comments and trailing commas, never rewrite the file, never re-serialize it, and stop if the anchor is missing or occurs more than once. Then enable the server in Zed (Settings → AI → MCP Servers) and open a NEW Agent session (running sessions do not hot-load MCP), then verify every mcp_required_tool before prepare_project.';
+        }
     } elseif ($primaryHost === 'unknown') {
         $nextAction = 'Install the MCP into your own host BEFORE any doc fallback (mcp_call_scope SELF-INSTALL): primary_host=unknown means this host is not in the supported table, not "nothing to do". Resolve this host\'s MCP config location yourself (host_mcp_install.hosts.unknown.install.steps[].known_targets, or the host documentation when unlisted), write host_mcp_install.registration (command/args/env) into it only when not semantically equivalent, enable the server inside the host, then open a new session and verify every mcp_required_tool is exposed before prepare_project. Do not ask the user to hand-edit Settings or Reload Window. Reading AI硬规则索引.md instead of installing is allowed ONLY after the install path is proven impossible on this host, and the reason must be reported.';
     }
@@ -238,6 +255,8 @@ function welineMcpInstallDetectPrimaryHost(array $cursorProbe, array $claudeProb
         'cursor' => 'cursor',
         'claude', 'claude_code' => 'claude',
         'vscode' => 'vscode',
+        // Zed 的 agent 终端导出 TERM_PROGRAM=zed（同时带 ZED_TERM / ZED_ENVIRONMENT）。
+        'zed' => 'zed',
         default => 'unknown',
     };
 }
@@ -309,6 +328,97 @@ function welineMcpInstallProbeClaude(string $repoRoot): array
     ];
 }
 
+/** Zed 用户级 settings.json 路径；无法解析 HOME 时返回 null。 */
+function welineMcpInstallZedConfigPath(): ?string
+{
+    $home = welineMcpServerTryResolveHome();
+
+    return $home === null ? null : $home . '/.config/zed/settings.json';
+}
+
+/** Zed 没有 CLI 探针：只对用户级 JSONC 做子串判定，绝不解析
+ *  （行首 // 注释与尾逗号会让严格 json_decode 失败，改前也一样失败）。
+ *  @return array<string,mixed>
+ */
+function welineMcpInstallProbeZed(): array
+{
+    $path = welineMcpInstallZedConfigPath();
+    if ($path === null) {
+        return ['ready' => null, 'config_path' => null, 'reason' => 'zed_home_unresolved'];
+    }
+    if (!is_file($path)) {
+        return ['ready' => false, 'config_path' => $path, 'reason' => 'zed_settings_not_found'];
+    }
+    $contents = @file_get_contents($path);
+    if (!is_string($contents)) {
+        return ['ready' => null, 'config_path' => $path, 'reason' => 'zed_settings_unreadable'];
+    }
+    // settings.json 里的键名用连字符，MCP serverInfo 用下划线，两种都认。
+    $underscored = WELINE_PROJECT_INTELLIGENCE_MCP_SERVER;
+    $hyphenated = str_replace('_', '-', $underscored);
+    $registered = str_contains($contents, $underscored) || str_contains($contents, $hyphenated);
+
+    return [
+        'ready' => $registered,
+        'config_path' => $path,
+        'reason' => $registered ? 'zed_settings_registered' : 'zed_settings_missing_entry',
+    ];
+}
+
+/** Zed 的安装计划：用户级 JSONC 只能锚点插入，不能整文件重写。
+ *  @param array<string,mixed> $serverConfig
+ *  @return array<string,mixed>
+ */
+function welineMcpInstallZedInstallPlan(string $configPath, string $serverName, array $serverConfig): array
+{
+    $env = is_array($serverConfig['env'] ?? null) ? $serverConfig['env'] : [];
+    // Zed 的 context_servers 条目只支持 command/args/env，不支持 cwd。
+    $entry = [
+        'command' => (string) ($serverConfig['command'] ?? 'php'),
+        'args' => is_array($serverConfig['args'] ?? null) ? array_values($serverConfig['args']) : [],
+    ];
+    if ($env !== []) {
+        $entry['env'] = $env;
+    }
+
+    return [
+        'mode' => 'session_install',
+        'summary' => 'Zed 的 MCP 注册在用户级 settings.json（JSONC：含行首 // 注释与尾逗号）。只允许锚点插入：在 "context_servers": { 之后新增一条本服务配置，保留既有注释与尾逗号；禁止整文件重写，禁止 json_decode→json_encode 回写。写入后在 Zed 内启用该 server，并新开 Agent 会话——已运行的会话不会热加载。',
+        'config_path' => $configPath,
+        'anchor' => '"context_servers": {',
+        'context_server_entry' => [$serverName => $entry],
+        'steps' => [
+            [
+                'kind' => 'edit_jsonc_anchor',
+                'required' => true,
+                'config_path' => $configPath,
+                'anchor' => '"context_servers": {',
+                'insert_after_anchor' => [$serverName => $entry],
+                'rules' => [
+                    '保留 // 注释与尾逗号；禁止整文件重写或重新序列化。',
+                    '先断言锚点恰好出现 1 次再插入；出现 0 次或多次时停手并报告。',
+                    '服务名已存在（语义等价注册）时跳过，不重复写入。',
+                ],
+            ],
+            [
+                'kind' => 'enable_in_host',
+                'required' => true,
+                'how' => 'Zed → Settings → AI → MCP Servers：确认该 server 为 active（绿点）；未启用则在 Zed 内启用。',
+            ],
+            [
+                'kind' => 'verify_session_tools',
+                'required' => true,
+                'tools_source' => 'ensure-project-guidance.mcp_required_tools',
+                'reason' => 'Zed 不提供 CLI 探针，本地 guidance 看不到会话工具目录；必须新开 Agent 会话后逐个确认 mcp_required_tool 可见。',
+            ],
+        ],
+        'notes' => [
+            'Zed 无 CLI 探针：本探针只做 settings.json 子串判定，不能证明会话真的挂上了。',
+            'settings.json 键名用连字符（如 weline-project-intelligence），与 MCP serverInfo 下划线常量不同名，两种都认。',
+        ],
+    ];
+}
+
 /** 已知宿主的 MCP 注册位置与启用方式。
  *  未命中支持表时由 Agent 据此定位，避免每换一个编辑器就重新考古一次。
  *  @return array<string,array<string,string>>
@@ -327,6 +437,10 @@ function welineMcpInstallHostConfigTargets(): array
         'vscode' => [
             'config' => '.vscode/mcp.json',
             'activate' => 'Copilot Agent 会话内重新加载 MCP',
+        ],
+        'zed' => [
+            'config' => '~/.config/zed/settings.json（用户级 JSONC：键名 context_servers.<server>，必须保留 // 注释与尾逗号，只能锚点插入）',
+            'activate' => 'Zed → Settings → AI → MCP Servers 确认 server 为 active；然后新开 Agent 会话（已运行会话不会热加载）',
         ],
         'codex' => [
             'config' => '~/.learning-mcp/codex-marketplace/plugins/weline-project-intelligence/.codex-plugin/plugin.json',

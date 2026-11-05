@@ -200,6 +200,19 @@ final class FloatChromeCriticalParityTest extends TestCase
         );
     }
 
+    public function testSheetCollapsedDockUsesFullShiftNotPartialSliver(): void
+    {
+        $css = $this->sheetCss();
+        $emitter = $this->emitterOutput();
+        foreach (['calc(-100% + 24px)', 'calc(100% - 24px)', 'calc(-100% + 24px)'] as $forbidden) {
+            self::assertStringNotContainsString($forbidden, $css, 'sheet 禁止 partial sliver 收起位移');
+        }
+        self::assertStringContainsString("translateX(-100%)", $css);
+        self::assertStringContainsString("translateX(100%)", $css);
+        self::assertStringContainsString('translateX(-100%)', $emitter);
+        self::assertStringContainsString('translateX(100%)', $emitter);
+    }
+
     public function testDesignThemeDoesNotForceHideDismiss(): void
     {
         $themeDir = $this->repoRoot() . '/app/design/Weline/playinginchina/frontend';

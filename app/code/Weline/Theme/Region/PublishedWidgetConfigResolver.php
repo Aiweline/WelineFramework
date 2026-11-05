@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Region;
 
+use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeContext;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
-use Weline\Theme\Api\Scoped\ThemeContentScope;
-use Weline\Theme\Api\Scoped\ThemeEditorContext;
-use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
-use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 
 /**
  * 把「编辑器发布的部件配置」交给全局区片段。
@@ -29,14 +28,26 @@ final class PublishedWidgetConfigResolver
     private static ?array $memo = null;
 
     /**
-     * 已发布载荷按 release_id 的进程级缓存：发布记录一旦写入就不再变化，
-     * 因此解码结果可以跨请求复用（每请求少解 60+ 份 JSON，约 2–3 ms）。
+     * 已发布部件配置的合并结果（进程快照，按发布代次分桶）。
      *
-     * @var array<int, array<string, array<string, mixed>>>
+     * 旧实现每请求 `select()` 一次 `theme_scope_release`（整行含 longtext payload）
+     * 并在 PHP 里重新合并 60+ 份载荷，真机 6.52ms/请求；可这张表只在发布时写。
+     * 键 =「当前作用域链的 Theme 命名空间代次指纹 + theme_id」，而所有发布路径
+     * （ThemeRuntimeCacheCleaner 的 clearScopedCaches / clearLayoutEntityCaches /
+     * invalidateAfterVersionPublish）本来就 bump 同一命名空间——所以别的 Worker
+     * 也会重建，不是「重启才生效」。
+     *
+     * @var array<string, array<string, array<string, mixed>>>
      */
-    private static array $payloadCache = [];
+    private static array $processSnapshot = [];
 
-    /** 测试/请求边界用。 */
+    /** 进程袋身份（显式命名，禁止匿名登记）。 */
+    private const SNAPSHOT_BAG = 'theme.published_widget_config.snapshot';
+
+    /** 一个 Worker 只服务少数站点，几十个作用域链已远超实际需要。 */
+    private const SNAPSHOT_BAG_MAX = 24;
+
+    /** 测试/请求边界用：清请求级 memo。进程快照由发布代次失效，不在此清。 */
     public static function reset(): void
     {
         self::$memo = null;
@@ -64,30 +75,65 @@ final class PublishedWidgetConfigResolver
         if (self::$memo !== null) {
             return self::$memo;
         }
-        self::$memo = [];
+        self::$memo = self::mergedFromSnapshot();
+
+        return self::$memo;
+    }
+
+    /**
+     * 合并结果：先问发布代次化的进程快照，没命中才回数据库重算一次。
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private static function mergedFromSnapshot(): array
+    {
         try {
             $themeId = self::currentThemeId();
             if ($themeId <= 0) {
-                return self::$memo;
+                return [];
             }
-            // 只认「已发布」的发布记录，并按发布时间（release_id）从旧到新合并：
-            // 后发布的覆盖先发布的。这样「编辑器最后一次发布」就是最终结果，
-            // 不受同身份重复 workspace 行、也不受作用域层级新旧不一致的影响。
-            $merged = [];
-            foreach (self::publishedPayloadsByAge($themeId) as $payload) {
-                foreach (self::collect($payload) as $code => $config) {
-                    $merged[$code] = isset($merged[$code]) && \is_array($merged[$code])
-                        ? \array_replace($merged[$code], $config)
-                        : $config;
-                }
+            $bagKey = self::snapshotKey($themeId);
+            if ($bagKey === null) {
+                // 没读到代次（发布中/事务内）：直读权威，不写进程袋。
+                return self::mergeReleasedPayloads($themeId);
             }
-            self::$memo = $merged;
+            $bag = &DictionaryCacheNamespace::processBag(
+                self::SNAPSHOT_BAG,
+                self::$processSnapshot,
+                self::SNAPSHOT_BAG_MAX,
+            );
+            if (isset($bag[$bagKey])) {
+                return $bag[$bagKey];
+            }
+
+            return $bag[$bagKey] = self::mergeReleasedPayloads($themeId);
         } catch (\Throwable) {
             // 读不到就按「没有编辑器配置」处理：片段走声明默认值，页面不能因此失败。
-            self::$memo = [];
+            return [];
+        }
+    }
+
+    /**
+     * 该主题下、当前作用域链内的所有已发布布局载荷，按发布时间（release_id）从旧到新，
+     * 合并成 widget_code => config。
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private static function mergeReleasedPayloads(int $themeId): array
+    {
+        // 只认「已发布」的发布记录，并按发布时间（release_id）从旧到新合并：
+        // 后发布的覆盖先发布的。这样「编辑器最后一次发布」就是最终结果，
+        // 不受同身份重复 workspace 行、也不受作用域层级新旧不一致的影响。
+        $merged = [];
+        foreach (self::publishedPayloadsByAge($themeId) as $payload) {
+            foreach (self::collect($payload) as $code => $config) {
+                $merged[$code] = isset($merged[$code]) && \is_array($merged[$code])
+                    ? \array_replace($merged[$code], $config)
+                    : $config;
+            }
         }
 
-        return self::$memo;
+        return $merged;
     }
 
     /**
@@ -100,6 +146,28 @@ final class PublishedWidgetConfigResolver
         if ($themeId <= 0) {
             return [];
         }
+        $scopes = [];
+        foreach (self::scopeChain() as $scope) {
+            $scopes[(string)$scope->storageScope] = true;
+        }
+        $out = [];
+        foreach (self::loadReleaseRows($themeId) as $entry) {
+            if (!isset($scopes[$entry['scope']])) {
+                continue;
+            }
+            $out[] = $entry['payload'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * 读权威发布行（只在快照未命中时执行）。
+     *
+     * @return list<array{release_id: int, scope: string, payload: array<string, mixed>}>
+     */
+    private static function loadReleaseRows(int $themeId): array
+    {
         try {
             $model = ObjectManager::getInstance(\Weline\Theme\Model\ThemeScopeRelease::class);
             // where 必须在 select() 之前链式调用才会生效（实测）；按主题+资源+区域先收窄，
@@ -113,45 +181,68 @@ final class PublishedWidgetConfigResolver
         } catch (\Throwable $__e) {
             return [];
         }
-        $scopes = [];
-        foreach (self::scopeChain() as $scope) {
-            $scopes[(string)$scope->storageScope] = true;
-        }
         $releases = [];
         foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
             if ((int)($row['theme_id'] ?? 0) !== $themeId) {
                 continue;
             }
             if ((string)($row['area'] ?? '') !== 'frontend' || (string)($row['resource_type'] ?? '') !== 'layout') {
                 continue;
             }
-            if (!isset($scopes[(string)($row['scope'] ?? '')])) {
-                continue;
-            }
             $releaseId = (int)($row['release_id'] ?? 0);
             if ($releaseId <= 0) {
                 continue;
             }
-            $releases[$releaseId] = $row;
+            $payload = \json_decode((string)($row['effective_payload_json'] ?? ''), true);
+            if (!\is_array($payload)) {
+                continue;
+            }
+            $releases[$releaseId] = [
+                'release_id' => $releaseId,
+                'scope' => (string)($row['scope'] ?? ''),
+                'payload' => $payload,
+            ];
         }
         \ksort($releases);
-        $out = [];
-        foreach ($releases as $releaseId => $row) {
-            if (!isset(self::$payloadCache[$releaseId])) {
-                $decoded = \json_decode((string)($row['effective_payload_json'] ?? ''), true);
-                if (!\is_array($decoded)) {
+
+        return \array_values($releases);
+    }
+
+    /**
+     * 快照键：当前作用域链的 Theme 命名空间代次 + theme_id。
+     *
+     * 发布只 bump 被发布那个作用域的 Theme 命名空间，所以键必须覆盖整条回退链，
+     * 否则「站点级发布、渠道级读者」会拿着旧快照。
+     */
+    private static function snapshotKey(int $themeId): ?string
+    {
+        try {
+            $namespaces = [];
+            $cleaner = ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class);
+            $paths = ObjectManager::getInstance(\Weline\Framework\Cache\Namespace\NamespacePath::class);
+            foreach (self::scopeChain() as $scope) {
+                try {
+                    $namespaces[] = $cleaner->scopeThemeNamespace($paths, $scope->identity);
+                } catch (\Throwable) {
                     continue;
                 }
-                self::$payloadCache[$releaseId] = $decoded;
-                if (\count(self::$payloadCache) > 256) {
-                    // 有界缓存：只保留最近 256 份，避免常驻 worker 无限增长。
-                    self::$payloadCache = \array_slice(self::$payloadCache, -256, null, true);
-                }
             }
-            $out[] = self::$payloadCache[$releaseId];
+            if ($namespaces === []) {
+                $namespaces[] = $paths->global('storefront', ['theme']);
+            }
+            $fingerprint = ObjectManager::getInstance(NamespaceGenerationInterface::class)
+                ->fingerprint($namespaces);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!\is_string($fingerprint) || $fingerprint === '') {
+            return null;
         }
 
-        return $out;
+        return $fingerprint . '|' . $themeId;
     }
 
     /**
@@ -219,13 +310,6 @@ final class PublishedWidgetConfigResolver
         }
 
         return $chain;
-    }
-
-    private static function storeMode(ScopeContext $scope): string
-    {
-        $mode = \trim((string)$scope->storeMode);
-
-        return $mode === '' ? 'normal' : $mode;
     }
 
     /** 诊断用：当前解析到的主题 id。 */

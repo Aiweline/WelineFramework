@@ -4,15 +4,41 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
+use Weline\Framework\Cache\Namespace\NamespacePath;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Dto\ThemeComponentDefinition;
 use Weline\Theme\Dto\ThemeSlotDefinition;
 use Weline\Theme\Model\WelineTheme;
 
 class ThemeComponentCatalog
 {
+    /** 请求内 L0：同一请求重复取用不再走进程袋查找。 */
     private array $cache = [];
     /** @var array<string, array<string, ThemeComponentDefinition>> */
     private array $identityIndex = [];
+
+    /**
+     * 进程袋：组件定义只依赖（主题代次 + area + themeId），是全局事实。
+     *
+     * 旧实现把 memo 放在实例字段上，而 ObjectManager 对未实现
+     * ProcessSharedInterface 的类按请求纤程建实例，memo 每请求必失 ——
+     * 于是每请求重走 177 个组件的目录扫描，并重读
+     * `w_theme_component`（每请求 2 次）+ `w_theme_component_version`（1 次），
+     * 首次构建实测 88.88 ms。静态袋是 Worker 级的，preload 期构建结果请求期
+     * 直接命中，加载就不必挪进请求里。
+     *
+     * 不放实例字段也不能改 ProcessSharedInterface：本类构造注入的
+     * {@see ThemeContextService} 带请求上下文（预览主题 / 站点应用），
+     * 变成进程单例会把 boot 期的上下文钉死在所有请求上。只共享不可变结果。
+     *
+     * @var array<string, array<int, ThemeComponentDefinition>>
+     */
+    private static array $processDefinitions = [];
+    /** @var array<string, array<string, ThemeComponentDefinition>> */
+    private static array $processIdentityIndex = [];
+    /** 快照建立时的代次指纹；代次变化即整袋作废 */
+    private static string $processGeneration = '';
 
     public function __construct(
         private readonly WelineTheme $welineTheme,
@@ -45,6 +71,14 @@ class ThemeComponentCatalog
             return $this->cache[$cacheKey];
         }
 
+        // 代次指纹按请求冻结（同命名空间请求内只读一次），本方法每请求只做一次比较。
+        $generation = self::syncProcessGeneration();
+        if (!$forceReload && $generation !== '' && isset(self::$processDefinitions[$cacheKey])) {
+            $this->cache[$cacheKey] = self::$processDefinitions[$cacheKey];
+
+            return $this->cache[$cacheKey];
+        }
+
         $definitions = [];
         $seen = [];
         $nativeThemeComponentCodes = [];
@@ -73,6 +107,12 @@ class ThemeComponentCatalog
             $this->identityIndex[$cacheKey][$definition->getIdentity()] = $definition;
         }
 
+        // 代次不可得（活跃事务 / 命名服务不可用）时不把快照钉进进程。
+        if ($generation !== '') {
+            self::$processDefinitions[$cacheKey] = $this->cache[$cacheKey];
+            self::$processIdentityIndex[$cacheKey] = $this->identityIndex[$cacheKey];
+        }
+
         return $this->cache[$cacheKey];
     }
 
@@ -85,7 +125,9 @@ class ThemeComponentCatalog
         $cacheKey = "{$themeId}:{$area}";
         $this->getDefinitionsForResolvedTheme($area, $resolvedTheme);
 
-        return $this->identityIndex[$cacheKey][$identity] ?? null;
+        $index = $this->identityIndex[$cacheKey] ?? self::$processIdentityIndex[$cacheKey] ?? [];
+
+        return $index[$identity] ?? null;
     }
 
     /**
@@ -178,6 +220,73 @@ class ThemeComponentCatalog
     {
         $this->cache = [];
         $this->identityIndex = [];
+        self::clearProcessSnapshot();
+    }
+
+    /**
+     * 清空进程袋。
+     *
+     * 同 Worker 内由 {@see \Weline\Theme\Api\Runtime\ProcessCacheResetter} 与
+     * {@see \Weline\Theme\Service\ThemeRuntimeCacheCleaner} 调用；跨 Worker 失效靠
+     * {@see self::GENERATION_NAMESPACES} 的代次 bump，不依赖本方法广播。
+     */
+    public static function clearProcessSnapshot(): void
+    {
+        self::$processDefinitions = [];
+        self::$processIdentityIndex = [];
+        self::$processGeneration = '';
+    }
+
+    /**
+     * 快照依赖的代次命名空间。
+     *
+     * - theme/catalogue：{@see WelineTheme::save_after()} / {@see \Weline\Theme\Model\ThemeComponent::save_after()}
+     *   等账本写入 bump；
+     * - theme：theme:update 等主题资源发布 bump；
+     * - widget/registry：部件注册表变更 bump（WidgetRegistryComponentSource 的数据源）。
+     *
+     * @return list<string>
+     */
+    private static function generationNamespaces(): array
+    {
+        $namespaces = [
+            WelineTheme::CATALOG_GENERATION_NAMESPACE,
+            'global/storefront/theme',
+        ];
+        try {
+            $namespaces[] = ObjectManager::getInstance(NamespacePath::class)->global('widget', ['registry']);
+        } catch (\Throwable) {
+            $namespaces[] = 'global/widget/registry';
+        }
+
+        return $namespaces;
+    }
+
+    /**
+     * 代次变化即整袋作废；返回当前指纹（'' 表示不可得，不驻留进程）。
+     */
+    private static function syncProcessGeneration(): string
+    {
+        $generation = self::generationFingerprint();
+        if ($generation === '' || $generation !== self::$processGeneration) {
+            self::$processDefinitions = [];
+            self::$processIdentityIndex = [];
+            self::$processGeneration = $generation;
+        }
+
+        return $generation;
+    }
+
+    private static function generationFingerprint(): string
+    {
+        try {
+            $fingerprint = ObjectManager::getInstance(NamespaceGenerationInterface::class)
+                ->fingerprint(self::generationNamespaces());
+        } catch (\Throwable) {
+            return '';
+        }
+
+        return \is_string($fingerprint) ? $fingerprint : '';
     }
 
     private function appendDefinition(array &$definitions, array &$seen, array &$nativeThemeComponentCodes, ThemeComponentDefinition $definition): void

@@ -44,20 +44,22 @@ class DefaultBtServerSeeder
 
     private function findExistingServer(array $serverData): BtServer
     {
-        $server = clone $this->btServerModel;
-        $existing = $server->clearQuery()
+        // find()+fetch() returns the model itself; select()+fetch() yields a RowCollection
+        // without getId(), which broke Install/seed on empty or multi-row results.
+        $existing = clone $this->btServerModel;
+        $existing->clearQuery()
             ->where(BtServer::schema_fields_EXTERNAL_URL, $serverData[BtServer::schema_fields_EXTERNAL_URL])
-            ->select()
+            ->find()
             ->fetch();
 
-        if ($existing && $existing->getId()) {
+        if ((int)$existing->getId() > 0) {
             return $existing;
         }
 
         $existing = clone $this->btServerModel;
         $existing->clearQuery()
             ->where(BtServer::schema_fields_NAME, $serverData[BtServer::schema_fields_NAME])
-            ->select()
+            ->find()
             ->fetch();
 
         return $existing;

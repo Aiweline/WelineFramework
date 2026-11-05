@@ -126,6 +126,36 @@ final class DictionaryCacheNamespace
     }
 
     /**
+     * 全局目录键：Worker 预热（无 RequestContext）与请求内得到同一个值。
+     *
+     * {@see self::cacheKey()} 在无 RequestContext 时带 `process|` 前缀、在请求内不带，
+     * 因此“预热写进去的袋子”和“请求查的袋子”不是同一个键——预热白做。
+     * 这份键只用命名空间代次，与请求上下文无关，所以预热的条目请求内能命中；
+     * 目录变更 bump 代次后两边同时失效。
+     *
+     * 活动事务内返回 ''：脏读不得进进程袋。
+     */
+    public static function processScopeKey(string $key): string
+    {
+        $stamp = self::generationStamp();
+        if ($stamp === '') {
+            return '';
+        }
+
+        return $stamp . '|' . $key;
+    }
+
+    /** 当前 i18n 命名空间代次戳（跨上下文稳定）；活动事务内返回 ''。 */
+    public static function generationStamp(): string
+    {
+        if (TransactionContext::activeTransactionConnectionCount() > 0) {
+            return '';
+        }
+
+        return self::resolveGenerationFingerprint(self::namespacePaths());
+    }
+
+    /**
      * 命名进程袋：身份即名称，绑定幂等，热路径 O(1)。
      *
      * 调用者必须传入进程级常驻数组（static 属性或进程单例属性）。请求级数组请用

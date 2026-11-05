@@ -421,7 +421,10 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $colors = is_array($runtimeColors[1]) ? $runtimeColors[1] : [];
                 $requestCache->colorsCache[$configCacheKey] = $colors;
             } else {
-                $colors = self::loadThemeColors($area, $scope, $theme);
+                $colors = \Weline\Framework\Runtime\TraceGate::measurePhase(
+                    'theme.layout.colors',
+                    static fn(): array => self::loadThemeColors($area, $scope, $theme),
+                );
                 $requestCache->colorsCache[$configCacheKey] = $colors;
                 if ($runtimeCacheAllowed) {
                     self::runtimeCacheSet('colors|' . $configCacheKey, $colors);
@@ -473,13 +476,16 @@ class ControllerFetchFileBefore implements ObserverInterface
                         } catch (\Throwable) {
                             // keep normal
                         }
-                        $decision = $solidifyGate->evaluate(
-                            $layoutEntityThemeId,
-                            (string)$area,
-                            (string)$scope,
-                            $storeMode,
-                            (string)$layoutType,
-                            (string)($layoutOption ?: 'default'),
+                        $decision = \Weline\Framework\Runtime\TraceGate::measurePhase(
+                            'theme.layout.solidify_gate',
+                            fn() => $solidifyGate->evaluate(
+                                $layoutEntityThemeId,
+                                (string)$area,
+                                (string)$scope,
+                                $storeMode,
+                                (string)$layoutType,
+                                (string)($layoutOption ?: 'default'),
+                            ),
                         );
                         $forceOriginalSolidifyGate = (bool)($decision['use_original_template'] ?? false);
                     }
@@ -497,15 +503,21 @@ class ControllerFetchFileBefore implements ObserverInterface
                     $solidifiedResolver = ObjectManager::getInstance(
                         \Weline\Theme\Service\LayoutEntity\SolidifiedControllerTemplateResolver::class,
                     );
-                    $sourceTargets = $this->resolveVirtualLayoutTargets($request);
+                    $sourceTargets = \Weline\Framework\Runtime\TraceGate::measurePhase(
+                        'theme.layout.targets',
+                        fn() => $this->resolveVirtualLayoutTargets($request),
+                    );
                     $sourceTarget = $sourceTargets[0] ?? ['target_type' => 'global', 'target_id' => 0];
-                    $solidifiedExecutablePath = $solidifiedResolver->resolveExecutableLayoutPath(
-                        $layoutEntityThemeId,
-                        (string)$layoutType,
-                        (string)$layoutOption,
-                        (string)$area,
-                        (string)$sourceTarget['target_type'],
-                        (int)$sourceTarget['target_id'],
+                    $solidifiedExecutablePath = \Weline\Framework\Runtime\TraceGate::measurePhase(
+                        'theme.layout.solidified_resolve',
+                        fn() => $solidifiedResolver->resolveExecutableLayoutPath(
+                            $layoutEntityThemeId,
+                            (string)$layoutType,
+                            (string)$layoutOption,
+                            (string)$area,
+                            (string)$sourceTarget['target_type'],
+                            (int)$sourceTarget['target_id'],
+                        ),
                     );
                     // 无固化物：不在热路径强造 bake（msg-3：双无用原布局）；升级/编辑/注入收集才 bake。
                     // 指纹过期由 RequestSolidifyGate 入队异步重固，本请求已强制原模板。
@@ -533,12 +545,15 @@ class ControllerFetchFileBefore implements ObserverInterface
                     $usedSolidifiedControllerTemplate = false;
                 }
             }
-            $this->recordSolidifiedLayoutSelection(
-                $usedSolidifiedControllerTemplate,
-                $solidifiedExecutablePath,
-                $layoutEntityThemeId,
-                (int)$themeId,
-                (string)$layoutType,
+            \Weline\Framework\Runtime\TraceGate::measurePhase(
+                'theme.layout.record_selection',
+                fn() => $this->recordSolidifiedLayoutSelection(
+                    $usedSolidifiedControllerTemplate,
+                    $solidifiedExecutablePath,
+                    $layoutEntityThemeId,
+                    (int)$themeId,
+                    (string)$layoutType,
+                ),
             );
             $virtualLayout = null;
             $virtualLayoutFilePath = null;
@@ -585,9 +600,15 @@ class ControllerFetchFileBefore implements ObserverInterface
                 if (is_array($virtualLayout)) {
                     $paramsCacheKey .= '|virtual:' . (int)($virtualLayout['asset_id'] ?? 0) . ':' . (int)($virtualLayout['version_id'] ?? 0);
                 }
-                $sourceSnapshot = \Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot::current();
-                $capturedSource = $usedSolidifiedControllerTemplate && $sourceSnapshot !== null
-                    ? $sourceSnapshot->source((string)$solidifiedExecutablePath) : null;
+                $capturedSource = \Weline\Framework\Runtime\TraceGate::measurePhase(
+                    'theme.layout.source_snapshot',
+                    static function () use ($usedSolidifiedControllerTemplate, $solidifiedExecutablePath): ?array {
+                        $sourceSnapshot = \Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot::current();
+
+                        return $usedSolidifiedControllerTemplate && $sourceSnapshot !== null
+                            ? $sourceSnapshot->source((string)$solidifiedExecutablePath) : null;
+                    },
+                );
                 $sourcePath = is_array($capturedSource)
                     ? $capturedSource['origin']
                     : ($virtualLayoutFilePath ?: LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area));
@@ -707,7 +728,10 @@ class ControllerFetchFileBefore implements ObserverInterface
                 // 模板头 @param.showHeader {default=true} 等：DB/缓存可能只有部分键。
                 // 缺键必须用布局文件 meta 区 default 补齐（不仅 empty($layoutParams) 时才解析）。
                 if ($layoutFilePath && is_file($layoutFilePath)) {
-                    $parsedMeta = \Weline\Theme\Helper\ComponentMetaParser::parse($layoutFilePath);
+                    $parsedMeta = \Weline\Framework\Runtime\TraceGate::measurePhase(
+                        'theme.layout.meta_parse',
+                        static fn(): array => \Weline\Theme\Helper\ComponentMetaParser::parse($layoutFilePath),
+                    );
                     if (!empty($parsedMeta['params']) && is_array($parsedMeta['params'])) {
                         $formattedParams = LayoutPathResolver::formatParsedParams($parsedMeta['params']);
                         if (empty($layoutDefinitions)) {
@@ -778,8 +802,14 @@ class ControllerFetchFileBefore implements ObserverInterface
                 // WS1: layout path consumes storefront.render_context.v1 —
                 // theme_meta via ThemeData::getMeta; website_table_snapshot via Bag
                 // (fill remains Installer/Websites; Theme never installs a parallel bag).
-                StorefrontRenderContextBag::websiteTableSnapshot();
-                $themeMetaDataObj = ThemeData::getMeta("theme.{$area}.layouts.{$layoutType}");
+                $themeMetaDataObj = \Weline\Framework\Runtime\TraceGate::measurePhase(
+                    'theme.layout.theme_meta',
+                    static function () use ($area, $layoutType) {
+                        StorefrontRenderContextBag::websiteTableSnapshot();
+
+                        return ThemeData::getMeta("theme.{$area}.layouts.{$layoutType}");
+                    },
+                );
                 if ($themeMetaDataObj && !empty($themeMetaDataObj['meta_data'])) {
                     // 合并 meta_data 中的配置值到 metaData
                     $layoutStaticMeta = array_merge($layoutStaticMeta, $themeMetaDataObj['meta_data']);
@@ -789,14 +819,17 @@ class ControllerFetchFileBefore implements ObserverInterface
                 if ($targetIdentify !== '' && !empty($layoutDefinitions)) {
                     /** @var ThemeMetaIdentityService $metaIdentityService */
                     $metaIdentityService = ObjectManager::getInstance(ThemeMetaIdentityService::class);
-                    $layoutStaticMeta = $metaIdentityService->mergeTargetOverrides(
-                        $theme,
-                        $area,
-                        $layoutStaticMeta,
-                        $targetIdentify,
-                        $layoutDefinitions,
-                        $scope,
-                        null
+                    $layoutStaticMeta = \Weline\Framework\Runtime\TraceGate::measurePhase(
+                        'theme.layout.target_overrides',
+                        fn(): array => $metaIdentityService->mergeTargetOverrides(
+                            $theme,
+                            $area,
+                            $layoutStaticMeta,
+                            $targetIdentify,
+                            $layoutDefinitions,
+                            $scope,
+                            null
+                        ),
                     );
                 }
                 $layoutStaticMeta = $this->sanitizeRuntimeLayoutParams($layoutStaticMeta);
@@ -825,12 +858,15 @@ class ControllerFetchFileBefore implements ObserverInterface
                     (string)$layoutType,
                     (string)$resolvedLayoutPath
                 );
-                $this->logThemeLayoutResolved(
-                    $eventData,
-                    (string)$contentTemplateFileName,
-                    (string)$resolvedLayoutPath,
-                    (string)$fileName,
-                    $controller
+                \Weline\Framework\Runtime\TraceGate::measurePhase(
+                    'theme.layout.log_resolved',
+                    fn() => $this->logThemeLayoutResolved(
+                        $eventData,
+                        (string)$contentTemplateFileName,
+                        (string)$resolvedLayoutPath,
+                        (string)$fileName,
+                        $controller
+                    ),
                 );
             }
             // 如果布局模板不存在，保持原路径（回退机制），但布局信息已设置到 theme 对象中

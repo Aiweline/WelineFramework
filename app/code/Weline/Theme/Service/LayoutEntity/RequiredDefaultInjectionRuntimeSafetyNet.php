@@ -60,13 +60,79 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
     /** @var array<string, list<array<string, mixed>>> */
     private static array $processOmissions = [];
 
+    /** Version id each `$processOmissions` entry was built from, for auditing/reset. */
+    private static array $processOmissionVersions = [];
+
+    /**
+     * Published numeric version id per theme.
+     *
+     * `ThemePublishedVersionRuntimeResolver::resolvePublishedNumericVersionId()`
+     * ignores its page-type argument and costs ~0.56 ms per call (theme chain ×
+     * scope probe walk), so resolving it once per theme instead of once per
+     * (theme, page type) pair is free accuracy-wise and removes the repeated walk.
+     *
+     * @var array<int, int>
+     */
+    private static array $processPublishedVersion = [];
+
     private const PROCESS_OMISSIONS_MAX = 64;
 
     public static function clearProcessCaches(): void
     {
         self::$processDeclarations = null;
         self::$processOmissions = [];
+        self::$processOmissionVersions = [];
+        self::$processPublishedVersion = [];
         self::$widgetKeyMemo = [];
+    }
+
+    /**
+     * Warm the process memos this class reads on the render path.
+     *
+     * Called from Worker boot (preload), not from a request: `ensure()` runs on
+     * every storefront document and its inputs are global publication facts
+     * (published declaration plans, published version id, per-version
+     * uninstall rows). Warming them here is what makes the FIRST render of each
+     * page type cost the same as the steady state instead of paying the
+     * publication lookups.
+     *
+     * Fail-open: an unresolvable theme warms declarations only.
+     *
+     * @param list<string> $pageTypes
+     * @return array{declarations:int, theme_id:int, page_types:int}
+     */
+    public function warmRenderInputs(array $pageTypes): array
+    {
+        $declarations = $this->loadDeclarations();
+        $themeId = 0;
+        $pageTypesWarmed = 0;
+
+        try {
+            $themeId = $this->resolveFrontendThemeId();
+        } catch (\Throwable) {
+            $themeId = 0;
+        }
+
+        if ($themeId > 0) {
+            foreach ($pageTypes as $pageType) {
+                $pageType = \trim((string)$pageType);
+                if ($pageType === '') {
+                    continue;
+                }
+                try {
+                    $this->omissionsFor($themeId, $pageType);
+                    ++$pageTypesWarmed;
+                } catch (\Throwable) {
+                    // A single unresolvable page type must not fail Worker boot.
+                }
+            }
+        }
+
+        return [
+            'declarations' => \count($declarations),
+            'theme_id' => $themeId,
+            'page_types' => $pageTypesWarmed,
+        ];
     }
 
     public function ensure(string $html): string
@@ -331,20 +397,26 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
         try {
             /** @var ThemePublishedVersionRuntimeResolver $versions */
             $versions = ObjectManager::getInstance(ThemePublishedVersionRuntimeResolver::class);
-            $versionId = $versions->resolvePublishedNumericVersionId($themeId, $pageType);
+            // Page-type independent: resolve once per theme, not once per page type.
+            if (!isset(self::$processPublishedVersion[$themeId])) {
+                self::$processPublishedVersion[$themeId] = $versions->resolvePublishedNumericVersionId($themeId, $pageType);
+            }
+            $versionId = self::$processPublishedVersion[$themeId];
             /** @var WidgetDefaultInjectionService $injections */
             $injections = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
 
             $omissions = $injections->uninstalledInjectionsForVersion($themeId, $pageType, $versionId);
 
-            // The published version id is part of the memo key so a republish lands on
-            // a fresh entry instead of serving the previous version's omissions.
-            $versionedKey = $memoKey . ':' . $versionId;
+            // Store the version the rows came from, and key by it, so a republish
+            // (new version id) can never be answered by the previous version's
+            // rows. `$memoKey` stays as the fast path; it is dropped whenever the
+            // theme runtime caches are reset (publish / layout change).
             if (\count(self::$processOmissions) >= self::PROCESS_OMISSIONS_MAX) {
                 self::$processOmissions = [];
+                self::$processOmissionVersions = [];
             }
             self::$processOmissions[$memoKey] = $omissions;
-            self::$processOmissions[$versionedKey] = $omissions;
+            self::$processOmissionVersions[$memoKey] = $versionId;
 
             return $omissions;
         } catch (\Throwable) {

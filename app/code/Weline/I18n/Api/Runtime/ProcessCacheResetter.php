@@ -45,6 +45,15 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
         } catch (\Throwable) {
         }
 
+        try {
+            // 显式清缓存：目录答案也属于进程内存，不能只清活动语言列表。
+            ObjectManager::getInstance(
+                \Weline\Framework\App\Localization\LocalizationProviderRegistry::class
+            )->clearCaches();
+            $cleared++;
+        } catch (\Throwable) {
+        }
+
         LanguageSwitcher::clearProcessCaches();
         LanguageSelect::clearProcessCaches();
         $cleared += 2;

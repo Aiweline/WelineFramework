@@ -952,7 +952,13 @@ final class WorkerPolicyKernel
             }
 
             $crawlerRule = $this->resolveCrawlerBlockRuleForHost($matcher, (string)($envelope->host ?? ''));
-            if ($crawlerRule['enabled'] ?? true) {
+            // Agent discovery documents (.well-known/ard.json, ai-catalog, llms.txt …) are
+            // protocol endpoints for arbitrary agents; UA-based crawler_block would make
+            // ARD/Lighthouse validators see 403 text instead of the manifest. Genuine
+            // attack rules (malicious patterns, bad UA, protected paths, path scan) stay on.
+            if (($crawlerRule['enabled'] ?? true)
+                && !$this->isAgentDiscoveryDocumentPath($this->attackPathCandidates($envelope))
+            ) {
                 $hasUaHeader = \array_key_exists('user-agent', $envelope->headers)
                     || \array_key_exists('User-Agent', $envelope->headers);
                 $uaSubjects = [];
@@ -1273,6 +1279,46 @@ final class WorkerPolicyKernel
         }
 
         return \preg_match('#^/\.well-known/acme-challenge/[A-Za-z0-9_-]{1,256}/?$#D', $path) === 1;
+    }
+
+    /**
+     * Public agent/AI discovery documents served for any HTTP client.
+     *
+     * These are advertised in the page head (rel="ard", rel="ai-catalog", llms) and are
+     * fetched by validators that do not send a browser UA. UA-based crawler_block must not
+     * turn them into a 403 text body; provider-specific rules (malicious patterns, bad UA,
+     * protected paths, path scan) still apply.
+     *
+     * @param list<string> $pathCandidates
+     */
+    private function isAgentDiscoveryDocumentPath(array $pathCandidates): bool
+    {
+        static $documents = [
+            '/.well-known/ard.json' => true,
+            '/.well-known/ai-catalog.json' => true,
+            '/.well-known/tdmrep.json' => true,
+            '/.well-known/trust.txt' => true,
+            '/ai.txt' => true,
+            '/llms.txt' => true,
+            '/llms-full.txt' => true,
+        ];
+
+        foreach ($pathCandidates as $candidate) {
+            $path = \strtolower(\trim((string)$candidate));
+            if ($path === '') {
+                continue;
+            }
+            $queryAt = \strpos($path, '?');
+            if ($queryAt !== false) {
+                $path = \substr($path, 0, $queryAt);
+            }
+            $path = '/' . \trim($path, '/');
+            if (isset($documents[$path])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

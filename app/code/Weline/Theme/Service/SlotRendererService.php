@@ -606,10 +606,21 @@ class SlotRendererService
 
         $theme = null;
         try {
-            $model = clone ObjectManager::getInstance(WelineTheme::class);
-            $model->clearData()->clearQuery()->load($themeId);
-            if ($model->getId()) {
-                $theme = $model;
+            // 主题目录已在进程袋：请求期按 id 取行不回库（写入路径代次 bump 失效）。
+            $row = WelineTheme::catalogRow($themeId);
+            if ($row !== []) {
+                $model = clone ObjectManager::getInstance(WelineTheme::class);
+                $model->clearData()->clearQuery()->setData($row);
+                if ($model->getId()) {
+                    $theme = $model;
+                }
+            } else {
+                // 目录缺行（如行外 id / 目录尚未装载）：退回单行读取，语义不变。
+                $model = clone ObjectManager::getInstance(WelineTheme::class);
+                $model->clearData()->clearQuery()->load($themeId);
+                if ($model->getId()) {
+                    $theme = $model;
+                }
             }
         } catch (\Throwable) {
             $theme = null;
@@ -3435,13 +3446,20 @@ class SlotRendererService
                 ];
                 $html = TraceGate::measurePhase(
                     'theme.slots.widget.component_render.' . $widgetCode,
-                    fn(): string => (string)$this->componentRenderer->render($definition, $renderConfig, $this->pass()->renderTheme, [
-                        'area' => $renderArea,
-                        // Editor iframe may keep PDP shells without product identity.
-                        // Do not map editor/theme-preview to widget-canvas preview_mode (is-preview).
-                        'preview_mode' => !empty($renderConfig['preview_mode']),
-                        'editor_mode' => $renderConfig['editor_mode'] ?? false,
-                    ]),
+                    // 部件渲染入口统一在 Weline_Widget：异步判定与占位都由部件侧决定，
+                    // 这里只把定义/配置交给部件，同步部件仍由它调用 Theme 渲染引擎。
+                    fn(): string => \Weline\Widget\Taglib\Widget::renderPlaceable(
+                        $definition,
+                        $renderConfig,
+                        $this->pass()->renderTheme,
+                        [
+                            'area' => $renderArea,
+                            // Editor iframe may keep PDP shells without product identity.
+                            // Do not map editor/theme-preview to widget-canvas preview_mode (is-preview).
+                            'preview_mode' => !empty($renderConfig['preview_mode']),
+                            'editor_mode' => $renderConfig['editor_mode'] ?? false,
+                        ]
+                    ),
                     $widgetTimingMeta,
                 );
                 $html = TraceGate::measurePhase(

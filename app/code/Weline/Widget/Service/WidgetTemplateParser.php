@@ -62,7 +62,7 @@ class WidgetTemplateParser
             $pathDefaults = $this->inferFromPath($templatePath);
 
             // 解析注释
-            $widgetMeta = $this->parseWidgetMeta($content);
+            $widgetMeta = $this->normalizeAsyncMeta($this->parseWidgetMeta($content));
             $params = $this->parseParams($content);
 
             // 合并：路径推断 < 注释定义
@@ -214,6 +214,52 @@ class WidgetTemplateParser
         }
 
         return $this->normalizeCacheMeta($result);
+    }
+
+    /**
+     * Async knobs: {@see @widget.async} / {@see @widget.async_cache} / {@see @widget.async_module}
+     * / {@see @widget.async_module_defer}.
+     *
+     * 异步只在 async=true 且 async_module 非空时生效（半配置等同未声明，避免出空壳）。
+     * async_cache 为片段 TTL 秒数，缺省/非法视为 0（不缓存）；async_module_defer 缺省 true。
+     *
+     * @param array<string, mixed> $meta
+     * @return array<string, mixed>
+     */
+    private function normalizeAsyncMeta(array $meta): array
+    {
+        $async = $this->normalizeBool($meta['async'] ?? false);
+        $module = \trim((string)($meta['async_module'] ?? ''));
+        $ttl = (int)($meta['async_cache'] ?? 0);
+        $defer = $this->normalizeBool($meta['async_module_defer'] ?? true);
+
+        unset($meta['async'], $meta['async_cache'], $meta['async_module'], $meta['async_module_defer']);
+
+        if (!$async || $module === '' || !\preg_match('/^[A-Za-z][A-Za-z0-9_.-]*$/', $module)) {
+            return $meta;
+        }
+
+        $meta['async'] = true;
+        $meta['async_cache'] = $ttl > 0 ? $ttl : 0;
+        $meta['async_module'] = $module;
+        $meta['async_module_defer'] = $defer;
+
+        return $meta;
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function normalizeBool(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (int)$value === 1;
+        }
+
+        return \in_array(\strtolower(\trim((string)$value)), ['1', 'true', 'on', 'yes'], true);
     }
 
     /**

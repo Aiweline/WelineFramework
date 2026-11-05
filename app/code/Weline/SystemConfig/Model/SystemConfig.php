@@ -10,6 +10,7 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
+use Weline\Framework\Database\TransactionContext;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
@@ -28,6 +29,10 @@ use Weline\SystemConfig\Service\SystemConfigResourceChangePublisher;
 class SystemConfig extends \Weline\Framework\Database\Model
 {
     private const CACHE_HIT_FLAG = '__system_config_cache_hit';
+
+    /** 请求 memo 里标记“结论性快照”的数据来源：一次库读，或整表进程快照。 */
+    private const SOURCE_DB = 'db';
+    private const SNAPSHOT_SOURCE = 'snapshot';
 
     /** Request-memo sentinel for a concluded "no row" resolution (negative cache). */
     private const RESOLVED_ROW_MISS = '__system_config_resolved_row_miss__';
@@ -97,6 +102,26 @@ class SystemConfig extends \Weline\Framework\Database\Model
      */
     private const MUTATION_GENERATION_KEY = 'system_config.mutation_generation';
 
+    /**
+     * 整表快照的**跨进程**代次键。
+     *
+     * 落在 `system_config` 池的自定义键上：该池是 `hijack_exempt + durable`，
+     * WLS worker 与 CLI 读写的都是同一份持久缓存，因此这条代次能被所有进程看到。
+     * 写路径在提交后推进它（{@see self::bumpTableSnapshotGeneration()}），
+     * 每个 worker 读取前比对；不一致就丢掉本地快照重建。
+     *
+     * 没有这条代次时，A worker 保存配置后，B/C/D worker 会一直拿旧快照证明
+     * “某 key 不存在”，表现为“配置改了不生效”——因为 `MUTATION_GENERATION_KEY`
+     * 走 {@see \Weline\Framework\Runtime\RequestContext} 的请求级静态，不跨进程。
+     */
+    private const TABLE_SNAPSHOT_GENERATION_KEY = 'system_config_table_snapshot_generation';
+
+    /** 请求内记忆代次，避免每次切片都读一次持久缓存。 */
+    private const TABLE_SNAPSHOT_GENERATION_MEMO = 'system_config.table_snapshot_generation';
+
+    /** 代次键寿命：与 scope generation 一致，过期只是让快照重建一次。 */
+    private const TABLE_SNAPSHOT_GENERATION_TTL = 86400 * 30;
+
     public array $_index_sort_keys = ['module', 'area', 'scope', 'locale', 'key'];
     public array $_unit_primary_keys = ['module', 'area', 'key', 'scope', 'locale'];
 
@@ -110,8 +135,36 @@ class SystemConfig extends \Weline\Framework\Database\Model
      */
     public static array $configs = [];
 
+    /**
+     * 整表进程快照：area → module → scope → locale → list<row>。
+     *
+     * `null` 表示尚未加载（或已被失效）。加载后，任何 (area, module, scope, locale)
+     * 组合都是纯内存切片，请求期不再逐 key 探针查库。表规模是商家配置量级
+     * （本机 37 组 module/area、264 行），一次读进内存的成本远低于每个请求重复探测。
+     *
+     * 失效由写路径驱动：后台保存 → {@see \Weline\SystemConfig\Service\ConfigCacheInvalidationService}
+     * → {@see self::clearProcessCache()} 丢掉本进程的整张快照（按切片丢弃会把刚写入的
+     * 行永久藏掉），再加上提交后的 {@see self::bumpTableSnapshotGeneration()} 推进
+     * 跨进程代次，使**其它 worker**的静态快照同时失效。快照本身带着建表时的代次
+     * （`self::$tableSnapshotGeneration`），每次切片前比对，不一致即重建。
+     */
+    private static ?array $tableSnapshot = null;
+
+    /** 防重入：加载期间再次触发读取时直接走库，避免递归。 */
+    private static bool $tableSnapshotLoading = false;
+
+    /** 建快照时观察到的跨进程代次；与当前代次不一致即视为失效。 */
+    private static ?int $tableSnapshotGeneration = null;
+
     public static function clearProcessCache(?string $area = null, ?string $module = null): void
     {
+        // 整表快照按“不存在的切片 = 该处确实没有配置”来解释，所以**不能按切片丢弃**：
+        // 一旦只 unset 掉 [$area][$module]，后续切片会变成空数组并被当作“权威无行”，
+        // 把刚写入的那批行永久藏掉。精确失效代价是整表重读（本机 264 行 / 1 条 SQL），
+        // 后台保存频率远低于请求频率，这里直接丢整快照，下次读取自动从库重建。
+        self::$tableSnapshot = null;
+        self::$tableSnapshotGeneration = null;
+
         if ($area === null && $module === null) {
             self::$configs = [];
             return;
@@ -133,6 +186,322 @@ class SystemConfig extends \Weline\Framework\Database\Model
                 unset(self::$configs[$areaKey]);
             }
         }
+    }
+
+    /**
+     * 把整张配置表一次读进进程内存（Worker 预热与首次冷读都会走到这里）。
+     *
+     * 返回快照覆盖的 (module, area) 组合数，便于预热日志展示覆盖面。失败返回 0，
+     * 绝不抛：配置表在 setup:upgrade 之前可能还不存在。
+     */
+    public static function warmTableSnapshot(): int
+    {
+        return self::ensureTableSnapshot();
+    }
+
+    public static function clearTableSnapshot(): void
+    {
+        self::$tableSnapshot = null;
+        self::$tableSnapshotGeneration = null;
+    }
+
+    /**
+     * 写路径（提交后）推进整表快照的跨进程代次。
+     *
+     * Worker 是长驻进程，`self::$tableSnapshot` / `self::$configs` 都是静态的：
+     * 只清本进程的静态缓存无法通知其它 worker。代次必须落在跨进程共享的
+     * `system_config` 池上，别的 worker 下次读取时会发现代次不符并重建快照。
+     *
+     * 缓存不可写时不抛：其它 worker 读代次会得到 -1（不可用），
+     * {@see self::tableSnapshotStillValid()} 随即拒绝把快照当权威，退回库读——慢但正确。
+     */
+    public static function bumpTableSnapshotGeneration(): void
+    {
+        self::$tableSnapshot = null;
+        self::$tableSnapshotGeneration = null;
+        if (RequestContext::has(self::TABLE_SNAPSHOT_GENERATION_MEMO)) {
+            RequestContext::remove(self::TABLE_SNAPSHOT_GENERATION_MEMO);
+        }
+
+        try {
+            $cache = \w_cache('system_config');
+            $current = (int)($cache->getCustom(self::TABLE_SNAPSHOT_GENERATION_KEY) ?? 0);
+            $cache->setCustom(
+                self::TABLE_SNAPSHOT_GENERATION_KEY,
+                $current + 1,
+                self::TABLE_SNAPSHOT_GENERATION_TTL,
+            );
+        } catch (\Throwable) {
+            // 见方法注释：读不到代次的 worker 会自动退回库读。
+        }
+    }
+
+    /**
+     * 快照是否已加载（含"整表为空"这一结论性状态）。
+     *
+     * 预热期用它区分"读成功但表里没配置"和"读失败"：前者不该报 failures。
+     */
+    public static function hasTableSnapshot(): bool
+    {
+        return self::$tableSnapshot !== null;
+    }
+
+    /**
+     * @return int 快照内的 (module, area) 组合数；加载失败为 0
+     */
+    private static function ensureTableSnapshot(): int
+    {
+        if (self::tableSnapshotStillValid()) {
+            return self::countSnapshotTargets(self::$tableSnapshot ?? []);
+        }
+        if (self::$tableSnapshotLoading) {
+            return 0;
+        }
+        // 事务进行中不建快照：快照读走独立连接，看不到未提交行，
+        // 空结果会被当成“确实没配置”，把本事务刚写入的行藏掉。
+        // 事务内的读取继续走事务感知的库读分支。
+        if (TransactionContext::activeTransactionConnectionCount() > 0) {
+            return 0;
+        }
+
+        // 拿不到跨进程代次就不建快照：快照用“空切片 = 确实没有配置”来解释，
+        // 无法在别的 worker 写入后失效时，它就是一个会撒谎的权威。宁可退回库读。
+        $generation = self::currentTableSnapshotGeneration();
+        if ($generation < 0) {
+            return 0;
+        }
+
+        self::$tableSnapshotLoading = true;
+        try {
+            /** @var static $model */
+            $model = ObjectManager::getInstance(self::class, [], false);
+            $rows = $model->clearData()->clearQuery()
+                ->select()
+                ->fetchArray();
+
+            $snapshot = [];
+            foreach (\is_array($rows) ? $rows : [] as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $module = \trim((string)($row[self::schema_fields_MODULE] ?? ''));
+                $area = \trim((string)($row[self::schema_fields_AREA] ?? ''));
+                $scope = (string)($row[self::schema_fields_SCOPE] ?? '');
+                $locale = (string)($row[self::schema_fields_LOCALE] ?? '');
+                if ($module === '' || $area === '' || $scope === '' || $locale === '') {
+                    continue;
+                }
+                $snapshot[$area][$module][$scope][$locale][] = $row;
+            }
+
+            self::$tableSnapshot = $snapshot;
+            self::$tableSnapshotGeneration = $generation;
+
+            return self::countSnapshotTargets($snapshot);
+        } catch (\Throwable) {
+            self::$tableSnapshot = null;
+            self::$tableSnapshotGeneration = null;
+
+            return 0;
+        } finally {
+            self::$tableSnapshotLoading = false;
+        }
+    }
+
+    /**
+     * 读当前跨进程代次：`-1` 表示读不到（缓存不可用），`>= 0` 为有效代次。
+     *
+     * 首次读到的空值会显式落一个 0 再读回——这样才能把“还没有人写过”和
+     * “这个池根本读不出来”区分开；后者必须让快照整体放弃。
+     * 记忆放在请求级 Context 里，只在有请求身份时生效（预热期没有请求身份，
+     * 记忆若跨请求留存会让快照一直不失效）。
+     */
+    private static function currentTableSnapshotGeneration(): int
+    {
+        $memoKey = self::TABLE_SNAPSHOT_GENERATION_MEMO;
+        $requestId = RequestContext::getRequestId();
+        $memoizable = \is_string($requestId) && $requestId !== '';
+        if ($memoizable && RequestContext::has($memoKey)) {
+            $memo = RequestContext::get($memoKey);
+
+            return \is_int($memo) ? $memo : -1;
+        }
+
+        $generation = -1;
+        try {
+            $cache = \w_cache('system_config');
+            $raw = $cache->getCustom(self::TABLE_SNAPSHOT_GENERATION_KEY);
+            if ($raw === null) {
+                $cache->setCustom(self::TABLE_SNAPSHOT_GENERATION_KEY, 0, self::TABLE_SNAPSHOT_GENERATION_TTL);
+                $raw = $cache->getCustom(self::TABLE_SNAPSHOT_GENERATION_KEY);
+            }
+            if ($raw !== null) {
+                $generation = (int)$raw;
+            }
+        } catch (\Throwable) {
+            $generation = -1;
+        }
+
+        if ($memoizable) {
+            RequestContext::set($memoKey, $generation);
+        }
+
+        return $generation;
+    }
+
+    /**
+     * 快照是否仍在当前跨进程代次下有效；失效时就地丢弃本地快照。
+     */
+    private static function tableSnapshotStillValid(): bool
+    {
+        if (self::$tableSnapshot === null || self::$tableSnapshotGeneration === null) {
+            return false;
+        }
+
+        $current = self::currentTableSnapshotGeneration();
+        if ($current >= 0 && $current === self::$tableSnapshotGeneration) {
+            return true;
+        }
+
+        // 代次变了（别的 worker 提交了配置）或读不到代次：本地快照立即作废，
+        // 下次读取重建（最坏一次全表读）。
+        self::$tableSnapshot = null;
+        self::$tableSnapshotGeneration = null;
+
+        return false;
+    }
+
+    /** @param array<string, array<string, mixed>> $snapshot */
+    private static function countSnapshotTargets(array $snapshot): int
+    {
+        $count = 0;
+        foreach ($snapshot as $modules) {
+            $count += \count($modules);
+        }
+
+        return $count;
+    }
+
+    /**
+     * 从整表快照切出 [scope][locale] => list<row>。
+     *
+     * 快照与库读取等价：切片为该范围内**全部**行，所以空结果同样结论性
+     * （调用方据此把模块快照标记为权威，不再逐 key 探针）。
+     * 该等价关系成立的**前提**是：快照一旦加载就覆盖全表，局部失效必须丢整张快照
+     * （见 {@see self::clearProcessCache()}）。
+     *
+     * @param list<string> $scopes
+     * @param list<string> $locales
+     * @return array<string, array<string, list<array<string, mixed>>>>|null null=快照不可用
+     */
+    private static function tableSnapshotSlice(
+        string $module,
+        string $area,
+        array $scopes,
+        array $locales,
+    ): ?array {
+        // 切片前先验代次：别的 worker 提交后本进程的静态快照必须作废，
+        // 否则会拿旧行证明“该 key 不存在”。
+        if (!self::tableSnapshotStillValid()) {
+            return null;
+        }
+
+        $batch = [];
+        foreach ($scopes as $scope) {
+            foreach ($locales as $locale) {
+                $rows = self::$tableSnapshot[$area][$module][$scope][$locale] ?? [];
+                $batch[$scope][$locale] = \is_array($rows) ? $rows : [];
+            }
+        }
+
+        return $batch;
+    }
+
+    /**
+     * 把一个模块在某作用域身份下的配置行一次性读进进程内存。
+     *
+     * 与请求路径共用同一条批量读取（{@see self::getExactModuleRowsForScopes()}），
+     * 所以预热写入的正是请求会命中的那块 `self::$configs`；后台保存后由
+     * {@see \Weline\SystemConfig\Service\ConfigCacheInvalidationService} 调
+     * `clearProcessCache($area, $module)` 整块丢弃，下一次读取自动从库里重建。
+     *
+     * 预热失败不抛：Worker READY 不能被配置读取拖垮。
+     */
+    public function warmModuleRows(
+        string $module,
+        string $area,
+        \Weline\Framework\Runtime\ScopeIdentity $identity,
+        ?string $locale = null,
+    ): bool {
+        $module = \trim($module);
+        $area = \trim($area);
+        if ($module === '' || $area === '') {
+            return false;
+        }
+
+        try {
+            /** @var \Weline\SystemConfig\Service\SystemConfigScopeResolver $resolver */
+            $resolver = ObjectManager::getInstance(\Weline\SystemConfig\Service\SystemConfigScopeResolver::class);
+            $scopes = $resolver->chainFromIdentity($identity);
+            $locales = $this->getFallbackLocales($this->normalizeLocale($locale));
+            $this->getExactModuleRowsForScopes($module, $area, $scopes, $locales);
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * 表里实际存在配置的 (module, area) 组合，一次分组查询。
+     *
+     * 预热按“库里真的有哪些模块配置”发现，不在运行时代码里维护一份模块名单；
+     * 新增模块配置不需要改预热代码。
+     *
+     * @return list<array{module: string, area: string}>
+     */
+    public static function configuredTargets(): array
+    {
+        // 整表快照已就位时直接派生：覆盖率指标不该再发一次全表分组查询。
+        // 用 stillValid 而不是 null 判断：快照被别的 worker 写脏时宁可查一次库。
+        if (self::tableSnapshotStillValid()) {
+            $targets = [];
+            foreach (self::$tableSnapshot ?? [] as $area => $modules) {
+                foreach (array_keys($modules) as $module) {
+                    $key = $module . '|' . $area;
+                    $targets[$key] = ['module' => (string)$module, 'area' => (string)$area];
+                }
+            }
+
+            return \array_values($targets);
+        }
+
+        try {
+            /** @var static $model */
+            $model = ObjectManager::getInstance(self::class, [], false);
+            $rows = $model->clearData()->clearQuery()
+                ->fields([self::schema_fields_MODULE, self::schema_fields_AREA])
+                ->group(self::schema_fields_MODULE . ',' . self::schema_fields_AREA)
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $targets = [];
+        foreach (\is_array($rows) ? $rows : [] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $module = \trim((string)($row[self::schema_fields_MODULE] ?? ''));
+            $area = \trim((string)($row[self::schema_fields_AREA] ?? ''));
+            if ($module === '' || $area === '') {
+                continue;
+            }
+            $targets[$module . '|' . $area] = ['module' => $module, 'area' => $area];
+        }
+
+        return \array_values($targets);
     }
 
     /**
@@ -159,7 +528,8 @@ class SystemConfig extends \Weline\Framework\Database\Model
         $existing = RequestContext::get($key);
         if (\is_array($existing)
             && (int)($existing['generation'] ?? -1) === $generation
-            && (($existing['source'] ?? '') === 'db' || ($existing['complete'] ?? false) === true)
+            && (\in_array(($existing['source'] ?? ''), [self::SOURCE_DB, self::SNAPSHOT_SOURCE], true)
+                || ($existing['complete'] ?? false) === true)
         ) {
             // Do not downgrade a snapshot that was already loaded in this
             // request just because a later read reused the process cache.
@@ -187,7 +557,23 @@ class SystemConfig extends \Weline\Framework\Database\Model
         }
 
         return (int)($marker['generation'] ?? -1) === $this->mutationGeneration()
-            && (($marker['source'] ?? '') === 'db' || ($marker['complete'] ?? false) === true);
+            && (\in_array(($marker['source'] ?? ''), [self::SOURCE_DB, self::SNAPSHOT_SOURCE], true)
+                || ($marker['complete'] ?? false) === true);
+    }
+
+    /**
+     * 空结果能否当作"确实没有配置"。
+     *
+     * 整表快照一加载就是全表的完整镜像，而且任何写入都会在开始时把它丢掉
+     * （{@see self::bumpMutationGeneration()}），所以快照在前时，空的进程袋/空切片
+     * 同样是结论性的：不必再逐 scope×locale 探针查库。
+     *
+     * 这是单请求 73 条 `w_system_config` 的来源：模块本来没有配置时，旧逻辑
+     * 对每个 key 把 4 个 fallback scope × 2 个 locale 各探一次。
+     */
+    private function absenceIsConclusive(): bool
+    {
+        return self::tableSnapshotStillValid();
     }
 
     /**
@@ -215,6 +601,11 @@ class SystemConfig extends \Weline\Framework\Database\Model
      */
     private function bumpMutationGeneration(): void
     {
+        // 写一开始就丢掉整表快照：不能拿写前的快照去证明“此 key 不存在”，
+        // 否则写后同请求的读取会被旧数据藏掉。重建代价就是一次全表读。
+        // 跨进程那半边由提交后的 {@see self::bumpTableSnapshotGeneration()} 负责。
+        self::$tableSnapshot = null;
+        self::$tableSnapshotGeneration = null;
         if ($this->hasRequestIdentity()) {
             RequestContext::sharedBumpGeneration(self::MUTATION_GENERATION_KEY);
 
@@ -253,10 +644,10 @@ class SystemConfig extends \Weline\Framework\Database\Model
     {
         $marker = RequestContext::get($requestCacheKey . ':source');
         if (\is_array($marker)
-            && ($marker['source'] ?? '') === 'db'
+            && \in_array(($marker['source'] ?? ''), [self::SOURCE_DB, self::SNAPSHOT_SOURCE], true)
             && (int)($marker['generation'] ?? -1) === $this->mutationGeneration()
         ) {
-            return 'db';
+            return (string)$marker['source'];
         }
 
         return 'cache';
@@ -338,7 +729,14 @@ class SystemConfig extends \Weline\Framework\Database\Model
         ) {
             $rows = self::$configs[$area][$module][$processKey];
             RequestContext::set($requestCacheKey, $rows);
-            $this->markModuleSnapshot($module, $area, $scope, $locale, 'cache', $rows !== []);
+            $this->markModuleSnapshot(
+                $module,
+                $area,
+                $scope,
+                $locale,
+                'cache',
+                $rows !== [] || $this->absenceIsConclusive(),
+            );
             return $rows;
         }
 
@@ -388,7 +786,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
             $scope,
             $locale,
             $exact['source'],
-            $exact['source'] === 'db' || $rows !== [],
+            \in_array($exact['source'], [self::SOURCE_DB, self::SNAPSHOT_SOURCE], true) || $rows !== [],
         );
 
         return $rows;
@@ -1350,7 +1748,15 @@ class SystemConfig extends \Weline\Framework\Database\Model
         // complete when it is non-empty and still valid for the current scope
         // version vector. Empty/negative snapshots and snapshots from before a
         // write keep the strong exact-row path.
-        if ($this->isModuleSnapshotAuthoritative($module, $area, $scope, $locale)) {
+        //
+        // 模块级 marker 只覆盖“本请求读到的那一组 scope/locale”；多候选 scope 链的
+        // 调用形状（如 Weline_Seo 商家信息：__store__ → default 逐级 resolveConfig）
+        // 命中不了它，于是每个 key 仍要逐 scope×locale 探针一次。整表快照有效时它
+        // 覆盖全部 (module, area, scope, locale)，缺失同样是结论性的，必须一并短路，
+        // 否则这条路径就是同一族 N+1 的残留。
+        if ($this->absenceIsConclusive()
+            || $this->isModuleSnapshotAuthoritative($module, $area, $scope, $locale)
+        ) {
             return null;
         }
 
@@ -1421,7 +1827,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
      * @param list<string> $locales
      * @return array{
      *     rows: array<string, array<string, list<array<string, mixed>>>>,
-     *     source: 'db'|'cache'
+     *     source: 'db'|'cache'|'snapshot'
      * }
      */
     private function getExactModuleRowsForScopes(
@@ -1471,6 +1877,22 @@ class SystemConfig extends \Weline\Framework\Database\Model
             $this->rememberExactBatchSource($requestCacheKey, 'cache');
 
             return ['rows' => $batch, 'source' => 'cache'];
+        }
+
+        // 整表进程快照：一次全表读即覆盖全部 (module, scope, locale)。
+        // ensureTableSnapshot() 自带跨进程代次校验：有效时只是一次（请求内记忆化过的）
+        // 缓存读；失效（含别的 worker 刚提交）时就地重建，避免本次调用退化成逐批库读。
+        // 与库读取等价（范围内行全在），包括空结果，所以标 'snapshot' 并当作权威，
+        // 否则模块没配置的 key 仍会退化成逐 scope×locale 探针（单请求 73 条的来源）。
+        self::ensureTableSnapshot();
+        $snapshotBatch = self::tableSnapshotSlice($module, $area, $scopes, $locales);
+        if ($snapshotBatch !== null) {
+            self::$configs[$area][$module][$processKey] = $snapshotBatch;
+            $this->seedExactModuleRowsRequestCache($module, $area, $snapshotBatch);
+            RequestContext::set($requestCacheKey, $snapshotBatch);
+            $this->rememberExactBatchSource($requestCacheKey, self::SNAPSHOT_SOURCE);
+
+            return ['rows' => $snapshotBatch, 'source' => self::SNAPSHOT_SOURCE];
         }
 
         $cache = $this->scopedConfigCache(

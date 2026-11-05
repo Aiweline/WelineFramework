@@ -11,10 +11,12 @@ use Weline\Framework\Runtime\Preload\WorkerPreloadContext;
 use Weline\Framework\Runtime\Preload\WorkerPreloadResult;
 use Weline\Framework\Runtime\RuntimeInterface;
 use Weline\Framework\View\Template;
+use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeComponentCatalog;
 use Weline\Theme\Service\ThemeDirectoryResolver;
 use Weline\Theme\Service\ThemePlaceableRegistry;
 use Weline\Theme\Service\ThemeResourceCatalog;
+use Weline\Websites\Api\Theme\ThemeApplicationRepositoryInterface;
 
 /**
  * Publishes the theme component/widget catalogue into process memory at Worker start-up.
@@ -83,6 +85,18 @@ final class ThemeCataloguePreloadProvider extends AbstractWorkerPreloadProvider
         $items = 0;
         $failures = [];
 
+        // Theme catalogue rows: the storefront layout gate resolves the active theme
+        // and its parent chain on every request to decide design-layer overrides and
+        // published-version inheritance. The table is a global fact with a handful of
+        // rows, so it belongs in process memory from Worker boot instead of being
+        // re-queried during requests. Writes publish a generation bump, so the
+        // snapshot can never outlive a theme edit.
+        try {
+            $items += \count(WelineTheme::fetchCatalogRows());
+        } catch (\Throwable $exception) {
+            $failures['theme_catalog_rows'] = $exception->getMessage();
+        }
+
         /** @var ThemeDirectoryResolver $directoryResolver */
         $directoryResolver = ObjectManager::getInstance(ThemeDirectoryResolver::class);
         /** @var ThemeResourceCatalog $resourceCatalog */
@@ -105,11 +119,38 @@ final class ThemeCataloguePreloadProvider extends AbstractWorkerPreloadProvider
         }
 
         // Component definitions: built on top of the resource catalogue.
+        //
+        // Two key families are warmed:
+        //  - `{registeredDefaultThemeId}:{area}` — what a page rendered outside a
+        //    Website theme application asks for (`getDefinitions($area, null)`);
+        //  - `{appliedThemeId}:{area}` — what every storefront request actually asks
+        //    for. The applied theme comes from the Website theme application
+        //    (ThemeApplicationContext::current()), which does not exist at Worker
+        //    boot, so warming only the null-theme key leaves every storefront miss
+        //    and each new Worker rebuilt the whole catalogue (a file walk across the
+        //    theme chain) inside its first request.
         try {
             /** @var ThemeComponentCatalog $componentCatalog */
             $componentCatalog = ObjectManager::getInstance(ThemeComponentCatalog::class);
             foreach (self::AREAS as $area) {
-                $items += \count($componentCatalog->getDefinitions($area, null));
+                try {
+                    $items += \count($componentCatalog->getDefinitions($area, null));
+                } catch (\Throwable $exception) {
+                    $failures['definitions.' . $area] = $exception->getMessage();
+                }
+                foreach ($this->appliedThemeIds($area) as $themeId) {
+                    $row = WelineTheme::catalogRow($themeId);
+                    if ($row === []) {
+                        continue;
+                    }
+                    try {
+                        /** @var WelineTheme $theme */
+                        $theme = (clone ObjectManager::getInstance(WelineTheme::class))->clearData()->setData($row);
+                        $items += \count($componentCatalog->getDefinitions($area, $theme));
+                    } catch (\Throwable $exception) {
+                        $failures['definitions.' . $area . '.' . $themeId] = $exception->getMessage();
+                    }
+                }
             }
         } catch (\Throwable $exception) {
             $failures['definitions'] = $exception->getMessage();
@@ -187,5 +228,40 @@ final class ThemeCataloguePreloadProvider extends AbstractWorkerPreloadProvider
         }
 
         return WorkerPreloadResult::warmed($this->code(), $this->phase(), $items, $durationMs, $memoryDelta);
+    }
+
+    /**
+     * Applied theme ids for one area, from the Website theme applications.
+     *
+     * These are the ids storefront requests resolve to; the preload warms their
+     * component-definition cache keys so the request path never rebuilds them.
+     * The repository is an abstraction over `websites_theme_application`, so this
+     * never duplicates the read logic that module already owns.
+     *
+     * @return list<int>
+     */
+    private function appliedThemeIds(string $area): array
+    {
+        if (!\interface_exists(ThemeApplicationRepositoryInterface::class)) {
+            return [];
+        }
+
+        $ids = [];
+        try {
+            /** @var ThemeApplicationRepositoryInterface $applications */
+            $applications = ObjectManager::getInstance(ThemeApplicationRepositoryInterface::class);
+            foreach ($applications->listForArea('normal', $area) as $row) {
+                $themeId = (int)($row['reference']?->themeId ?? 0);
+                if ($themeId > 0) {
+                    $ids[$themeId] = true;
+                }
+            }
+        } catch (\Throwable) {
+            // Warm-up is an optimisation: an unreadable application table must not
+            // block Worker READY, and the request path keeps its own resolution.
+            return \array_keys($ids);
+        }
+
+        return \array_keys($ids);
     }
 }

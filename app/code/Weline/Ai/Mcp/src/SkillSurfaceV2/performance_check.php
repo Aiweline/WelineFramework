@@ -21,6 +21,7 @@ return [
         'CachePool', 'CachePolicy', 'WLS', 'FPC', '缓存失效', '批量预取',
         '店面列表性能', '冷切扫描', '假写粘性', 'performance', 'performance check',
         'performance engineer', 'performance_check',
+        '加载慢', '很慢', '卡顿', '响应慢',
     ],
     'authoritative_skill' => 'weline-performance-check',
     'authoritative_doc' => 'dev/ai-command/ai/性能检查.md',

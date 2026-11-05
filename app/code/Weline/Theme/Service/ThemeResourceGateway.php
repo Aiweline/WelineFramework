@@ -650,10 +650,19 @@ final class ThemeResourceGateway
 
         /** @var WelineTheme $theme */
         $theme = \Weline\Framework\Manager\ObjectManager::getInstance(WelineTheme::class);
-        $loaded = clone $theme;
-        $loaded->clear()->load(WelineTheme::schema_fields_PATH, $path);
-        if ($loaded->getId()) {
-            return $loaded;
+        // 主题目录已在进程袋：按 path 反查不回库（写入路径代次 bump 失效）。
+        $catalogRow = WelineTheme::catalogRowByPath($path);
+        if ($catalogRow !== []) {
+            $loaded = (clone $theme)->clearData()->clearQuery()->setData($catalogRow);
+            if ($loaded->getId()) {
+                return $loaded;
+            }
+        } else {
+            $loaded = clone $theme;
+            $loaded->clear()->load(WelineTheme::schema_fields_PATH, $path);
+            if ($loaded->getId()) {
+                return $loaded;
+            }
         }
 
         // Registered module-default themes store an absolute source directory.

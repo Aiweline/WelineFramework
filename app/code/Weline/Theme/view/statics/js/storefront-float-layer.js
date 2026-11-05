@@ -24,6 +24,12 @@
   var boundSlots = typeof WeakSet === 'function' ? new WeakSet() : null;
   var syncScheduled = false;
   var syncing = false;
+  // 事件驱动架构：观察面只认 layer 容器的 childList/subtree，不认任何 attribute。
+  // 本模块自写的 class/style/attribute 结构上不可能再被自己观察到，
+  // 自触发循环在架构层不可能发生（取代 storefront-float-self-mute-sync-v1 时间门补丁）。
+  // 内容晚到 → 一次 flush；sync 幂等，下一次 flush 无写入即静默收敛。
+  // Marker: storefront-float-self-mute-sync-v1 (superseded: time-gate removed)
+  // Marker: storefront-float-observer-content-only-v1
 
   function layer() {
     return document.querySelector(LAYER_SEL);
@@ -177,11 +183,12 @@
   }
 
   function applyShift(slotEl, collapsed) {
-    // Collapsed transforms live in CSS keyed by `data-float-dock`, so every
-    // direction (including base translateY(-50%) containers) composes without
-    // per-side JS. Expanded must clear any inline transform: a leftover
-    // identity translate still creates a containing block so mobile CS
-    // position:fixed panels size to the FAB slot and appear to vanish.
+    // Collapsed transforms live in CSS (critical + sheet), keyed by `data-float-dock`.
+    // Recall chip stays on the slot exterior (left:100% / right:100%); geometry is
+    // full ±100% shift — see Theme/doc/店面浮动层贴边收起契约.md.
+    // Expanded must clear any inline transform: a leftover identity translate still
+    // creates a containing block so mobile CS position:fixed panels size to the
+    // FAB slot and appear to vanish.
     // Marker: storefront-float-edge-transform-clear-v1
     if (!collapsed) {
       slotEl.style.transform = '';
@@ -367,6 +374,8 @@
     var recallLabel = labels.recall;
 
     slotEl.classList.toggle('is-edge-collapsed', collapsed);
+    // is-edge-expanded 不是本机制状态机的一部分（历史 keepSlotExpanded 残留）；展开/收起只认 collapsed。
+    slotEl.classList.remove('is-edge-expanded');
     slotEl.setAttribute('data-edge-collapsed', collapsed ? '1' : '0');
     applyShift(slotEl, collapsed);
 
@@ -374,6 +383,29 @@
       parts.body.setAttribute('aria-hidden', collapsed ? 'true' : 'false');
       if ('inert' in parts.body) {
         parts.body.inert = collapsed;
+      }
+    }
+
+    // 异步部件晚于 dock 初始化注入时可能不在 __body 内：除 edge chrome 外的槽位
+    // 子节点内联隐藏（展开还原）。几何与 visibility 主路径仍由 CSS 承担。
+    // Marker: storefront-float-collapse-inline-children-v1
+    for (var i = 0; i < slotEl.children.length; i++) {
+      var child = slotEl.children[i];
+      if (!child || (child.hasAttribute && child.hasAttribute('data-float-edge-chrome'))) {
+        continue;
+      }
+      if (collapsed) {
+        if (!child.hasAttribute('data-float-collapse-hidden')) {
+          child.setAttribute('data-float-collapse-hidden', '1');
+          child.setAttribute('data-float-collapse-prev', child.getAttribute('style') || '');
+        }
+        child.style.visibility = 'hidden';
+        child.style.opacity = '0';
+        child.style.pointerEvents = 'none';
+      } else if (child.hasAttribute('data-float-collapse-hidden')) {
+        child.setAttribute('style', child.getAttribute('data-float-collapse-prev') || '');
+        child.removeAttribute('data-float-collapse-hidden');
+        child.removeAttribute('data-float-collapse-prev');
       }
     }
 
@@ -401,11 +433,40 @@
     }
   }
 
+  function healCollapsedChildren(slotEl) {
+    if (!slotEl) {
+      return;
+    }
+    for (var i = 0; i < slotEl.children.length; i++) {
+      var child = slotEl.children[i];
+      if (!child || (child.hasAttribute && child.hasAttribute('data-float-edge-chrome'))) {
+        continue;
+      }
+      if (!child.hasAttribute('data-float-collapse-hidden')) {
+        child.setAttribute('data-float-collapse-hidden', '1');
+        child.setAttribute('data-float-collapse-prev', child.getAttribute('style') || '');
+      }
+      child.style.visibility = 'hidden';
+      child.style.opacity = '0';
+      child.style.pointerEvents = 'none';
+    }
+  }
+
   function clearDockVisual(slotEl) {
+    var chrome = slotEl.querySelector('[data-float-edge-chrome]');
+    var alreadyClear =
+      !slotEl.classList.contains('is-edge-collapsed') &&
+      !slotEl.classList.contains('is-edge-expanded') &&
+      !slotEl.hasAttribute('data-edge-collapsed') &&
+      !slotEl.style.transform &&
+      (!chrome || chrome.hidden);
+    if (alreadyClear) {
+      return;
+    }
     slotEl.classList.remove('is-edge-collapsed');
+    slotEl.classList.remove('is-edge-expanded');
     slotEl.removeAttribute('data-edge-collapsed');
     slotEl.style.transform = '';
-    var chrome = slotEl.querySelector('[data-float-edge-chrome]');
     if (chrome) {
       chrome.hidden = true;
     }
@@ -455,6 +516,15 @@
       clearDockVisual(slotEl);
       return;
     }
+    // 异步部件（全局区水合）晚于 dock 初始化注入内容：若此时没有 edge body，
+    // 内容会留在槽位本身，收起态只隐藏 __body 就会「收起了还在展示」。
+    // 这里强制重建外壳，把新内容收进 __body，后续 setCollapsed 才能真隐藏。
+    if (!edgeBody(slotEl)) {
+      if (boundSlots) {
+        boundSlots.delete(slotEl);
+      }
+      bindDock(slotEl);
+    }
     bindDock(slotEl);
     var chrome = slotEl.querySelector('[data-float-edge-chrome]');
     if (chrome) {
@@ -469,10 +539,17 @@
     var is = slotEl.classList.contains('is-edge-collapsed');
     if (want !== is || !slotEl.hasAttribute('data-edge-collapsed')) {
       setCollapsed(slotEl, want, false);
-    } else if (!want) {
+    } else if (want) {
+      // 已是收起态：只把晚到的子节点藏起来，禁止再 toggle class（避免 document MO 自触发）。
+      healCollapsedChildren(slotEl);
+    } else {
       // Re-assert clear transform even when class already expanded (legacy
       // identity-translate inline from older builds).
       applyShift(slotEl, false);
+      // 幂等：classList.remove 对不存在的类仍会发 attribute 变更记录；先查再删。
+      if (slotEl.classList.contains('is-edge-expanded')) {
+        slotEl.classList.remove('is-edge-expanded');
+      }
     }
   }
 
@@ -487,6 +564,7 @@
     if (syncing || !layer()) {
       return;
     }
+    ensureLayerContentObserver();
     syncing = true;
     try {
       adoptMusic();
@@ -498,6 +576,7 @@
   }
 
   function scheduleSync() {
+    // 幂等收敛：sync() 只在状态漂移时写 DOM；重复 flush 第二次无写入即静默。
     if (syncScheduled || syncing) {
       return;
     }
@@ -624,6 +703,47 @@
     }
   }
 
+  var layerContentObserverEl = null;
+
+  function ensureLayerContentObserver() {
+    var layerEl = layer();
+    if (!layerEl || layerEl === layerContentObserverEl) {
+      return;
+    }
+    layerContentObserverEl = layerEl;
+    // 只观察内容插入（childList/subtree），不观察任何 attribute。
+    // 本模块自写的 class/style/attribute 不在观察面内：
+    // 自触发循环在结构上不可能发生（取代 document 级 class 观察 + muteUntil 时间门）。
+    // 自写 childList（adoptOne/chrome 插入）最多触发一次幂等收敛 flush。
+    // Marker: storefront-float-observer-content-only-v1
+    var observeOptions = { childList: true, subtree: true };
+    var observeApi = (global.Weline && global.Weline.dom && typeof global.Weline.dom.observe === 'function')
+      ? global.Weline.dom.observe.bind(global.Weline.dom)
+      : (global.Weline && typeof global.Weline.observeMutationsCoalesced === 'function'
+        ? global.Weline.observeMutationsCoalesced
+        : null);
+    if (observeApi) {
+      try {
+        observeApi({
+          target: layerEl,
+          options: observeOptions,
+          idleTimeoutMs: 100,
+          label: 'storefront-float-layer',
+          onFlush: scheduleSync,
+        });
+        return;
+      } catch (_e) { /* fall through */ }
+    }
+    if (typeof MutationObserver === 'function') {
+      /* ARCH_MO_FALLBACK_START */
+      var obs = new MutationObserver(function () {
+        scheduleSync();
+      });
+      obs.observe(layerEl, observeOptions);
+      /* ARCH_MO_FALLBACK_END */
+    }
+  }
+
   function boot() {
     measureHeaderOffset();
     measureFooterLift();
@@ -643,45 +763,13 @@
     }
     sync();
     bindCsOpenClearsEndTransform();
-    var observeOptions = {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['class'],
-    };
-    var observeApi = (global.Weline && global.Weline.dom && typeof global.Weline.dom.observe === 'function')
-      ? global.Weline.dom.observe.bind(global.Weline.dom)
-      : (global.Weline && typeof global.Weline.observeMutationsCoalesced === 'function'
-        ? global.Weline.observeMutationsCoalesced
-        : null);
-    if (observeApi && document.documentElement) {
-      try {
-        observeApi({
-          target: document.documentElement,
-          options: observeOptions,
-          idleTimeoutMs: 100,
-          label: 'storefront-float-layer',
-          onFlush: scheduleSync,
-        });
-        return;
-      } catch (_e) { /* fall through */ }
-    }
-    /* ARCH_MO_FALLBACK_START */
-    if (typeof MutationObserver === 'function' && document.documentElement) {
-      var obs = new MutationObserver(function () {
-        try { obs.disconnect(); } catch (_d) { /* ignore */ }
-        global.setTimeout(function () {
-          scheduleSync();
-          try {
-            obs.observe(document.documentElement, observeOptions);
-          } catch (_o) { /* ignore */ }
-        }, 100);
-      });
-      try {
-        obs.observe(document.documentElement, observeOptions);
-      } catch (_b) { /* ignore */ }
-    }
-    /* ARCH_MO_FALLBACK_END */
+    // 事件驱动入口：slot 内容填充由 global-region-async 派发（bubbles），
+    // 这里只订阅一次 document 事件——不观察任何 attribute。
+    // layer 晚建时 sync() 不 attach，由本事件回调补 attach + sync。
+    document.addEventListener('weline:float-slot-filled', function () {
+      ensureLayerContentObserver();
+      scheduleSync();
+    });
   }
 
   global.WelineStorefrontFloatLayer = {

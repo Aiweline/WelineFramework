@@ -17,9 +17,10 @@ return [
     'authoritative_doc' => 'app/code/Weline/Framework/doc/3-开发/API接口开发规范.md',
     'triggers' => [
         'REST', 'Rest', 'Api/Rest', 'AbstractRestController', 'BackendRestController', 'FrontendRestController',
-        'API接口', 'API 开发', 'API开发', 'API SDK', 'API席', 'Team:API',
+        'API接口', 'API 开发', 'API开发', 'API SDK', 'API席', 'Team:API', 'API',
         'BinQuery', 'QueryProvider', 'query-bin', '/bin/query', 'binquery', 'w_query',
         'openapi', 'SDK使用指南', '第三方 SDK', '远程 API', 'rest/v1',
+        '开放接口', '对外接口', '接口开发', '第三方调用', '开放 API',
     ],
     'authoritative_docs' => [
         'app/code/Weline/Framework/doc/3-开发/API接口开发规范.md',

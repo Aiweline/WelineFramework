@@ -591,7 +591,17 @@ class AiTranslationService
             $where .= ' AND d.word NOT LIKE ' . $this->sqlQuote('@meta::%');
         }
 
-        $han = "d.word ~ '[" . "\u{4e00}" . "-" . "\u{9fff}" . "]'";
+        // PostgreSQL 用 `~` 正则，MySQL/MariaDB 用 REGEXP；原先固定 `~` 在 MySQL 上直接 SQL 语法错误。
+        $driver = 'mysql';
+        try {
+            $driver = strtolower((string)$this->dictionary->getConnection()->getConnector()->getLink()
+                ->getAttribute(\PDO::ATTR_DRIVER_NAME));
+        } catch (\Throwable) {
+        }
+        $hanRange = '[' . "\u{4e00}" . '-' . "\u{9fff}" . ']';
+        $han = $driver === 'pgsql'
+            ? "d.word ~ '" . $hanRange . "'"
+            : "d.word REGEXP '" . $hanRange . "'";
         if ($allowKeyOnlyWords) {
             $where .= ' AND (' . $han . ' OR d.word LIKE ' . $this->sqlQuote('google_taxonomy.%') . ')';
         } else {

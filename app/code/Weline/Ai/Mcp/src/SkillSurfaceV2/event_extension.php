@@ -16,6 +16,7 @@ return [
     'authoritative_doc' => 'app/code/Weline/Framework/doc/3-开发/事件命名与注册规范.md',
     'triggers' => [
         'event', 'observer', 'event.xml', 'dispatch', 'EventsManager',
+        '事件监听', '监听器', '事件监听器', '观察者', '事件回调', '广播事件',
     ],
     'authoritative_docs' => [
         'app/code/Weline/Framework/doc/3-开发/事件命名与注册规范.md',

@@ -338,6 +338,31 @@ EXEMPT：内容运营与纯闲聊。宿主常带：`~/.cursor/rules/requirement-
 
 宿主常带：`~/.dsh/AGENTS.md`「禁止脚本批量替换」镜（与 MCP 双写，见 §4.1；个人 Agent 全局镜按本机实际存在的宿主镜落点）。
 
+### 4.4b 图片禁止进入会话上下文（`no_inline_images_in_context`，强制 · 2026-11-05 用户指定）
+
+**用户原话：「图片不允许存在会话里面，图片最好放在 tmp 这种缓存目录。否则很快就满了。全局 weline-mcp 规则限定死」。**
+
+**图片字节一律不得进入会话 / 线程上下文；要产出图片时先落 tmp 缓存目录，只按路径引用。**
+
+| 允许 / 必须 | 禁止 |
+|------|------|
+| 图片先**落盘到临时缓存目录**：`$TMPDIR`、仓库 `var/tmp/`、`dev/tmp/`（一次性工作资料归 `dev/`，见 `module_doc_forbids_ephemeral_work_artifacts`），汇报时给**绝对路径 + `ls -l` 字节数** | 用 `read_file` / 视图 / 打开 / 附件 的方式把任何图片（jpg/jpeg/png/webp/gif/bmp/tiff）送进会话；把截图、生成图、素材图、验收图贴进消息流 |
+| 交付物图片走 FileAsset / `pub/static` / 站点柜 / 主题静态资源，**同样只给路径** | 把 base64、`data:image/...` URI 贴进提示词、文档、代码、注释、日志、提交信息、规则正文 |
+| 确需看像素时才看图，且**先缩略**：`sips -Z 512 -s format png <src> --out <tmp>`；一次会话最多 1–2 张缩略图 | 一次读多张大图；把 `read_file` 当「打开图片查看器」用 |
+| 能用非图片证据就说清楚：DOM 文本、尺寸/时序 metrics、`文件:行号`、HTTP 状态 + 响应头 | 用「我看过了截图」当验收证据 |
+| 收尾证据写「图片落盘路径 + 字节数 + 会话体积增长」 | 用正文内联图片充当验收凭据 |
+
+**为什么是硬规则（2026-11-05 实测，全部已验证）**
+
+1. **单图放大 16.5 倍**：本地 `ref1.jpg` 300,567B，进入线程后同一张图变成 4,958,616B。三层放大 = JPG→PNG 重编码 **5.92 倍**（`sips -s format png` 实测 300,567→1,778,670B）+ PNG→base64 **1.33 倍** + 同一条 `tool_result` **存两份**（`content[0]` 与 `output` 各一份）= 2 倍。
+2. **会话体积由图片决定，不是文本**：Zed 线程库 `~/Library/Application Support/Zed/threads/threads.db`（zstd）两个汉服会话解压后 26.76MB / 22.13MB，其中图片 base64 占 24.43MB / 19.92MB，**全部文本只有 1.65MB / 1.52MB**。
+3. **后果是会话卡死，不是变慢**：图片把请求体顶过网关上限（`Zed.log` 里 `request body exceeds 8MB limit` 共 18 次，其中 **8 次是 `Manual compaction failed`**）。压缩本身也要重发整段上下文，所以**自动压缩同样跑不起来**——会话既发不出请求、又压不下去，无法自愈。
+4. **换模型没用**：线程记录 `request_token_usage.input_tokens=200000`，Zed 实际窗口 168000（`200000 - 32000`），不是 token 超窗。换 1M 上下文模型不解决问题；`.webp` 也不解决问题（编辑器一律转 PNG），**唯一有效杠杆是像素尺寸与图片数量**（同一张图 1200→768→512 的 PNG 分别 1,778,670 / 861,010 / 417,936B）。
+
+**配套**：`preserve_dirty_workspace`（脏改不可丢弃）、`no_script_batch_replace`（逐文件改）、`module_doc_forbids_ephemeral_work_artifacts`（临时资料落 `dev/`）。
+
+宿主常带：仓根 `AGENTS.md`「图片禁止进入会话上下文」镜 + `~/.dsh/AGENTS.md` 同名镜（与 MCP 双写，见 §4.1）。
+
 ### 4.5 算法理解与伪代码汇报（`algorithm_understanding_pseudocode_report`，强制 · 2026-10-29 用户指定）
 
 **用户原话：算法没理清楚，以及汇报的时候涉及到修改算法，就用伪代码、文字示意图等方式汇报理解。**

@@ -7,7 +7,6 @@ namespace Weline\Framework\Test\Unit\Cache;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Cache\Console\Cache\Clear;
 use Weline\Framework\Cache\Scanner;
-use Weline\Framework\Cache\Service\CacheWarmerRegistry;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
 
@@ -23,7 +22,6 @@ final class ClearSkipWarmTest extends TestCase
             new ClearSkipWarmScanner(),
             new Printing(),
             new ClearSkipWarmBroadcaster(),
-            new CacheWarmerRegistry([]),
         );
 
         \ob_start();
@@ -42,7 +40,6 @@ final class ClearSkipWarmTest extends TestCase
             new ClearSkipWarmScanner(),
             new Printing(),
             new ClearSkipWarmBroadcaster(),
-            new CacheWarmerRegistry([]),
         );
 
         \ob_start();

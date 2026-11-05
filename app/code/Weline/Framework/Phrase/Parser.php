@@ -553,11 +553,21 @@ class Parser
     {
         self::ensureStateRegistered();
 
-        // Persistent Workers must stay route-scoped. The first internal/homepage
-        // warmup request naturally discovers its controller, layout and query
-        // modules; preloading every active module here defeats that boundary and
-        // multiplies startup RSS by the Worker count.
+        // Persistent Workers stay route-scoped for *module* dictionaries: the
+        // first request discovers its controller, layout and query modules, and
+        // preloading every active module here multiplies startup RSS by the
+        // Worker count. The global file layer is a different thing — bounded by
+        // one locale chain, read by every storefront request — so exactly that
+        // layer is warmed, for the locales an operator declared.
+        //
+        // Scope is deliberately NOT discoverPreloadLanguages(): on a persistent
+        // runtime that list merges every generated locale, which is the RSS
+        // blow-up the route-scoped rule above exists to prevent.
         if (Runtime::isPersistent()) {
+            foreach (self::discoverWorkerGlobalDictionaryLocales() as $lang) {
+                self::getLayeredWords($lang, [], null);
+            }
+
             return;
         }
 
@@ -1233,6 +1243,37 @@ class Parser
         );
 
         return \array_values(\array_unique(\array_filter($languages)));
+    }
+
+    /**
+     * Locales a persistent Worker may warm without breaking the route-scoped
+     * boundary: an explicit operator list, otherwise the single framework
+     * default language.
+     *
+     * Kept separate from {@see self::discoverPreloadLanguages()} on purpose:
+     * that one intentionally widens to every generated locale on a persistent
+     * runtime, which is correct for the FPM-style full warm but wrong for a
+     * per-Worker global-layer warm.
+     *
+     * @return list<string>
+     */
+    private static function discoverWorkerGlobalDictionaryLocales(): array
+    {
+        $configured = self::normalizeLanguageList(Env::get('wls.i18n.preload_locales', ''));
+        if ($configured === []) {
+            $configured = self::normalizeLanguageList(Env::get('i18n.preload_locales', ''));
+        }
+        if ($configured === []) {
+            $configured = self::normalizeLanguageList(Env::get('locale', ''));
+        }
+        if ($configured === []) {
+            return [Env::default_LANGUAGE_CODE];
+        }
+        if (\in_array('all', $configured, true)) {
+            return self::discoverGeneratedLanguages();
+        }
+
+        return $configured;
     }
 
     private static function normalizeLanguageList(mixed $value): array

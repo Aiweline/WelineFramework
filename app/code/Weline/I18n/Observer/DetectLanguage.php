@@ -2,74 +2,34 @@
 
 namespace Weline\I18n\Observer;
 
-use Weline\Framework\Cache\Contract\CachePoolInterface;
-use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Model\Locals;
+use Weline\I18n\Service\ActiveLocaleCodeProvider;
 
+/**
+ * 路由语言段校验：只回答「该语言是否已安装且启用」。
+ *
+ * 答案来自 {@see ActiveLocaleCodeProvider}（进程袋 + 命名空间代次失效），
+ * 本类不再自己拼 `Locals` 查询、也不再维护一份 `all_languages_list` 缓存：
+ * 同一事实的第二条读路径与第二套失效点，正是旧实现里语言装了却要重启才生效的来源。
+ */
 class DetectLanguage implements ObserverInterface
 {
-    private const CACHE_KEY_ALL_LANGUAGES = 'all_languages_list';
-    private const CACHE_KEY_PREFIX_CHECK = 'lang_check_';
-
     /**
      * @inheritDoc
      */
     public function execute(Event &$event): void
     {
         $data = $event->getData();
-        /**@var DataObject $data */
-        $code = $data->getData('code');
-        $codeLower = strtolower($code);
-        
-        $cache = w_cache('i18n');
-        
-        // 先检查单个语言代码的缓存
-        $checkCacheKey = self::CACHE_KEY_PREFIX_CHECK . $codeLower;
-        $checkResult = $cache->get($checkCacheKey);
-        if ($checkResult !== null && $checkResult !== false) {
-            $data->setData('result', (bool)$checkResult);
+        $code = \trim((string)$data->getData('code'));
+        if ($code === '') {
+            $data->setData('result', false);
             return;
         }
-        
-        // 缓存未命中，检查所有语言列表缓存
-        $languages = $cache->get(self::CACHE_KEY_ALL_LANGUAGES);
-        if ($languages === null || !is_array($languages)) {
-            // 查询数据库
-            /**@var Locals $local */
-            $local = ObjectManager::getInstance(Locals::class);
-            // 只投影 code 一列：本处只消费 code，取全字段实测多花 58%（21.71ms → 9.02ms @1000 行）。
-            // 用字典去重：is_install+is_active 命中 2085 行但唯一 code 只有 47 个，
-            // 原写法把 2038 个重复项一起塞进缓存，下游还要 in_array 做 O(n) 查找。
-            $locals = $local
-                ->where(Locals::schema_fields_IS_INSTALL, 1)
-                ->where(Locals::schema_fields_IS_ACTIVE, 1)
-                ->select(Locals::schema_fields_CODE)
-                ->fetchArray();
 
-            $languages = [];
-            foreach ($locals as $localData) {
-                $codeValue = $localData[Locals::schema_fields_CODE] ?? null;
-                if (\is_string($codeValue) && $codeValue !== '') {
-                    $languages[\strtolower($codeValue)] = true;
-                }
-            }
-
-            // 保存到缓存
-            $cache->set(self::CACHE_KEY_ALL_LANGUAGES, $languages);
-        }
-
-        // 检查语言代码是否存在
-        // 字典形态用 isset（O(1)）；兼容历史缓存里仍是 list 形态的数据。
-        $exists = \is_array($languages) && \array_is_list($languages)
-            ? \in_array($codeLower, $languages, true)
-            : isset($languages[$codeLower]);
-        
-        // 保存单个语言代码的检查结果
-        $cache->set($checkCacheKey, $exists ? 1 : 0);
-        
-        $data->setData('result', $exists);
+        /** @var ActiveLocaleCodeProvider $active */
+        $active = ObjectManager::getInstance(ActiveLocaleCodeProvider::class);
+        $data->setData('result', isset($active->getInstalledActiveCodeMap()[\strtolower($code)]));
     }
 }

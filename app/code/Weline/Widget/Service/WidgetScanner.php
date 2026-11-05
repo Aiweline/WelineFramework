@@ -753,6 +753,13 @@ class WidgetScanner
                     ? \trim((string)$widgetConfig['source'])
                     : '',
                 'cache' => max(0, (int)($widgetConfig['cache'] ?? 0)),
+                // 异步部件契约（@widget.async*）：部件只声明，占位/加载由 Weline_Widget 统一实现。
+                'async' => ($widgetConfig['async'] ?? false) === true,
+                'async_cache' => max(0, (int)($widgetConfig['async_cache'] ?? 0)),
+                'async_module' => \is_string($widgetConfig['async_module'] ?? null)
+                    ? \trim((string)$widgetConfig['async_module'])
+                    : '',
+                'async_module_defer' => ($widgetConfig['async_module_defer'] ?? true) !== false,
                 'config' => $widgetConfig
             ];
 

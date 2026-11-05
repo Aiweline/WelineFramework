@@ -55,7 +55,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     miniCartIcon: {
         paths: [
-            "Weline_Theme::js/widgets/mini-cart-icon.js?v=20261102-async-shell1"
+            "Weline_Theme::js/widgets/mini-cart-icon.js"
         ],
         globalVar: "WelineMiniCartIcon",
         load: "eager",

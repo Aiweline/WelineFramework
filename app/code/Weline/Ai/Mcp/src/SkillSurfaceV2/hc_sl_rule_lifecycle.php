@@ -18,6 +18,7 @@ return [
         'HC-SL', '符号规则', '逻辑符号规则', '硬规则生命周期',
         'HardConstraintsCatalog', 'HardConstraintsSymbolDsl', 'hc-sl.language',
         'hc_sl_rule_lifecycle', 'weline-hc-sl-rule-lifecycle',
+        '硬规则', '规则入库', '规则生命周期', '语言表登记',
     ],
     'authoritative_skill' => 'weline-hc-sl-rule-lifecycle',
     'authoritative_doc' => 'dev/ai-command/ai/HC-SL硬规则生命周期.md',

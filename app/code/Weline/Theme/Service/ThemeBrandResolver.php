@@ -245,6 +245,11 @@ final class ThemeBrandResolver
     protected function resolveParentThemeId(int $themeId): int
     {
         try {
+            // 主题目录已在进程袋：父主题链同样只读快照（不污染共享模型实例）。
+            $row = WelineTheme::catalogRow($themeId);
+            if ($row !== []) {
+                return max(0, (int)($row[WelineTheme::schema_fields_PARENT_ID] ?? 0));
+            }
             /** @var WelineTheme $theme */
             $theme = ObjectManager::getInstance(WelineTheme::class);
             $theme->clearData()->clearQuery()->load($themeId);

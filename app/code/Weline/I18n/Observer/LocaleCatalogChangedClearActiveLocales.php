@@ -22,6 +22,15 @@ final class LocaleCatalogChangedClearActiveLocales implements ObserverInterface
             ActiveLocaleCodeProvider::clearProcessCache();
         }
 
+        try {
+            // 目录答案的进程 memo 同样属于这里：代次守卫只是兼容跨 Worker，
+            // 本 Worker 立即丢掉重建，不让下一个请求白跑一趟代次对比。
+            ObjectManager::getInstance(
+                \Weline\Framework\App\Localization\LocalizationProviderRegistry::class
+            )->clearCaches();
+        } catch (\Throwable) {
+        }
+
         LocaleRepository::clearProcessCache();
         CountryRepository::clearProcessCache();
     }

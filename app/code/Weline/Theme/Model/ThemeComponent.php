@@ -229,4 +229,21 @@ class ThemeComponent extends Model
         $decoded = json_decode($value, true);
         return is_array($decoded) ? $decoded : [];
     }
+
+    /**
+     * 部件账本是 {@see \Weline\Theme\Service\ThemeComponentCatalog} 进程袋的数据源之一；
+     * 本表没有自己的命名空间，写后复用主题目录代次 bump，让最后一个 Worker
+     * 也在下一次代次比较时重建，而不是等 cache:clear / 重启。
+     */
+    public function save_after()
+    {
+        WelineTheme::bumpCatalogGeneration();
+        parent::save_after();
+    }
+
+    public function delete_after()
+    {
+        WelineTheme::bumpCatalogGeneration();
+        parent::delete_after();
+    }
 }

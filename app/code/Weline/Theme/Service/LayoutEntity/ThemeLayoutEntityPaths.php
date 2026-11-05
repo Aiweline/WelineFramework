@@ -237,10 +237,16 @@ final class ThemeLayoutEntityPaths
     {
         $path = '';
         try {
-            $theme = (clone \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\Theme\Model\WelineTheme::class
-            ))->clearData()->clearQuery()->load($themeId);
-            $path = \trim((string)$theme->getData(\Weline\Theme\Model\WelineTheme::schema_fields_PATH));
+            // 主题目录已在进程袋：请求期取 path 不回库（写入路径代次 bump 失效）。
+            $row = \Weline\Theme\Model\WelineTheme::catalogRow($themeId);
+            if ($row !== []) {
+                $path = \trim((string)($row[\Weline\Theme\Model\WelineTheme::schema_fields_PATH] ?? ''));
+            } else {
+                $theme = (clone \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Theme\Model\WelineTheme::class
+                ))->clearData()->clearQuery()->load($themeId);
+                $path = \trim((string)$theme->getData(\Weline\Theme\Model\WelineTheme::schema_fields_PATH));
+            }
         } catch (\Throwable) {
             $path = '';
         }

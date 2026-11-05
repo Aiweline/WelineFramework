@@ -20,7 +20,7 @@ class Llms extends FrontendController
     {
         $path = strtolower(trim((string) (parse_url($this->request->getUrlPath(), PHP_URL_PATH) ?: ''), '/'));
 
-        return match ($path) {
+        $response = match ($path) {
             'ai.txt' => Response::text(IndustryProtocolDocuments::aiTxt(), 200, 'text/plain; charset=utf-8'),
             'license.xml' => Response::text($this->renderer->renderLicenseXml(), 200, 'application/rsl+xml; charset=utf-8'),
             'trust.txt', '.well-known/trust.txt' => Response::text($this->renderer->renderTrustTxt(), 200, 'text/plain; charset=utf-8'),
@@ -28,7 +28,18 @@ class Llms extends FrontendController
             '.well-known/ai-catalog.json', '.well-known/ard.json' => $this->agentCatalog(),
             default => Response::text($this->renderer->renderLlms(false), 200, 'text/plain; charset=utf-8'),
         };
+
+        // Agent discovery documents are fetched with arbitrary UAs and must stay
+        // Set-Cookie-free: identity cookies stop ARD validators and CDN edge caching.
+        // Request-scoped arm also prevents the WLS worker from re-queueing the cookie.
+        \Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::arm('industry_protocol_document');
+        $response->setHeader(self::PROTOCOL_DOCUMENT_HEADER, '1');
+
+        return $response;
     }
+
+    /** Marks a response as an agent/AI discovery document (see StorefrontGenerationOutbound). */
+    public const PROTOCOL_DOCUMENT_HEADER = 'X-Weline-Protocol-Document';
 
     /**
      * ARD agent catalog manifest; served for both the normative ard.json and the

@@ -7503,6 +7503,11 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         }
         $searchPaths[] = \rtrim((string)PUB, '/\\') . DS . $diskRel;
         $searchPaths[] = BP . 'app' . DS . 'code' . DS . $diskRel;
+        // PSR-4 模块目录可能大写（Framework/View），静态 URL 约定小写 view；
+        // Linux 大小写敏感，补一次大小写变体，避免模块静态资源 404。
+        if (\str_contains($candidateUri, '/view/')) {
+            $searchPaths[] = BP . 'app' . DS . 'code' . DS . \str_replace('/view/', '/View/', $diskRel);
+        }
         $searchPaths[] = BP . 'vendor' . DS . $diskRel;
         $searchPaths[] = BP . $diskRel;
 

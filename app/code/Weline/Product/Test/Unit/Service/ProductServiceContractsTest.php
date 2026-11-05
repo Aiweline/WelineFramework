@@ -552,7 +552,9 @@ private function assert_HomepageShelfOffersLocaleCacheWarmer_testWarmerTargetsPr
 private function assert_HomepageShelfOffersLocaleCacheWarmer_testClearWarmsProductPoolWithoutProductFqcn(): void
 {
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Framework/Cache/Console/Cache/Clear.php');
-    self::assertStringContainsString("warmUp('product')", $src);
+    // 预热已从 cache:clear 移除（统一交给 cron 定时任务）。
+    self::assertStringNotContainsString("warmUp('product')", $src);
+    self::assertStringContainsString('预热由 cron 定时任务按构建世代执行', $src);
     self::assertStringNotContainsString('HomepageShelfOffersLocaleCacheWarmer', $src);
     self::assertStringNotContainsString('StorefrontHotCacheBagSeeder', $src);
 }
@@ -573,8 +575,10 @@ private function assert_HomepageShelfOffersLocaleCacheWarmer_testWarmerUsesWebsi
     self::assertStringContainsString('remaining', $src);
     self::assertStringContainsString('BUDGET_MS', $src);
     self::assertStringContainsString("MEMORY_FLOOR = '512M'", $src);
-    self::assertStringContainsString("warmUp('product')", (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Framework/Cache/Console/Cache/Clear.php'));
-    self::assertStringContainsString('reportWarmUpDetails', (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Framework/Cache/Console/Cache/Clear.php'));
+    // 预热已从 cache:clear 移除（统一交给 cron 定时任务）：Clear 里不得再出现预热编排。
+    $clearSource = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Framework/Cache/Console/Cache/Clear.php');
+    self::assertStringNotContainsString("warmUp('product')", $clearSource);
+    self::assertStringNotContainsString('reportWarmUpDetails', $clearSource);
     self::assertStringNotContainsString('->publishedOffers(', $src);
     self::assertStringNotContainsString('::publishedOffers(', $src);
     self::assertStringNotContainsString('publishedOffers(1000', $src);
@@ -798,7 +802,9 @@ private function assert_PlpFilterOffersLightCacheWarmer_testWarmerTargetsProduct
 private function assert_PlpFilterOffersLightCacheWarmer_testClearDiscoversViaProductPoolWithoutFqcn(): void
 {
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Framework/Cache/Console/Cache/Clear.php');
-    self::assertStringContainsString("warmUp('product')", $src);
+    // 预热已从 cache:clear 移除（统一交给 cron 定时任务）。
+    self::assertStringNotContainsString("warmUp('product')", $src);
+    self::assertStringContainsString('预热由 cron 定时任务按构建世代执行', $src);
     self::assertStringNotContainsString('PlpFilterOffersLightCacheWarmer', $src);
 }
 
@@ -1410,7 +1416,9 @@ private function assert_SearchProjectionScopeCacheWarmer_testWarmerTargetsProduc
 private function assert_SearchProjectionScopeCacheWarmer_testClearWarmsProductPoolWithoutProductFqcn(): void
 {
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Framework/Cache/Console/Cache/Clear.php');
-    self::assertStringContainsString("warmUp('product')", $src);
+    // 预热已从 cache:clear 移除（统一交给 cron 定时任务）。
+    self::assertStringNotContainsString("warmUp('product')", $src);
+    self::assertStringContainsString('预热由 cron 定时任务按构建世代执行', $src);
     self::assertStringNotContainsString('SearchProjectionScopeCacheWarmer', $src);
 }
 

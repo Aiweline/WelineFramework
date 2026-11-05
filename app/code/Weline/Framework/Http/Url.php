@@ -720,7 +720,13 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
     {
         $codes = [];
         try {
-            $knownCodes = ObjectManager::getInstance(LocalizationProviderRegistry::class)->preferredLanguageCodes();
+            $registry = ObjectManager::getInstance(LocalizationProviderRegistry::class);
+            // 路由前缀校验用“可用语言并集”，避免早期作用域只暴露默认站语言时
+            // 把已安装的其它语言前缀判成非法并回落默认语。
+            $knownCodes = $registry->availableLanguageCodes();
+            if ($knownCodes === []) {
+                $knownCodes = $registry->preferredLanguageCodes();
+            }
             foreach ($knownCodes as $knownCode) {
                 $code = \trim((string)$knownCode);
                 if ($code !== '') {

@@ -6,6 +6,7 @@ namespace Weline\Framework\App\Localization;
 
 use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\Framework\Runtime\ProcessSharedInterface;
 
 
@@ -38,6 +39,17 @@ final class LocalizationProviderRegistry implements ProcessSharedInterface
      */
     private array $memo = [];
 
+    /**
+     * Catalogue version the memo was built under.
+     *
+     * The memo is process-scoped, so without a version guard a worker that
+     * answered before a catalogue change keeps that answer until someone clears
+     * it locally. Every language/currency catalogue change already bumps the
+     * i18n namespace generation, so keying the memo on it gives cross-worker
+     * invalidation instead of "stale until restart".
+     */
+    private string $memoToken = '';
+
     public function __construct(
         private readonly ServiceProviderRegistry $serviceProviders,
     ) {
@@ -49,34 +61,69 @@ final class LocalizationProviderRegistry implements ProcessSharedInterface
     public function clearCaches(): void
     {
         $this->memo = [];
+        $this->memoToken = '';
         $this->providers = null;
     }
 
     /** @return list<string> */
     public function preferredLanguageCodes(): array
     {
-        if (isset($this->memo['language_codes'])) {
-            return $this->memo['language_codes'];
+        $memoized = $this->memoGet('language_codes');
+        if ($memoized !== null) {
+            return $memoized;
         }
         foreach ($this->providers() as $provider) {
             $codes = $this->normalizeLanguageCodes($provider->languageCodes());
             if ($codes !== []) {
-                return $this->memo['language_codes'] = $codes;
+                return $this->memoSet('language_codes', $codes);
             }
         }
-        return $this->memo['language_codes'] = [];
+        return $this->memoSet('language_codes', []);
+    }
+
+    /**
+     * Union of every provider's language codes.
+     *
+     * Used where the question is "which locale segments are legitimate?", not
+     * "what is the preferred ordering?". Narrow scopes (e.g. a resolved website
+     * with only two languages) must not hide locales that another provider
+     * already installed, otherwise those route segments fall back to the
+     * default language.
+     *
+     * @return list<string>
+     */
+    public function availableLanguageCodes(): array
+    {
+        $memoized = $this->memoGet('available_language_codes');
+        if ($memoized !== null) {
+            return $memoized;
+        }
+
+        $union = [];
+        foreach ($this->providers() as $provider) {
+            foreach ($this->normalizeLanguageCodes($provider->languageCodes()) as $code) {
+                $union[\strtolower($code)] = $code;
+            }
+        }
+
+        return $this->memoSet('available_language_codes', \array_values($union));
     }
 
     /** @return list<string> */
     public function preferredCurrencyCodes(): array
     {
+        $memoized = $this->memoGet('currency_codes');
+        if ($memoized !== null) {
+            return $memoized;
+        }
         foreach ($this->providers() as $provider) {
             $codes = $this->normalizeCurrencyCodes($provider->currencyCodes());
             if ($codes !== []) {
-                return $codes;
+                return $this->memoSet('currency_codes', $codes);
             }
         }
-        return [];
+
+        return $this->memoSet('currency_codes', []);
     }
 
     /**
@@ -144,8 +191,9 @@ final class LocalizationProviderRegistry implements ProcessSharedInterface
      */
     public function preferredInstalledLanguageCodes(): array
     {
-        if (isset($this->memo['installed_language_codes'])) {
-            return $this->memo['installed_language_codes'];
+        $memoized = $this->memoGet('installed_language_codes');
+        if ($memoized !== null) {
+            return $memoized;
         }
 
         foreach ($this->providers() as $provider) {
@@ -155,11 +203,11 @@ final class LocalizationProviderRegistry implements ProcessSharedInterface
             }
             $normalized = $this->normalizeLanguageCodes($codes);
             if ($normalized !== []) {
-                return $this->memo['installed_language_codes'] = $normalized;
+                return $this->memoSet('installed_language_codes', $normalized);
             }
         }
 
-        return $this->memo['installed_language_codes'] = [];
+        return $this->memoSet('installed_language_codes', []);
     }
 
     /**
@@ -180,6 +228,50 @@ final class LocalizationProviderRegistry implements ProcessSharedInterface
         }
 
         return null;
+    }
+
+    /**
+     * Read a memoised catalogue answer, or null when the memo is empty / stale.
+     *
+     * A null generation means "inside an open transaction": the catalogue cannot
+     * be trusted there, so the memo is bypassed instead of freezing a dirty read
+     * for the rest of the process life.
+     */
+    private function memoGet(string $key): ?array
+    {
+        $token = $this->currentMemoToken();
+        if ($token === '') {
+            $this->memo = [];
+            $this->memoToken = '';
+            return null;
+        }
+        if ($this->memoToken !== $token) {
+            $this->memo = [];
+            $this->memoToken = $token;
+            return null;
+        }
+
+        return $this->memo[$key] ?? null;
+    }
+
+    /** @param array<int, string> $value @return list<string> */
+    private function memoSet(string $key, array $value): array
+    {
+        $token = $this->currentMemoToken();
+        if ($token === '') {
+            return $value;
+        }
+        if ($this->memoToken !== $token) {
+            $this->memo = [];
+            $this->memoToken = $token;
+        }
+
+        return $this->memo[$key] = $value;
+    }
+
+    private function currentMemoToken(): string
+    {
+        return DictionaryCacheNamespace::generationStamp();
     }
 
     /** @return list<LocalizationProviderInterface> */

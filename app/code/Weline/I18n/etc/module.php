@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_I18n',
-    "version" => '1.0.157',
+    "version" => '1.0.159',
     "requires" => [
         'Weline_Framework' => '*',
         'Weline_SystemConfig' => '*',
@@ -39,6 +39,7 @@ return [
         \Weline\I18n\Api\LanguageRequest\LanguageSupportRequestWorkflowInterface::class => \Weline\I18n\Service\LanguageSupportRequestDirectory::class,
         'localization_provider.Weline_I18n' => \Weline\I18n\Api\Localization\LocalizationProvider::class,
         'process_cache_resetter.Weline_I18n' => \Weline\I18n\Api\Runtime\ProcessCacheResetter::class,
+        'worker_preload_provider.Weline_I18n' => \Weline\I18n\Service\Preload\LocaleCatalogPreloadProvider::class,
         'template_cache_policy.Weline_I18n' => \Weline\I18n\Api\View\TemplateCachePolicyProvider::class,
     ],
 ];

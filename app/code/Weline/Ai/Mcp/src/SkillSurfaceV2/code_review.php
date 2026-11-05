@@ -19,6 +19,7 @@ return [
         'diff 复审', '审查代码', '模块串融', '网站概念侵入', 'website_concept_seed',
         '硬编码网站', 'CatalogSeeder 进模块', '品牌种子进模块', 'module_boundary',
         'code_review', 'weline-code-review',
+        '架构边界', '模块边界', '代码质量', '审一下代码', '审查这段代码',
     ],
     'authoritative_skill' => 'weline-code-review',
     'authoritative_doc' => 'dev/ai-command/ai/代码复审.md',

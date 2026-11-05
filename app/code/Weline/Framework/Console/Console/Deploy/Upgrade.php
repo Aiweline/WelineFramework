@@ -760,6 +760,11 @@ class Upgrade extends CommandAbstract
             if (!$existed) {
                 $this->treeChanged = true;
             }
+            // Binary/unread path: still emit JS companion so preferMinJsPath URLs resolve.
+            $copied = @file_get_contents($targetPath);
+            if (is_string($copied)) {
+                $this->publishJsCompanionMin($targetPath, $copied);
+            }
 
             return;
         }
@@ -781,16 +786,64 @@ class Upgrade extends CommandAbstract
         }
 
         $content = (string)$payload->getData('content');
+        $primaryUnchanged = false;
         if (is_file($targetPath)) {
             $existing = @file_get_contents($targetPath);
+            if ($existing !== false && $existing === $content) {
+                $primaryUnchanged = true;
+            }
+        }
+        if (!$primaryUnchanged) {
+            $temporary = $targetPath . '.tmp-' . \bin2hex(\random_bytes(4));
+            if (@file_put_contents($temporary, $content) === false || !$this->replaceFile($temporary, $targetPath)) {
+                @unlink($temporary);
+                throw new \RuntimeException('Unable to write static asset: ' . $targetPath);
+            }
+            $this->treeChanged = true;
+        }
+
+        // Frontend weline.js preferMinJsPath() rewrites foo.js → foo.min.js in PROD.
+        // Transform may minify the pretty path in place, but the companion URL must
+        // still resolve or browsers log a 404 before the pretty fallback (PSI BP).
+        // Marker: deploy-js-companion-min-v1
+        $this->publishJsCompanionMin($targetPath, $content);
+    }
+
+    /**
+     * Ensure a companion *.min.js / *.min.mjs exists next to a pretty JS asset.
+     */
+    private function publishJsCompanionMin(string $targetPath, string $content): void
+    {
+        $basename = strtolower(basename($targetPath));
+        if (preg_match('/\.min\.(js|mjs)$/', $basename) === 1) {
+            return;
+        }
+        if (preg_match('/\.(js|mjs)$/', $basename) !== 1) {
+            return;
+        }
+
+        $companion = (string)preg_replace('/\.(js|mjs)$/i', '.min.$1', $targetPath);
+        if ($companion === '' || $companion === $targetPath) {
+            return;
+        }
+
+        if (is_file($companion)) {
+            $existing = @file_get_contents($companion);
             if ($existing !== false && $existing === $content) {
                 return;
             }
         }
-        $temporary = $targetPath . '.tmp-' . \bin2hex(\random_bytes(4));
-        if (@file_put_contents($temporary, $content) === false || !$this->replaceFile($temporary, $targetPath)) {
+
+        $destDir = dirname($companion);
+        if (!is_dir($destDir) && !@mkdir($destDir, 0775, true) && !is_dir($destDir)) {
+            return;
+        }
+
+        $temporary = $companion . '.tmp-' . \bin2hex(\random_bytes(4));
+        if (@file_put_contents($temporary, $content) === false || !$this->replaceFile($temporary, $companion)) {
             @unlink($temporary);
-            throw new \RuntimeException('Unable to write static asset: ' . $targetPath);
+
+            return;
         }
         $this->treeChanged = true;
     }

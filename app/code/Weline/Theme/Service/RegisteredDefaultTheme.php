@@ -15,7 +15,6 @@ use Weline\Theme\Model\WelineTheme;
 final class RegisteredDefaultTheme implements DefaultThemeInterface
 {
     public function __construct(
-        private readonly WelineTheme $themes,
         private readonly ThemeContextService $themeContext,
         private readonly ThemeApplicationReferenceReaderInterface $references,
     ) {
@@ -126,18 +125,16 @@ final class RegisteredDefaultTheme implements DefaultThemeInterface
     /** 目录可选；找不到则 0（模块包默认）。绝不假定 id=1。 */
     private function lookupCatalogThemeId(): int
     {
-        $theme = clone $this->themes;
-        $theme->clearData()->clearQuery()->load(WelineTheme::schema_fields_NAME, DefaultThemeInterface::REGISTERED_NAME);
-        if ((int)$theme->getId() >= 1) {
-            return (int)$theme->getId();
+        // 主题目录已在进程袋：按名查询不再回库（写入路径代次 bump 失效）。
+        $row = WelineTheme::catalogRowByName(DefaultThemeInterface::REGISTERED_NAME);
+        $catalogId = (int)($row[WelineTheme::schema_fields_ID] ?? 0);
+        if ($catalogId >= 1) {
+            return $catalogId;
         }
-        $theme->clearData()->clearQuery()
-            ->where(WelineTheme::schema_fields_MODULE_NAME, DefaultThemeInterface::REGISTERED_MODULE)
-            ->where(WelineTheme::schema_fields_NAME, 'default')
-            ->find()
-            ->fetch();
-        if ((int)$theme->getId() >= 1) {
-            return (int)$theme->getId();
+        $row = WelineTheme::catalogRowByName('default', DefaultThemeInterface::REGISTERED_MODULE);
+        $catalogId = (int)($row[WelineTheme::schema_fields_ID] ?? 0);
+        if ($catalogId >= 1) {
+            return $catalogId;
         }
 
         return DefaultThemeInterface::MODULE_DEFAULT_THEME_ID;

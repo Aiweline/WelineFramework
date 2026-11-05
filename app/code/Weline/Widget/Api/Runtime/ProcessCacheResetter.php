@@ -6,6 +6,7 @@ namespace Weline\Widget\Api\Runtime;
 
 use Weline\Framework\Runtime\ProcessCacheResetContext;
 use Weline\Framework\Runtime\ProcessCacheResetterInterface;
+use Weline\Widget\Service\DefaultInjectionPlanRepository;
 use Weline\Widget\Service\WidgetData;
 use Weline\Widget\Service\WidgetRegistry;
 
@@ -19,6 +20,8 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
 
         if ($context->allowsRegistryClear()) {
             WidgetRegistry::clearRuntimeCache();
+            $cleared++;
+            DefaultInjectionPlanRepository::clearProcessBag();
             $cleared++;
         }
 

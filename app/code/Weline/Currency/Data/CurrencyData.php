@@ -23,7 +23,10 @@ use Weline\Framework\Manager\ObjectManager;
 /**
  * 货币数据类
  *
- * 提供静态方法获取货币信息：进程记忆 → w_cache('currency') → DB。
+ * 唯一权威（single authority）：所有“当前启用的货币”读口都从这里出，
+ * 顺序为 进程记忆 → w_cache('currency') → DB。其它地方禁止再写自己的
+ * `status = 1` 查询，否则同一事实会同时存在多个缓存与多种名称本地化结果。
+ *
  * 清缓存 / process_cache_resetter 时丢弃进程记忆。
  */
 class CurrencyData
@@ -32,6 +35,9 @@ class CurrencyData
      * 缓存时间（1小时）
      */
     private const CACHE_TTL = 3600;
+
+    /** 进程袋上界：locale 维不能无界增长（对齐 Partials / RenderContext 的容量惯例）。 */
+    private const PROCESS_LOCALE_MAX = 32;
 
     /** @var array<string, array<int, array<string, mixed>>> locale → currency rows */
     private static array $processCurrenciesByLocale = [];
@@ -46,17 +52,60 @@ class CurrencyData
      */
     public static function getCurrencies(): array
     {
-        $localeCode = self::getLocaleCode();
+        return self::currenciesForLocale(self::getLocaleCode());
+    }
+
+    /**
+     * 把一个 locale 的启用货币行预热到进程袋。
+     *
+     * 由 Currency 模块自己的 worker preload provider 调用：这些行对同一个
+     * locale 是全局事实，首个请求不该再付 shared 缓存 + ORM + 本地名 join。
+     * 预热失败不得阻断 Worker READY——请求路径仍可懒加载。
+     */
+    public static function warmLocale(string $localeCode): bool
+    {
+        $localeCode = trim($localeCode);
+        if ($localeCode === '') {
+            return false;
+        }
+        if (isset(self::$processCurrenciesByLocale[$localeCode])) {
+            return true;
+        }
+
+        try {
+            self::currenciesForLocale($localeCode);
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private static function currenciesForLocale(string $localeCode): array
+    {
         if (isset(self::$processCurrenciesByLocale[$localeCode])) {
             return self::$processCurrenciesByLocale[$localeCode];
         }
 
+        $currencies = self::loadCurrenciesForLocale($localeCode);
+        if (\count(self::$processCurrenciesByLocale) >= self::PROCESS_LOCALE_MAX) {
+            unset(self::$processCurrenciesByLocale[\array_key_first(self::$processCurrenciesByLocale)]);
+        }
+        self::$processCurrenciesByLocale[$localeCode] = $currencies;
+
+        return $currencies;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private static function loadCurrenciesForLocale(string $localeCode): array
+    {
         $cacheKey = 'all_currencies_' . $localeCode;
         $cache = w_cache('currency');
 
         $cached = $cache->get($cacheKey);
         if ($cached !== false && is_array($cached)) {
-            return self::$processCurrenciesByLocale[$localeCode] = $cached;
+            return $cached;
         }
 
         /** @var Currency $currencyModel */
@@ -69,13 +118,13 @@ class CurrencyData
             ->fetchArray();
 
         foreach ($currencies as &$currency) {
-            $currency = self::applyLocalDescription($currency);
+            $currency = self::applyLocalDescriptionForLocale($currency, $localeCode);
         }
         unset($currency);
 
         $cache->set($cacheKey, $currencies, self::CACHE_TTL);
 
-        return self::$processCurrenciesByLocale[$localeCode] = $currencies;
+        return $currencies;
     }
 
     /**
@@ -159,6 +208,11 @@ class CurrencyData
 
     private static function applyLocalDescription(array $currency): array
     {
+        return self::applyLocalDescriptionForLocale($currency, self::getLocaleCode());
+    }
+
+    private static function applyLocalDescriptionForLocale(array $currency, string $localeCode): array
+    {
         $localName = trim((string)($currency['local_name'] ?? ''));
         if ($localName !== '') {
             $currency[Currency::schema_fields_NAME] = $localName;
@@ -167,7 +221,7 @@ class CurrencyData
         }
 
         $code = strtoupper(trim((string)($currency[Currency::schema_fields_CODE] ?? '')));
-        $resolved = CurrencyDisplayName::forCode($code, self::getLocaleCode());
+        $resolved = CurrencyDisplayName::forCode($code, $localeCode);
         if ($resolved !== '') {
             $currency[Currency::schema_fields_NAME] = $resolved;
         }
