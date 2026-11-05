@@ -21,6 +21,13 @@
   var DOCK_SEL = '[data-float-dock]';
   var CS_SEL = '#customer-service-widget, .customer-service-widget';
   var STORAGE_PREFIX = 'weline.storefrontFloat.edgeCollapsed.';
+  // 偏好值带版本：旧实现只写裸 `'1'`，无版本、无 TTL，且收起态连召回芯片都不出现
+  // （2026-11-05 实测：值 '1' 时 panel 整体移到屏幕外、recall hidden）⇒ 用户点过一次 ×
+  // 就永久看不到悬浮层，只能手清 localStorage。读到旧值一律视为过期偏好并自愈展开。
+  // 键前缀不得改（dev/session/float-edge-dock-recall-fix 明令）；版本化只改值的格式。
+  // Marker: storefront-float-edge-collapsed-storage-version-v1
+  var STORAGE_VERSION = 2;
+  var LEGACY_COLLAPSED_VALUE = '1';
   var boundSlots = typeof WeakSet === 'function' ? new WeakSet() : null;
   var syncScheduled = false;
   var syncing = false;
@@ -160,9 +167,29 @@
   }
 
   function readStoredCollapsed(slotEl) {
+    // Marker: storefront-float-edge-collapsed-storage-version-v1
     try {
-      return !!(global.localStorage && global.localStorage.getItem(storageKey(slotEl)) === '1');
+      if (!global.localStorage) {
+        return false;
+      }
+      var raw = global.localStorage.getItem(storageKey(slotEl));
+      if (!raw) {
+        return false;
+      }
+      if (raw === LEGACY_COLLAPSED_VALUE) {
+        // 旧值无法区分「用户主动收起」与「历史 bug 写入」：一次删除即自愈为展开。
+        global.localStorage.removeItem(storageKey(slotEl));
+        return false;
+      }
+      var parsed = JSON.parse(raw);
+      return !!(parsed && parsed.v === STORAGE_VERSION && parsed.collapsed === true);
     } catch (e) {
+      // 非法值（含 JSON 解析失败）同样清除，避免永久不可见。
+      try {
+        global.localStorage.removeItem(storageKey(slotEl));
+      } catch (e2) {
+        /* ignore quota / private mode */
+      }
       return false;
     }
   }
@@ -173,7 +200,10 @@
         return;
       }
       if (collapsed) {
-        global.localStorage.setItem(storageKey(slotEl), '1');
+        global.localStorage.setItem(
+          storageKey(slotEl),
+          JSON.stringify({ v: STORAGE_VERSION, collapsed: true })
+        );
       } else {
         global.localStorage.removeItem(storageKey(slotEl));
       }
