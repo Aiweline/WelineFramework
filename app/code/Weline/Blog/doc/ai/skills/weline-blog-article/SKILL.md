@@ -33,6 +33,7 @@ description: >-
 6. **翻译**：默认站 `WebsiteLanguage::getWebsiteLanguageCodes(0)` **全部**语种真译；**禁止启动 Ollama**（除非用户本回合明确要求）。
 7. **改主题部件链接后**：清主题运行时缓存（`ThemeRuntimeCacheCleaner::clearAllThemeRelatedCaches`）+ `server:reload`，否则 FPC/编译模板仍可能出旧链。
 8. **去 AI 水印 · 对口专业（落盘前硬）**：每篇先写明本篇专业身份，再用该行当的判断和术语写完全部语种。清掉套话结构，并清掉零宽字符等不可见标记。口吻不符、套话成篇、或隐藏字符未清 → 审查 **不可发**。细则见 [methodology.md](methodology.md) §3b。
+9. **发布前先确认站点真的在服务（2026-11-06 实测）**：首页 200 可能只是整页缓存（FPC）静态命中，必须再抽查一条动态路由（`/blog` 或任一已有文章路径）。出现 `HTTP 503` + `<title>网站维护</title>` 就是维护模式：此状态下不入库、不改链、不报「已发布」；只能先关维护或等维护结束。
 
 ## Agent 必做（create）
 
