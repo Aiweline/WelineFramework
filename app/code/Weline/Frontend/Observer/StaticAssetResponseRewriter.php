@@ -11,6 +11,7 @@ use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\Spec\ThemeSpecValidator;
 use Weline\Theme\Service\ThemeHeadChromeCssPack;
 use Weline\Theme\Service\ThemeHeadCssDuplicateInspector;
 
@@ -44,6 +45,35 @@ final class StaticAssetResponseRewriter implements ObserverInterface
             $response->setBody($rewritten);
         }
         $this->assertHeadCssNoDuplicateLeaf($rewritten, $response);
+        $this->assertThemeSpecInDev($rewritten);
+    }
+
+    /**
+     * DEV 断言：把主题规范门禁接到**真实交付 HTML**上。
+     *
+     * 背景：ThemeSpecValidator::assertHtml() 此前只有定义、全仓没有任何调用点，等于
+     * S2（head 阻塞样式表预算）/ S10（文档完整性）从未对渲染结果生效——模板里多塞一个
+     * 阻塞 link 不会有人拦。这里在最终 HTML 上跑一次，命中硬违规只落 error 日志：
+     * 不改字节、不抛异常，失败也不影响页面。PROD 直接返回。
+     */
+    private function assertThemeSpecInDev(string $html): void
+    {
+        if (\defined('PROD') && \PROD) {
+            return;
+        }
+        try {
+            /** @var ThemeSpecValidator $validator */
+            $validator = ObjectManager::getInstance(ThemeSpecValidator::class);
+            $validator->assertHtml($html, 'rendered');
+        } catch (\Throwable $e) {
+            try {
+                if (\function_exists('w_log_error')) {
+                    w_log_error('[theme-spec] ' . $e->getMessage()
+                        . ' uri=' . \Weline\Framework\Http\RequestUri::current());
+                }
+            } catch (\Throwable) {
+            }
+        }
     }
 
     /**
