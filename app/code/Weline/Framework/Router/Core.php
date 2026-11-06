@@ -2258,7 +2258,10 @@ class Core
             ) {
                 $publishCoordinator = $fpcCoordinator;
                 $publishResponse = $response;
-                $publishUrl = $this->url;
+                // 发布身份必须是完整 cache-key URI（scheme://host/path）：$this->url 是路由路径
+                // （如 blog/frontend），drain 里无法回推出完整 URI → 发布键落到 '/'（T5.0b 实测）。
+                // engine_identity_url 是请求期冻结的完整身份，与读侧 fpc_lookup 同键。
+                $publishUrl = (string)(RequestContext::get('fpc.engine_identity_url', '') ?: $this->url);
                 $publishRule = $this->request->getRule();
                 $publishRouter = $this->router;
                 $publishParams = $this->routerGeneratedGetParams;
@@ -2266,6 +2269,10 @@ class Core
                 $publishKey = 'fpc_publish|'
                     . \substr(\sha1($publishUrl . '|' . $publishMethod), 0, 24);
                 try {
+                    FpcDiag::event('fpc_publish_enqueue', [
+                        'key' => \substr($publishKey, 0, 40),
+                        'url' => \substr($publishUrl, 0, 120),
+                    ]);
                     \Weline\Framework\Runtime\PostResponseTaskQueue::enqueue(
                         $publishKey,
                         static function () use (
@@ -2278,6 +2285,10 @@ class Core
                             $publishMethod
                         ): void {
                             try {
+                                FpcDiag::event('fpc_publish_task_run', [
+                                    'url' => \substr($publishUrl, 0, 120),
+                                    'method' => $publishMethod,
+                                ]);
                                 $publishCoordinator->publishResponse(
                                     $publishResponse,
                                     $publishUrl,
@@ -2288,6 +2299,12 @@ class Core
                                 );
                             } catch (\Throwable $publishError) {
                                 // A failed publish is a cache miss, never a request error.
+                                FpcDiag::event('fpc_publish_task_error', [
+                                    'url' => \substr($publishUrl, 0, 120),
+                                    'error' => \substr($publishError->getMessage(), 0, 200),
+                                    'prev' => $publishError->getPrevious() ? \substr($publishError->getPrevious()->getMessage(), 0, 200) : '',
+                                    'at' => $publishError->getFile() . ':' . $publishError->getLine(),
+                                ]);
                                 \Weline\Framework\App\Env::log_warning(
                                     'router/fpc_publish_async',
                                     $publishError->getMessage()
@@ -2295,7 +2312,11 @@ class Core
                             }
                         },
                         0.0,
-                        \Weline\Framework\Runtime\PostResponseCaptureMode::None,
+                        // SCOPE 而非 None：发布复检（canPublishResponse→fpcNamespaceFingerprint）需要
+                        // 完整 Channel ScopeIdentity 与语言/币种/来源 pin；None 模式在请求上下文清理后
+                        // 执行，identity 退化为 global → 指纹合成抛「缺少完整 Channel Scope」→
+                        // 发布任务被 drain 却永不落盘（T5.0b 实测根因）。
+                        \Weline\Framework\Runtime\PostResponseCaptureMode::Scope,
                     );
                 } catch (\Throwable) {
                     // Queue refused the task: fall back to an inline publish so the

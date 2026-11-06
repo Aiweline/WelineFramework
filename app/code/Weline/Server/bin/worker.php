@@ -3514,6 +3514,12 @@ while (true) {
         $pendingClose,
         $longLivedConnections
     );
+    // 本轮前台读写与 Fiber 已先推进；与 worker_ssl 同款空闲排水：无活跃 Fiber、
+    // 无活跃请求、非排水退出时，处理到期 post-response 任务（如 FPC 发布）。
+    // 缺了它，响应后 drain 因 busy 闸跳过的任务会一直滞留到下一个请求（T5.0b）。
+    if (!$shouldExit && !$ipcDraining && $activeFibers === [] && $activeRequests === 0) {
+        wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, null);
+    }
     wlsHttpDrainAfterResponseIfRequested(
         $socket,
         $shouldExit,
@@ -6341,7 +6347,11 @@ function sendResponseAndCleanup(
     unset($response, $rawRequest);
 
     if ($recordObservability && !$isSseMode && !$isWebSocketMode && $responseFullyWritten) {
-        wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, $connId);
+        // 本请求此时仍被计入 $activeRequests（递减在调用方 finalize 尾部），
+        // 直接传原值会被 busy 闸判定为「有待办工作」而跳过 drain —— 发布任务
+        // 只能等下一个请求顺带排水，低流量站点表现为 FPC 永远 MISS（T5.0b）。
+        // 传自排除值：当前请求已响应完毕，不算待办工作。
+        wlsDrainPostResponseTasks($activeRequests - 1, $requestBuffers, $writeBuffers, $connId);
     }
 
     $awaitPeerCloseAfterDrain = \Weline\Server\Service\WorkerResponseMemoryGuard::shouldAwaitPeerCloseAfterDrainResponse(

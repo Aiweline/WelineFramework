@@ -395,8 +395,12 @@ final class PostResponseTaskQueue
         try {
             $envelope = ScopeEnvelope::fromArray($envelopeData);
             RequestContext::installScopeIdentity($envelope->scope);
-        } catch (\Throwable) {
+            // 清掉残留的冻结上下文：其 lang/currency 可能与还原身份不一致（如残留 CNY），
+            // 不清会让发布任务复用旧 variant → 发布键与读侧键不一致（T5.0b 实测）。
+            RequestContext::remove('framework.cache.storefront_key_context.v2');
+        } catch (\Throwable $restoreError) {
             // Scope restore is best-effort for post-response writers.
+            \error_log('[PostResponseTaskQueue] scope restore failed: ' . $restoreError->getMessage());
         }
 
         $language = (string)($snapshot['language'] ?? '');
@@ -410,8 +414,9 @@ final class PostResponseTaskQueue
         if ($currency !== '') {
             try {
                 RequestContext::setWelineUserCurrency($currency);
-            } catch (\Throwable) {
+            } catch (\Throwable $currencyError) {
                 $_SERVER['WELINE_USER_CURRENCY'] = $currency;
+                \error_log('[PostResponseTaskQueue] currency set failed: ' . $currencyError->getMessage());
             }
         }
 

@@ -1232,6 +1232,15 @@ function wlsWorkerMemoryHealthDiagnostics(bool $includeStaticProperties = false,
         }
     }
 
+    // 与 worker_ssl 同款：暴露 post-response 任务队列状态，供 /_wls/health?memory=1 排水诊断（T5.0b）。
+    if (\class_exists(\Weline\Framework\Runtime\PostResponseTaskQueue::class, false)) {
+        try {
+            $diagnostics['post_response_tasks'] = \Weline\Framework\Runtime\PostResponseTaskQueue::getRuntimeDiagnostics();
+        } catch (\Throwable $throwable) {
+            $diagnostics['post_response_tasks_error'] = $throwable->getMessage();
+        }
+    }
+
     if ($includeStaticProperties) {
         $diagnostics['static_properties'] = wlsWorkerStaticPropertyDiagnostics();
     }

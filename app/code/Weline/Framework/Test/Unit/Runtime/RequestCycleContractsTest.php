@@ -92,6 +92,32 @@ final class RequestCycleContractsTest extends TestCase
         self::assertStringContainsString('droppedTasks', $source);
     }
 
+    /**
+     * http worker 发布任务排水契约（T5.0b，2026-11-06）。
+     *
+     * worker.php 唯一常规 drain 点在 sendResponseAndCleanup，此时本请求仍被
+     * 计入 $activeRequests（递减在函数返回后），busy 闸会把当前请求算作待办
+     * 而自我阻塞 → 发布任务只能等下一个请求顺带 drain，低流量站点表现为
+     * FPC 永远 MISS。两条契约：
+     *  1. 响应后 drain 必须自排除（传 $activeRequests - 1）；
+     *  2. 主循环必须有空闲 drain（无 Fiber、无活跃请求、非排水退出时），
+     *     兜住 keepalive 空闲期队列滞留（镜像 worker_ssl.php 同款守卫）。
+     */
+    public function testHttpWorkerDrainsPostResponseTasksWithoutSelfBlocking(): void
+    {
+        $source = $this->source('Server/bin/worker.php');
+        self::assertStringContainsString(
+            'wlsDrainPostResponseTasks($activeRequests - 1, $requestBuffers, $writeBuffers, $connId)',
+            $source,
+            '响应后 drain 必须自排除当前请求，否则 busy 闸自我阻塞（T5.0b）'
+        );
+        self::assertMatchesRegularExpression(
+            '/wlsHttpFlushQueuedWrites\([\s\S]{0,800}?wlsDrainPostResponseTasks\(\$activeRequests, \$requestBuffers, \$writeBuffers, null\);/',
+            $source,
+            'http worker 主循环需要空闲 drain，兜住 keepalive 空闲期发布任务滞留（T5.0b）'
+        );
+    }
+
     public function testFpmSessionWritesCookieParamsBeforeSessionStart(): void
     {
         $source = $this->source('Session/Strategy/FpmStrategy.php');

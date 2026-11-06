@@ -515,6 +515,21 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         string $method = 'GET'
     ): void {
         $method = $this->normalizeBuildMethod($method);
+        // 异步发布（PostResponseTaskQueue，Scope 模式）在请求上下文清理后执行：
+        // getRawFullUri()/getCacheKeyFullUri() 的冻结分支与 fallback 均已失效（engine identity /
+        // $_SERVER 被复位，残留主线程上一请求的 '/' 身份 → 发布键与读侧键不一致，T5.0b 实测）。
+        // 调用方闭包携带的 $url 才是本次发布的唯一身份：强制回写（覆盖残留），保证发布与入队同一身份。
+        if ($url !== '') {
+            try {
+                RequestContext::set('fpc.engine_identity_url', $url);
+                RequestContext::remove(self::MEMO_RAW_FULL_URI);
+                RequestContext::remove(self::MEMO_CACHE_KEY_FULL_URI);
+                \Weline\Framework\Env\WelineEnv::set('full_request_uri', $url, 'FPC async publish identity');
+                \Weline\Framework\Env\WelineEnv::setServer('REQUEST_URI', (string)(\parse_url($url, PHP_URL_PATH) ?: '/'), 'FPC async publish identity');
+            } catch (\Throwable) {
+                // RequestContext may be unavailable; re-check below will fail-closed.
+            }
+        }
         if (!$this->canPublishResponse($response, $method)) {
             return;
         }
@@ -5240,10 +5255,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
     private function getUnifiedCacheKey(string $method): string
     {
+        $u = $this->getCacheKeyFullUri();
+        $v = $this->buildCurrentFpcVariant();
         return $this->buildUnifiedFpcCacheKey(
-            $this->getCacheKeyFullUri(),
+            $u,
             $this->normalizeCacheMethod($method),
-            $this->buildCurrentFpcVariant()
+            $v
         );
     }
 
@@ -6172,7 +6189,13 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     {
         $current = StorefrontCacheKeyContext::current();
         if ($current instanceof StorefrontCacheKeyContext && $current->isGlobalScopeFallback()) {
-            return $current;
+            // 异步发布（Scope 还原）场景：残留的 global fallback 不能盖住当前已还原的
+            // channel identity —— 否则指纹合成抛「缺少完整 Channel Scope」（T5.0b 实测）。
+            $liveIdentity = RequestContext::scopeIdentity();
+            if (!($liveIdentity instanceof \Weline\Framework\Runtime\ScopeIdentity
+                && $liveIdentity->scopeKind === \Weline\Framework\Runtime\ScopeIdentity::KIND_CHANNEL)) {
+                return $current;
+            }
         }
         if ($current instanceof StorefrontCacheKeyContext && $current->cacheable) {
             $provider = $this->storefrontScopeProviderResolution();
