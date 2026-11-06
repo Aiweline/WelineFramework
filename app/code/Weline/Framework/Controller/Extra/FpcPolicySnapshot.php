@@ -158,7 +158,8 @@ final class FpcPolicySnapshot
                 continue;
             }
             $best = null;
-            foreach ([(string)($row['path_pattern'] ?? ''), ...(array)($row['public_path_patterns'] ?? [])] as $pattern) {
+            // canonical + 显式 public patterns + 生成器额外注册的别名键（别名不进 fingerprint，见 ExtraCollector）。
+            foreach ([(string)($row['path_pattern'] ?? ''), ...(array)($row['public_path_patterns'] ?? []), ...(array)($row['alias_path_patterns'] ?? [])] as $pattern) {
                 if ($pattern === '') {
                     continue;
                 }

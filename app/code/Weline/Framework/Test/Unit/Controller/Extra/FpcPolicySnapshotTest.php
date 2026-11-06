@@ -10,6 +10,13 @@ use Weline\Framework\Runtime\ScopeIdentity;
 
 final class FpcPolicySnapshotTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        // FpcPolicySnapshot 的 matching()/resolve() 带进程级 memo（键 = revision+path），
+        // 本测试在同一个方法内改 snapshot 后重复 resolve 同一路径，必须清掉 memo 才能观察新声明。
+        FpcPolicySnapshot::clearProcessCaches();
+    }
+
     public function testIndependentInheritanceAndModeIsolation(): void
     {
         $scope = ScopeIdentity::channel(0, 'default', 'main', 'web', 'normal');
@@ -36,6 +43,8 @@ final class FpcPolicySnapshotTest extends TestCase
         $snapshot['overrides']['normal'][$scope->canonicalKey()]['b'] = ['enabled' => true, 'ttl' => 90];
         self::assertFalse(FpcPolicySnapshot::resolve($snapshot, '/products/coat', $scope)['enabled']);
         self::assertNull(FpcPolicySnapshot::resolve($snapshot, '/unlisted', $scope));
+        // 进程级 memo 键 = revision+path：改 snapshot 后必须清掉，否则会读到旧声明集。
+        FpcPolicySnapshot::clearProcessCaches();
         $snapshot['declarations']['c'] = $snapshot['declarations']['a'];
         $snapshot['declarations']['c']['declaration_id'] = 'c';
         $snapshot['declarations']['c']['path_pattern'] = '/products/coat';
@@ -51,6 +60,7 @@ final class FpcPolicySnapshotTest extends TestCase
         $snapshot['revision'] = 'different';
         $snapshot['overrides']['test'][$scope->canonicalKey()]['a'] = ['ttl' => 1];
         self::assertSame($before, FpcPolicySnapshot::resolve($snapshot, '/products/coat', $scope)['policy_fingerprint']);
+        FpcPolicySnapshot::clearProcessCaches();
         $snapshot['overrides']['normal'][$scope->canonicalKey()]['a'] = ['ttl' => 5];
         self::assertNotSame($before, FpcPolicySnapshot::resolve($snapshot, '/products/coat', $scope)['policy_fingerprint']);
     }
@@ -90,11 +100,31 @@ final class FpcPolicySnapshotTest extends TestCase
         $without = FpcPolicySnapshot::resolve($snapshot, '/products/coat', $scope);
         self::assertSame([], $without['query_keys']);
         $snapshot['declarations']['a']['attrs']['query_keys'] = ['price', 'af_x', 'price'];
+        FpcPolicySnapshot::clearProcessCaches();
         $with = FpcPolicySnapshot::resolve($snapshot, '/products/coat', $scope);
         self::assertSame(['af_x', 'price'], $with['query_keys']);
         self::assertNotSame($without['policy_fingerprint'], $with['policy_fingerprint']);
         self::assertTrue(FpcPolicySnapshot::requestCarriesAllowlistedQuery($with['query_keys'], ['utm_source' => 'x', 'price' => '1-2']));
         self::assertFalse(FpcPolicySnapshot::requestCarriesAllowlistedQuery($with['query_keys'], ['utm_source' => 'x']));
+    }
+
+    /**
+     * 生成器别名键必须能被策略匹配命中，但不得改动 policy_fingerprint
+     * （改了会让每次路由别名增减都触发全站 FPC 失效）。
+     */
+    public function testAliasPathMatchesWithoutChangingFingerprint(): void
+    {
+        $scope = ScopeIdentity::channel(0, 'default', 'main', 'web', 'normal');
+        $snapshot = $this->snapshot();
+        $before = FpcPolicySnapshot::resolve($snapshot, '/products/coat', $scope);
+        $snapshot['declarations']['a']['alias_path_patterns'] = ['/products/coat/get'];
+        $alias = FpcPolicySnapshot::resolve($snapshot, '/products/coat/get', $scope);
+        self::assertSame('a', $alias['declaration_id']);
+        self::assertSame(
+            $before['policy_fingerprint'],
+            $alias['policy_fingerprint'],
+            '别名路径不得改动 policy_fingerprint',
+        );
     }
 
     private function snapshot(): array

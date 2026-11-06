@@ -69,6 +69,9 @@ final class FpcPolicyStateReducer
         $row['namespaces'] = $row['attrs']['namespaces'];
         $row['public_path_patterns'] = array_values(array_unique((array)($row['public_path_patterns'] ?? [])));
         sort($row['public_path_patterns']);
-        return array_intersect_key($row, array_flip(['declaration_id','module','class','method','type','path_pattern','public_path_patterns','attrs','namespaces']));
+        // 生成器别名键：仅用于请求匹配，不进 policy_fingerprint（FpcPolicySnapshot::resolve 的 $paths）。
+        $row['alias_path_patterns'] = array_values(array_unique((array)($row['alias_path_patterns'] ?? [])));
+        sort($row['alias_path_patterns']);
+        return array_intersect_key($row, array_flip(['declaration_id','module','class','method','type','path_pattern','public_path_patterns','alias_path_patterns','attrs','namespaces']));
     }
 }

@@ -187,6 +187,9 @@ final class ExtraCollector
                 'method' => $method->getName(),
                 'path_pattern' => $path,
                 'public_path_patterns' => $patterns,
+                // 生成器为同一动作额外注册的可达键；由收集器注入，开发者不可手写，
+                // 也**不**参与 policy_fingerprint（否则每次路由别名增减都会让全站 FPC 失效）。
+                'alias_path_patterns' => $this->resolveAliases($reflection, $method, $module),
                 'type' => $type,
                 'attrs' => $normalized,
                 'namespaces' => is_array($normalized['namespaces'] ?? null)
@@ -230,26 +233,19 @@ final class ExtraCollector
     /** @param array<string, mixed> $module */
     private function resolvePath(ReflectionClass $reflection, ReflectionMethod $method, array $module): string
     {
-        $routerPath = (string)($module['router'] ?? $module['name'] ?? '');
-        $class = $reflection->getName();
-        $slice = [];
-        $capture = false;
-        foreach (explode('\\', $class) as $p) {
-            if ($p === 'Controller' || $p === 'Api') {
-                $capture = true;
-                continue;
-            }
-            if ($capture) {
-                $slice[] = strtolower(preg_replace('/([a-z])([A-Z])/', '$1-$2', $p) ?? $p);
-            }
-        }
-        $relative = implode('/', $slice);
-        $action = strtolower(preg_replace('/([a-z])([A-Z])/', '$1-$2', $method->getName()) ?? $method->getName());
-        if ($action === 'index') {
-            $action = '';
-        }
-        $path = '/' . trim($routerPath . '/' . $relative . ($action !== '' ? '/' . $action : ''), '/');
-        return $path === '' ? '/' : $path;
+        return DeclarationPath::canonical($this->routerPath($module), $reflection->getName(), $method->getName());
+    }
+
+    /** @return list<string> */
+    private function resolveAliases(ReflectionClass $reflection, ReflectionMethod $method, array $module): array
+    {
+        return DeclarationPath::aliases($this->routerPath($module), $reflection->getName(), $method->getName());
+    }
+
+    /** @param array<string, mixed> $module */
+    private function routerPath(array $module): string
+    {
+        return (string)($module['router'] ?? $module['name'] ?? '');
     }
 
     /** @return list<string> */
