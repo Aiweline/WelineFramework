@@ -41,8 +41,10 @@ final class Alias extends CommandAbstract
             return $manager->promptInstall();
         }
 
+        $allowPrompt = !isset($args['no-sudo']);
+
         if (isset($args['remove'])) {
-            $result = $manager->remove();
+            $result = $manager->remove($allowPrompt);
             foreach ($result['errors'] as $error) {
                 $this->printing->error($error);
             }
@@ -77,7 +79,7 @@ final class Alias extends CommandAbstract
 
                 return 1;
             }
-            $result = $manager->install($name);
+            $result = $manager->install($name, $allowPrompt);
             foreach ($result['errors'] as $error) {
                 $this->printing->error($error);
             }
@@ -99,6 +101,7 @@ final class Alias extends CommandAbstract
             }
             $this->printing->note('用法：' . $name . '  → 进入 ' . $manager->getRoot() . ' 并以项目用户执行 php bin/w');
             $this->printing->note('      ' . $name . ' cache:clear  → 等价于 php bin/w cache:clear');
+            $this->printing->note('身份：项目用户自己直接执行；root 直接切换不询问密码；其他身份需输入项目用户本人的密码（Linux 走 su）。');
             if ($result['script'] === null) {
                 $first = $result['files'][0] ?? '~/.bashrc';
                 $this->printing->note('当前终端需 source ' . $first . ' 或新终端后生效。');
@@ -163,18 +166,20 @@ final class Alias extends CommandAbstract
                 '--name=<命令名>' => '设置快捷命令名（如 weline）；会先移除之前的别名，只保留一个',
                 '--remove' => '删除本项目的快捷命令',
                 '--ask' => '安装器专用：交互输入命令名，15 秒无输入自动跳过',
+                '--no-sudo' => '不询问 sudo 授权：只装到 ~/.local/bin（仅项目用户可用，其他身份找不到该命令）',
                 '-h, --help' => '显示帮助信息',
             ],
             [
-                '写入文件' => '~/.zshrc、~/.bashrc、~/.bash_profile（当前 HOME，以及 root / sudo 发起用户的 HOME 中可写者）；命令文件优先写入 /usr/local/bin/<命令名>（系统级，所有用户免 source 可用），不可写时回退 ~/.local/bin/<命令名> 并给出 sudo 安装命令',
+                '写入文件' => '~/.zshrc、~/.bashrc、~/.bash_profile（当前 HOME，以及 root / sudo 发起用户的 HOME 中可写者）；命令文件优先写入 /usr/local/bin/<命令名>（系统级，所有身份免 source 可用）；不可写时先写 ~/.local/bin，需要在终端里授权时当场询问 sudo 密码并装到 /usr/local/bin（不想被询问用 --no-sudo）',
                 '命令行为' => '进入项目目录并以项目用户执行 php bin/w（HOME 固定为项目用户的 HOME），参数原样透传',
+                '身份规则' => '项目用户自己：直接执行；root：直接切换为项目用户，不询问密码；其他身份：Linux 上走 su - <项目用户>，需要输入项目用户本人的密码；若该身份已配免密 sudo 切换则静默自动切换；macOS 非 root 回退 sudo（要该身份自己的 sudo 密码）',
             ],
             [
                 '设置命令名（如 weline）' => 'php bin/w shell:alias weline',
                 '查看当前命令' => 'php bin/w shell:alias',
                 '删除命令' => 'php bin/w shell:alias --remove',
             ],
-            'php bin/w shell:alias [<命令名>|--name=<命令名>|--remove|--ask]'
+            'php bin/w shell:alias [<命令名>|--name=<命令名>|--remove|--ask|--no-sudo]'
         );
     }
 }

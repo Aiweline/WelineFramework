@@ -19,7 +19,9 @@ use Weline\Framework\App\Env;
  * - 同一个项目只保留一个别名：写入前先删除旧块与旧命令文件；
  * - shell 函数块（~/.zshrc 等）负责进入项目后保持当前目录；
  * - 同时写入已在 PATH 中的 ~/.local/bin/<名字> 可执行文件，改完立即可用，不需要 source；
- * - 块与可执行文件都带项目标记，改名/删除时一并清理。
+ * - 块与可执行文件都带项目标记，改名/删除时一并清理；
+ * - 身份规则：项目用户直接执行；root 直接切换（不输密码）；其他身份在 Linux 走 `su - 项目用户`
+ *   （需要项目用户本人的密码），已有免密 sudo 授权的身份静默切换，macOS 非 root 走 sudo。
  */
 class ShellAliasManager
 {
@@ -254,11 +256,23 @@ class ShellAliasManager
     }
 
     /**
+     * 是否由本项目生成的命令文件（标记里带本项目路径，可区分同族其他项目）。
+     */
+    private function isThisProjectScript(string $path): bool
+    {
+        $head = @file_get_contents($path, false, null, 0, 1024);
+
+        return is_string($head) && str_contains($head, $this->scriptMarker());
+    }
+
+    /**
      * 写入（或改名）项目快捷命令；旧别名会先被移除，只保留一个。
+     *
+     * @param bool $allowPrompt 系统级安装需要授权时，是否当场询问 sudo 密码（TTY 下默认问）
      *
      * @return array{files: list<string>, script: ?string, errors: list<string>, warnings: list<string>, system: bool}
      */
-    public function install(string $name): array
+    public function install(string $name, bool $allowPrompt = true): array
     {
         $error = self::validateName($name);
         if ($error !== null) {
@@ -306,9 +320,15 @@ class ShellAliasManager
 
         $warnings = [];
         foreach ($this->findScripts() as $oldScript) {
-            if (!@unlink($oldScript['file'])) {
-                $warnings[] = '旧命令文件删除失败：' . $oldScript['file'];
+            if (@unlink($oldScript['file'])) {
+                continue;
             }
+            if ($oldScript['name'] === $name) {
+                // 同名的系统级命令交给 promoteToSystemBin 覆盖，这里不算删除失败
+                continue;
+            }
+            $warnings[] = '旧命令文件删除失败（可能属于 root 或其他身份）：' . $oldScript['file']
+                . '；需要删除请执行：sudo rm -f ' . $oldScript['file'];
         }
         $script = null;
         $system = false;
@@ -326,8 +346,20 @@ class ShellAliasManager
             }
         }
         if ($script !== null && !$system) {
-            $warnings[] = '该命令仅对 ' . $this->deployUser() . ' 可见；如需所有用户（含 root）免 source 直接使用：sudo install -m 0755 '
-                . $script . ' /usr/local/bin/' . $name;
+            $promoteNotes = [];
+            $promoted = $this->promoteToSystemBin($name, $script, $allowPrompt, $promoteNotes);
+            if ($promoted !== null) {
+                @unlink($script);
+                $script = $promoted;
+                $system = true;
+            } else {
+                foreach ($promoteNotes as $note) {
+                    $warnings[] = $note;
+                }
+                $warnings[] = '该命令只对 ' . $this->deployUser() . ' 可见：其他身份（含 root）在 PATH 里找不到 ' . $name
+                    . '；要全身份可用，请在自己的终端里执行 php bin/w shell:alias ' . $name
+                    . '（不要加 --no-sudo），按提示输入 sudo 密码即完成系统级安装。';
+            }
         }
         $invoking = (string)(getenv('SUDO_USER') ?: '');
         if ($invoking !== '' && $invoking !== $this->currentUser()) {
@@ -344,11 +376,197 @@ class ShellAliasManager
     }
 
     /**
+     * 把用户级命令文件提升为系统级，让任意身份都能在 PATH 中找到该命令。
+     *
+     * 已配免密 sudo 时静默安装；没有则当场询问授权（需 TTY）：输密码就装，不输就保持用户级。
+     *
+     * 系统目录里已有同名文件时的处置：
+     * - 本项目生成的，内容一致 → 视为已安装，不再重复请求授权；
+     * - 本项目生成的但内容过期 → 请求授权覆盖；
+     * - 失效的（悬空符号链接 / 没有执行权限）→ 说明原因后请求授权替换，先删链接再装，绝不顺着链接写到别处；
+     * - 其他项目正在使用的可执行命令 → 不覆盖，报告冲突并建议换命令名。
+     *
+     * @param list<string> $notes 供调用方展示的说明（授权提示、冲突原因、失败输出）
+     */
+    private function promoteToSystemBin(string $name, string $scriptPath, bool $allowPrompt, array &$notes = []): ?string
+    {
+        $passwordless = $this->passwordlessSudo();
+        if (!$allowPrompt) {
+            $notes[] = '已指定 --no-sudo，跳过系统级安装（命令只装在项目用户自己的 bin 目录）。';
+
+            return null;
+        }
+        if (!$passwordless && !$this->isTty()) {
+            $notes[] = '当前会话不是交互终端，无法当场请求 sudo 密码，跳过系统级安装；请在真实终端里重新执行本命令。';
+
+            return null;
+        }
+        foreach (self::SYSTEM_BIN_DIRS as $dir) {
+            if (!is_dir($dir) || is_writable($dir)) {
+                continue;
+            }
+            $target = $dir . DIRECTORY_SEPARATOR . $name;
+            $ours = $this->isThisProjectScript($target);
+            if ($ours && @file_get_contents($target) === $this->renderScript($name)) {
+                return $target;
+            }
+            $mustRemove = false;
+            if (!$ours && (is_link($target) || file_exists($target))) {
+                $linkTarget = is_link($target) ? (string)@readlink($target) : '';
+                if ($linkTarget !== '' && !file_exists($target)) {
+                    $mustRemove = true;
+                    $notes[] = $target . ' 是失效的符号链接（指向 ' . $linkTarget . '，目标已不存在）。';
+                } elseif (!is_executable($target)) {
+                    $mustRemove = true;
+                    $notes[] = $target . ' 已存在但没有执行权限（' . sprintf('%04o', (int)@fileperms($target) & 0777)
+                        . '），任何身份都跑不起来。';
+                } else {
+                    $notes[] = $target . ' 已被另一个项目的命令占用'
+                        . ($linkTarget !== '' ? '（符号链接 → ' . $linkTarget . '）' : '')
+                        . '，为免破坏它没有覆盖；请换个命令名，例如：php bin/w shell:alias ' . $name . '-weline';
+
+                    continue;
+                }
+            }
+            if (!$passwordless) {
+                fwrite(STDOUT, PHP_EOL . '为让 root / 其他身份也能直接运行 ' . $name . '，需要把它装到 ' . $target . PHP_EOL);
+                foreach ($notes as $note) {
+                    fwrite(STDOUT, '  · ' . $note . PHP_EOL);
+                }
+                fwrite(STDOUT, '现在请求授权（请输入当前身份的 sudo 密码，直接按回车可跳过）：' . PHP_EOL);
+            }
+            $output = [];
+            $status = 1;
+            $sudo = $this->sudoBinary() . ($passwordless ? ' -n' : '');
+            if ($mustRemove) {
+                @exec(
+                    $sudo . ' ' . escapeshellarg($this->absoluteTool(['/bin/sh', '/usr/bin/sh'], 'sh')) . ' -c '
+                    . escapeshellarg($this->replaceCommand()) . ' _ '
+                    . escapeshellarg($target) . ' ' . escapeshellarg($scriptPath) . ' 2>&1',
+                    $output,
+                    $status
+                );
+            } else {
+                @exec(
+                    $sudo . ' ' . escapeshellarg($this->installBinary()) . ' -m 0755 '
+                    . escapeshellarg($scriptPath) . ' ' . escapeshellarg($target) . ' 2>&1',
+                    $output,
+                    $status
+                );
+            }
+            if ($status === 0 && is_file($target) && is_readable($target)) {
+                if (!$passwordless) {
+                    fwrite(STDOUT, '已安装到 ' . $target . '：任意身份、任意 shell 免 source 可用。' . PHP_EOL);
+                }
+
+                return $target;
+            }
+            $detail = trim(implode(' | ', array_slice($output, -2)));
+            if ($detail !== '') {
+                $notes[] = '安装命令输出：' . $detail;
+            }
+            if (!$passwordless) {
+                fwrite(STDOUT, '未获得授权，' . $name . ' 暂时只装在 ' . $scriptPath . '（仅 ' . $this->deployUser() . ' 可用）。' . PHP_EOL);
+            }
+
+            return null;
+        }
+
+        return null;
+    }
+
+    /**
+     * 删除系统级命令文件：root 所有时需要当场询问授权。
+     */
+    private function sudoRemove(string $path, bool $allowPrompt): bool
+    {
+        foreach (self::SYSTEM_BIN_DIRS as $dir) {
+            if (!str_starts_with($path, $dir . DIRECTORY_SEPARATOR)) {
+                continue;
+            }
+            $passwordless = $this->passwordlessSudo();
+            if (!$passwordless && (!$allowPrompt || !$this->isTty())) {
+                return false;
+            }
+            if (!$passwordless) {
+                fwrite(STDOUT, PHP_EOL . '删除系统级命令 ' . $path . ' 需要授权（请输入当前身份的 sudo 密码）：' . PHP_EOL);
+            }
+            $output = [];
+            $status = 1;
+            @exec(
+                $this->sudoBinary() . ($passwordless ? ' -n' : '') . ' '
+                . escapeshellarg($this->rmBinary()) . ' -f ' . escapeshellarg($path) . ' 2>&1',
+                $output,
+                $status
+            );
+
+            return $status === 0 && !file_exists($path);
+        }
+
+        return false;
+    }
+
+    private function passwordlessSudo(): bool
+    {
+        if (!function_exists('exec') || !function_exists('posix_geteuid') || posix_geteuid() === 0) {
+            return false;
+        }
+        $output = [];
+        $status = 1;
+        @exec($this->sudoBinary() . ' -n true 2>/dev/null', $output, $status);
+
+        return $status === 0;
+    }
+
+    /**
+     * 先删目标再安装的 shell 片段（$1 = 目标路径，$2 = 源文件）。
+     *
+     * 必须用绝对路径：本机实测 PATH 里的 install 会被其他项目的同名脚本遮蔽，
+     * 而 /etc/sudoers 没有 secure_path 时 sudo 不会重置 PATH。
+     */
+    private function replaceCommand(): string
+    {
+        return escapeshellarg($this->rmBinary()) . ' -f "$1" && '
+            . escapeshellarg($this->installBinary()) . ' -m 0755 "$2" "$1"';
+    }
+
+    private function installBinary(): string
+    {
+        return $this->absoluteTool(['/usr/bin/install', '/bin/install', '/usr/sbin/install'], 'install');
+    }
+
+    private function rmBinary(): string
+    {
+        return $this->absoluteTool(['/bin/rm', '/usr/bin/rm'], 'rm');
+    }
+
+    private function sudoBinary(): string
+    {
+        return $this->absoluteTool(['/usr/bin/sudo', '/bin/sudo', '/usr/local/bin/sudo'], 'sudo');
+    }
+
+    /**
+     * 解析系统命令的绝对路径，避免被 PATH 中其他项目的同名命令遮蔽。
+     *
+     * @param list<string> $candidates
+     */
+    private function absoluteTool(array $candidates, string $fallback): string
+    {
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate) && is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return $fallback;
+    }
+
+    /**
      * 移除本项目的快捷命令。
      *
      * @return array{files: list<string>, scripts: list<string>, errors: list<string>}
      */
-    public function remove(): array
+    public function remove(bool $allowPrompt = true): array
     {
         $written = [];
         $errors = [];
@@ -383,6 +601,8 @@ class ShellAliasManager
         if ($errors === []) {
             foreach ($this->findScripts() as $script) {
                 if (@unlink($script['file'])) {
+                    $removedScripts[] = $script['file'];
+                } elseif ($this->sudoRemove($script['file'], $allowPrompt)) {
                     $removedScripts[] = $script['file'];
                 } else {
                     $errors[] = '删除失败：' . $script['file'];
@@ -508,9 +728,22 @@ class ShellAliasManager
         }
         fwrite(STDOUT, '  用法：' . $name . '              # 进入项目并执行 php bin/w' . PHP_EOL);
         fwrite(STDOUT, '        ' . $name . ' cache:clear  # 等价于 php bin/w cache:clear' . PHP_EOL);
+        fwrite(STDOUT, '  身份：项目用户自己直接执行；root 直接切换不询问密码；其他身份需输入项目用户本人的密码（Linux 走 su）。' . PHP_EOL);
         foreach ($warnings as $warning) {
             fwrite(STDOUT, '  提示：' . $warning . PHP_EOL);
         }
+    }
+
+    /**
+     * 以项目用户身份执行 php bin/w 的子命令。
+     *
+     * `su - <用户> -c <脚本> 参数...` / `sudo -u <用户> sh -c <脚本> 参数...` 都会把后续参数
+     * 交给目标用户的 shell（第一个参数成为 $0），所以统一按 _ <root> <home> <php> <args...> 取参数，
+     * 由子命令自己 cd 到项目目录：调用者不一定是项目用户，可能根本进不去项目目录。
+     */
+    private function runnerScript(): string
+    {
+        return 'root="$1"; home="$2"; php="$3"; shift 3; cd "$root" || exit 1; exec env HOME="$home" "$php" bin/w "$@"';
     }
 
     private function renderBlock(string $name): string
@@ -518,6 +751,8 @@ class ShellAliasManager
         $root = $this->quote($this->root);
         $php = $this->quote($this->phpBinary());
         $user = $this->quote($this->deployUser());
+        $home = $this->quote($this->deployHome());
+        $runner = $this->quote($this->runnerScript());
         $begin = self::BEGIN_PREFIX . ': ' . $this->root . ' >>>';
 
         return <<<SH
@@ -526,15 +761,50 @@ class ShellAliasManager
     local _weline_root={$root}
     local _weline_php={$php}
     local _weline_user={$user}
-    cd "\$_weline_root" || return 1
+    local _weline_home={$home}
+    local _weline_runner={$runner}
+    local _weline_status=0
     if [ ! -x "\$_weline_php" ]; then
         _weline_php="\$(command -v php)" || { echo '{$name}: 找不到 php 命令' >&2; return 127; }
     fi
     if [ "\$(id -un 2>/dev/null)" = "\$_weline_user" ]; then
-        "\$_weline_php" bin/w "\$@"
-    else
-        sudo -u "\$_weline_user" -H "\$_weline_php" bin/w "\$@"
+        cd "\$_weline_root" || return 1
+        env HOME="\$_weline_home" "\$_weline_php" bin/w "\$@"
+        return \$?
     fi
+    if [ "\$(id -u 2>/dev/null)" = 0 ]; then
+        # root：直接切换为项目用户，不询问密码
+        if command -v runuser >/dev/null 2>&1; then
+            runuser -u "\$_weline_user" -- sh -c "\$_weline_runner" _ "\$_weline_root" "\$_weline_home" "\$_weline_php" "\$@"
+        elif command -v sudo >/dev/null 2>&1; then
+            sudo -u "\$_weline_user" -H sh -c "\$_weline_runner" _ "\$_weline_root" "\$_weline_home" "\$_weline_php" "\$@"
+        elif command -v su >/dev/null 2>&1; then
+            su - "\$_weline_user" -c "\$_weline_runner" _ "\$_weline_root" "\$_weline_home" "\$_weline_php" "\$@"
+        else
+            echo '{$name}: root 身份下没有 runuser / sudo / su，无法切换用户' >&2
+            return 1
+        fi
+        _weline_status=\$?
+    elif command -v sudo >/dev/null 2>&1 && sudo -n -u "\$_weline_user" -H true >/dev/null 2>&1; then
+        # 当前身份已获免密切换授权：静默执行，不弹任何密码
+        sudo -u "\$_weline_user" -H sh -c "\$_weline_runner" _ "\$_weline_root" "\$_weline_home" "\$_weline_php" "\$@"
+        _weline_status=\$?
+    elif [ "\$(uname -s 2>/dev/null)" = "Linux" ] && command -v su >/dev/null 2>&1; then
+        # 普通身份：切换到项目用户需要项目用户本人的密码
+        echo "{$name}: 正在切换到 \${_weline_user}，请输入 \${_weline_user} 的密码" >&2
+        su - "\$_weline_user" -c "\$_weline_runner" _ "\$_weline_root" "\$_weline_home" "\$_weline_php" "\$@"
+        _weline_status=\$?
+    elif command -v sudo >/dev/null 2>&1; then
+        # 兜底：sudo（需要当前身份自己的 sudo 密码 / 管理员权限）
+        echo "{$name}: 本机 su 不可用，改用 sudo 切换到 \${_weline_user}，请输入当前身份的 sudo 密码" >&2
+        sudo -u "\$_weline_user" -H sh -c "\$_weline_runner" _ "\$_weline_root" "\$_weline_home" "\$_weline_php" "\$@"
+        _weline_status=\$?
+    else
+        echo "{$name}: 无法切换到 \${_weline_user}：本机没有 su 与 sudo，请联系管理员给 \${_weline_user} 设置密码" >&2
+        _weline_status=1
+    fi
+    cd "\$_weline_root" 2>/dev/null || true
+    return \$_weline_status
 }
 # <<< Weline project command <<<
 SH;
@@ -542,36 +812,66 @@ SH;
 
     private function renderScript(string $name): string
     {
-        $root = $this->quote($this->root);
+        $rootLit = $this->quote($this->root);
         $php = $this->quote($this->phpBinary());
         $user = $this->quote($this->deployUser());
         $home = $this->quote($this->deployHome());
+        $runner = $this->quote($this->runnerScript());
         $marker = $this->scriptMarker();
 
         return <<<SH
 #!/usr/bin/env bash
 {$marker}
-ROOT={$root}
+NAME={$name}
+ROOT={$rootLit}
 PHP={$php}
 DEPLOY_USER={$user}
 DEPLOY_HOME={$home}
+RUNNER={$runner}
 
 if [[ ! -x "\$PHP" ]]; then
-  PHP="\$(command -v php)" || { echo "{$name}: 找不到 php 命令" >&2; exit 127; }
+  PHP="\$(command -v php)" || { printf '%s\\n' "\$NAME: 找不到 php 命令" >&2; exit 127; }
 fi
-cd "\$ROOT" || exit 1
 
-current="\$(id -un 2>/dev/null || true)"
-if [[ "\$current" == "\$DEPLOY_USER" ]]; then
+if [[ "\$(id -un 2>/dev/null)" == "\$DEPLOY_USER" ]]; then
+  cd "\$ROOT" || exit 1
   exec env HOME="\$DEPLOY_HOME" "\$PHP" bin/w "\$@"
 fi
-if [[ "\$(id -u 2>/dev/null)" == "0" ]] && command -v runuser >/dev/null 2>&1; then
-  exec runuser -u "\$DEPLOY_USER" -- env HOME="\$DEPLOY_HOME" "\$PHP" bin/w "\$@"
+
+if [[ "\$(id -u 2>/dev/null)" == 0 ]]; then
+  # root：直接切换为项目用户，不询问密码
+  if command -v runuser >/dev/null 2>&1; then
+    exec runuser -u "\$DEPLOY_USER" -- sh -c "\$RUNNER" _ "\$ROOT" "\$DEPLOY_HOME" "\$PHP" "\$@"
+  fi
+  if command -v sudo >/dev/null 2>&1; then
+    exec sudo -u "\$DEPLOY_USER" -H sh -c "\$RUNNER" _ "\$ROOT" "\$DEPLOY_HOME" "\$PHP" "\$@"
+  fi
+  if command -v su >/dev/null 2>&1; then
+    exec su - "\$DEPLOY_USER" -c "\$RUNNER" _ "\$ROOT" "\$DEPLOY_HOME" "\$PHP" "\$@"
+  fi
+  printf '%s\\n' "\$NAME: root 身份下没有 runuser / sudo / su，无法切换用户" >&2
+  exit 1
 fi
+
+if command -v sudo >/dev/null 2>&1 && sudo -n -u "\$DEPLOY_USER" -H true >/dev/null 2>&1; then
+  # 当前身份已获免密切换授权：静默执行
+  exec sudo -u "\$DEPLOY_USER" -H sh -c "\$RUNNER" _ "\$ROOT" "\$DEPLOY_HOME" "\$PHP" "\$@"
+fi
+
+if [[ "\$(uname -s 2>/dev/null)" == "Linux" ]] && command -v su >/dev/null 2>&1; then
+  # 普通身份：切换到项目用户需要项目用户本人的密码
+  printf '%s\\n' "\$NAME: 正在切换到 \${DEPLOY_USER}，请输入 \${DEPLOY_USER} 的密码" >&2
+  su - "\$DEPLOY_USER" -c "\$RUNNER" _ "\$ROOT" "\$DEPLOY_HOME" "\$PHP" "\$@"
+  exit \$?
+fi
+
 if command -v sudo >/dev/null 2>&1; then
-  exec sudo -u "\$DEPLOY_USER" -H "\$PHP" bin/w "\$@"
+  # 兜底：sudo（需要当前身份自己的 sudo 密码 / 管理员权限）
+  printf '%s\\n' "\$NAME: 本机 su 不可用，改用 sudo 切换到 \${DEPLOY_USER}，请输入当前身份的 sudo 密码" >&2
+  exec sudo -u "\$DEPLOY_USER" -H sh -c "\$RUNNER" _ "\$ROOT" "\$DEPLOY_HOME" "\$PHP" "\$@"
 fi
-echo "{$name}: cannot switch to user \$DEPLOY_USER (need runuser or sudo)" >&2
+
+printf '%s\\n' "\$NAME: 无法切换到 \${DEPLOY_USER}：本机没有 su 与 sudo，请联系管理员给 \${DEPLOY_USER} 设置密码" >&2
 exit 1
 SH;
     }
