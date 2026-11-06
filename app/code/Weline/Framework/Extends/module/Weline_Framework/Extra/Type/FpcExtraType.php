@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Extends\Module\Weline_Framework\Extra\Type;
 
+use Weline\Framework\Controller\Extra\ExtraAttributeParser;
 use Weline\Framework\Controller\Extra\ExtraTypeProviderInterface;
 
 final class FpcExtraType implements ExtraTypeProviderInterface
@@ -39,24 +40,12 @@ final class FpcExtraType implements ExtraTypeProviderInterface
     public function normalize(array $attrs): array
     {
         $enabled = \array_key_exists('enabled', $attrs)
-            ? (bool)$attrs['enabled']
+            ? ExtraAttributeParser::toBool($attrs['enabled'])
             : true;
         // Match Coordinator default-allow TTL when Extra omits ttl=.
-        $ttl = isset($attrs['ttl']) ? \max(0, (int)$attrs['ttl']) : 31536000;
-        $namespaces = [];
-        foreach ((array)($attrs['namespaces'] ?? []) as $ns) {
-            $ns = \trim((string)$ns);
-            if ($ns !== '') {
-                $namespaces[] = $ns;
-            }
-        }
-        $patterns = [];
-        foreach ((array)($attrs['public_path_patterns'] ?? []) as $p) {
-            $p = \trim((string)$p);
-            if ($p !== '') {
-                $patterns[] = $p;
-            }
-        }
+        $ttl = isset($attrs['ttl']) ? \max(0, ExtraAttributeParser::toInt($attrs['ttl'], 0)) : 31536000;
+        $namespaces = ExtraAttributeParser::toStringList($attrs['namespaces'] ?? []);
+        $patterns = ExtraAttributeParser::toStringList($attrs['public_path_patterns'] ?? []);
 
         return [
             'type' => 'fpc',

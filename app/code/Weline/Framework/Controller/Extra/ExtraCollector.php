@@ -217,11 +217,11 @@ final class ExtraCollector
                 $key = strtolower((string)$part[1]);
                 $val = $part[2] !== '' ? $part[2] : ($part[3] !== '' ? $part[3] : $part[4]);
                 if ($key === 'namespaces' || $key === 'public_path_patterns' || $key === 'query_keys') {
-                    $attrs[$key] = array_values(array_filter(array_map('trim', explode(',', (string)$val))));
+                    $attrs[$key] = ExtraAttributeParser::toStringList($val);
                 } elseif ($key === 'enabled') {
-                    $attrs[$key] = !in_array(strtolower((string)$val), ['0', 'false', 'no', 'off'], true);
+                    $attrs[$key] = ExtraAttributeParser::toBool($val);
                 } elseif ($key === 'ttl') {
-                    $attrs[$key] = (int)$val;
+                    $attrs[$key] = ExtraAttributeParser::toInt($val, 0);
                 } else {
                     $attrs[$key] = $val;
                 }
