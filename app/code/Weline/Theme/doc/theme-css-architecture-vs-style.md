@@ -214,3 +214,24 @@ storefront / overlay / 设计主题皮肤 / 第三方字体 CSS 一律
 
 首屏外壳由 `<theme:layout-critical>` 内联兜住（`.w-container` / hero 宽高比 / 字号阶梯 /
 按钮最小高度），预算 ≤ 14,336 字节。规则与反例见 `theme-spec-gates.md`。
+
+### critical 必须与皮肤终值一致（S13，架构级）
+
+**皮肤是终值权威，layout-critical 只能“提前画出同一个盒子”，不得自己另定一套尺寸。**
+
+理由：critical 先于皮肤生效，皮肤（preload + onload，非阻塞）随后覆盖。同一个
+`媒体作用域 + 选择器 + 几何属性` 两侧取值不同 → 首帧按 critical 画、皮肤到齐后跳到终值，
+CLS 必被破，且现场看不出「谁和谁不一致」。
+
+执行约定：
+
+1. 要 pin 就 **pin 皮肤的稳态值**（同一个表达式，如同一个 `clamp()`），不是“首帧先写个占位”。
+2. 宁可 **不 pin** 让皮肤完全拥有，也不要 pin 一个之后会被覆盖的值。
+3. 断点阶梯本就要由皮肤接管时，写显式豁免 `/* @critical-skin-waivers: sel:prop */`，
+   不得沉默漂移。
+4. **自定义主题必须跟着骨架对齐**：`app/design/*/*/frontend/assets/css/layout-critical.css`
+   属于主题自己的首帧骨架，它的值要与该主题皮肤（`partials/head/theme-head-css-overlay.php`
+   列出的叶）一致；这条对自定义主题同样生效，不是「框架基线管不着」的例外。
+
+判据、几何属性白名单、`var()` 回退归一、1% 数值容差、豁免语法与**静态不可知边界**
+（断点阶梯不对称 / 简写与长写 / 运行时计算值）见 `theme-spec-gates.md` §S13。

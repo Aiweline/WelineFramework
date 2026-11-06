@@ -1,5 +1,5 @@
 /* Weline UI source: css/frontend.css */
-@layer reset, tokens, base, layout, components, utilities, page;
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 
 @layer base {
     /* Page canvas: prefer body-bg token; do not require data-w-area (some layouts omit it). */

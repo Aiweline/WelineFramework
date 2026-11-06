@@ -1,5 +1,8 @@
 /* Weline UI source: css/components/field.css */
 /* Weline UI · Field / Input / Select / Textarea（Apple 风格） */
+/* 级联层序契约（ThemeCssLayerContract::DECLARATION）：本文件可能先于 foundation.css 解析，
+ * 漏写会让浏览器把 weline-theme 追加到层序末尾（=最高优先级），骨架反过来被皮肤压过。 */
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 @layer components {
     /* migrated from foundation.css (layout-first split) */
     .w-field { display: grid; min-width: 0; min-inline-size: 0; max-width: 100%; max-inline-size: 100%; gap: var(--weline-space-2); }

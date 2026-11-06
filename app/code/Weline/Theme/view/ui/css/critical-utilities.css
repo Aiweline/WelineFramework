@@ -2,6 +2,9 @@
  * 与 foundation.css 的 @layer layout/utilities 保持同一语义；仅覆盖首屏可见结构，
  * 完整规则仍以 foundation.css 为准。主包 preload 到达后同源规则不会改变结果。
  */
+/* 级联层序契约（ThemeCssLayerContract::DECLARATION）：本文件是文档里最早出现的 CSS，
+ * 必须自行钉死层序——否则层序由别处抢先固定，weline-theme 的最低位可能失效。 */
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 @layer layout {
     .w-container {
         box-sizing: border-box;

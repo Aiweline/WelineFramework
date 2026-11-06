@@ -1,5 +1,5 @@
 /* Weline UI source: css/embed-detail.css */
-@layer reset, tokens, base, layout, components, utilities, page;
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 
 @layer page {
     .w-seo-embed {

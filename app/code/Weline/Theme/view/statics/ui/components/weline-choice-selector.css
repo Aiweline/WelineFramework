@@ -1,5 +1,5 @@
 /* Weline UI source: css/header-choice-selector.css */
-@layer reset, tokens, base, layout, components, utilities, page;
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 
 @layer components {
     .w-currency-switcher { position: relative; }

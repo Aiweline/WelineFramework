@@ -1,7 +1,11 @@
 /* Layout-critical budget (backend). Full rules live in weline-backend.css / foundation.
- * Unlayered on purpose (FOUC): must mirror backend.css shell breakpoints, or this file
- * beats @layer layout and leaves wrong column widths (empty mobile rail / uncollapsed desktop).
+ * 层序契约（S11 · ThemeCssLayerContract）：本文件是文档里最早解析的 CSS，必须自行声明层序，
+ * 否则层序被别处抢先固定，weline-theme 的最低位可能失效。
+ * 正文**故意保持未分层**：首屏 pin 必须压过晚到的 backend 包，未分层恒胜任何层。
+ * 代价是它的 display/visibility 型 `!important` 不可被普通规则覆盖（见 S12 门禁）：
+ * 强制显隐必须带条件（状态选择器或 @media），禁止无条件强藏。
  */
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; line-height: 1.5; }
 body {

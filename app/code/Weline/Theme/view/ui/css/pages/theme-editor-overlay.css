@@ -1,4 +1,4 @@
-@layer reset, tokens, base, layout, components, utilities, page;
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 
 @layer page {
     .widget-wrapper {

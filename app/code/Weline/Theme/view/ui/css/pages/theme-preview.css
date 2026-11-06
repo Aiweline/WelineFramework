@@ -1,4 +1,4 @@
-@layer reset, tokens, base, layout, components, utilities, page;
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 
 @layer page {
     /* 薄适配器：仅无完整 editor-mode 引擎时生效；full 引擎由 editor-mode.css + data-w-slot-hover-target 接管 */

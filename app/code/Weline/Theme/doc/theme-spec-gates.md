@@ -1,4 +1,4 @@
-# 主题规范门禁（S1–S10）
+# 主题规范门禁（S1–S13）
 
 **权威实现**：`app/code/Weline/Theme/Service/Spec/ThemeSpecValidator.php`
 **命令**：`php bin/w theme:compile spec`
@@ -29,6 +29,9 @@ CLS、重复 og、跨站 llms.txt 品牌串台的形式在生产暴露。
 | **S8** | head 区域 | 硬 | 禁止手写 `og:*` 与 head 内 `application/ld+json`；正文局部 JSON-LD 允许 | 抛异常 |
 | **S9** | 渲染期 | 软 | `<h1>` 唯一（渲染后断言，见 Seo 检查面板） | 警告 |
 | **S10** | 渲染后整页 | 硬 | 必须含 `</body>` / `</html>` 且非空（FPC 落盘同判据） | 抛异常 |
+| **S11** | `layout-critical*.css` | 硬 | 首个样式表必须自钉层序（`ThemeCssLayerContract::DECLARATION`），否则 `weline-theme` 的最低位可能被抢先固定而失效 | 抛异常 |
+| **S12** | `layout-critical*.css` | 硬 | 未分层正文里 `display`/`visibility` 的 `!important` 必须带条件（位于 `@media` 内，或选择器带状态标记 `[hidden]` / `:not([open])` / `[data-*` / `aria-` / `:hover` / `:focus` / `.is-*`） | 抛异常 |
+| **S13** | 主题整根（critical ↔ 皮肤叶） | 硬 | 同一 `媒体作用域+选择器+几何属性` 在 layout-critical 与皮肤叶里不得取值不同 | 抛异常 |
 
 ### 适用范围
 
@@ -64,6 +67,65 @@ php bin/w theme:compile spec
 <img src="/hero.webp" width="1600" height="600" fetchpriority="high"
      class="homepage-hero" alt="...">
 ```
+
+## S13：layout-critical 与皮肤叶的几何一致性
+
+**权威实现**：`app/code/Weline/Theme/Service/Spec/ThemeCriticalSkinConflict.php`
+**接线**：`ThemeSpecValidator::validateCriticalSkinConflicts()`（`assertDirectory()` 末尾，跨文件必须整根校验）
+
+### 判据
+
+默认主题的架构契约是：**首帧几何由内联 layout-critical 钉住，皮肤到齐后不得改动它**。
+只要同一个 `媒体作用域 + 选择器 + 属性` 在两侧写成不同值，位移就是必然的 —— critical
+先画一帧，皮肤（preload + onload，非阻塞）随后覆盖，CLS 被打回来，而且现场看不出
+「是谁和谁不一致」。
+
+- 键 = `media | selector | property`；同一键有多条声明时取**最后一条**（CSS 层叠后者胜）。
+- 只比「两侧都声明」的同一键；一侧没声明 = 不归 S13 管（那是「谁该拥有它」的归属问题）。
+- 皮肤叶清单取自主题自己的 `partials/head/theme-head-css-overlay.php`
+  （与 `ThemeHeadChromeCssPack::OVERLAY_LIST_RELATIVE` 同源），不另立名单。
+
+### 只比几何属性
+
+`display` / `position` / `width|height|min-*|max-*` / `inline-size|block-size` /
+`aspect-ratio` / `gap|row-gap|column-gap` / `flex|flex-basis|flex-grow|flex-shrink` /
+`flex-direction|flex-wrap|order` / `grid-template*|grid-auto-*` / `align-*|justify-*` /
+`inset|top|right|bottom|left` / `line-height|font-size|letter-spacing|word-spacing` /
+`columns|column-width`，外加 `margin*` / `padding*` 前缀。
+
+**颜色 / 背景 / 边框 / 阴影不进 S13**：它们不移动盒子，报出来只是噪声，会把真实位移
+淹掉。完整白名单见 `ThemeCriticalSkinConflict::GEOMETRY_PROPERTIES` + `GEOMETRY_PREFIXES`。
+
+### 归一与容差
+
+1. `var(--x, 22px)` → `var(--x)`：critical 带 fallback 是首帧设计意图，不该算成漂移。
+2. 数值容差 **1%**：`aspect-ratio: 420/270` 与 `1.55` 视为相等，避免算术表达差异误报。
+3. 注释先遮蔽再解析，选择器与值都做空白归一。
+
+### 豁免（不允许沉默漂移）
+
+有些断点阶梯本来就要由皮肤接管（首帧允许一次水平位移，换更少的 critical 字节）。
+这类意图必须写进 critical 文件顶部的显式豁免：
+
+```css
+/* @critical-skin-waivers: .ca-brand:width, .ca-nav:gap */
+```
+
+语法 `selector:property`，多个用逗号分隔；`property` 留空 = 豁免该选择器全部属性。
+豁免是**声明**，与「改 critical 对齐皮肤终值」是两回事：能改就改，改不了（预算/台阶）
+才写豁免，并把原因写进同一个注释。
+
+### 已知边界（静态不可知）
+
+S13 是**纯静态跨文件比较**，只看得见「两侧都声明」的同一键。以下场景它不会报，需要人盯：
+
+- **断点阶梯不对称**：皮肤在 `≤480` 另有 `104px`，而 critical 只在 `≤900` 生效 →
+  窄屏首帧仍会跳。S13 比不到这一层，因为两侧没有同键声明。
+- **继承与简写**：`flex: 1` 与 `flex-grow/shrink/basis` 三条分开写，静态不等价（按字面比会报）。
+- **运行时计算值**：`clamp()` / `calc()` 里的变量在换主题时改值，静态阶段看到的是同一个表达式，
+  算相等。
+
+这类残留只能在浏览器侧用计算样式回归（见 `theme-css-architecture-vs-style.md`「首帧几何」）。
 
 ## 与其它覆盖面的关系
 

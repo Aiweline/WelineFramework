@@ -99,10 +99,39 @@ final class ThemeSpecValidatorTest extends TestCase
     {
         $file = $this->write(
             'app/design/demo/frontend/assets/css/layout-critical.css',
-            str_repeat('.x{color:#000}', 1200)
+            \Weline\Theme\Service\Theme\ThemeCssLayerContract::DECLARATION . "\n" . str_repeat('.x{color:#000}', 1200)
         );
 
-        self::assertSame(['S4'], array_column((new ThemeSpecValidator())->validateFile($file), 'rule'));
+        self::assertContains('S4', array_column((new ThemeSpecValidator())->validateFile($file), 'rule'));
+    }
+
+    public function testRenderedHtmlDoesNotCountPreloadOrNoscriptAsBlocking(): void
+    {
+        $html = '<html><head>'
+            . '<link rel="preload" as="style" href="/p.css" onload="this.onload=null;this.rel=\'stylesheet\'">'
+            . '<noscript><link rel="stylesheet" data-weline-preload-fallback="1" href="/p.css"></noscript>'
+            . '</head><body>x</body></html>';
+
+        (new ThemeSpecValidator())->assertHtml($html);
+        $this->addToAssertionCount(1);
+    }
+
+    public function testRenderedHtmlWithTooManyBlockingStylesheetsIsS2(): void
+    {
+        $html = '<html><head>' . str_repeat('<link rel="stylesheet" href="/x.css">', 7) . '</head><body>x</body></html>';
+
+        $this->expectException(ThemeSpecViolationException::class);
+        $this->expectExceptionMessage('S2');
+        (new ThemeSpecValidator())->assertHtml($html);
+    }
+
+    public function testRenderedDocumentMissingClosingBodyIsS10(): void
+    {
+        $html = '<html><head><title>x</title></head><body><main>x</main></html>';
+
+        $this->expectException(ThemeSpecViolationException::class);
+        $this->expectExceptionMessage('S10');
+        (new ThemeSpecValidator())->assertHtml($html);
     }
 
     public function testDevCompileGateThrowsForHardViolation(): void

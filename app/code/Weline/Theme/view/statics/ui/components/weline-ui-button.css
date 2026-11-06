@@ -2,6 +2,9 @@
 /* Weline UI · Button（Apple 风格）
  * 规则：只用语义 Token；高度/圆角/间距走统一尺度；主按钮每屏 ≤1（见设计品味）。
  */
+/* 级联层序契约（ThemeCssLayerContract::DECLARATION）：本文件可能先于 foundation.css 解析，
+ * 漏写会让浏览器把 weline-theme 追加到层序末尾（=最高优先级），骨架反过来被皮肤压过。 */
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 @layer components {
     .w-button {
         display: inline-flex;

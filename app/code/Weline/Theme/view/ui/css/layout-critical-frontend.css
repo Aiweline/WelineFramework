@@ -1,14 +1,23 @@
 /* Layout-critical budget (storefront). Full rules live in weline-frontend.css / foundation.
- * Budget: <= 14 KB uncompressed (enforced by Theme/test/Unit/Ui/LayoutCriticalBudgetTest.php).
+ * Budget: <= 14 KB uncompressed (enforced by Theme/test/Unit/Spec/LayoutCriticalBudgetTest.php).
  *
  * Why this file exists after head CSS went non-blocking:
  * PACK_TOKENS stays blocking; PACK_STOREFRONT / PACK_OVERLAY arrive via rel=preload
  * (see ThemeHeadChromeCssPack::tryPreloadLinkHtml). Everything above the fold that
  * would otherwise shift must therefore be reserved here.
  *
+ * 级联契约（S11/S12 · ThemeCssLayerContract）：
+ * - 本文件是文档里最早解析的 CSS，必须自行声明层序（下面那行 @layer 声明），否则层序被别处
+ *   抢先固定，weline-theme 的最低位可能失效、theme.css 皮肤反过来压过骨架。
+ * - 正文**故意保持未分层**：本文件是首屏 pin，必须压过晚到的 storefront/overlay 包。
+ *   代价是它的 `!important` 不可被任何普通规则覆盖（这正是 hanfu 移动抽屉被
+ *   `display:none!important` 压死的根因），所以 S12 门禁要求 display/visibility 的
+ *   `!important` 必须带条件（状态选择器或 @media），禁止无条件强藏。
+ *
  * Primitives (.w-container / .w-grid / .w-stack …) are prepended at render time by
  * LayoutCriticalCssService from view/ui/css/critical-utilities.css — do not duplicate them here.
  */
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; line-height: 1.5; }
 body {

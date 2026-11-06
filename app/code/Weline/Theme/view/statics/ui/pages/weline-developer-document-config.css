@@ -1,5 +1,5 @@
 /* Weline UI source: css/document-config.css */
-@layer reset, tokens, base, layout, components, utilities, page;
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 
 @layer page {
     .w-document-config__help {

@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Spec;
 
+use Weline\Theme\Service\Theme\ThemeCssLayerContract;
+
 /**
- * 主题规范校验器（S1–S10）。
+ * 主题规范校验器（S1–S13）。
  *
- * 目标：把「head 预算 / 首屏图 / 字体 / SEO 单一出口」从文档口号变成可执行、可测试、
- * 开发环境直接报错的门禁。规则正文见 Theme/doc/theme-spec-gates.md。
+ * 目标：把「head 预算 / 首屏图 / 字体 / SEO 单一出口 / 层序单一出处 / critical 与皮肤几何一致」
+ * 从文档口号变成可执行、可测试、开发环境直接报错的门禁。规则正文见 Theme/doc/theme-spec-gates.md。
  *
  * 用法：
  * - `php bin/w theme:compile spec`：全量扫描默认主题 + 设计主题，硬违规即非 0 退出；
@@ -110,7 +112,36 @@ final class ThemeSpecValidator
             }
         }
 
+        // S13：主题自身 layout-critical 与皮肤叶的几何值不得矛盾（跨文件，必须整根校验）
+        $violations = array_merge($violations, $this->validateCriticalSkinConflicts($directory));
+
         return $violations;
+    }
+
+    /**
+     * @return list<array{rule:string,file:string,line:int,severity:string,message:string,hint:string}>
+     */
+    private function validateCriticalSkinConflicts(string $themeRoot): array
+    {
+        $themeRoot = rtrim(str_replace('\\', '/', $themeRoot), '/');
+        try {
+            // 设计主题根已是 <theme>/<area>；模块默认主题根是 view/theme，需要下沉到 area 目录。
+            $mayBeContainer = !is_file($themeRoot . '/' . ThemeCriticalSkinConflict::MANIFEST_RELATIVE);
+            if ($mayBeContainer) {
+                foreach (['frontend', 'backend'] as $area) {
+                    $areaRoot = $themeRoot . '/' . $area;
+                    if (is_file($areaRoot . '/' . ThemeCriticalSkinConflict::MANIFEST_RELATIVE)) {
+                        return (new ThemeCriticalSkinConflict())->collect($areaRoot, $area);
+                    }
+                }
+
+                return [];
+            }
+
+            return (new ThemeCriticalSkinConflict())->collect($themeRoot);
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     public function assertHtml(string $html, string $origin = 'html'): void
@@ -137,7 +168,7 @@ final class ThemeSpecValidator
         $headEnd = stripos($html, '</head>');
         $head = $headEnd === false ? '' : substr($html, 0, $headEnd);
         if ($head !== '') {
-            $stylesheets = preg_match_all('/<link\b[^>]*rel\s*=\s*["\']stylesheet["\'][^>]*>/i', $head);
+            $stylesheets = count($this->blockingStylesheetTags($head));
             if ($stylesheets > self::MAX_HEAD_STYLESHEETS) {
                 throw new ThemeSpecViolationException(
                     'S2',
@@ -164,18 +195,144 @@ final class ThemeSpecValidator
         if (!in_array($basename, self::LAYOUT_CRITICAL_FILES, true)) {
             return [];
         }
-        $size = (int)@filesize($path);
-        if ($size <= self::MAX_LAYOUT_CRITICAL_BYTES) {
-            return [];
+
+        $violations = [];
+        $source = (string)@file_get_contents($path);
+
+        // S11：首个样式表必须自钉层序，否则 weline-theme 的最低位可能被抢先固定而失效。
+        if (!ThemeCssLayerContract::isDeclared($source)) {
+            $violations[] = $this->violation(
+                'S11',
+                $path,
+                1,
+                'layout-critical CSS does not declare the canonical cascade layer order.',
+                'Add "' . ThemeCssLayerContract::DECLARATION . '" so the earliest stylesheet in the document fixes the layer order.'
+            );
         }
 
-        return [$this->violation(
-            'S4',
-            $path,
-            1,
-            sprintf('layout-critical CSS is %d bytes, over the %d byte inline budget.', $size, self::MAX_LAYOUT_CRITICAL_BYTES),
-            'Move non-first-paint rules into the async storefront pack; layout-critical may only carry first-paint shells.'
-        )];
+        // S12：未分层 pin 的强制显隐必须带条件，否则会压死响应式/打开态（hanfu 移动抽屉事故）。
+        $violations = array_merge($violations, $this->assertCriticalImportantIsConditioned($path, $source));
+
+        // S4：内联字节预算
+        $size = (int)@filesize($path);
+        if ($size > self::MAX_LAYOUT_CRITICAL_BYTES) {
+            $violations[] = $this->violation(
+                'S4',
+                $path,
+                1,
+                sprintf('layout-critical CSS is %d bytes, over the %d byte inline budget.', $size, self::MAX_LAYOUT_CRITICAL_BYTES),
+                'Move non-first-paint rules into the async storefront pack; layout-critical may only carry first-paint shells.'
+            );
+        }
+
+        return $violations;
+    }
+
+    /**
+     * S12：layout-critical 正文未分层 ⇒ 未分层恒胜所有 @layer，其 `!important` 不可被普通规则
+     * 覆盖。因此 display/visibility 的 `!important` 必须带条件，二选一：
+     *  a) 位于 @media 内（断点镜像，如「桌面才隐藏」）；
+     *  b) 选择器带状态标记（[hidden] / :not([open]) / [data-* / :hover / :focus / .is-*）。
+     * 无条件 `display:none!important` 会让已打开的面板也被压回 none（点不开）。
+     *
+     * @return list<array{rule:string,file:string,line:int,severity:string,message:string,hint:string}>
+     */
+    private function assertCriticalImportantIsConditioned(string $path, string $source): array
+    {
+        $violations = [];
+        $css = (string)preg_replace('!/\*.*?\*/!s', '', $source);
+        $length = strlen($css);
+        $stack = [];
+        $buffer = '';
+        $line = 1;
+        $stateSelector = '/[\[\:](hidden|not\(\[open\]\)|data-|aria-|hover|focus|is\(|where\()|^\.is-/i';
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $css[$i];
+            if ($char === "\n") {
+                $line++;
+            }
+            if ($char === '{') {
+                $stack[] = trim($buffer);
+                $buffer = '';
+                continue;
+            }
+            if ($char === '}') {
+                array_pop($stack);
+                $buffer = '';
+                continue;
+            }
+            if ($char === ';') {
+                $declaration = trim($buffer);
+                $buffer = '';
+                if ($declaration === ''
+                    || !preg_match('/^(display|visibility)\s*:/i', $declaration)
+                    || !str_contains($declaration, '!important')) {
+                    continue;
+                }
+
+                $conditioned = false;
+                foreach ($stack as $prelude) {
+                    if (str_starts_with($prelude, '@media')) {
+                        $conditioned = true;
+                        break;
+                    }
+                }
+                if (!$conditioned) {
+                    $selector = (string)(end($stack) ?: '');
+                    if ($selector !== '' && preg_match($stateSelector, $selector) === 1) {
+                        $conditioned = true;
+                    }
+                }
+                if (!$conditioned) {
+                    $violations[] = $this->violation(
+                        'S12',
+                        $path,
+                        $line,
+                        'Unconditional "' . $declaration . '" in layout-critical CSS.',
+                        'Condition it: place it inside the mirrored @media breakpoint, or scope it to the closed state ([hidden] / :not([open]) / [data-*). Otherwise it beats the design theme forever.'
+                    );
+                }
+                continue;
+            }
+            $buffer .= $char;
+        }
+
+        return $violations;
+    }
+
+    /**
+     * 真实阻塞样式表：`<link>` 的 rel **属性词元** 含 stylesheet、不含 preload。
+     *
+     * 不能用子串判 rel：合规写法 `rel="preload" ... onload="this.rel='stylesheet'"` 自身就含
+     * `rel='stylesheet'`，子串判会把非阻塞包数成阻塞（实测把 2 个 preload 计成阻塞，S2 据此只会误报）。
+     * `<noscript>` 里的回退副本也不算阻塞请求：JS 浏览器把 noscript 内容当惰性文本，从不加载。
+     *
+     * @return list<string>
+     */
+    private function blockingStylesheetTags(string $html): array
+    {
+        $stripped = (string)preg_replace('/<noscript\b[^>]*>.*?<\/noscript>/is', '', $html);
+        $tags = [];
+        if (preg_match_all('/<link\b[^>]*>/i', $stripped, $matches) === false) {
+            return $tags;
+        }
+        foreach ($matches[0] as $tag) {
+            if (preg_match('/\brel\s*=\s*(["\'])(.*?)\1/i', $tag, $rel) !== 1) {
+                continue;
+            }
+            $raw = strtolower(trim($rel[2]));
+            $tokens = $raw === '' ? [] : preg_split('/\s+/', $raw);
+            if (!is_array($tokens) || $tokens === [] || !in_array('stylesheet', $tokens, true)) {
+                continue;
+            }
+            if (in_array('preload', $tokens, true)) {
+                continue;
+            }
+            $tags[] = $tag;
+        }
+
+        return $tags;
     }
 
     /**
@@ -199,7 +356,7 @@ final class ThemeSpecValidator
             }
 
             // S2：head 阻塞样式表 / 业务 JS 外链
-            $stylesheets = preg_match_all('/rel\s*=\s*["\']stylesheet["\']/i', $source);
+            $stylesheets = count($this->blockingStylesheetTags($source));
             if ($stylesheets > self::MAX_HEAD_STYLESHEETS) {
                 $violations[] = $this->violation('S2', $path, 1, sprintf('Head partial emits %d stylesheet links (max %d).', $stylesheets, self::MAX_HEAD_STYLESHEETS), 'Only tokens/backend packs stay blocking; everything else must preload.');
             }

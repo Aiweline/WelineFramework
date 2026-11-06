@@ -11,13 +11,13 @@
             "ui-core"
         ]
     },
-    "build_id": "f928cc1a09460288343be99604049136094a80e7d433554fc9aad06d7be0ac91",
+    "build_id": "f05d786c41b87c14293b84f66c805e90d94e298438083ea6a2e07967c33d6797",
     "bundles": {
         "acl-role-assign-css": {
-            "bytes": 2931,
+            "bytes": 2945,
             "file": "pages/weline-acl-role-assign.css",
-            "gzip_bytes": 840,
-            "sha256": "9ec4a68c1a42acef12c506865256d7fa10f23a37be1793d91545ebabbc0c0605",
+            "gzip_bytes": 846,
+            "sha256": "c65c975f31556aacd65f83721ca9ee233647aca5c11daf2cf7375e6bdee0a549",
             "type": "css"
         },
         "acl-role-assign-js": {
@@ -91,10 +91,10 @@
             "type": "js"
         },
         "api-worker-smoke-css": {
-            "bytes": 579,
+            "bytes": 593,
             "file": "pages/weline-api-worker-smoke.css",
-            "gzip_bytes": 310,
-            "sha256": "e4fe58fb916642d5c7f499d184c8e59b41379670cfb1df8f93eade5a127de008",
+            "gzip_bytes": 314,
+            "sha256": "fd56787562699701a7cb8107f063a171a7503e90049ef41074713f666334b588",
             "type": "css"
         },
         "api-worker-smoke-js": {
@@ -105,17 +105,17 @@
             "type": "js"
         },
         "backend": {
-            "bytes": 62834,
+            "bytes": 62848,
             "file": "weline-backend.css",
-            "gzip_bytes": 10305,
-            "sha256": "870bac95be36c0ea5f89caa04cc96742480b2c3f9c90ba092a07eabf361590a8",
+            "gzip_bytes": 10309,
+            "sha256": "dde8375482d11df8479ccae8dc21538596b41f5e0f888f7d95b5b45b15d79324",
             "type": "css"
         },
         "choice-selector-css": {
-            "bytes": 1662,
+            "bytes": 1676,
             "file": "components/weline-choice-selector.css",
-            "gzip_bytes": 630,
-            "sha256": "5f6810ce411caf5bd5bc1f4dec9dc972a005737bc0744f4591ad519e9662318e",
+            "gzip_bytes": 635,
+            "sha256": "778f4f31404d81be8b149c1f505e779ccb9cd44767a47faca806a330ae0c9a34",
             "type": "css"
         },
         "choice-selector-js": {
@@ -245,10 +245,10 @@
             "type": "js"
         },
         "developer-catalogs-css": {
-            "bytes": 3242,
+            "bytes": 3256,
             "file": "pages/weline-developer-catalogs.css",
-            "gzip_bytes": 813,
-            "sha256": "f6c4f42f3c4c78c37fc54c1ef661f36d585bccbd3b708d54e6f179e2b62a95b3",
+            "gzip_bytes": 815,
+            "sha256": "043b694dbb0469954cd5055a0e9ee21d8d78c689060bfe155bd05e5ce3949a2f",
             "type": "css"
         },
         "developer-catalogs-js": {
@@ -273,10 +273,10 @@
             "type": "js"
         },
         "developer-document-config-css": {
-            "bytes": 1315,
+            "bytes": 1329,
             "file": "pages/weline-developer-document-config.css",
-            "gzip_bytes": 469,
-            "sha256": "eb2aa8bbe696d8179d8de7a51e4190dc0cd287e129fc83284eae8e67b89587c5",
+            "gzip_bytes": 475,
+            "sha256": "18fbd3359b466b249c07989ac0f3d8a687f6f737b95eb6d3c0ec5b8742ec18a1",
             "type": "css"
         },
         "developer-document-config-js": {
@@ -294,10 +294,10 @@
             "type": "js"
         },
         "developer-documents-css": {
-            "bytes": 4660,
+            "bytes": 4674,
             "file": "pages/weline-developer-documents.css",
-            "gzip_bytes": 1071,
-            "sha256": "8c42f07e937b0533d8184b0659e59223118d66e2cfd271dc9f416c31e1c11a48",
+            "gzip_bytes": 1075,
+            "sha256": "dffa235bff7586882f29974ff591aec8b0113638abbf0238bea11fad1a2d6ad2",
             "type": "css"
         },
         "developer-documents-js": {
@@ -308,10 +308,10 @@
             "type": "js"
         },
         "eav-manager-css": {
-            "bytes": 23237,
+            "bytes": 23251,
             "file": "pages/weline-eav-manager.css",
-            "gzip_bytes": 3145,
-            "sha256": "b2b4bccad61daf583afbb297948a26f000f5dbeec12fb467934af79d4d447613",
+            "gzip_bytes": 3149,
+            "sha256": "6383dfc676c2e07453a73a0101de935a78268adc754389b6ffacf9e265e32bcf",
             "type": "css"
         },
         "eav-manager-js": {
@@ -336,17 +336,17 @@
             "type": "js"
         },
         "foundation": {
-            "bytes": 171752,
+            "bytes": 174731,
             "file": "weline-foundation.css",
-            "gzip_bytes": 27610,
-            "sha256": "acc76bc95564ddfa5ec62e631f98e7e9a1dd55f210616643c489806e3c05d9a6",
+            "gzip_bytes": 28398,
+            "sha256": "76eee4753f17c69ecc691222c665f9cac747978457d240ff6535db56aa389f94",
             "type": "css"
         },
         "frontend": {
-            "bytes": 13429,
+            "bytes": 13443,
             "file": "weline-frontend.css",
-            "gzip_bytes": 3010,
-            "sha256": "5c08d6b6238e3ec27a2cad6069efe36b7bd922ef5f997133f1d5ee3f7e78532a",
+            "gzip_bytes": 3016,
+            "sha256": "6451f3bca80a893b7aee9f9c712e4bd13544fa512035b9e90f035bcd7a825d99",
             "type": "css"
         },
         "icons": {
@@ -399,10 +399,10 @@
             "type": "js"
         },
         "mega-menu-css": {
-            "bytes": 12774,
+            "bytes": 13182,
             "file": "components/weline-mega-menu.css",
-            "gzip_bytes": 2496,
-            "sha256": "ff28a45decff1f594855fcc6837075352ef7f7cdb21c3b66dcb41aaa6fadebcd",
+            "gzip_bytes": 2883,
+            "sha256": "6298fc9dc491be801dc5df69787ffd296634c079dca9f8c4a59707bd0db1d29d",
             "type": "css"
         },
         "mega-menu-js": {
@@ -427,10 +427,10 @@
             "type": "js"
         },
         "queue-admin-css": {
-            "bytes": 17919,
+            "bytes": 17933,
             "file": "pages/weline-queue-admin.css",
-            "gzip_bytes": 2572,
-            "sha256": "7529405ff8089fc1d30379ba05be652cca711137f3763831b6ba074b5f482619",
+            "gzip_bytes": 2577,
+            "sha256": "2d9a16f760879d3214c55f4d495002b865be064342ce4af7a4a1389ef7da0527",
             "type": "css"
         },
         "queue-content-js": {
@@ -441,10 +441,10 @@
             "type": "js"
         },
         "queue-form-css": {
-            "bytes": 7159,
+            "bytes": 7173,
             "file": "pages/weline-queue-form.css",
-            "gzip_bytes": 1448,
-            "sha256": "971354806cb659b4d30d6cb3a8e42138acb6a1cc49dd28537c2895cde537d913",
+            "gzip_bytes": 1453,
+            "sha256": "cebb34cd8bac7ceb30b310cbfd6ab185f8465259c1bb0b884a3f8f84df1425e6",
             "type": "css"
         },
         "queue-form-js": {
@@ -476,10 +476,10 @@
             "type": "js"
         },
         "seo-embed-css": {
-            "bytes": 1666,
+            "bytes": 1680,
             "file": "pages/weline-seo-embed.css",
-            "gzip_bytes": 538,
-            "sha256": "557e2bfbe3b3eba92113cceeec36f3d136d8847b24dbc3b1dcc4fe23a83db082",
+            "gzip_bytes": 543,
+            "sha256": "dc79957d07e5557277580da856f1da079423912a97afaa96842abcab0b6b1b4d",
             "type": "css"
         },
         "seo-embed-detail-js": {
@@ -497,10 +497,10 @@
             "type": "js"
         },
         "system-config-css": {
-            "bytes": 30424,
+            "bytes": 30438,
             "file": "pages/weline-system-config.css",
-            "gzip_bytes": 4315,
-            "sha256": "5bb5d0b27af386c386584a50a506f58f6691915792abb77f1d27d43e5cf6c078",
+            "gzip_bytes": 4321,
+            "sha256": "4dfdbde48effdebcc3c597c7f8844e1bff545474e7712c32b430a8fd4174abb4",
             "type": "css"
         },
         "system-config-js": {
@@ -511,10 +511,10 @@
             "type": "js"
         },
         "theme-editor-css": {
-            "bytes": 175564,
+            "bytes": 175986,
             "file": "pages/weline-theme-editor.css",
-            "gzip_bytes": 26315,
-            "sha256": "3d68282d154bc452183ea951159e6ad3e528b7aab9d89c0e6a26ec181fb30daf",
+            "gzip_bytes": 26639,
+            "sha256": "a35fead56bd78c3b699bab3fb671c38630664df669e0d2910c32237d1b116308",
             "type": "css"
         },
         "theme-editor-js": {
@@ -525,10 +525,10 @@
             "type": "js"
         },
         "theme-editor-overlay-css": {
-            "bytes": 7268,
+            "bytes": 7282,
             "file": "pages/weline-theme-editor-overlay.css",
-            "gzip_bytes": 1787,
-            "sha256": "16d2bd08712f4b994f50ba798d72ed2c0e8c2e333607aea2452bc470a236b88b",
+            "gzip_bytes": 1792,
+            "sha256": "d7d6e6a736aabecdfda9729523c3ad5952884ed09a3cc83e9d96b80549e6129f",
             "type": "css"
         },
         "theme-editor-widget-config-css": {
@@ -560,10 +560,10 @@
             "type": "js"
         },
         "theme-preview-css": {
-            "bytes": 40102,
+            "bytes": 40428,
             "file": "pages/weline-theme-preview.css",
-            "gzip_bytes": 8038,
-            "sha256": "e17feaeba4a7f25cc5960a3e38bc21c9f6a8a2fb4012af0d581887b2a7bd315e",
+            "gzip_bytes": 8229,
+            "sha256": "3fe31eb3aec49dd5ca741d7762e8418aa33420e49369d386db0a978e34ebd4a2",
             "type": "css"
         },
         "theme-preview-js": {
@@ -581,10 +581,10 @@
             "type": "js"
         },
         "ui-button": {
-            "bytes": 4481,
+            "bytes": 4795,
             "file": "components/weline-ui-button.css",
-            "gzip_bytes": 1257,
-            "sha256": "985dfd89e6f8b591d0047bbf49926538735945af47904517da6bcc7f0c36fefe",
+            "gzip_bytes": 1487,
+            "sha256": "9c0e93a43e66d63851b58fce4fdcf4a3059bc2957bd7a9fe9ad4f63fff7fd347",
             "type": "css"
         },
         "ui-core": {
@@ -595,52 +595,52 @@
             "type": "js"
         },
         "ui-critical": {
-            "bytes": 4075,
+            "bytes": 4375,
             "file": "components/weline-ui-critical.css",
-            "gzip_bytes": 1142,
-            "sha256": "4a37867fcd0057bef6a8f92d5f1307ae14c29e6010346cf0f46e890ed61dca20",
+            "gzip_bytes": 1365,
+            "sha256": "f80d26b4e1154f88a889778b3dcfdd24993fb14168571942928905e290175139",
             "type": "css"
         },
         "ui-feedback": {
-            "bytes": 2600,
+            "bytes": 2914,
             "file": "components/weline-ui-feedback.css",
-            "gzip_bytes": 717,
-            "sha256": "79f341b214561b92a1a135a9722d64a3933e207e314b6a9fefbddb7374991e4f",
+            "gzip_bytes": 981,
+            "sha256": "49895bd2281f29207922ffbea2d6f03a31f45c872c161e7dcadfa14cab159e64",
             "type": "css"
         },
         "ui-field": {
-            "bytes": 12697,
+            "bytes": 13011,
             "file": "components/weline-ui-field.css",
-            "gzip_bytes": 2241,
-            "sha256": "251dae63f5470799d8df1149e63f281a3063bafad7df7e4a6c98072d85daad8c",
+            "gzip_bytes": 2494,
+            "sha256": "545e3bd99d272d3d0d0f531a41e004fb017e35d532cabd1c0f6a503daef26c2d",
             "type": "css"
         },
         "ui-navigation": {
-            "bytes": 3815,
+            "bytes": 4129,
             "file": "components/weline-ui-navigation.css",
-            "gzip_bytes": 926,
-            "sha256": "9db8b845c3557d00937eb8068b539bdb17f00cbe7ec864697124d79188dad098",
+            "gzip_bytes": 1191,
+            "sha256": "36db623cafaf389bf35066a22affece687b7049c22e93b42b8bb6c24b4260b1c",
             "type": "css"
         },
         "ui-selection": {
-            "bytes": 4311,
+            "bytes": 4625,
             "file": "components/weline-ui-selection.css",
-            "gzip_bytes": 1027,
-            "sha256": "e52a250f46f34380481d2c21e3e73bb23d5ce6b00917bd342b75ed563985107b",
+            "gzip_bytes": 1292,
+            "sha256": "b487792346535a6018a18a3a44604dc735044047d9d598f13d30610076864833",
             "type": "css"
         },
         "ui-surface": {
-            "bytes": 4471,
+            "bytes": 4785,
             "file": "components/weline-ui-surface.css",
-            "gzip_bytes": 898,
-            "sha256": "1debee82da7ca98489d4b0dac623016e334ddf9bc9660a99e8e13d0d658e227c",
+            "gzip_bytes": 1166,
+            "sha256": "b00b7b8d1749813d68fbd73d4e2949dd4dd0ed507ea7e8bd1f25147fe6cafb9d",
             "type": "css"
         },
         "ui-tokens": {
-            "bytes": 7341,
+            "bytes": 7655,
             "file": "components/weline-ui-tokens.css",
-            "gzip_bytes": 2017,
-            "sha256": "81b5cf8cc4031b83e336d0387e0c7a6f504b7900f04e2948e458a6368c7786aa",
+            "gzip_bytes": 2225,
+            "sha256": "8aef91f0063fbb831562b9f69d19ecb18e104641ef68c66bbc1fcca78099a688",
             "type": "css"
         },
         "websites-admin-css": {

@@ -1,5 +1,5 @@
 /* Weline UI source: css/backend.css */
-@layer reset, tokens, base, layout, components, utilities, page;
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 
 /* 后台主列左右 gutter：顶栏与正文共用，断点只改 token */
 @layer tokens {

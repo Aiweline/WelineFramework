@@ -1,4 +1,8 @@
 /* Theme editor chrome collapse + brand basics drawer */
+/* 级联层序契约（ThemeCssLayerContract::DECLARATION）：本文件可能先于 foundation.css 解析，
+ * 漏写会让浏览器把 weline-theme 追加到层序末尾（=最高优先级），骨架反过来被皮肤压过。
+ * 遗留：本文件规则仍未分层（未分层恒胜任何层），属待收口债务。 */
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 
 .theme-editor-container.theme-editor-chrome-collapsed > .editor-toolbar,
 .theme-editor-container.theme-editor-chrome-collapsed > .editor-preview-toolbar {

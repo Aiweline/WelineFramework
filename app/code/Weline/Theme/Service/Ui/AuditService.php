@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Ui;
 
+use Weline\Theme\Service\Theme\ThemeCssLayerContract;
+
 final class AuditService
 {
     private const RUNTIME_EXTENSIONS = ['css', 'html', 'js', 'json', 'mjs', 'php', 'phtml', 'svg', 'xml'];
@@ -24,7 +26,7 @@ final class AuditService
 
     private const LEGACY_CLASS_PATTERN = '/^(?:container(?:-fluid)?|row|col(?:-[a-z]+)?(?:-[0-9]+)?|btn(?:-[a-z0-9_-]+)?|card(?:-[a-z0-9_-]+)?|form-(?:control|select|check(?:-input|-label)?|switch|group)|input-group(?:-[a-z0-9_-]+)?|modal(?:-[a-z0-9_-]+)?|offcanvas(?:-[a-z0-9_-]+)?|dropdown(?:-[a-z0-9_-]+)?|table(?:-[a-z0-9_-]+)?|alert(?:-[a-z0-9_-]+)?|badge|pagination|page-item|page-link|breadcrumb|nav(?:-[a-z0-9_-]+)?|accordion(?:-[a-z0-9_-]+)?|spinner-border|d-(?:flex|grid|none|block|inline(?:-block)?)|align-items-[a-z0-9_-]+|justify-content-[a-z0-9_-]+|[mp][trblxy]?-[0-9]+|text-(?:start|end|center|muted|primary|secondary|success|warning|danger|info|white)|bg-[a-z0-9_-]+|w-100|h-100|sr-only|visually-hidden|invalid-tooltip|waves(?:-light)?|show|fade)$/i';
 
-    private const LAYER_ORDER = '@layer reset, tokens, base, layout, components, utilities, page;';
+
 
     public function __construct(private readonly AssetManifest $manifest)
     {
@@ -228,8 +230,20 @@ final class AuditService
                 '/#[0-9a-f]{3,8}\b|\b(?:rgb|rgba|hsl|hsla)\s*\(/i',
             );
         }
-        if (str_contains($relative, '/Theme/view/ui/css/') && !str_contains($content, self::LAYER_ORDER)) {
-            $violations[] = $this->violation('missing_css_layer_contract', $relative, 1, self::LAYER_ORDER);
+        if (str_contains($relative, '/Theme/view/ui/css/') && !ThemeCssLayerContract::isDeclared($content)) {
+            $violations[] = $this->violation('missing_css_layer_contract', $relative, 1, ThemeCssLayerContract::DECLARATION);
+        }
+        // 「第一处层序声明决定全部层序」是 CSS 硬语义：只要某个源文件先写了一份非规范层序，
+        // 该层就会被追加到末尾（= 最高优先级），默认主题骨架反被子主题/模块压过。
+        // 门禁覆盖所有源文件（不限 Theme UI 目录），不依赖「谁先被打包」的偶然顺序。
+        if (ThemeCssLayerContract::violatesOrder($content)) {
+            $offset = ThemeCssLayerContract::firstOrderStatementOffset($content) ?? 0;
+            $violations[] = $this->violation(
+                'noncanonical_css_layer_order',
+                $relative,
+                1 + substr_count(substr($content, 0, $offset), "\n"),
+                (ThemeCssLayerContract::firstOrderStatement($content) ?? '') . '  !=  ' . ThemeCssLayerContract::DECLARATION
+            );
         }
         $this->appendPatternViolations(
             $violations,

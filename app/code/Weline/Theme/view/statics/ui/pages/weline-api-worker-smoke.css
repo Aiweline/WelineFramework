@@ -1,5 +1,5 @@
 /* Weline UI source: css/worker-smoke.css */
-@layer reset, tokens, base, layout, components, utilities, page;
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 
 @layer page {
     .w-api-worker-smoke { padding-block: var(--weline-space-8); }

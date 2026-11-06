@@ -5,7 +5,10 @@
  * 不会影响前端正式页面
  */
 
-@layer reset, tokens, base, layout, components, utilities, page;
+/* 层序契约（S11，2026-11-06）：本文件是 theme-preview 包的首个源文件，它的 @layer 声明
+ * 就先于 pages/theme-preview.css 生效，漏 weline-theme 会让该层被追加到末尾（=最高优先级）。
+ * 必须与 ThemeCssLayerContract::DECLARATION 逐字一致。 */
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 
 @layer page {
 

@@ -1,6 +1,6 @@
 /* Weline UI source: css/eav-manager.css */
 /* Weline UI source: css/eav-manager.css */
-@layer reset, tokens, base, layout, components, utilities, page;
+@layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 
 @layer page {
     .w-eav-manager {
