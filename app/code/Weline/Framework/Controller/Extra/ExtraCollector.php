@@ -222,6 +222,11 @@ final class ExtraCollector
                     $attrs[$key] = ExtraAttributeParser::toBool($val);
                 } elseif ($key === 'ttl') {
                     $attrs[$key] = ExtraAttributeParser::toInt($val, 0);
+                } elseif ($key === 'rate_enabled') {
+                    $attrs[$key] = ExtraAttributeParser::toBool($val);
+                } elseif ($key === 'rate_window' || $key === 'rate_max_requests' || $key === 'rate_block_duration') {
+                    // 只做类型转换；缺省值与合法性（>0）由类型提供者 normalize() 负责。
+                    $attrs[$key] = ExtraAttributeParser::toInt($val, 0);
                 } else {
                     $attrs[$key] = $val;
                 }

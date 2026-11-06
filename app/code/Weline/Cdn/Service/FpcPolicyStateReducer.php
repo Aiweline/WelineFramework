@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace Weline\Cdn\Service;
 
+use Weline\Framework\Controller\Extra\ExtraAttributeParser;
 use Weline\Framework\Extends\Module\Weline_Framework\Extra\Type\FpcExtraType;
 
 /** 控制面变更的纯函数：版本化清理集合不会丢失连续保存。 */
@@ -65,6 +66,11 @@ final class FpcPolicyStateReducer
             'ttl' => (int)($row['attrs']['ttl'] ?? 600),
             'namespaces' => $namespaces,
             'query_keys' => $queryKeys,
+            // 限流参数必须进白名单：本方法**重建** attrs，漏键 = 保存一次策略后限流配置凭空消失。
+            'rate_enabled' => ExtraAttributeParser::toBool($row['attrs']['rate_enabled'] ?? false),
+            'rate_window' => ExtraAttributeParser::toInt($row['attrs']['rate_window'] ?? FpcExtraType::RATE_WINDOW_DEFAULT, FpcExtraType::RATE_WINDOW_DEFAULT),
+            'rate_max_requests' => ExtraAttributeParser::toInt($row['attrs']['rate_max_requests'] ?? 0, 0),
+            'rate_block_duration' => ExtraAttributeParser::toInt($row['attrs']['rate_block_duration'] ?? 0, 0),
         ];
         $row['namespaces'] = $row['attrs']['namespaces'];
         $row['public_path_patterns'] = array_values(array_unique((array)($row['public_path_patterns'] ?? [])));

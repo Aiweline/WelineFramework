@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Controller\Extra;
 
 use Weline\Framework\App\State;
+use Weline\Framework\Extends\Module\Weline_Framework\Extra\Type\FpcExtraType;
 use Weline\Framework\Runtime\ScopeIdentity;
 
 /** 已编译策略矩阵的纯内存解释器。 */
@@ -65,14 +66,16 @@ final class FpcPolicySnapshot
         return '/' . implode('/', (array)$localized['remaining']);
     }
 
-    public static function resolve(array $snapshot, string $path, ScopeIdentity $scope, ?string $storeMode = null): ?array
+    public static function resolve(array $snapshot, string $path, ScopeIdentity $scope, ?string $storeMode = null, ?string $method = null): ?array
     {
         $revision = (string)($snapshot['revision'] ?? '');
+        $methodKey = $method === null ? '' : \strtoupper($method);
         $resolveKey = \implode("\n", [
             $revision,
             $path,
             $scope->canonicalKey(),
             (string)($scope->storeMode ?? $storeMode ?? ScopeIdentity::MODE_NORMAL),
+            $methodKey,
         ]);
         if (\array_key_exists($resolveKey, self::$processResolveCache)) {
             return self::$processResolveCache[$resolveKey];
@@ -83,6 +86,7 @@ final class FpcPolicySnapshot
             $path,
             'fpc',
             $revision,
+            $method,
         );
         $resolved = [];
         foreach ($candidates as $candidate) {
@@ -120,16 +124,24 @@ final class FpcPolicySnapshot
             $paths = array_values(array_unique([(string)($row['path_pattern'] ?? ''), ...(array)($row['public_path_patterns'] ?? [])]));
             sort($paths, SORT_STRING);
             $queryKeys = self::queryKeysFromAttrs($attrs);
+            // 每 IP 窗口限流参数：缺省值必须补齐（消费方不再做 null 判断），但**不进** fingerprint。
+            $rateEnabled = ExtraAttributeParser::toBool($attrs['rate_enabled'] ?? false);
+            $rateWindow = ExtraAttributeParser::toInt($attrs['rate_window'] ?? FpcExtraType::RATE_WINDOW_DEFAULT, FpcExtraType::RATE_WINDOW_DEFAULT);
+            $rateMax = ExtraAttributeParser::toInt($attrs['rate_max_requests'] ?? 0, 0);
+            $rateBlock = ExtraAttributeParser::toInt($attrs['rate_block_duration'] ?? 0, 0);
             $resolved[] = ['rank' => $candidate['rank'], 'policy' => [
                 'declaration_id' => $id, 'enabled' => $enabled, 'ttl' => $ttl, 'namespaces' => $namespaces,
                 'query_keys' => $queryKeys,
                 'policy_fingerprint' => hash('sha256', json_encode([$id, $codeEnabled, $codeTtl, $enabled, $ttl, $namespaces, $paths, $queryKeys, $scope->canonicalKey(), $mode], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)),
                 'snapshot_revision' => (string)($snapshot['revision'] ?? ''), 'source_version' => (int)($snapshot['source_version'] ?? 0),
                 'enabled_source' => $enabledSource, 'ttl_source' => $ttlSource,
+                'rate_enabled' => $rateEnabled, 'rate_window' => $rateWindow,
+                'rate_max_requests' => $rateMax, 'rate_block_duration' => $rateBlock,
             ]];
         }
         usort($resolved, static fn(array $a, array $b): int => ($a['rank'] <=> $b['rank'])
             ?: ($a['policy']['enabled'] <=> $b['policy']['enabled'])
+            ?: ($b['policy']['ttl'] <=> $a['policy']['ttl'])
             ?: strcmp($a['policy']['declaration_id'], $b['policy']['declaration_id']));
         $policy = $resolved[0]['policy'] ?? null;
 
@@ -144,11 +156,12 @@ final class FpcPolicySnapshot
     }
 
     /** @return list<array{row:array,rank:array}> */
-    public static function matching(array $rows, string $path, string $type, string $revision = ''): array
+    public static function matching(array $rows, string $path, string $type, string $revision = '', ?string $method = null): array
     {
         $path = '/' . ltrim($path, '/');
+        $methodKey = $method === null ? '' : \strtoupper($method);
 
-        $cacheKey = $revision . "\n" . $type . "\n" . $path;
+        $cacheKey = $revision . "\n" . $type . "\n" . $methodKey . "\n" . $path;
         if (isset(self::$processMatchCache[$cacheKey])) {
             return self::$processMatchCache[$cacheKey];
         }
@@ -156,6 +169,14 @@ final class FpcPolicySnapshot
         foreach ($rows as $row) {
             if (($row['type'] ?? 'fpc') !== $type) {
                 continue;
+            }
+            // 「方法名即 HTTP 动词」的声明（get / post …）公开路径不含动词段，
+            // 同一 URL 上的 GET/POST 只能靠请求方法区分；显式动作段（postPhrase）不受影响。
+            if ($methodKey !== '') {
+                $declaredVerb = DeclarationPath::action((string)($row['method'] ?? ''))['verb'];
+                if ($declaredVerb !== '' && $declaredVerb !== $methodKey) {
+                    continue;
+                }
             }
             $best = null;
             // canonical + 显式 public patterns + 生成器额外注册的别名键（别名不进 fingerprint，见 ExtraCollector）。
