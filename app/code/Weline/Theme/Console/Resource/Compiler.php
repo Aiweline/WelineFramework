@@ -89,6 +89,7 @@ class Compiler implements \Weline\Framework\Console\CommandInterface
             'less' => __('编译less静态资源！'),
             'welineModules' => __('静态文件：weline.modules.js编译文件！'),
             'welineUi' => __('编译 Weline UI 2.0 静态资源包！'),
+            'layoutCritical' => __('把各设计主题的 layout-critical 自动物化副本同步到当前基线（fork 主题跳过）！'),
             'spec' => __('主题规范校验（head 预算 / 首屏图 / 字体 / SEO 单一出口）！'),
         ];
         if ($to_string) {

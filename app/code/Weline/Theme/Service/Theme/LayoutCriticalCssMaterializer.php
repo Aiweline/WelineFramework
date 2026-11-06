@@ -43,6 +43,85 @@ final class LayoutCriticalCssMaterializer
         return $written;
     }
 
+    /**
+     * Refresh every auto-materialized design-theme copy to the current baseline.
+     *
+     * Generated bodies are a pure function of the baseline, so this needs no theme
+     * model and no DB access — safe to re-run from `theme:compile layoutCritical`.
+     * Fork themes (which removed the marker to take the file over) are reported but
+     * never written: once a theme owns layout-critical, the framework must not
+     * overwrite it.
+     *
+     * @return array{synced:list<string>,fork:list<string>,current:list<string>}
+     */
+    public function syncGeneratedCopies(): array
+    {
+        $result = ['synced' => [], 'fork' => [], 'current' => []];
+
+        foreach ($this->designCriticalPaths() as $target) {
+            $area = $this->extractArea($target);
+            if ($area === null) {
+                continue;
+            }
+
+            $baselinePath = BP . sprintf(self::BASELINE_RELATIVE, $area);
+            if (!is_readable($baselinePath)) {
+                continue;
+            }
+
+            $baseline = (string)file_get_contents($baselinePath);
+            if (trim($baseline) === '') {
+                continue;
+            }
+            $baselineSha = hash('sha256', $baseline);
+
+            $existing = is_readable($target) ? (string)file_get_contents($target) : '';
+            if (!$this->isGeneratedPayload($existing)) {
+                $result['fork'][] = $target;
+                continue;
+            }
+            if ($this->extractBaselineSha($existing) === $baselineSha) {
+                $result['current'][] = $target;
+                continue;
+            }
+
+            $body = $this->buildGeneratedBody($baseline, $baselineSha, $area);
+            if (@file_put_contents($target, $body) === false) {
+                throw new \RuntimeException('layout_critical_materialize_write_failed:' . $target);
+            }
+            $result['synced'][] = $target;
+        }
+
+        return $result;
+    }
+
+    /** @return list<string> */
+    private function designCriticalPaths(): array
+    {
+        $paths = [];
+        foreach ([BP . 'app/design', BP . 'design'] as $root) {
+            if (!is_dir($root)) {
+                continue;
+            }
+            foreach (['frontend', 'backend'] as $area) {
+                foreach (glob($root . '/*/*/' . $area . '/assets/css/layout-critical.css') ?: [] as $path) {
+                    $paths[$path] = $path;
+                }
+            }
+        }
+
+        return array_values($paths);
+    }
+
+    private function extractArea(string $target): ?string
+    {
+        if (preg_match('!/(frontend|backend)/assets/css/layout-critical\.css$!', str_replace('\\', '/', $target), $m) === 1) {
+            return $m[1];
+        }
+
+        return null;
+    }
+
     private function materializeArea(WelineTheme $theme, string $area): ?string
     {
         $baselinePath = BP . sprintf(self::BASELINE_RELATIVE, $area);
