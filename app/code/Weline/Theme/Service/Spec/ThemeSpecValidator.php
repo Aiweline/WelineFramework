@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Spec;
 
+use Weline\Theme\Service\Theme\LayoutCriticalCssMaterializer;
 use Weline\Theme\Service\Theme\ThemeCssLayerContract;
 
 /**
@@ -19,8 +20,16 @@ use Weline\Theme\Service\Theme\ThemeCssLayerContract;
  */
 final class ThemeSpecValidator
 {
-    /** S4：layout-critical 内联预算 */
+    /** S4：layout-critical 内联预算（单文件） */
     public const MAX_LAYOUT_CRITICAL_BYTES = 14336;
+
+    /**
+     * S4（composed）：head 实际内联总量上限 = override（或基线）+ addendum。
+     * 为何单独放宽到 16KB：基线现在自带移动端自适应契约（dvh / 触控下限 / 输入字号地板）；
+     * 主题又合法持有自己的首屏 pin（CLS 实测证据驱动），“基线 + 增量”合起来 14KB 已装不下。
+     * 语义仍然是“首屏只放必要规则”：超了就得分流到异步包，不是把阈值当可调参数反复抬。
+     */
+    public const MAX_COMPOSED_LAYOUT_CRITICAL_BYTES = 16384;
 
     /** S2：head 内阻塞样式表上限 */
     public const MAX_HEAD_STYLESHEETS = 6;
@@ -29,6 +38,17 @@ final class ThemeSpecValidator
         'layout-critical.css',
         'layout-critical-frontend.css',
         'layout-critical-backend.css',
+    ];
+
+    /**
+     * 增量通道：主题在基线上追加自己的首屏规则（不整体替换基线）。
+     * 免 S11：层序已由基线（文档中更早的样式表）钉死，追加文件再声明只是重复。
+     * 不免 S4/S12：它们照样进 head 内联，照样会强隐。
+     */
+    private const LAYOUT_CRITICAL_ADDENDUM_FILES = [
+        'layout-critical-addendum.css',
+        'layout-critical-frontend-addendum.css',
+        'layout-critical-backend-addendum.css',
     ];
 
     /** @var array<string, array<int, array{rule:string,file:string,line:int,severity:string,message:string,hint:string}>> */
@@ -112,8 +132,95 @@ final class ThemeSpecValidator
             }
         }
 
+        // S4（composed）：head 内联的是「生效集合」——override 或基线，再加 addendum。
+        // 逐文件判会假通过（基线 ≤14KB、增量也 ≤14KB，合起来内联就超）。
+        $violations = array_merge($violations, $this->assertComposedCriticalBudget($directory));
+
         // S13：主题自身 layout-critical 与皮肤叶的几何值不得矛盾（跨文件，必须整根校验）
         $violations = array_merge($violations, $this->validateCriticalSkinConflicts($directory));
+
+        return $violations;
+    }
+
+    /**
+     * S4（composed）：按「一个 area 目录实际会内联多少字节」判，而不是按单个文件判。
+     * 生效集合与 LayoutCriticalCssService 同口径：目录里有 override 就用 override，否则用基线；
+     * 再加上同目录的 addendum。
+     *
+     * @return list<array{rule:string,file:string,line:int,severity:string,message:string,hint:string}>
+     */
+    private function assertComposedCriticalBudget(string $themeRoot): array
+    {
+        $groups = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($themeRoot, \FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $file) {
+            if (!$file instanceof \SplFileInfo || !$file->isFile()) {
+                continue;
+            }
+            $basename = strtolower($file->getBasename());
+            if (!in_array($basename, self::LAYOUT_CRITICAL_FILES, true)
+                && !in_array($basename, self::LAYOUT_CRITICAL_ADDENDUM_FILES, true)) {
+                continue;
+            }
+            $effective = in_array($basename, self::LAYOUT_CRITICAL_ADDENDUM_FILES, true)
+                ? 'addendum'
+                : 'override';
+            if ($effective === 'override') {
+                // 带 GENERATED 标记 = 物化器托管快照：实际内联的是基线，不是这个文件。
+                $head = (string)@file_get_contents($file->getPathname(), false, null, 0, 2048);
+                if (str_contains($head, LayoutCriticalCssMaterializer::GENERATED_MARKER)) {
+                    $effective = 'snapshot';
+                }
+            }
+            $dir = str_replace('\\', '/', dirname($file->getPathname()));
+            $groups[$dir][$effective][] = str_replace('\\', '/', $file->getPathname());
+        }
+
+        $violations = [];
+        foreach ($groups as $dir => $byKind) {
+            // 仅托管快照 = 实际读基线，内联的不是这个文件，跳过。
+            if (empty($byKind['override']) && empty($byKind['addendum'])) {
+                continue;
+            }
+
+            $area = str_contains($dir, '/backend/') ? 'backend' : 'frontend';
+            $baselinePath = BP . sprintf('app/code/Weline/Theme/view/ui/css/layout-critical-%s.css', $area);
+
+            $total = 0;
+            $sources = [];
+            if (!empty($byKind['override'])) {
+                $override = (string)$byKind['override'][0];
+                $total += (int)@filesize($override);
+                $sources[] = basename($override);
+            } else {
+                $total += (int)@filesize($baselinePath);
+                $sources[] = 'view/ui/css/layout-critical-' . $area . '.css (baseline)';
+            }
+            foreach ($byKind['addendum'] ?? [] as $addendum) {
+                $total += (int)@filesize($addendum);
+                $sources[] = basename($addendum);
+            }
+
+            if ($total <= self::MAX_COMPOSED_LAYOUT_CRITICAL_BYTES) {
+                continue;
+            }
+
+            $reported = $byKind['addendum'][0] ?? ($byKind['override'][0] ?? $dir);
+            $violations[] = $this->violation(
+                'S4',
+                $reported,
+                1,
+                sprintf(
+                    'Composed layout-critical CSS is %d bytes (%s), over the %d byte inline budget.',
+                    $total,
+                    implode(' + ', $sources),
+                    self::MAX_COMPOSED_LAYOUT_CRITICAL_BYTES
+                ),
+                'The head inlines the whole effective set. Move non-first-paint rules into the async pack.'
+            );
+        }
 
         return $violations;
     }
@@ -192,7 +299,9 @@ final class ThemeSpecValidator
      */
     private function validateCssFile(string $path, string $basename): array
     {
-        if (!in_array($basename, self::LAYOUT_CRITICAL_FILES, true)) {
+        $isCritical = in_array($basename, self::LAYOUT_CRITICAL_FILES, true);
+        $isAddendum = in_array($basename, self::LAYOUT_CRITICAL_ADDENDUM_FILES, true);
+        if (!$isCritical && !$isAddendum) {
             return [];
         }
 
@@ -200,7 +309,7 @@ final class ThemeSpecValidator
         $source = (string)@file_get_contents($path);
 
         // S11：首个样式表必须自钉层序，否则 weline-theme 的最低位可能被抢先固定而失效。
-        if (!ThemeCssLayerContract::isDeclared($source)) {
+        if ($isCritical && !ThemeCssLayerContract::isDeclared($source)) {
             $violations[] = $this->violation(
                 'S11',
                 $path,

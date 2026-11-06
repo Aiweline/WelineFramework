@@ -184,13 +184,35 @@
         };
         collect('data-weline-load');
         collect('data-weline-declare');
+        // 声明式挂载宿主（data-weline-mount）的模块清单是第三套属性：
+        // 它不参与顶上那轮 load 扫描，由 Weline.mount 自己消费。
+        collect('data-weline-mount-load');
+        var pending = [];
         for (var k = 0; k < names.length; k++) {
             try {
-                Promise.resolve(load(names[k])).catch(function () {
+                pending.push(Promise.resolve(load(names[k]).catch(function () {
                     // 单个模块失败不影响其它模块；错误由加载器自身记录。
-                });
+                })));
             } catch (e) {
                 // 同步异常同样不阻断水合流程。
+            }
+        }
+        // 声明式挂载宿主：weline.js 的 mount 扫描同样只在 DOMContentLoaded 跑一次。
+        // 这里只扫本节点、不 force —— 已 ready 的宿主必须跳过，否则二次挂载。
+        function scanMounts() {
+            var mount = window.Weline && window.Weline.mount;
+            if (!mount || typeof mount.scan !== 'function') {
+                return;
+            }
+            try {
+                mount.scan({ root: root });
+            } catch (e2) {}
+        }
+        if (root.querySelector('[data-weline-mount]')) {
+            if (pending.length) {
+                Promise.all(pending).then(scanMounts);
+            } else {
+                scanMounts();
             }
         }
     }
@@ -300,6 +322,16 @@
         var dir = (slot.getAttribute('data-global-region-float') || '').trim();
         if (!dir) {
             layer.appendChild(slot);
+            return;
+        }
+        // 主题已经声明过同名槽（publishedSlotLayerMarkup / <w:slot>）：并入它，
+        // 不要造第二个 data-slot-id —— 并列双壳会让「取首个匹配」的消费者落进空容器。
+        var host = layer.querySelector('[data-slot-id="storefront-float-' + dir + '"]');
+        if (host && host !== slot) {
+            while (slot.firstChild) {
+                host.appendChild(slot.firstChild);
+            }
+            slot.remove();
             return;
         }
         slot.classList.add('w-storefront-float-layer__slot');

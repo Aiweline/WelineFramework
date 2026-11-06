@@ -13,6 +13,11 @@
         min-inline-size: 0;
         margin-inline: auto;
         padding-inline: var(--weline-layout-content-padding-inline, var(--weline-space-5, 1.25rem));
+        /* 安全区沟槽（架构级）：版心只在刘海屏横屏时需要额外让位。
+         * 未声明 viewport-fit=cover 的站点 env() 恒为 0 → max() 回落到 gutter，零回归；
+         * 站点一旦在 head meta 加 viewport-fit=cover，这里自动生效，主题不必再各自算。 */
+        padding-inline-start: max(var(--weline-layout-content-padding-inline, var(--weline-space-5, 1.25rem)), env(safe-area-inset-left));
+        padding-inline-end: max(var(--weline-layout-content-padding-inline, var(--weline-space-5, 1.25rem)), env(safe-area-inset-right));
     }
     .w-grid {
         display: grid;

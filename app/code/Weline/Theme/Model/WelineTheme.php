@@ -335,7 +335,10 @@ class WelineTheme extends Model
     }
     public function getOriginPath(): string
     {
-        return $this->getData(self::schema_fields_PATH);
+        // 与 getPath() 同语义的 null 安全：链上缓存重建的空模型（getThemeChain 缓存分支
+        // `setData($themeData)` 不校验内容）会让 getData 返回 null，严格返回类型把
+        // 「空串走 fallback」放大成烘焙进程 TypeError（layout_solidify_queue 死信 4 次）。
+        return (string)$this->getData(self::schema_fields_PATH);
     }
     public function getRelatePath(): string
     {
@@ -454,15 +457,23 @@ class WelineTheme extends Model
     {
         $cacheKey = 'theme_chain_v2_' . $this->getId();
         
-        // 尝试从缓存获取
+        // 尝试从缓存获取（重建的行必须有 id 与 path，否则下游 getOriginPath/getPath
+        // 消费到空模型；空行一律丢弃，不能混进链里）
         if ($cached = $this->_cache->get($cacheKey)) {
             $chain = [];
             foreach ($cached as $themeData) {
+                if (!\is_array($themeData) || empty($themeData[self::schema_fields_ID])) {
+                    continue;
+                }
                 /** @var WelineTheme $theme */
                 $theme = ObjectManager::make(WelineTheme::class);
                 $chain[] = $theme->setData($themeData);
             }
-            return $chain;
+            if ($chain !== []) {
+                return $chain;
+            }
+            // 缓存内容整体无效：丼掉缓存，走下方重建（不再把空链写回缓存）
+            $this->_cache->delete($cacheKey);
         }
         $chain = [];
         $visited = [];

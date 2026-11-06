@@ -213,7 +213,8 @@ storefront / overlay / 设计主题皮肤 / 第三方字体 CSS 一律
 模板不必逐个改；自定义主题皮肤里的手写字面量链接由门禁 S2 兜底。
 
 首屏外壳由 `<theme:layout-critical>` 内联兜住（`.w-container` / hero 宽高比 / 字号阶梯 /
-按钮最小高度），预算 ≤ 14,336 字节。规则与反例见 `theme-spec-gates.md`。
+按钮最小高度，并把移动端自适应契约一并内联），预算两层：单文件 ≤ 14,336 字节、
+composed（基线|快照 + addendum）≤ 16,384 字节。规则与反例见 `theme-spec-gates.md` §S4。
 
 ### critical 必须与皮肤终值一致（S13，架构级）
 
@@ -229,9 +230,143 @@ CLS 必被破，且现场看不出「谁和谁不一致」。
 2. 宁可 **不 pin** 让皮肤完全拥有，也不要 pin 一个之后会被覆盖的值。
 3. 断点阶梯本就要由皮肤接管时，写显式豁免 `/* @critical-skin-waivers: sel:prop */`，
    不得沉默漂移。
-4. **自定义主题必须跟着骨架对齐**：`app/design/*/*/frontend/assets/css/layout-critical.css`
-   属于主题自己的首帧骨架，它的值要与该主题皮肤（`partials/head/theme-head-css-overlay.php`
+4. **自定义主题必须跟着骨架对齐**：主题自己的首帧骨架（`layout-critical.css` 或增量
+   `layout-critical-addendum.css`）的值要与该主题皮肤（`partials/head/theme-head-css-overlay.php`
    列出的叶）一致；这条对自定义主题同样生效，不是「框架基线管不着」的例外。
+   **首选形态是 addendum，不是整体 fork**（见下文「layout-critical 的继承模型」）。
 
 判据、几何属性白名单、`var()` 回退归一、1% 数值容差、豁免语法与**静态不可知边界**
 （断点阶梯不对称 / 简写与长写 / 运行时计算值）见 `theme-spec-gates.md` §S13。
+
+# 移动端自适应契约 —— 硬规则（默认主题自带，设计主题继承）
+
+**一句话：默认主题基线自己把手机端做完，设计主题继承即可；只有确实要偏离时才覆盖，
+并且必须付出可解释的特异性代价。** 契约落在
+`app/code/Weline/Theme/view/ui/css/layout-critical-frontend.css`（无层，随 `<theme:layout-critical>`
+内联进 head），因此**所有设计主题都在它之后**加载皮肤，皮肤能改它，但必须先赢过它的特异性。
+
+## 1. 契约内容（三条，全部在 `@media` 内）
+
+| # | 规则 | 选择器特异性 | 目的 |
+|---|------|--------------|------|
+| ① | 输入字号地板 `max(var(--weline-input-font-floor), 1rem)` | (0,2,1) | 控件字号 < 16px 时 iOS 聚焦会整页放大 |
+| ② | 触控目标下限 `min-block-size: var(--weline-tap-target-min)` | (0,2,1) | WCAG 2.5.5 44px；用 `min-*` 而非 `height` |
+| ③ | 点按体验：`-webkit-tap-highlight-color: transparent` + `touch-action: manipulation` | (0,0,0) `:where()` | 去灰块闪烁 / 去双击 300ms 延迟 |
+
+守卫统一为 `@media (pointer: coarse), (max-width: 48rem)` → **桌面零影响**；
+另加 `@supports (height: 100dvh)` 把页壳 `min-height` 从 `100vh` 升到 `100dvh`（地址栏收起/展开不再留白）。
+
+可调 token：`--weline-tap-target-min`（默认 `2.75rem`）、`--weline-input-font-floor`（默认 `16px`）。
+主题只调数值时改 token 即可，不要复制规则。
+
+## 2. 为什么必须写高特异性（实测，不要再用 `:where()`）
+
+两条硬事实（2026-11-06 实测，hanfu 站点 390/360/320）：
+
+1. **`:where()`（特异性 0）等于没写**：皮肤单类 `min-height`（0,1,0）直接压回 30px，
+   实测触控小目标数 28→28、输入字号 15→15，契约失效。
+2. **纯类型选择器提不动特异性**：首版把字号地板写成 `html input:not(...), html select, html textarea`，
+   其中 `html select` 只有 **(0,0,2)**（两个类型选择器），连皮肤的 `.ca select { font: inherit }`(0,1,1)
+   都赢不过 → `/category/hanfu`、`/products` 的排序下拉实测仍是 **14px**；
+   而 `html input:not([type="hidden"])` 因为是 (0,1,2) 才生效，所以当时只有输入框被修好。
+   改用 `:is(input, select, textarea):not([type="hidden"])` 后三类控件一致到 (0,2,1)。
+3. **页面内联样式会到 (0,2,0)**：`.hanfu-plp .amz-plp__sort-select { font: inherit }` 两个类压过 (0,1,2)，
+   最终定版把字号地板提到与触控地板同级的 **(0,2,1)**（`:root` + `:not()` 提供类级）。
+
+结论（写新规则时照抄）：
+
+- 能压回契约的只有**未分层 + 类选择器（≥0,1,0）**的皮肤/legacy 局部 —— 所以下限必须 ≥ (0,1,1)，
+  实际取 **(0,2,1)** 才稳。
+- 触控尺寸只能用 `min-block-size` / `min-inline-size`（盒模型 clamp），写成 `width`/`height` 会被皮肤后到的硬编码顶回。
+- `a[href]` 对**行内 `<a>`** 的 `min-block-size` 天然无效（行内盒不吃 min-height），不要靠它救文字链接。
+
+## 3. 桌面零影响（验收基线，改契约后必须复测）
+
+1440 宽桌面实测：`formFontMin` 仍是主题自己的 12px、仍有 44 个 <44px 的控件 —— 即契约在桌面**完全没有介入**。
+若改完契约后桌面这些数字变了，说明守卫写错（漏写 `@media` 或把规则放到了 media 外）。
+
+## 4. 主题如何退出/覆盖
+
+- addendum 与基线在**同一个 `<style>` 内**、且 addendum **后到** → addendum 写同特异性值即可覆盖，
+  必要时用 `!important`（S12 只约束 `layout-critical.css` / addendum 里的 `display`/`visibility`，不动字号与尺寸）。
+- 在皮肤里覆盖则必须 ≥ **(0,3,0)** 或 `!important`，否则 (0,2,1) 会赢——这正是契约想要的效果。
+- 只想改数值时优先改 token，别抄规则，避免以后基线升级时两套并存。
+
+## 5. 已知例外台账（框架自身部件，故意低于 44px）
+
+以下由**框架部件自己**用 ID 选择性（1,1,0 级）钉死，契约结构上管不到，属于**有意保留**，
+不是遗漏；改它们要连同步改两处并跑一致性测试：
+
+| 部件 | 尺寸 | 出处 | 为何不改 |
+|------|------|------|----------|
+| `.w-storefront-float-edge__dismiss` | 24×24 | `storefront-float-layer.css` + `SharedChromeService` 内联 critical | Lighthouse「触摸目标」门槛是 ≥24px，40px 在浅纸面上会盖内容；两侧必须同值（`FloatChromeCriticalParityTest`） |
+| `.weline-social-quick-bar__btn` | 高 36px | `storefront-float-layer.css` | 同上，浮层按钮成组排列，撑到 44px 会在 320 宽顶出横向溢出 |
+
+同理，页脚**行内文字链接**（高 23px / 宽 22px）适用 WCAG 2.5.8 的「行内文本」豁免。
+要动这批尺寸，必须先重测 320 档 `docScrollW`，不能只看单控件几何。
+
+## 6. 验收（缺一不可）
+
+```bash
+php bin/w theme:compile layoutCritical   # 把各设计主题生成物对齐当前基线
+php bin/w cache:clear
+php bin/w fpc:clear -w <站点域名>        # html-disk 层 Nginx 直出，cache:clear 清不掉
+```
+
+然后对**至少 8 类页面**（`/`、FAQ、分类、列表、详情、购物车、博客、静态页）× **320/360/390** 取：
+
+- `document.documentElement.scrollWidth - innerWidth` 必须为 **0**（横向溢出）；
+- 全部 `input/select/textarea` 的 computed `font-size` 最小值必须 **≥ 16px**；
+- 响应头必须带 `X-Wls-Fpc-Status: MISS`（证明是新渲染，不是旧 FPC 样本）。
+
+`formFontMin` 出现 14/15 就是契约没送达或被压住，**不要**当成「主题设计如此」。
+
+# layout-critical 的继承模型：baseline + addendum —— 硬规则
+
+**一句话：基线归框架、增量归主题，两者拼起来才是真正内联进 head 的那段 CSS。**
+
+## 1. 四种形态（`LayoutCriticalCssService::readShellCriticalCss()` 判定）
+
+| 形态 | 判定 | 实际内联 | 基线升级是否自动送达 |
+|------|------|----------|----------------------|
+| baseline | 主题目录**没有** `layout-critical.css` | 基线 | ✅ |
+| snapshot | 有文件且头部含 `weline-layout-critical:generated` | **基线**（忽略该文件） | ✅ |
+| fork | 有文件且**无** marker（主题接管） | 该文件 | ❌（主题自己负责合并） |
+| any + addendum | 同级目录另有 `layout-critical-addendum.css` | 上面的结果 **+ addendum** | ✅ |
+
+`snapshot` 存在的原因是 `LayoutCriticalCssMaterializer` 会把基线物化成主题目录下的副本
+（`theme:compile layoutCritical`），供主题自己看；读它等于读基线且**可能过期**，所以服务层显式走基线。
+**要接管就把 marker 删掉变成 fork，否则永远只是镜像。**
+
+## 2. addendum 是首选增量形态
+
+- addendum 与基线在同一 `<style>` 内、**后到**：同特异性即胜，所以主题增量不必抬特异性。
+- addendum **不要**写 `@layer` 序声明（层序由 `layout-critical.css` 负责，S11 只约束后者）。
+- addendum 里的 `display`/`visibility` 的 `!important` 仍受 S12：必须带条件（`[hidden]` / `:not([open])` / `@media`）。
+  hanfu 抽屉事故就是不带给条件：`display:none!important` 把打开态一起压回（marker `hanfu-menu-closed-state-only-v1`）。
+- 迁移规程（fork → baseline+addendum，已经在 hanfu 与 playinginchina 上执行过）：
+  1. 备份 fork 到 `dev/backup/<相对路径>.<时间戳>`；
+  2. 用 `ThemeCriticalSkinConflict::declarations()` 做**声明级**比对：剥注释后 fork 独有行 = 真正主题增量，
+     其余必须与基线逐值相等（若不等，先解释再迁）；
+  3. 把增量写进 `layout-critical-addendum.css`（注释压成 marker 形式）；
+  4. 删掉 fork —— `designCriticalPaths()` 只 glob **已存在**文件，所以 `theme:compile layoutCritical`
+     **不会**把它复活；主题此后就是 baseline + addendum；
+  5. `php bin/w theme:compile spec` 必须 `0 hard, 0 soft`，且 S13 的
+     `Real themes have no critical skin drift` 必须绿。
+
+## 3. S4 composed 预算（16,384 字节）
+
+判的是**一个 area 目录实际会内联多少字节**（`baseline|override 快照 + addendum`），不是单文件 ≤14KB。
+逐文件判会假通过：基线 6.8KB、增量 8KB，各自都没超，拼起来就超了。
+
+现状（2026-11-06）：基线 6,979 B；`Weline/hanfu` = 基线 + addendum 8,192 B = **15,171 / 16,384**（余量 1,213）。
+
+**不要靠抬 `MAX_COMPOSED_LAYOUT_CRITICAL_BYTES` 过关**——阈值不是可调参数。要腾空间就
+**压注释、把散文搬到本文档**（本轮为此压缩了 hanfu addendum 的 15 个注释块，腾出 1,300+ 字节）。
+
+## 4. 注释占预算，散文不属于 CSS
+
+head 里的 CSS 会被 minify，注释不进浏览器；但 S4 量的是**原始文件字节**。所以：
+
+- `layout-critical*.css` 注释只允许 **marker + 事故/PSI 编号**（如 `msh0ffvsbv`），一句以内；
+- 「为什么这么写」写进本文档，CSS 里留指针（`契约正文：Theme/doc/...`）。

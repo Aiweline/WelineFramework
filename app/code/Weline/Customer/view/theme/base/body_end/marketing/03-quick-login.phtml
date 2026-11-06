@@ -1,0 +1,29 @@
+<?php
+/**
+ * 右上快捷登录（浮层右上角）—— 店面全站共享 chrome 部件。
+ *
+ * 只输出声明式挂载宿主：游客/已登录、登录页已有的完整面板，都由
+ * customer/social-quick provider 在浏览器裁决（见 Customer/doc/挂载面.md）。
+ *
+ * @widget.code {quick-login}
+ * @widget.name {右上快捷登录}
+ * @widget.description {右上角浮动快捷登录入口；异步水合，登录页与已登录访客自动不展示。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {[]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {}
+ * @widget.supports {["quick-login","layout-storefront-float-top-end","content"]}
+ * @widget.default_injections {[]}
+ * @global-region.float-slot {top-end}
+ * @global-region.cache {60}
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+?>
+<div class="w-float-quick-login"
+     data-weline-mount="customer/social-quick"
+     data-weline-mount-load="account,customerSocialQuick"
+     data-weline-mount-variant="inline"
+     data-weline-mount-state="pending"
+     data-testid="storefront-float-quick-login"></div>

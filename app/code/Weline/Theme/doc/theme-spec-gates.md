@@ -22,7 +22,7 @@ CLS、重复 og、跨站 llms.txt 品牌串台的形式在生产暴露。
 | **S1** | 前端 head partial | 硬 | 禁止 `media="print"` 伪装非阻塞 CSS | 抛异常 |
 | **S2** | 前端 head partial | 硬 | 只允许 tokens pack（`data-weline-theme-tokens="1"`）与 `<noscript>` 回退（`data-weline-preload-fallback="1"`）阻塞；其余样式表必须 `rel="preload" as="style"` + onload 切换；业务 JS 仅允许 `defer`/`async`/`module` | 抛异常 |
 | **S3** | 默认主题 head | 硬 | `default.phtml` / `assets-prefix.phtml` / `minimal.phtml` 必须包含 `<theme:layout-critical>` | 抛异常 |
-| **S4** | `layout-critical*.css` | 硬 | 内联预算 ≤ **14,336 字节**（`ThemeSpecValidator::MAX_LAYOUT_CRITICAL_BYTES`） | 抛异常 |
+| **S4** | `layout-critical*.css` | 硬 | 两层预算：（a）**单文件** ≤ **14,336 字节**（`MAX_LAYOUT_CRITICAL_BYTES`）；（b）**composed** ≤ **16,384 字节**（`MAX_COMPOSED_LAYOUT_CRITICAL_BYTES`）—— 判的是「一个 area 目录实际会内联多少」，即 `override 快照|基线 + addendum` 合起来，逐文件判会假通过 | 抛异常 |
 | **S5** | 首屏图 | 硬 | 标 `data-weline-first-screen` 或 class 含 hero/lcp/banner/cover 的 `<img>` 必须带 `width`+`height` | 抛异常 |
 | **S6** | 首屏图 | 硬/软 | 首屏图禁止 `loading="lazy"`（硬）；缺 `fetchpriority` 记软告警 | 抛异常 / 警告 |
 | **S7** | `<w:theme:font>` | 硬 | 显式 `display` 只允许 `swap` / `optional`（默认即 swap） | 抛异常 |
@@ -31,7 +31,7 @@ CLS、重复 og、跨站 llms.txt 品牌串台的形式在生产暴露。
 | **S10** | 渲染后整页 | 硬 | 必须含 `</body>` / `</html>` 且非空（FPC 落盘同判据） | 抛异常 |
 | **S11** | `layout-critical*.css` | 硬 | 首个样式表必须自钉层序（`ThemeCssLayerContract::DECLARATION`），否则 `weline-theme` 的最低位可能被抢先固定而失效 | 抛异常 |
 | **S12** | `layout-critical*.css` | 硬 | 未分层正文里 `display`/`visibility` 的 `!important` 必须带条件（位于 `@media` 内，或选择器带状态标记 `[hidden]` / `:not([open])` / `[data-*` / `aria-` / `:hover` / `:focus` / `.is-*`） | 抛异常 |
-| **S13** | 主题整根（critical ↔ 皮肤叶） | 硬 | 同一 `媒体作用域+选择器+几何属性` 在 layout-critical 与皮肤叶里不得取值不同 | 抛异常 |
+| **S13** | 主题整根（critical ↔ 皮肤叶） | 硬 | 同一 `媒体作用域+选择器+几何属性` 在 layout-critical **或 addendum** 与皮肤叶里不得取值不同 | 抛异常 |
 
 ### 适用范围
 
@@ -84,6 +84,11 @@ php bin/w theme:compile spec
 - 只比「两侧都声明」的同一键；一侧没声明 = 不归 S13 管（那是「谁该拥有它」的归属问题）。
 - 皮肤叶清单取自主题自己的 `partials/head/theme-head-css-overlay.php`
   （与 `ThemeHeadChromeCssPack::OVERLAY_LIST_RELATIVE` 同源），不另立名单。
+- **参与比对的文件名**（`ThemeCriticalSkinConflict::CRITICAL_BASENAMES`）：`layout-critical.css` /
+  `-frontend` / `-backend` 三个，**加上** `layout-critical-addendum.css` / `-frontend-addendum` /
+  `-backend-addendum` 三个增量名 —— 增量同样会 pin 几何，不能漏。
+- **托管快照（GENERATED）也参与比对**：`snapshot` 形态下主题目录里的 `layout-critical.css`
+  就是基线副本，比它等于比基线；只要基线本身与该主题皮肤不冲突，就不会报。
 
 ### 只比几何属性
 

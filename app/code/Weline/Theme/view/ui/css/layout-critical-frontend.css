@@ -1,21 +1,8 @@
-/* Layout-critical budget (storefront). Full rules live in weline-frontend.css / foundation.
- * Budget: <= 14 KB uncompressed (enforced by Theme/test/Unit/Spec/LayoutCriticalBudgetTest.php).
- *
- * Why this file exists after head CSS went non-blocking:
- * PACK_TOKENS stays blocking; PACK_STOREFRONT / PACK_OVERLAY arrive via rel=preload
- * (see ThemeHeadChromeCssPack::tryPreloadLinkHtml). Everything above the fold that
- * would otherwise shift must therefore be reserved here.
- *
- * 级联契约（S11/S12 · ThemeCssLayerContract）：
- * - 本文件是文档里最早解析的 CSS，必须自行声明层序（下面那行 @layer 声明），否则层序被别处
- *   抢先固定，weline-theme 的最低位可能失效、theme.css 皮肤反过来压过骨架。
- * - 正文**故意保持未分层**：本文件是首屏 pin，必须压过晚到的 storefront/overlay 包。
- *   代价是它的 `!important` 不可被任何普通规则覆盖（这正是 hanfu 移动抽屉被
- *   `display:none!important` 压死的根因），所以 S12 门禁要求 display/visibility 的
- *   `!important` 必须带条件（状态选择器或 @media），禁止无条件强藏。
- *
- * Primitives (.w-container / .w-grid / .w-stack …) are prepended at render time by
- * LayoutCriticalCssService from view/ui/css/critical-utilities.css — do not duplicate them here.
+/* Layout-critical (storefront) — 首屏骨架 pin，预算 <= 14 KB 未压缩（S4）。
+ * 契约正文：Theme/doc/theme-css-architecture-vs-style.md。本文件只留三条：
+ * 1) 必须自钉层序（S11）；2) 正文故意未分层，所以 display/visibility 的 !important 必须带条件（S12）；
+ * 3) 原语由 LayoutCriticalCssService 前置注入 critical-utilities.css，勿在此重复。
+ * 注释占用 S4 字节预算，细节写文档、这里只留标记。
  */
 @layer weline-theme, reset, tokens, base, layout, components, utilities, page;
 *, *::before, *::after { box-sizing: border-box; }
@@ -108,11 +95,9 @@ body, p, li { font-size: var(--weline-font-size-base, 1rem); }
 .w-button, button, [role="button"] { min-block-size: 2.5rem; }
 
 /* ---- 首屏骨架几何预留（2026-10-29 · 全局默认，治 CLS）----
- * PACK_STOREFRONT / PACK_OVERLAY 走 rel=preload（见 ThemeHeadChromeCssPack::tryPreloadLinkHtml），
- * 批量 CSS 晚到 100–600ms；首帧若不预占 header/hero 的最终高度，后到的 min-height 会把整页下推。
- * 全局基线提供「设计主题可声明」的骨架占位约定，主题只需在变量盘里给自己的数值：
- *   --weline-header-height-reserve / --weline-hero-min-height-reserve
- * 未声明时 min-height:0 → 对既有主题零影响（零回归）。
+ * PACK_STOREFRONT / PACK_OVERLAY 走 rel=preload，CSS 晚到 100–600ms；首帧不预占 header/hero
+ * 最终高度，后到的 min-height 会把整页下推。主题只需在变量盘给
+ * --weline-header-height-reserve / --weline-hero-min-height-reserve；未声明时 0 → 零回归。
  */
 [data-weline-skeleton="header"],
 .w-frontend-header {
@@ -121,4 +106,51 @@ body, p, li { font-size: var(--weline-font-size-base, 1rem); }
 [data-weline-skeleton="hero"],
 .w-line-hero {
     min-height: var(--weline-hero-min-height-reserve, 0);
+}
+
+/* ==== 移动端 / 粗指针自适应契约（2026-11-06 · 默认主题自带，全部设计主题继承）====
+ * 设计主题不必自己实现，只在必要时覆盖（退出方式与特异性理由见
+ * Theme/doc/theme-css-architecture-vs-style.md §移动端自适应契约）。
+ * 全部规则在 @media 内 → 桌面零影响。
+ */
+:root {
+    --weline-tap-target-min: 2.75rem;  /* 44px · WCAG 2.5.5 */
+    --weline-input-font-floor: 16px;   /* <16px 时 iOS 聚焦整页放大 */
+}
+
+/* 动态视口：地址栏收起/展开时 100vh 留白，dvh 跟随可视区；
+ * 不认识 100dvh 的旧浏览器整条声明作废，继续用上面的 100vh。 */
+@supports (height: 100dvh) {
+    .weline-page-wrapper,
+    .w-frontend-shell,
+    .w-maintenance-shell { min-height: 100dvh; }
+}
+
+@media (pointer: coarse), (max-width: 48rem) {
+    /* ① 输入字号地板 = 0,2,1。必须高于（a）皮肤 `.ca input/select/textarea{font:inherit}`(0,1,1)
+     * 与（b）主题页内 `.hanfu-plp .xxx{font:inherit}`(0,2,0)；否则控件继承 14–15px → iOS 聚焦整页放大。
+     * 首版 `html select` 只有 0,0,2（纯类型）连（a）都输，实测 /category 排序下拉仍 14px。 */
+    :root :is(input, select, textarea):not([type="hidden"]) {
+        font-size: max(var(--weline-input-font-floor, 16px), 1rem);
+    }
+
+    /* ② 触控目标下限 = 0,2,1（:root + :is 取最大项）。实测 :where()(0) 会被皮肤
+     * 单类 min-height(0,1,0) 压回 30px，等于契约失效；用 min-* 而非 height，
+     * min 在盒模型里 clamp 皮肤写死的值。a[href] 对行内 <a> 天然无效果。 */
+    :root :is(
+        a[href], button, [role="button"], summary,
+        input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+        select, textarea
+    ) {
+        min-block-size: var(--weline-tap-target-min, 2.75rem);
+    }
+    :root [data-icon-only="true"] {
+        min-inline-size: var(--weline-tap-target-min, 2.75rem);
+    }
+
+    /* ③ 点按体验：去 iOS 灰块闪烁、去双击缩放 300ms 延迟。 */
+    :where(a[href], button, [role="button"], summary) {
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+    }
 }

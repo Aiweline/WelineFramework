@@ -27,6 +27,13 @@ final class LayoutCriticalCssService
      */
     private const BASELINE_PRIMITIVES_RELATIVE = 'app/code/Weline/Theme/view/ui/css/critical-utilities.css';
 
+    /**
+     * 设计主题只在基线上追加自己的增量（不整体替换基线）。
+     * 通道与 layout-critical.css 平行，但语义是「baseline + addendum」：
+     * 基线升级会自然送达每个主题，主题只需要维护差分部分。
+     */
+    private const ADDENDUM_SUFFIX = '-addendum.css';
+
     public function renderInlineStyle(string $area): string
     {
         $area = $this->normalizeArea($area);
@@ -94,36 +101,76 @@ final class LayoutCriticalCssService
     private function readShellCriticalCss(string $area): string
     {
         $overridePath = $this->resolveActiveThemeOverridePath($area);
-        if ($overridePath !== null && is_readable($overridePath)) {
+        $shell = null;
+        if ($overridePath !== null && !$this->isManagedSnapshot($overridePath)) {
             $contents = file_get_contents($overridePath);
             if (is_string($contents) && trim($contents) !== '') {
-                return $contents;
+                $shell = $contents;
             }
         }
 
-        $baseline = BP . sprintf(self::BASELINE_RELATIVE, $area);
-        if (!is_readable($baseline)) {
-            return '';
+        if ($shell === null) {
+            $baseline = BP . sprintf(self::BASELINE_RELATIVE, $area);
+            $contents = is_readable($baseline) ? file_get_contents($baseline) : null;
+            $shell = is_string($contents) ? $contents : '';
         }
 
-        $contents = file_get_contents($baseline);
+        return $shell . $this->readAddendum($area);
+    }
 
-        return is_string($contents) ? $contents : '';
+    /**
+     * 主题增量（可选）：基线上追加，不替换。
+     */
+    private function readAddendum(string $area): string
+    {
+        $path = $this->resolveActiveThemeAddendumPath($area);
+        if ($path === null) {
+            return '';
+        }
+        $contents = file_get_contents($path);
+
+        return is_string($contents) && trim($contents) !== '' ? "\n" . $contents : '';
+    }
+
+    /**
+     * 带 GENERATED_MARKER 的副本是物化器的托管快照（纯基线的函数），不是主题自持文件。
+     * 读它等于读基线（且可能过期），所以显式走基线：去掉标记才算主题接管。
+     */
+    private function isManagedSnapshot(string $path): bool
+    {
+        $contents = @file_get_contents($path, false, null, 0, 2048);
+        if (!is_string($contents) || $contents === '') {
+            return false;
+        }
+
+        return str_contains($contents, LayoutCriticalCssMaterializer::GENERATED_MARKER);
+    }
+
+    private function resolveActiveThemeAddendumPath(string $area): ?string
+    {
+        $basePath = $this->activeThemeBasePath();
+        if ($basePath === null) {
+            return null;
+        }
+
+        $candidates = [
+            $basePath . DIRECTORY_SEPARATOR . $area . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'css' . DIRECTORY_SEPARATOR . 'layout-critical' . self::ADDENDUM_SUFFIX,
+            $basePath . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'css' . DIRECTORY_SEPARATOR . 'layout-critical-' . $area . self::ADDENDUM_SUFFIX,
+        ];
+
+        foreach ($candidates as $path) {
+            if (is_readable($path)) {
+                return $path;
+            }
+        }
+
+        return null;
     }
 
     private function resolveActiveThemeOverridePath(string $area): ?string
     {
-        try {
-            $theme = ThemeData::getCurrentTheme();
-        } catch (\Throwable) {
-            $theme = null;
-        }
-        if (!$theme instanceof WelineTheme) {
-            return null;
-        }
-
-        $basePath = rtrim((string)$theme->getPath(), '/\\');
-        if ($basePath === '') {
+        $basePath = $this->activeThemeBasePath();
+        if ($basePath === null) {
             return null;
         }
 
@@ -139,6 +186,22 @@ final class LayoutCriticalCssService
         }
 
         return null;
+    }
+
+    private function activeThemeBasePath(): ?string
+    {
+        try {
+            $theme = ThemeData::getCurrentTheme();
+        } catch (\Throwable) {
+            $theme = null;
+        }
+        if (!$theme instanceof WelineTheme) {
+            return null;
+        }
+
+        $basePath = rtrim((string)$theme->getPath(), '/\\');
+
+        return $basePath === '' ? null : $basePath;
     }
 
     private function normalizeArea(string $area): string

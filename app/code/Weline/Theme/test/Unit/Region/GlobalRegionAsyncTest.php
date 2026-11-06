@@ -163,6 +163,56 @@ class GlobalRegionAsyncTest extends TestCase
         self::assertStringContainsString("collect('data-weline-declare')", $js);
     }
 
+    /**
+     * 水合内容里若有声明式挂载宿主（data-weline-mount），水合后必须让它被扫描到。
+     *
+     * weline.js 的 mount 扫描同样只在 DOMContentLoaded 跑一次；基座浮层片段必须
+     * 非 eager 才能进浮层槽，因此宿主必然落在异步片段里 —— 不扫就永远停在 pending。
+     * 只扫水合节点、不 force：已 ready 的宿主由扫描器自身跳过，force 会二次挂载。
+     */
+    public function testHydratorActivatesMountHostsOfHydratedFragment(): void
+    {
+        $js = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/view/statics/js/global-region-async.js'
+        );
+        // 声明式挂载宿主的模块清单与 data-weline-load 是两套属性，必须两套都收集。
+        self::assertStringContainsString("collect('data-weline-mount-load')", $js);
+        // 必须把扫描范围限定到水合节点，不能整页重扫（整页 force 重扫会二次挂已 ready 的宿主）。
+        self::assertStringContainsString('mount.scan({ root:', $js);
+        self::assertStringNotContainsString('mount.scan({ root: root, force: true }', $js);
+        // 必须发生在 innerHTML 写入之后。
+        self::assertGreaterThan(
+            \strpos($js, 'node.innerHTML = html;'),
+            \strpos($js, 'mount.scan({ root:')
+        );
+    }
+
+    /**
+     * 主题已经声明过同名浮层槽时，外来片段必须并入它，不得再造第二个同 id 壳。
+     *
+     * StorefrontFloatLayerHost::publishedSlotLayerMarkup 会输出
+     * data-slot-id="storefront-float-<dir>" 的静态壳；片段自己又被 adoptSlot 补上一个。
+     * 并壳成双后，「取首个匹配」的消费者会落进空容器（ego 实测 12 槽 / 4 组重复 id）。
+     */
+    public function testAdoptSlotMergesIntoThemeDeclaredSlot(): void
+    {
+        $js = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/view/statics/js/global-region-async.js'
+        );
+        // 主题侧已声明同名槽（StorefrontFloatLayerHost::publishedSlotLayerMarkup 产出）。
+        self::assertStringContainsString(
+            "layer.querySelector('[data-slot-id=\"storefront-float-' + dir + '\"]')",
+            $js
+        );
+        // 并入后必须移除自己，否则 layer 内仍留一个空壳同 id。
+        self::assertStringContainsString('slot.remove();', $js);
+        // 并入必须先于「新建壳」分支。
+        self::assertLessThan(
+            \strpos($js, "slot.classList.add('w-storefront-float-layer__slot--' + dir);"),
+            \strpos($js, 'slot.remove();')
+        );
+    }
+
     private function put(string $relative, string $contents): void
     {
         $path = $this->root . '/' . $relative;

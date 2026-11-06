@@ -40,6 +40,10 @@ final class ThemeCriticalSkinConflict
         'layout-critical.css',
         'layout-critical-frontend.css',
         'layout-critical-backend.css',
+        // 增量通道：主题自持的首屏追加规则同样会 pin 几何，必须一起比。
+        'layout-critical-addendum.css',
+        'layout-critical-frontend-addendum.css',
+        'layout-critical-backend-addendum.css',
     ];
 
     private const WAIVER_PATTERN = '/@critical-skin-waivers\s*:\s*([^\r\n*]+)/i';

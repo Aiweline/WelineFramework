@@ -104,7 +104,7 @@
   bottom: max(0.95rem, env(safe-area-inset-bottom, 0px));
 }
 
-/* Async quick-login surface mounted by the theme float module (top-end slot). */
+/* Async quick-login surface mounted by the Weline_Customer base fragment (top-end slot). */
 #w-storefront-float-layer .w-float-quick-login {
   box-sizing: border-box;
   width: min(216px, calc(100vw - 24px));
@@ -113,38 +113,24 @@
   border: var(--weline-theme-border-width, 1px) solid var(--weline-theme-border, #e2e8f0);
   border-radius: var(--weline-radius-md, 10px);
   box-shadow: var(--weline-theme-shadow-md, 0 8px 24px rgba(15, 23, 42, 0.12));
+
+  /* × 贴槽左上（top:-0.35rem，24px 高）会压到首按钮：内容顶部让位一个 clearance。
+   * 只改内容、不动机制几何（.w-storefront-float-edge__dismiss 的位置是全槽共享契约）。 */
+  padding-block-start: calc(var(--weline-space-2, 8px) + var(--w-storefront-float-chrome-clearance, 0.65rem));
+
+  /* 紧凑尺寸通过自定义属性交给 Weline_Customer 的内联面消费；
+   * Theme 不选外模块内部类（theme_mechanism_not_foreign_content）。 */
+  --w-social-quick-btn-min-height: 2.25rem;
+  --w-social-quick-btn-padding-block: 0.375rem;
+  --w-social-quick-btn-padding-inline: 0.625rem;
+  --w-social-quick-btn-font-size: 0.75rem;
+  --w-social-quick-icon-size: 1rem;
+  --w-social-quick-actions-gap: var(--weline-space-1, 0.375rem);
 }
 
 #w-storefront-float-layer .w-float-quick-login[data-weline-mount-state="empty"],
 #w-storefront-float-layer .w-float-quick-login[data-weline-mount-state="pending"]:empty {
   display: none;
-}
-
-#w-storefront-float-layer .w-float-quick-login .weline-social-quick-inline {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  box-shadow: none;
-}
-
-#w-storefront-float-layer .w-float-quick-login .weline-social-quick-bar__actions {
-  gap: var(--weline-space-1, 6px);
-}
-
-#w-storefront-float-layer .w-float-quick-login .weline-social-quick-bar__btn {
-  min-height: 36px;
-  padding: 6px 10px;
-  gap: var(--weline-space-2, 8px);
-  border-radius: var(--weline-radius-sm, 6px);
-  font-size: 12px;
-}
-
-#w-storefront-float-layer .w-float-quick-login .weline-social-quick-bar__btn-icon,
-#w-storefront-float-layer .w-float-quick-login .weline-social-quick-bar__btn-icon svg {
-  width: 16px;
-  height: 16px;
-  flex-basis: 16px;
 }
 
 /*

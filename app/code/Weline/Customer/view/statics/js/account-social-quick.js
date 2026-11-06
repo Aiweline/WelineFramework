@@ -486,14 +486,18 @@
           '.weline-social-quick-bar[hidden]{display:none!important}',
           '.weline-social-quick-bar__title{margin:0 32px 10px 2px;font-weight:600;letter-spacing:.01em;',
           'color:var(--color-text-on-dark,inherit)}',
-          '.weline-social-quick-bar__actions{display:flex;flex-direction:column;gap:8px;width:100%;align-items:stretch}',
+          '.weline-social-quick-bar__actions{display:flex;flex-direction:column;gap:var(--w-social-quick-actions-gap,8px);width:100%;align-items:stretch}',
           '.weline-social-quick-bar__btn{appearance:none;display:flex;align-items:center;justify-content:flex-start;',
-          'gap:12px;width:100%;min-height:44px;box-sizing:border-box;',
+          'gap:12px;width:100%;box-sizing:border-box;',
+          'min-height:var(--w-social-quick-btn-min-height,2.75rem);',
+          'padding:var(--w-social-quick-btn-padding-block,.625rem) var(--w-social-quick-btn-padding-inline,.875rem);',
           'border-radius:var(--weline-radius-md,10px);',
-          'padding:10px 14px;cursor:pointer;font:600 14px/1.2 inherit;text-align:left}',
-          '.weline-social-quick-bar__btn-icon{flex:0 0 20px;width:20px;height:20px;display:inline-flex;',
+          'cursor:pointer;font-size:var(--w-social-quick-btn-font-size,.875rem);line-height:1.2;text-align:left}',
+          '.weline-social-quick-bar__btn-icon{flex:0 0 var(--w-social-quick-icon-size,1.25rem);',
+          'width:var(--w-social-quick-icon-size,1.25rem);height:var(--w-social-quick-icon-size,1.25rem);display:inline-flex;',
           'align-items:center;justify-content:center}',
-          '.weline-social-quick-bar__btn-icon svg{width:20px;height:20px;display:block}',
+          '.weline-social-quick-bar__btn-icon svg{width:var(--w-social-quick-icon-size,1.25rem);',
+          'height:var(--w-social-quick-icon-size,1.25rem);display:block}',
           '.weline-social-quick-bar__btn-label{flex:1 1 auto;min-width:0}',
           '.weline-social-quick-bar__btn--google{background:var(--color-bg-primary,#fffefa);color:var(--color-text,#1c1c1c);',
           'border:1px solid var(--color-border-default,#d4cfc5)}',
@@ -519,7 +523,7 @@
           '.weline-social-quick-inline__title{margin:0 0 10px;font-weight:700;',
           'color:var(--color-text-primary,inherit)}',
           '.weline-social-quick-inline .weline-social-quick-bar__actions{display:flex;',
-          'flex-direction:column;gap:8px;width:100%;align-items:stretch}'
+          'flex-direction:column;gap:var(--w-social-quick-actions-gap,8px);width:100%;align-items:stretch}'
         ].join('');
         document.head.appendChild(style);
       }
