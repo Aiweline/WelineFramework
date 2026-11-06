@@ -55,6 +55,8 @@ ensure 会写出 MCP 生成的 Cursor alwaysApply 门禁：`.cursor/rules/weline
 
 **MCP 未挂载且自装被证明不可能时**（如宿主以不可修改的 MCP 白名单拉起 Agent）：宿主 Read `app/code/Weline/Ai/doc/AI硬规则索引.md` 继续开发，并如实说明尝试过的安装路径与失败原因；不得假装已遵守 MCP，不得借此绕过验收门禁。
 
+**`MCP_RUNTIME_STALE` 不要靠重启宿主解决（HARD，`mcp_runtime_generation_self_reload`）**：MCP 源码（`bin/` + `src/`）一改，运行中的 STDIO 子进程会在空闲 tick（≤1s）自检代次并原地 `pcntl_exec` 换代——pid 与 stdio 管道不变、无需重新 initialize、宿主句柄继续有效。`scripts/`、`tests/`、安装元数据不在运行时指纹内，改它们不再触发 stale。只有「早于本机制启动」的老进程需要一次性重租（新会话/新窗口）。**禁止**因 stale 让用户重启宿主 / Reload Window，**禁止** SIGTERM 健康进程（`WELINE_MCP_FORCE_BOUNCE=1` 仅用于 transport 已死）。响应里的 `result.structuredContent._weline_mcp_runtime`（`pid` / `loaded_generation` / `current_generation` / `source_current`）是唯一判据；`health` 豁免 stale 拒绝，不能拿来证明业务工具可用。细则见 `app/code/Weline/Ai/doc/规则/00-MCP调用与会话.md` §8c。
+
 规范正文只维护在 `app/code/Weline/Ai/doc/`、`app/code/Weline/Framework/doc/` 和各模块 `doc/`。
 
 ## Git 策略

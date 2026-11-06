@@ -14,6 +14,9 @@ final class McpServer
     private const SUPPORTED_PROTOCOLS = ['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25'];
     private const MCP_APP_MIME = 'text/html;profile=mcp-app';
 
+    /** Idle poll window: how long to block for input before re-checking the source generation. */
+    private const IDLE_POLL_MICROS = 1_000_000;
+
     public function __construct(private readonly ToolService $tools)
     {
     }
@@ -24,7 +27,14 @@ final class McpServer
     public function run($input, $output): void
     {
         $this->prepareStdio($input, $output);
+        $reloadAttempted = false;
         while (true) {
+            if (!$reloadAttempted && $this->reloadStaleRuntime($input)) {
+                $reloadAttempted = true;
+            }
+            if (!$this->waitForInput($input)) {
+                continue;
+            }
             $line = fgets($input);
             if ($line === false) {
                 if ($this->stdioEnded($input)) {
@@ -322,6 +332,76 @@ final class McpServer
     private function stdioEnded($input): bool
     {
         return !is_resource($input) || feof($input);
+    }
+
+    /**
+     * Block for input only for one idle window, so the generation can be re-checked
+     * while the host is quiet. A source edit that lands while this server sits idle
+     * is then picked up before the next request is read.
+     *
+     * @param resource $input
+     *  @return bool true when a line can be read (data or EOF); false on an idle tick
+     */
+    private function waitForInput($input): bool
+    {
+        if (!is_resource($input) || !function_exists('stream_select')) {
+            return true;
+        }
+        $read = [$input];
+        $write = null;
+        $except = null;
+        $ready = @stream_select($read, $write, $except, 0, self::IDLE_POLL_MICROS);
+        if ($ready === false) {
+            return true;
+        }
+
+        return $ready > 0;
+    }
+
+    /**
+     * Pick up the current source generation without an operator restart.
+     *
+     * A host can keep one STDIO child alive for the whole worktree (Zed does), so a source
+     * edit would otherwise leave MCP_RUNTIME_STALE refusing every later session. Re-exec
+     * replaces this process image in place - same pid, same STDIO file descriptors - and the
+     * new image answers the next request: no initialize is needed (handle() dispatches any
+     * method at any time) and the host handle stays valid.
+     *
+     * Called only while no request is waiting, so nothing in flight is dropped.
+     *
+     * `pcntl_exec` replaces the whole argv, and PHP CLI takes `args[0]` as the script to run,
+     * so the original argv (script path first) must be passed through unchanged: dropping
+     * `argv[0]` makes php print its usage and exit 1, which would kill the host transport
+     * instead of reloading it.
+     *
+     * @param resource $input
+     *  @return bool true when the reload can no longer be attempted in this process
+     */
+    private function reloadStaleRuntime($input): bool
+    {
+        if (!$this->tools->runtimeGenerationStale()) {
+            return false;
+        }
+        if (!function_exists('pcntl_exec')) {
+            return true;
+        }
+        if (is_resource($input) && function_exists('stream_select')) {
+            $read = [$input];
+            $write = null;
+            $except = null;
+            if (@stream_select($read, $write, $except, 0, 0) > 0) {
+                return false;
+            }
+        }
+        $argv = $_SERVER['argv'] ?? null;
+        if (!is_array($argv) || !isset($argv[0]) || !is_file((string) $argv[0])) {
+            return true;
+        }
+        @fflush(STDOUT);
+        @fflush(STDERR);
+        @pcntl_exec(PHP_BINARY, array_values($argv));
+
+        return true;
     }
 
     /** @param resource $output

@@ -207,9 +207,11 @@ if (!$branchOk) {
             ? 'Cursor MCP bounce was debounced (recent repair). Start a new Agent turn only; do not touch mcp.json or Reload Window. Rerun ensure-project-guidance after the new turn, then prepare_project.'
             : 'Cursor MCP transport looks dead or force-bounce was requested. Start a new Agent turn after ensure-project-guidance; for engineering, prepare_project remains mandatory once tools reappear. Do NOT use Developer: Reload Window.');
 } elseif ($cursorBounceRecommended) {
-    // Soft: keep ready so interactive STDIO stays usable; ToolService MCP_RUNTIME_STALE
-    // still refuses stale-generation work until a new Agent turn re-leases the process.
-    $nextAction = 'learning-mcp source generation is newer than the live Cursor child, but the process is still healthy so ensure did not SIGTERM-bounce it. Start a new Agent turn to re-lease MCP (MCP_RUNTIME_STALE may refuse tools until then). Set WELINE_MCP_FORCE_BOUNCE=1 only if the live transport is dead. Do NOT toggle MCP in Settings and do NOT use Developer: Reload Window. Check health.project_intelligence.index_refresh_worker if sibling cognition calls time out.';
+    // Soft: keep ready so interactive STDIO stays usable. A child that runs the current source
+    // swaps itself in place on its next idle tick, so this branch only describes a child that
+    // predates that mechanism (or a package-only edit whose scripts/ change the runtime never
+    // loads). Never turn this into a host restart instruction.
+    $nextAction = 'The recorded learning-mcp child started before the newest package source mtime, so ensure did not SIGTERM-bounce it. A child running the current source re-execs itself in place on its next idle tick (same pid, no initialize, no host restart needed). If MCP_RUNTIME_STALE still refuses tools, that child predates the self-reload mechanism and needs one host re-lease (new session or new window) - a one-time bootstrap, not a recurring step. Set WELINE_MCP_FORCE_BOUNCE=1 only if the live transport is dead. Do NOT toggle MCP in Settings and do NOT use Developer: Reload Window. Check health.project_intelligence.index_refresh_worker if sibling cognition calls time out.';
 }
 
 welineGuidanceEmit([

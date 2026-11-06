@@ -31,6 +31,18 @@ final class ToolService
         $this->runtimePid = (int) getmypid();
     }
 
+    /**
+     * True when the code this process loaded no longer matches the current source.
+     * McpServer uses it to re-exec into the current generation before reading the
+     * next request, so a long-lived host process never pinions every later session
+     * to stale code (2026-11-06: Zed keeps one STDIO child per worktree, so
+     * MCP_RUNTIME_STALE blocked every new session until the host was restarted).
+     */
+    public function runtimeGenerationStale(): bool
+    {
+        return !hash_equals($this->runtimeGeneration, self::sourceGeneration());
+    }
+
     /** @return list<array<string, mixed>> */
     public function definitions(): array
     {
@@ -626,11 +638,18 @@ final class ToolService
         ];
     }
 
+    /**
+     * Fingerprint of the code this STDIO server actually loads (bin entry + src `require_once`
+     * chain). `scripts/**` and install metadata are one-shot tooling that a running server never
+     * loads, so editing them must not invalidate a healthy runtime: on 2026-11-06 a single
+     * `scripts/project-guidance-mcp-install.php` edit turned every live host session into
+     * MCP_RUNTIME_STALE while the server code itself was unchanged.
+     */
     private static function sourceGeneration(): string
     {
         $root = dirname(__DIR__);
         $files = [];
-        foreach (['bin', 'src', 'scripts'] as $directory) {
+        foreach (['bin', 'src'] as $directory) {
             $sourceRoot = $root . DIRECTORY_SEPARATOR . $directory;
             if (!is_dir($sourceRoot)) {
                 continue;
@@ -649,12 +668,6 @@ final class ToolService
                     && !in_array($extension, ['php', 'sh', 'ps1', 'json', 'yaml', 'yml'], true)) {
                     continue;
                 }
-                $files[$relative] = $path;
-            }
-        }
-        foreach (['install.sh', 'install.ps1', 'config.example.yaml', 'composer.json'] as $relative) {
-            $path = $root . DIRECTORY_SEPARATOR . $relative;
-            if (is_file($path)) {
                 $files[$relative] = $path;
             }
         }

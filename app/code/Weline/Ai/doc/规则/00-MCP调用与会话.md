@@ -619,11 +619,36 @@ curl -sS -m 10 -H 'Host: www.example.com' \
 | 验收仍须遵守 `browser_operator_self_test` / `browser_cache_disabled_on_open` / `browser_operator_fail_closed_release`（禁缓存、穿章、探活、卡死释放） | 因换了 ego 就跳过缓存禁用、穿章、截图/审图证据 |
 | **用毕收口（`ego_browser_tab_closeout_after_use`，HARD · 2026-10-29 用户指定）**：**用完之后当回合就关掉正在用的标签页**——中间页 `await page.close()`，任务收尾 `task.finish({ keep: [] })`（技能 CLI）或 `completeTaskSpace(name, { keep: false })`（DSH 工具），默认关光本任务开过的标签页；会话首次用 ego 前 `listTaskSpaces()` 盘点，回收不属于在飞任务的 `ownership === "agent"` 滞留空间；收尾汇报附收口实测（ego 进程数 + 空间清单） | 任务结束不收口、把用过的页面 `keep` 留着、每步新建 taskSpace、循环 `newPage()` 叠标签（单任务并发 ≤3）；出错或等用户接管时调 `finish()`（该情形禁止 finish） |
 
+### 8b.1 ego 脚本编写层（2026-11-06 实测，写脚本前先对一遍）
+
+| 必须 | 禁止 |
+|------|------|
+| CLI 用 stdin 整段脚本：`ego-browser nodejs <<'EOF' … EOF` | 先把脚本落盘再 `node dev/tmp/x.js` 跑（报 `ReferenceError: takeOverTaskSpace is not defined`） |
+| 页面代码只写在 `page.evaluate(...)` 内；脚本层只做编排 | 脚本顶层写 `document.querySelector` / `window.*`（Node 里没有 `document`，报 `ReferenceError: document is not defined`） |
+| 路径一律绝对（含被读写的本地文件，用 `await import("node:fs/promises")`） | 依赖 shell 的 cwd / 环境变量（ego 脚本不继承，相对路径直接失效） |
+| 读表单值要递归穿透 shadow root（`if (el.shadowRoot) walk(el.shadowRoot)`），再读 `value` / `value.length` | 只用 `document.querySelector` 判「有没有填进去」（登录框常在 shadow DOM 内，恒返回 `null` → 把「已填好」误判成「填失败」） |
+| 选择器限定到唯一目标（如 `css:div[role="textbox"][name="body"]`） | 用会命中 2+ 元素的宽选择器（如 `css:[name="body"]`），`fill` / `setInputFiles` 报 `ElementResolutionError: matched 2 elements` |
+| 要清登录态只按 origin 清：`page.cdp("Storage.clearDataForOrigin", { origin, storageTypes: "cookies" })` | 用 `Network.clearBrowserCookies` 清整个 profile（所有站点一起掉登录、不可恢复） |
+
 安装（DSH）：`dsh plugin --profile <name> add -w @dshworks/dsh-ego-browser`，重启 DSH；工具面 = `ego_doctor` / `ego_recall` / `ego_run` / `ego_site_run` / `ego_learn` / `ego_forget` / `ego_handoff`。ego lite 本体与 `ego-browser` 命令需先装好并完成引导（<https://lite.ego.app/>）。
 
 **为什么收口是硬规则**：ego 的任务空间与标签页是全机共享资源。事故实录（2026-10-29 00:30，本机实测）：AI 会话开完不关，ego lite 泄漏 61 进程 / 8GB RSS（12 个 Renderer 中 4 个存活 11 小时以上 = 浏览器开机时长），叠加 swap 打满（10.5GB/11.25GB），load 冲到 76.88（10 核）；回收滞留空间后 ego 降到 22 进程 / ~2GB。僵尸进程（`<defunct>`）另案：那是父进程不 wait（本机为 verge-mihomo、AI Work 助手），与 ego 无关、不占 CPU，处置法是重启父应用。
 
 索引：本机 `~/.dsh/AGENTS.md`「浏览器操作默认 ego · 用毕收口」；宿主镜像由 MCP 生成，禁止手写。
+
+## 8c. MCP 换代次是自动的（`mcp_runtime_generation_self_reload`，强制 · 2026-11-06 用户指定）
+
+需求来源：用户原话「让每个会话都能正常启动 mcp」。此前 `MCP_RUNTIME_STALE` 会在源码一改就把全部活跃会话打死，只能人工重启宿主；现在的口径如下。
+
+| 必须 | 禁止 |
+|------|------|
+| 改完 `bin/` 或 `src/` 后什么都不用做：运行中的 STDIO 子进程在空闲 tick（≤1s）自检代次，stale 就原地 `pcntl_exec` 换代（**pid 与 stdio 管道不变**，无需重新 initialize，宿主句柄继续有效） | 把「重启宿主 / Reload Window / 新开会话」当成改完 MCP 源码的标准步骤 |
+| 判断现状看响应里的 `result.structuredContent._weline_mcp_runtime`：`pid` / `loaded_generation` / `current_generation` / `source_current`（`loaded_generation` 是构造期只读快照，同 pid 下它变了 = 真的换代了） | 用 `result._weline_mcp_runtime`（路径错，取不到）；用「进程还在」推断「代码是新的」 |
+| 指纹只覆盖**运行时会加载的代码**：`bin/` + `src/` 的 `require_once` 链。`scripts/`、`tests/`、安装元数据属一次性工具，改它们**不应**触发 stale | 往指纹里加 `scripts/` 或安装元数据（2026-11-06 根因：一次 `scripts/project-guidance-mcp-install.php` 编辑把所有活会话打成 stale，而服务端代码根本没变） |
+| 只有「早于本机制启动」的老进程需要一次性让宿主重租（新会话/新窗口）；这是引导代价，不是复发问题 | 对健康进程 SIGTERM 来「刷新代码」（撕裂当前会话管道，仓内 `scripts/project-guidance-reload-policy.php` 明令禁止；`WELINE_MCP_FORCE_BOUNCE=1` 仅用于 transport 已死） |
+| 探活/复验要走真工具（`prepare_project` / `project_index_status`），`health` 是唯一豁免 stale 拒绝的工具 | 用 `health` 能返回就当「门禁已解除」 |
+
+权威实现：`app/code/Weline/Ai/Mcp/src/ToolService.php`（`sourceGeneration` / `runtimeGenerationStale`）+ `src/McpServer.php`（`waitForInput` / `reloadStaleRuntime`），运维口径见 `app/code/Weline/Ai/Mcp/docs/OPERATIONS.md`「Runtime generation and in-place reload」。
 
 ## 9. 模块 doc 禁放一次性工作资料（`module_doc_forbids_ephemeral_work_artifacts`，强制）
 
