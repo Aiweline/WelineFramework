@@ -62,7 +62,7 @@ final class FpcPolicyStateReducer
         // Guest-shared allowlist: same fail-closed normalizer as FpcExtraType (`*` / storm → empty = path-only).
         $queryKeys = FpcExtraType::normalizeQueryKeys($row['attrs']['query_keys'] ?? []);
         $row['attrs'] = [
-            'enabled' => (bool)($row['attrs']['enabled'] ?? true),
+            'enabled' => ExtraAttributeParser::toBool($row['attrs']['enabled'] ?? true),
             'ttl' => (int)($row['attrs']['ttl'] ?? 600),
             'namespaces' => $namespaces,
             'query_keys' => $queryKeys,

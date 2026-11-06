@@ -17,6 +17,7 @@ use Weline\Framework\Cache\StorefrontCacheKeyContextResolver;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
+use Weline\Framework\Controller\Extra\ExtraAttributeParser;
 use Weline\Framework\Database\TransactionContext;
 use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Runtime\ScopeIdentity;
@@ -28,6 +29,7 @@ use Weline\Framework\Http\Fpc\FpcBypassFactsBuilder;
 use Weline\Framework\Http\Fpc\FpcHtmlDiskStore;
 use Weline\Framework\Http\Fpc\FpcPayloadPathIndex;
 use Weline\Framework\Http\Fpc\FpcStoreAdapterRegistry;
+use Weline\Framework\Http\Fpc\ResponseShareabilityDecider;
 use Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress;
 use Weline\Framework\Http\GuardHeaders;
 use Weline\Framework\Http\HeaderCollector;
@@ -3034,17 +3036,24 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         return $this->payloadHasAuthoritativeBody($cached);
     }
 
+    /**
+     * 页面共享性门的唯一出口（页面与接口共用同一套判定）。
+     *
+     * 等价性说明：重构前这里是「必须接受 HTML + 非 SSE + 非编辑器预览 +
+     * 非硬门 + policy.enabled」。现在这四条由
+     * {@see ResponseShareabilityDecider} 统一判定，本方法只认 html 叶，
+     * 因此页面行为逐条不变；接口叶（bq）改由
+     * {@see canShareInterfaceResponse()} 放行。
+     *
+     * 环境开关 / 静态文件 / 后台 / 缓存键合法性属于传输层前提，
+     * 与叶类型无关，故留在本方法内、不进决策器。
+     */
     private function isFrontendResponseCacheAllowed(string $method): bool
     {
         $method = \strtoupper($method ?: 'GET');
         if ($method !== 'GET' && $method !== 'HEAD') {
             return false;
         }
-
-        // FPM (non-persistent) in DEV must still FPC: default-allow storefront +
-        // @Extra / hard-exclude paths. Do not gate on isPersistent∧PROD — that
-        // silently disabled blog/products under Nginx→php-fpm while homepage
-        // only HITed pre-baked html-disk from a prior WLS publish.
 
         if (!Env::get('cache.status.router_cache', 1) || !Env::get('cache.status.frontend_cache', 1)) {
             return false;
@@ -3062,15 +3071,78 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return false;
         }
 
-        if (!$this->requestAcceptsFrontendHtml()
-            || $this->requestHasSseAcceptHeader()
-            || $this->isEditorOrPreviewRequest($rawFullUri)
-        ) {
+        return $this->decideShareability($method, $rawFullUri)['leaf']
+            === ResponseShareabilityDecider::LEAF_HTML;
+    }
+
+    /**
+     * 采集请求态，交给唯一决策点 {@see ResponseShareabilityDecider}。
+     *
+     * 纯判定：不计数、不写头、不落盘——本方法每请求会被调 3~5 次（R1）。
+     * 也不允许用实例属性记结果：本类实现 ProcessSharedInterface，实例跨请求复用（R2）。
+     *
+     * @param ?string $contentType 发布期传响应 Content-Type 用于定叶；
+     *                             服务/读侧留空，按 Accept 定叶。
+     * @return array{shareable: bool, leaf: string, reason: string, ttl: int}
+     */
+    private function decideShareability(string $method, string $fullUri, ?string $contentType = null): array
+    {
+        $policy = $this->effectiveFpcPolicy($fullUri);
+
+        return (new ResponseShareabilityDecider())->decide([
+            'method' => $method,
+            'path' => $fullUri,
+            'policy' => [
+                'enabled' => ExtraAttributeParser::toBool($policy['enabled'] ?? false),
+                'ttl' => (int)($policy['ttl'] ?? 0),
+            ],
+            'accepts_html' => $this->requestAcceptsFrontendHtml(),
+            'accepts_json' => $this->requestAcceptsJsonPayload(),
+            'has_logged_in_session' => $this->hasLoggedInFrontendSession(),
+            'is_sse' => $this->requestHasSseAcceptHeader(),
+            'is_editor_or_preview' => $this->isEditorOrPreviewRequest($fullUri),
+            'is_excluded_path' => $this->isExcludedFrontendPath($fullUri),
+            'content_type' => $contentType ?? '',
+        ]);
+    }
+
+    /**
+     * 接口（JSON / BinQuery wire）共享门：与页面门同一套判定，只认 bq 叶。
+     * 传输层前提（环境开关 / 静态 / 后台 / 键合法性）与页面门完全一致。
+     */
+    private function canShareInterfaceResponse(string $method, ?string $contentType = null): bool
+    {
+        $method = \strtoupper($method ?: 'GET');
+        if ($method !== 'GET' && $method !== 'HEAD') {
             return false;
         }
 
-        return !$this->isExcludedFrontendPath($rawFullUri)
-            && $this->effectiveFpcPolicy($rawFullUri)['enabled'];
+        if (!Env::get('cache.status.router_cache', 1) || !Env::get('cache.status.frontend_cache', 1)) {
+            return false;
+        }
+        if ((bool)WelineEnv::get('is_static_file', false) || (bool)WelineEnv::get('is_backend', false)) {
+            return false;
+        }
+
+        $rawFullUri = $this->getRawFullUri();
+        if (!KeyBuilder::isValidFullPageCacheKey($rawFullUri)) {
+            return false;
+        }
+
+        $decision = $this->decideShareability($method, $rawFullUri, $contentType);
+
+        return $decision['shareable'] && $decision['leaf'] === ResponseShareabilityDecider::LEAF_BQ;
+    }
+
+    private function requestAcceptsJsonPayload(): bool
+    {
+        $accept = (string)(WelineEnv::server('HTTP_ACCEPT', '') ?: WelineEnv::get('server.http_accept', ''));
+        if ($accept === '') {
+            return false;
+        }
+        $accept = \strtolower($accept);
+
+        return \str_contains($accept, 'application/json') || \str_contains($accept, '+json');
     }
 
     private function isEditorOrPreviewRequest(string $fullUri): bool
