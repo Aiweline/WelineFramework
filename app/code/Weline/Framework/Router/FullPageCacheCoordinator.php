@@ -3115,6 +3115,28 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
     }
 
+    /**
+     * 硬门精确豁免表：仅放行「公开只读」的整条路径（不做段级放宽，不含通配）。
+     * 每条必须写明所属的公开只读语义；新增一条须同时在 T8 加一条 `enabled=false` 反例（
+     * 即“默认放开 + 敏感面显式禁用”两面都要有声明，不能只靠豁免表）。
+     */
+    private const HARD_GATE_EXEMPT_PATHS = [
+        // i18n 前台语言切换目录：无会话态、无写操作，按 locale/country 维度纯只读。
+        '/i18n/frontend/switcher/catalog',
+    ];
+
+    private function isHardGateExemptPath(string $path): bool
+    {
+        $normalized = \strtolower(\trim($path, '/'));
+        foreach (self::HARD_GATE_EXEMPT_PATHS as $exemptPath) {
+            if ($normalized === \strtolower(\trim($exemptPath, '/'))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function isExcludedFrontendPath(string $fullUri): bool
     {
         $path = (string)(\parse_url($fullUri, \PHP_URL_PATH) ?: '/');
@@ -3196,7 +3218,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             's',
             'q',
         ]);
-        if ($firstSegment !== '' && \in_array($firstSegment, $blockedPrefixes, true)) {
+        if ($firstSegment !== ''
+            && \in_array($firstSegment, $blockedPrefixes, true)
+            && !$this->isHardGateExemptPath($path)
+        ) {
             return true;
         }
 
