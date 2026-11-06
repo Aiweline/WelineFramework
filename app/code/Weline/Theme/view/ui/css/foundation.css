@@ -1559,7 +1559,14 @@
     .w-menu__divider { height: 1px; margin-block: var(--weline-space-2); background: var(--weline-theme-border); }
     .w-language-switcher__trigger { max-width: min(12rem, 36vw); }
     .w-language-switcher__current { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .w-language-switcher__menu {
+    /* marker: w-menu-panel-grid-v1 (2026-11-05)
+     * `.w-menu`（components/navigation.css，@layer components）与本规则同在 components 层、
+     * 特异性都是 (0,1,0)，但 .w-menu 源序更靠后 → `display:block` 覆盖了本面板的 `display:grid`，
+     * 于是 `grid-template-rows: auto minmax(0,1fr) auto` 完全失效、列表行按内容无限长。
+     * 实测（41 个语种）：list clientHeight=scrollHeight=4212px，被面板 max-height 654px + overflow:hidden 裁掉，
+     * 底部「申请支持其他语言」落到视口外不可点；强制 display:grid 后 list 变为 532px 可滚区、footer 回到视口内。
+     * 故把选择器提到 (0,2,0)，让面板自身布局契约在同层内稳定胜出（不靠源序）。 */
+    .w-menu.w-language-switcher__menu {
         display: grid;
         width: min(24rem, calc(100dvw - 1rem));
         max-height: min(32rem, calc(100dvh - 1rem));
