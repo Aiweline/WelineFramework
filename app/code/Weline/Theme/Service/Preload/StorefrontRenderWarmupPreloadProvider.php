@@ -156,47 +156,62 @@ final class StorefrontRenderWarmupPreloadProvider extends AbstractWorkerPreloadP
         /** @var Partials $partials */
         $partials = ObjectManager::getInstance(Partials::class);
 
-        // Storefront chrome. The frontend head partial is page-scoped (its cache
-        // key carries the request path), so it is warmed for the warm-up document
-        // itself; that is the document the READY gate and the first real request
-        // both render.
-        $options = (string)Env::get('wls.worker.storefront_render_warmup_option', 'default');
-
-        foreach ([
-            'header' => $options,
-            'footer' => $options,
-            'head' => $options,
-        ] as $type => $option) {
-            if (\microtime(true) >= $deadline) {
-                $failures['budget'] = 'deadline exceeded before ' . $type;
-                break;
-            }
-            $result = $this->warmFrontendPartial($partials, $type, $option);
-            if (isset($result['error'])) {
-                $failures[$type] = $result['error'];
-                continue;
-            }
-            if ($result['warmed'] === true) {
-                ++$items;
-            }
-        }
-
-        // Compiled artifacts of the storefront page template.
+        // Storefront chrome + compiled artifacts, ONE LANGUAGE AT A TIME.
         //
-        // Separately from the output caches above, the *compiler* still had to
-        // run on the first request: resolving `best-sellers/index.phtml` to its
-        // compiled artifact measured 100.85 ms cold in a fresh process and
-        // `partials/head/default.phtml` 37.28 ms, while every later resolution in
-        // that process costs 0.3-0.5 ms. That is the compile, not the parse of a
-        // 449 KB document — which the micro-benchmark put at 12 ms. Compiling the
-        // page's own templates once here leaves the request path with "artifact
-        // exists -> include it", never "compile it".
-        if (\microtime(true) < $deadline) {
-            $compiled = $this->warmCompiledArtifacts($start + self::COMPILE_BUDGET_SECONDS);
-            $items += $compiled['items'];
-            foreach ($compiled['failures'] as $key => $message) {
-                $failures[$key] = $message;
+        // 店面 chrome 的输出缓存与编译产物都按语言分区。只预热默认语言时，其余语言的
+        // 首个请求仍要付全部构建成本：实测某双语言店面的第二语言首访 15.3s
+        // （storefront.cache.builder 8.8s + head 5.0s + footer 2.4s），而同一请求
+        // 构建完成后再发只需 0.9s。因此按语言逐个预热，默认语言排第一，
+        // 超出预算的语言留给后续 Worker 启动补齐。
+        $options = (string)Env::get('wls.worker.storefront_render_warmup_option', 'default');
+        $contextDeadline = $start + self::COMPILE_BUDGET_SECONDS;
+        $previousLang = \Weline\Framework\Env\WelineEnv::getLang();
+        $previousCurrency = \Weline\Framework\Env\WelineEnv::getCurrency();
+        try {
+            foreach ($this->resolveStorefrontCompileContexts() as [$lang, $currency]) {
+                if (\microtime(true) >= $contextDeadline) {
+                    $failures['languages'] = 'deadline reached; remaining languages deferred';
+                    break;
+                }
+                if ($lang !== '') {
+                    \Weline\Framework\Env\WelineEnv::setLang($lang);
+                }
+                if ($currency !== '') {
+                    \Weline\Framework\Env\WelineEnv::setCurrency($currency);
+                }
+                // 切语言后必须清进程内模板缓存：getFetchFile 会把编译根按首次解析
+                // 结果缓存下来，不清就会把每个语言都解析成同一个目录。
+                Template::clearProcessViewFileCache();
+
+                foreach ([
+                    'header' => $options,
+                    'footer' => $options,
+                    'head' => $options,
+                ] as $type => $option) {
+                    if (\microtime(true) >= $contextDeadline) {
+                        break 2;
+                    }
+                    $result = $this->warmFrontendPartial($partials, $type, $option);
+                    $failureKey = $lang . '#' . $type;
+                    if (isset($result['error'])) {
+                        $failures[$failureKey] = $result['error'];
+                        continue;
+                    }
+                    if ($result['warmed'] === true) {
+                        ++$items;
+                    }
+                }
+
+                $items += $this->warmCompiledTemplates($lang, $failures);
             }
+        } finally {
+            if ($previousLang !== '') {
+                \Weline\Framework\Env\WelineEnv::setLang($previousLang);
+            }
+            if ($previousCurrency !== '') {
+                \Weline\Framework\Env\WelineEnv::setCurrency($previousCurrency);
+            }
+            Template::clearProcessViewFileCache();
         }
 
         // Execution-time warm-up.
@@ -262,82 +277,43 @@ final class StorefrontRenderWarmupPreloadProvider extends AbstractWorkerPreloadP
     }
 
     /**
-     * Compile the storefront page template chain so the request path only reads
-     * the compiled artifact. Resolution failures are reported, never thrown: a
-     * renamed template must not fail Worker boot.
+     * Compile the storefront template chain for the CURRENT language context so the
+     * request path only reads an artifact that already exists.
      *
-     * @param float $deadline 绝对时间戳（0 = 不设限）；到点即停，剩余分区留给下次启动
-     * @return array{items: int, failures: array<string, string>}
+     * Compiled artifacts are partitioned per language: the path carries a
+     * `<lang>/<currency>/` segment. Resolving them under the wrong context writes
+     * entries the live request never reads, so the caller sets the language and
+     * clears the process template cache before each pass.
+     *
+     * Resolution failures are reported, never thrown: a renamed template must not
+     * fail Worker boot.
+     *
+     * @param array<string, string> $failures
      */
-    private function warmCompiledArtifacts(float $deadline = 0.0): array
+    private function warmCompiledTemplates(string $lang, array &$failures): int
     {
         $items = 0;
-        $failures = [];
         $template = Template::getInstance();
 
-        // Warm under the SAME compile context the storefront request uses.
-        //
-        // Compiled chrome artifacts are partitioned by (lang, currency) — the path
-        // carries a `<lang>/<currency>/` segment. A warm-up that resolves them under
-        // the CLI defaults writes opcache entries for `<zh_Hans_CN>/<CNY>/…`, while
-        // the live storefront reads `<zh_Hans_CN>/<USD>/…`: different files, so the
-        // first request still paid a full first-include compile (measured ~98 ms per
-        // chrome partial). Resolve the site's real defaults before warming.
-        //
-        // 只铺默认语言是不够的：编译产物每个语言分区各存一份文件，每出现一个新语言，
-        // 首访仍要现场写文件 + 首次编译（线上实测单个新语言首访数秒）。
-        // 这里按站点全部语言逐个铺开，默认语言排第一，保证热路径先就绪；
-        // 超出预算的语言留给后续启动补齐。币种不参与分区（见下方说明）。
-        $contexts = $this->resolveStorefrontCompileContexts();
-        $previousLang = \Weline\Framework\Env\WelineEnv::getLang();
-        $previousCurrency = \Weline\Framework\Env\WelineEnv::getCurrency();
-        try {
-            foreach ($contexts as [$lang, $currency]) {
-                if ($deadline > 0.0 && \microtime(true) >= $deadline) {
-                    $failures['budget'] = 'deadline reached; remaining compile contexts deferred';
-                    break;
-                }
-                if ($lang !== '') {
-                    \Weline\Framework\Env\WelineEnv::setLang($lang);
-                }
-                if ($currency !== '') {
-                    \Weline\Framework\Env\WelineEnv::setCurrency($currency);
-                }
-                // 切换语言后必须清掉进程内模板缓存：getFetchFile 会把编译根按首次
-                // 解析结果缓存下来（processViewFileCache + processTemplateContextKey），
-                // 不清就会把每个语言都解析成同一个目录，等于只铺了一种语言。
-                Template::clearProcessViewFileCache();
-
-                foreach (self::COMPILED_TEMPLATES as $index => $fileName) {
-                    $failureKey = $lang . '/' . $currency . '#tpl' . $index;
-                    try {
-                        $compiled = (string)$template->getFetchFile($fileName);
-                    } catch (\Throwable $exception) {
-                        $failures[$failureKey] = $fileName . ': ' . $exception->getMessage();
-                        continue;
-                    }
-                    if ($compiled === '' || !\is_file($compiled)) {
-                        $failures[$failureKey] = $fileName . ': no compiled artifact';
-                        continue;
-                    }
-                    if (\function_exists('opcache_compile_file')) {
-                        @\opcache_compile_file($compiled);
-                    }
-                    ++$items;
-                }
+        foreach (self::COMPILED_TEMPLATES as $index => $fileName) {
+            $failureKey = $lang . '#tpl' . $index;
+            try {
+                $compiled = (string)$template->getFetchFile($fileName);
+            } catch (\Throwable $exception) {
+                $failures[$failureKey] = $fileName . ': ' . $exception->getMessage();
+                continue;
             }
-        } finally {
-            if ($previousLang !== '') {
-                \Weline\Framework\Env\WelineEnv::setLang($previousLang);
+            if ($compiled === '' || !\is_file($compiled)) {
+                $failures[$failureKey] = $fileName . ': no compiled artifact';
+                continue;
             }
-            if ($previousCurrency !== '') {
-                \Weline\Framework\Env\WelineEnv::setCurrency($previousCurrency);
+            if (\function_exists('opcache_compile_file')) {
+                @\opcache_compile_file($compiled);
             }
-            // 恢复原上下文后同样要清缓存，避免后续渲染沿用最后一个被铺的语言目录。
-            Template::clearProcessViewFileCache();
+            ++$items;
         }
 
-        return ['items' => $items, 'failures' => $failures];
+        return $items;
     }
 
     /**
