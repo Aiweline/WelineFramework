@@ -62,6 +62,45 @@ final class StorefrontRenderWarmupPreloadProviderTest extends TestCase
         );
     }
 
+    /**
+     * 编译产物按语言分区，每个语言各存一份模板文件；只铺默认语言时，其余语言的
+     * 首访仍要现场编译（线上实测每个新语言数秒）。
+     *
+     * 币种不是分区维度（只切换展示币种），铺开时不得乘以币种，否则模板份数爆炸。
+     */
+    public function testCompileContextCoversEveryLanguageWithDefaultCurrencyOnly(): void
+    {
+        $pairs = StorefrontRenderWarmupPreloadProvider::expandCompileContextPairs(
+            ['en_US', 'USD'],
+            ['en_US', 'ja_JP', 'de_DE'],
+        );
+
+        self::assertSame(['en_US', 'USD'], $pairs[0], '默认语言必须排第一，保证热路径先就绪');
+        self::assertCount(3, $pairs);
+        self::assertContains(['ja_JP', 'USD'], $pairs);
+        self::assertContains(['de_DE', 'USD'], $pairs);
+        foreach ($pairs as [, $currency]) {
+            self::assertSame('USD', $currency, '币种不得参与分区');
+        }
+    }
+
+    public function testCompileContextDeduplicatesAndFallsBackToDefaults(): void
+    {
+        self::assertSame(
+            [['en_US', 'USD']],
+            StorefrontRenderWarmupPreloadProvider::expandCompileContextPairs(['en_US', 'USD'], []),
+        );
+
+        // 默认语言同时出现在站点清单里时不得重复铺两遍。
+        self::assertSame(
+            [['en_US', 'USD'], ['ja_JP', 'USD']],
+            StorefrontRenderWarmupPreloadProvider::expandCompileContextPairs(
+                ['en_US', 'USD'],
+                ['en_US', '', 'ja_JP'],
+            ),
+        );
+    }
+
     private function context(string $runtimeMode): WorkerPreloadContext
     {
         return new WorkerPreloadContext(

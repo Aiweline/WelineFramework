@@ -90,6 +90,21 @@ final class StorefrontRenderWarmupPreloadProvider extends AbstractWorkerPreloadP
      */
     private const BUDGET_SECONDS = 20.0;
 
+    /**
+     * Time box for laying out the per-language compiled-artifact partitions.
+     *
+     * The storefront serves several languages, and each language partition stores
+     * its own copy of the chrome templates. Building them at boot is a one-off cost
+     * that is paid again only when the theme source changes; doing it lazily costs
+     * seconds on the first request of every new language. Kept below the startup
+     * readiness timeout so a large language set can never fail boot.
+     *
+     * Currency is deliberately NOT a dimension here: it only switches the displayed
+     * currency, so multiplying partitions by currency would explode the template
+     * copies without changing the compiled output.
+     */
+    private const COMPILE_BUDGET_SECONDS = 30.0;
+
     public function code(): string
     {
         return 'storefront_render';
@@ -175,7 +190,7 @@ final class StorefrontRenderWarmupPreloadProvider extends AbstractWorkerPreloadP
         // page's own templates once here leaves the request path with "artifact
         // exists -> include it", never "compile it".
         if (\microtime(true) < $deadline) {
-            $compiled = $this->warmCompiledArtifacts();
+            $compiled = $this->warmCompiledArtifacts($start + self::COMPILE_BUDGET_SECONDS);
             $items += $compiled['items'];
             foreach ($compiled['failures'] as $key => $message) {
                 $failures[$key] = $message;
@@ -249,9 +264,10 @@ final class StorefrontRenderWarmupPreloadProvider extends AbstractWorkerPreloadP
      * the compiled artifact. Resolution failures are reported, never thrown: a
      * renamed template must not fail Worker boot.
      *
+     * @param float $deadline 绝对时间戳（0 = 不设限）；到点即停，剩余分区留给下次启动
      * @return array{items: int, failures: array<string, string>}
      */
-    private function warmCompiledArtifacts(): array
+    private function warmCompiledArtifacts(float $deadline = 0.0): array
     {
         $items = 0;
         $failures = [];
@@ -265,32 +281,44 @@ final class StorefrontRenderWarmupPreloadProvider extends AbstractWorkerPreloadP
         // the live storefront reads `<zh_Hans_CN>/<USD>/…`: different files, so the
         // first request still paid a full first-include compile (measured ~98 ms per
         // chrome partial). Resolve the site's real defaults before warming.
+        //
+        // 只铺默认语言是不够的：编译产物每个语言分区各存一份文件，每出现一个新语言，
+        // 首访仍要现场写文件 + 首次编译（线上实测单个新语言首访数秒）。
+        // 这里按站点全部语言逐个铺开，默认语言排第一，保证热路径先就绪；
+        // 超出预算的语言留给后续启动补齐。币种不参与分区（见下方说明）。
+        $contexts = $this->resolveStorefrontCompileContexts();
         $previousLang = \Weline\Framework\Env\WelineEnv::getLang();
         $previousCurrency = \Weline\Framework\Env\WelineEnv::getCurrency();
         try {
-            [$lang, $currency] = $this->resolveStorefrontCompileContext();
-            if ($lang !== '') {
-                \Weline\Framework\Env\WelineEnv::setLang($lang);
-            }
-            if ($currency !== '') {
-                \Weline\Framework\Env\WelineEnv::setCurrency($currency);
-            }
+            foreach ($contexts as [$lang, $currency]) {
+                if ($deadline > 0.0 && \microtime(true) >= $deadline) {
+                    $failures['budget'] = 'deadline reached; remaining compile contexts deferred';
+                    break;
+                }
+                if ($lang !== '') {
+                    \Weline\Framework\Env\WelineEnv::setLang($lang);
+                }
+                if ($currency !== '') {
+                    \Weline\Framework\Env\WelineEnv::setCurrency($currency);
+                }
 
-            foreach (self::COMPILED_TEMPLATES as $index => $fileName) {
-                try {
-                    $compiled = (string)$template->getFetchFile($fileName);
-                } catch (\Throwable $exception) {
-                    $failures['tpl' . $index] = $fileName . ': ' . $exception->getMessage();
-                    continue;
+                foreach (self::COMPILED_TEMPLATES as $index => $fileName) {
+                    $failureKey = $lang . '/' . $currency . '#tpl' . $index;
+                    try {
+                        $compiled = (string)$template->getFetchFile($fileName);
+                    } catch (\Throwable $exception) {
+                        $failures[$failureKey] = $fileName . ': ' . $exception->getMessage();
+                        continue;
+                    }
+                    if ($compiled === '' || !\is_file($compiled)) {
+                        $failures[$failureKey] = $fileName . ': no compiled artifact';
+                        continue;
+                    }
+                    if (\function_exists('opcache_compile_file')) {
+                        @\opcache_compile_file($compiled);
+                    }
+                    ++$items;
                 }
-                if ($compiled === '' || !\is_file($compiled)) {
-                    $failures['tpl' . $index] = $fileName . ': no compiled artifact';
-                    continue;
-                }
-                if (\function_exists('opcache_compile_file')) {
-                    @\opcache_compile_file($compiled);
-                }
-                ++$items;
             }
         } finally {
             if ($previousLang !== '') {
@@ -302,6 +330,76 @@ final class StorefrontRenderWarmupPreloadProvider extends AbstractWorkerPreloadP
         }
 
         return ['items' => $items, 'failures' => $failures];
+    }
+
+    /**
+     * 站点全部语言编译分区；默认语言排第一，币种固定用站点默认币种。
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private function resolveStorefrontCompileContexts(): array
+    {
+        $defaults = $this->resolveStorefrontCompileContext();
+        $websiteId = (int)\Weline\Websites\Model\Website::ID_DEFAULT;
+        $langs = [];
+        try {
+            $langs = (array)\Weline\Websites\Data\WebsiteData::languageCodesForWebsite($websiteId);
+        } catch (\Throwable) {
+            // 站点语言清单取不到：只铺默认语言。
+        }
+
+        return self::expandCompileContextPairs($defaults, $langs);
+    }
+
+    /**
+     * 默认语言排第一，其后是站点全部语言（去重）。
+     *
+     * 币种不是编译分区维度：币种只切换展示币种，按币种铺会让模板份数乘以币种数，
+     * 所以这里不接受币种清单，一律用站点默认币种。
+     *
+     * @param array{0: string, 1: string} $defaults
+     * @param array<array-key, mixed> $langs
+     * @return list<array{0: string, 1: string}>
+     */
+    public static function expandCompileContextPairs(array $defaults, array $langs): array
+    {
+        $currency = (string)($defaults[1] ?? '');
+        $langs = self::normalizeCompileContextCodes($langs);
+        if ($langs === []) {
+            $langs = [(string)($defaults[0] ?? '')];
+        }
+
+        $pairs = [[(string)($defaults[0] ?? ''), $currency]];
+        foreach ($langs as $lang) {
+            $pairs[] = [$lang, $currency];
+        }
+
+        $unique = [];
+        foreach ($pairs as [$lang, $currencyOfPair]) {
+            if ($lang === '' || $currencyOfPair === '') {
+                continue;
+            }
+            $unique[$lang . '|' . $currencyOfPair] = [$lang, $currencyOfPair];
+        }
+
+        return \array_values($unique);
+    }
+
+    /**
+     * @param array<array-key, mixed> $codes
+     * @return list<string>
+     */
+    private static function normalizeCompileContextCodes(array $codes): array
+    {
+        $out = [];
+        foreach ($codes as $code) {
+            $code = \trim((string)$code);
+            if ($code !== '') {
+                $out[$code] = true;
+            }
+        }
+
+        return \array_keys($out);
     }
 
     /**
