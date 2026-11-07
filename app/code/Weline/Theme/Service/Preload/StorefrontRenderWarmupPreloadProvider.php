@@ -301,6 +301,10 @@ final class StorefrontRenderWarmupPreloadProvider extends AbstractWorkerPreloadP
                 if ($currency !== '') {
                     \Weline\Framework\Env\WelineEnv::setCurrency($currency);
                 }
+                // 切换语言后必须清掉进程内模板缓存：getFetchFile 会把编译根按首次
+                // 解析结果缓存下来（processViewFileCache + processTemplateContextKey），
+                // 不清就会把每个语言都解析成同一个目录，等于只铺了一种语言。
+                Template::clearProcessViewFileCache();
 
                 foreach (self::COMPILED_TEMPLATES as $index => $fileName) {
                     $failureKey = $lang . '/' . $currency . '#tpl' . $index;
@@ -327,6 +331,8 @@ final class StorefrontRenderWarmupPreloadProvider extends AbstractWorkerPreloadP
             if ($previousCurrency !== '') {
                 \Weline\Framework\Env\WelineEnv::setCurrency($previousCurrency);
             }
+            // 恢复原上下文后同样要清缓存，避免后续渲染沿用最后一个被铺的语言目录。
+            Template::clearProcessViewFileCache();
         }
 
         return ['items' => $items, 'failures' => $failures];
