@@ -1692,18 +1692,23 @@ final class FpcHtmlDiskStore
         }
         $link = $pg . \DIRECTORY_SEPARATOR . self::PAGE_GEN_CURRENT;
         if (\is_link($link)) {
-            $target = \readlink($link);
-            if ($target === $token) {
+            if (\readlink($link) === $token) {
                 return;
-            }
-            if (!@\unlink($link)) {
-                throw new \RuntimeException('fpc_html_disk_page_gen_symlink_replace_failed');
             }
         } elseif (\file_exists($link)) {
             throw new \RuntimeException('fpc_html_disk_page_gen_current_not_symlink');
         }
-        if (!@\symlink($token, $link)) {
+        // 原子换指针：先建同目录临时符号链接，再 rename 覆盖。
+        // 旧写法 unlink+symlink 在两步之间指针不存在，该窗口内所有**无 w_pg** 的请求
+        // 都会退化为回源渲染（发布期最贵、最容易撞准入拒绝的路径）。
+        $tmpLink = $pg . \DIRECTORY_SEPARATOR . '.' . self::PAGE_GEN_CURRENT
+            . '.' . \getmypid() . '.' . \bin2hex(\random_bytes(4));
+        if (!@\symlink($token, $tmpLink)) {
             throw new \RuntimeException('fpc_html_disk_page_gen_symlink_failed');
+        }
+        if (!@\rename($tmpLink, $link)) {
+            @\unlink($tmpLink);
+            throw new \RuntimeException('fpc_html_disk_page_gen_symlink_replace_failed');
         }
     }
 

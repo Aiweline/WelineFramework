@@ -43,15 +43,15 @@ final class Detail extends FrontendController
         $slug = \Weline\Product\Http\ProductRouteIdentity::slug($this->request);
         $productId = \Weline\Product\Http\ProductRouteIdentity::productId($this->request);
 
-        $offers = [];
-        if ($slug !== '') {
-            $offers = $this->catalog->publishedOffersBySlug($slug);
-        } elseif ($productId > 0) {
-            $offers = $this->catalog->publishedOffersForProduct($productId);
-        }
+        $offers = $this->resolvePublishedOffers($slug, $productId);
 
         if ($offers === []) {
-            return $this->renderUnavailableProduct($slug, $productId);
+            // 瞬时读空 / 作用域漂移不得判死成 404：已发布商品返可重试的 503。
+            return $this->renderUnavailableProduct(
+                $slug,
+                $productId,
+                $this->isTransientEmptyForPublishedProduct($slug),
+            );
         }
 
         $canonicalSlug = strtolower(trim((string)($offers[0]['slug'] ?? '')));
@@ -336,16 +336,63 @@ final class Detail extends FrontendController
     }
 
     /**
+     * 取已发布 offer；空结果做一次有界重试，吸收投影/作用域在切换瞬间的空读。
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function resolvePublishedOffers(string $slug, int $productId): array
+    {
+        $load = function () use ($slug, $productId): array {
+            if ($slug !== '') {
+                return $this->catalog->publishedOffersBySlug($slug);
+            }
+            if ($productId > 0) {
+                return $this->catalog->publishedOffersForProduct($productId);
+            }
+
+            return [];
+        };
+
+        $offers = $load();
+        if ($offers !== []) {
+            return $offers;
+        }
+        \usleep(80000);
+
+        return $load();
+    }
+
+    /** 空结果是否属于「商品已发布、只是这次读空了」。 */
+    private function isTransientEmptyForPublishedProduct(string $slug): bool
+    {
+        if ($slug === '') {
+            return false;
+        }
+        try {
+            return $this->catalog->resolvePublishedProductIdBySlug($slug) > 0;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
      * Missing / unpublished product: stay on /product/{slug} with an inline notice.
      * Do not 301 back to /products/ (shopper sees a “refresh”); never long-TTL FPC this body.
+     *
+     * $transient=true（商品已发布但本次投影读空）→ 503 + Retry-After，绝不落成 404。
      */
-    private function renderUnavailableProduct(string $slug, int $productId): string
+    private function renderUnavailableProduct(string $slug, int $productId, bool $transient = false): string
     {
+        $statusCode = $transient ? 503 : 404;
         $response = $this->request->getResponse();
         if (method_exists($response, 'setCode')) {
-            $response->setCode(404);
+            $response->setCode($statusCode);
         } else {
-            $response->setHttpResponseCode(404);
+            $response->setHttpResponseCode($statusCode);
+        }
+        if ($transient) {
+            $response->setHeader('Retry-After', '2');
+            $response->setHeader('X-Robots-Tag', 'noindex, follow');
         }
         $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
 
@@ -359,18 +406,24 @@ final class Detail extends FrontendController
             $productsUrl = '/products';
         }
 
-        $title = (string)__('商品不存在或当前不可用。');
+        $title = $transient
+            ? (string)__('商品信息正在刷新，请稍后重试。')
+            : (string)__('商品不存在或当前不可用。');
         $this->layoutType = 'not_found';
         $this->request->setGet('page_type', 'not_found');
         $this->request->setGet('theme_page_title', $title);
         $this->carryResolvedIdentity($productId, $slug);
 
         $this->assign('meta', [
-            'statusCode' => 404,
+            'statusCode' => $statusCode,
             'title' => $title,
             'pageTitle' => $title,
-            'pageLead' => (string)__('您访问的商品链接可能已失效，或该商品当前不可购买。'),
-            'pageHint' => (string)__('请返回全部商品继续选购，或检查链接是否正确。'),
+            'pageLead' => $transient
+                ? (string)__('该商品的展示数据正在更新，稍后自动可用。')
+                : (string)__('您访问的商品链接可能已失效，或该商品当前不可购买。'),
+            'pageHint' => $transient
+                ? (string)__('请稍后刷新本页；若持续出现，请返回全部商品继续选购。')
+                : (string)__('请返回全部商品继续选购，或检查链接是否正确。'),
             'homeHref' => $productsUrl,
             'productsHref' => $productsUrl,
             'requestedSlug' => $slug,
@@ -378,7 +431,7 @@ final class Detail extends FrontendController
         $this->assign('page_title', $title);
         $this->assign('seo', [
             'page_type' => 'not_found',
-            'title' => '404 · ' . $title,
+            'title' => ($transient ? '503 · ' : '404 · ') . $title,
             'robots' => 'noindex,nofollow',
         ]);
 

@@ -1063,17 +1063,21 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
 /* Theme .w-frame：锁几何；详情仍用 contain + 限高，禁 cover 裁切 */
 .product-native-detail__description-body .weline-detail-feature__media.w-frame,
 .product-native-detail__description-body .weline-detail-figure.w-frame {
-    overflow: visible;
+    /* Foundation .w-frame 靠 overflow:hidden 锁几何。这里放开会让框内绝对定位的
+       > img 按 aspect-ratio 未裁高度（1284×1712）画出框外，压住后续楼层。 */
+    overflow: hidden;
     max-height: min(72vh, var(--token-size-42rem));
     border-radius: 0;
     background: transparent;
 }
 .product-native-detail__description-body .weline-detail-feature__media.w-frame > img,
 .product-native-detail__description-body .weline-detail-figure.w-frame > img {
+    /* 回到文档流：框被 max-height 限高时图片盒子同步限高，不再按未裁比例溢出。 */
+    position: static;
     width: 100%;
-    height: 100%;
+    height: auto;
     max-width: none;
-    max-height: none;
+    max-height: min(72vh, var(--token-size-42rem));
     margin: 0;
     object-fit: var(--weline-frame-fit, contain);
     object-position: center top;
@@ -1445,11 +1449,16 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
 }
 .product-native-detail__description-body .weline-detail-figure.w-frame > img,
 .product-native-detail__description-body .weline-detail-figure-stack .w-frame > img {
+    /* 与上方 .w-frame > img 同步：框被 max-height 限高时图片盒子也限高，
+       否则 height:100% 会按 aspect-ratio 的未裁高度（1712px）算出框外高度并被裁掉。 */
+    position: static;
     width: 100%;
-    height: 100%;
+    height: auto;
     max-width: none;
-    max-height: none;
+    max-height: min(72vh, var(--token-size-42rem));
     margin: 0;
+    object-fit: var(--weline-frame-fit, contain);
+    object-position: center top;
 }
 .product-native-detail__description-body .weline-detail-figure-row--pair .weline-detail-figure:not(.w-frame),
 .product-native-detail__description-body .weline-detail-figure-row--solo .weline-detail-figure:not(.w-frame) {

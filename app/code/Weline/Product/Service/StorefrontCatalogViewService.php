@@ -2233,6 +2233,43 @@ final class StorefrontCatalogViewService
     }
 
     /**
+     * 该 slug 是否指向一个**已发布**商品（不构建 offer）。
+     *
+     * 用途：`publishedOffersBySlug()` 返回空时区分「商品不存在/未发布」（404）与
+     * 「投影瞬时读空 / 作用域漂移」（可重试的 503）。判定链路与 publishedOffersBySlug
+     * 完全一致，但不做 offer 投影，因此不会在同一处投影上再次得到空结果。
+     */
+    public function resolvePublishedProductIdBySlug(string $slug): int
+    {
+        $slug = \strtolower(\trim($slug));
+        if ($slug === '' || \preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
+            return 0;
+        }
+
+        $scope = $this->currentScope();
+        $websiteId = \max(0, (int)$scope->websiteId);
+        $storeId = \max(0, RequestContext::getWelineStoreId());
+
+        $candidateIds = [];
+        foreach ($this->attributeValues->findEntityIdsByAttributeValues(
+            $websiteId,
+            'product',
+            ['source_slug', 'slug'],
+            $slug,
+            \array_values(\array_unique([$storeId, 0])),
+        ) as $productId) {
+            $candidateIds[$productId] = $productId;
+        }
+
+        $matchedProductId = $this->matchPublishedProductIdBySlug(\array_values($candidateIds), $slug);
+        if ($matchedProductId <= 0) {
+            $matchedProductId = $this->findPublishedProductIdByPublicSkuSlug($websiteId, $slug);
+        }
+
+        return \max(0, $matchedProductId);
+    }
+
+    /**
      * Pick a published product id for an exact storefront slug without building catalog offers.
      *
      * Reverse lookup already matched value_text; we only gate on STATUS_PUBLISHED.
