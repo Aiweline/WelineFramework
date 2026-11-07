@@ -207,6 +207,20 @@ final class StorefrontFpcPrewarmer
         } catch (\Throwable) {
             // 放弃
         }
+        // 站点柜绑定的主域名。每个站独立库，主域就是该站对外的 Host；
+        // 有些站没配 wls.public_host，此时这是唯一可用的预热目标。
+        try {
+            $domainModel = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Websites\Model\WebsiteDomain::class
+            );
+            $domainRows = $domainModel->select()
+                ->where(\Weline\Websites\Model\WebsiteDomain::schema_fields_IS_PRIMARY, 1)
+                ->limit(1)
+                ->fetchArray();
+            $candidates[] = (string)($domainRows[0][\Weline\Websites\Model\WebsiteDomain::schema_fields_DOMAIN] ?? '');
+        } catch (\Throwable) {
+            // 放弃
+        }
 
         foreach ($candidates as $candidate) {
             $candidate = \trim($candidate);
