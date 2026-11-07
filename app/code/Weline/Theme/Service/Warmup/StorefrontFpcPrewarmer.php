@@ -66,9 +66,21 @@ final class StorefrontFpcPrewarmer
         }
         $defaultLocale = '';
         try {
-            $defaultLocale = \strtolower(\trim((string)\Weline\Framework\App\Env::get('locale', '')));
+            // 站点默认语言才是「不带语种前缀」的那一档；Env::get('locale') 在 CLI 下
+            // 常取不到或与站点默认不一致，会把默认语言也铺成 /zh_Hans_CN/ 这类带前缀
+            // 的 URL，导致规范 URL `/` 没被预热、首个真实请求仍现场渲染。
+            $defaultLocale = \strtolower(\trim(
+                (string)\Weline\Websites\Data\WebsiteData::defaultLanguageForWebsite(\max(0, $websiteId))
+            ));
         } catch (\Throwable) {
             $defaultLocale = '';
+        }
+        if ($defaultLocale === '') {
+            try {
+                $defaultLocale = \strtolower(\trim((string)\Weline\Framework\App\Env::get('locale', '')));
+            } catch (\Throwable) {
+                $defaultLocale = '';
+            }
         }
 
         $paths = [];
