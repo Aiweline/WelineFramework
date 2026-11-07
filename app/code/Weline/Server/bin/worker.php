@@ -7530,6 +7530,11 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         }
     }
     
+    // 模块静态发布副本缺失时按需补发一次（部署期静态发布被跳过/中断后自愈）。
+    if ($filename === null) {
+        $filename = wlsTryPublishModuleStatic($uriPath);
+    }
+
     // 文件不存在，交给框架处理（可能是动态生成的资源）
     if ($filename === null) {
         foreach ($candidateUris as $candidateUri) {

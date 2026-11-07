@@ -1387,3 +1387,40 @@ function wlsApproxMemoryValueSize(mixed $value, int $depth = 0, int &$visited = 
     return $size;
 }
 }
+
+if (!\function_exists('wlsTryPublishModuleStatic')) {
+    /**
+     * 模块静态（`/static/{Vendor}/{Module}/...`）发布副本缺失时按需补发一次。
+     *
+     * 背景：模块静态只由部署期静态发布铺进 `pub/static/<Vendor>/<Module>/...`，
+     * 请求期没有补发入口；一旦发布被跳过/中断，这些 URL 会**永久 404**
+     * （整站部件 JS 全挂，例如 /static/Weline/Frontend/base/weline.modules.js）。
+     * 本函数只在静态快路径已确认找不到文件时调用，命中后返回可读的发布后绝对路径。
+     */
+    function wlsTryPublishModuleStatic(string $uriPath): ?string
+    {
+        $path = '/' . \ltrim(\str_replace('\\', '/', $uriPath), '/');
+        if (!\str_starts_with($path, '/static/')) {
+            return null;
+        }
+        // 只有「模块静态」命名空间才补发：/static/{Vendor}/{Module}/...
+        if (\preg_match('#^/static/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/#', $path) !== 1) {
+            return null;
+        }
+        try {
+            $gateway = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\ThemeResourceGateway::class
+            );
+            $published = $gateway->publishForRequestPath($path);
+            if (!\is_string($published) || $published === '') {
+                return null;
+            }
+            $absolute = \rtrim((string)\BP, '/\\') . $published;
+            $absolute = \str_replace(['//', DS . DS], ['/', DS], $absolute);
+
+            return (\is_file($absolute) && \is_readable($absolute)) ? $absolute : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+}
