@@ -169,51 +169,68 @@ final class StorefrontFpcPrewarmer
         return \array_keys($out);
     }
 
-    /** 当前站点对外 Host（用于回环请求的 Host 头）；取不到返回空串。 */
+    /**
+     * 当前站点对外 Host（用于回环请求的 Host 头）；取不到返回空串。
+     *
+     * 回环地址（localhost / 127.0.0.1 / ::1）一律不算有效结果：用它预热只会打到
+     * 错误的 Host 上，等于没预热（实测 CLI 下 `website.url` 可能解析成 localhost，
+     * 于是主题更新后的店面预热全部落空，页面仍是首次请求现场构建）。
+     */
     public function resolveHost(): string
     {
+        $candidates = [];
         try {
-            $url = \trim((string)\Weline\Framework\App\Env::get('website.url', ''));
-            if ($url !== '') {
-                return (string)(\parse_url($url, PHP_URL_HOST) ?: $url);
-            }
+            $candidates[] = (string)\Weline\Framework\App\Env::get('website.url', '');
         } catch (\Throwable) {
             // fall through
         }
         foreach (['wls.public_host', 'wls.host', 'server.public_host', 'server.host'] as $key) {
             try {
-                $value = \trim((string)\Weline\Framework\App\Env::get($key, ''));
+                $candidates[] = (string)\Weline\Framework\App\Env::get($key, '');
             } catch (\Throwable) {
-                $value = '';
-            }
-            if ($value !== '') {
-                return (string)(\parse_url($value, PHP_URL_HOST) ?: $value);
+                // ignore
             }
         }
         try {
-            $host = \trim((string)(\w_env('server.HTTP_HOST', '') ?: ''));
-            if ($host !== '') {
-                return $host;
-            }
+            $candidates[] = (string)(\w_env('server.HTTP_HOST', '') ?: '');
         } catch (\Throwable) {
-            // fall through
+            // ignore
         }
-        // 最后回落到默认网站绑定的域名（多站点时预热当前默认站点）。
+        // 站点柜里默认站绑定的域名（多站点时预热当前默认站点）。
         try {
             $website = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
             $row = $website->select()
                 ->where('code', \Weline\Websites\Model\Website::CODE_DEFAULT)
                 ->limit(1)
                 ->fetchArray();
-            $url = \trim((string)($row[0]['url'] ?? ''));
-            if ($url !== '') {
-                return (string)(\parse_url($url, PHP_URL_HOST) ?: $url);
-            }
+            $candidates[] = (string)($row[0]['url'] ?? '');
         } catch (\Throwable) {
             // 放弃
         }
 
+        foreach ($candidates as $candidate) {
+            $candidate = \trim($candidate);
+            if ($candidate === '') {
+                continue;
+            }
+            $host = (string)(\parse_url($candidate, PHP_URL_HOST) ?: $candidate);
+            if (self::isWarmupHostUsable($host)) {
+                return $host;
+            }
+        }
+
         return '';
+    }
+
+    /** 回环地址/空值不能当预热目标 Host。 */
+    private static function isWarmupHostUsable(string $host): bool
+    {
+        $host = \strtolower(\trim($host));
+        if ($host === '') {
+            return false;
+        }
+
+        return !\in_array($host, ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0'], true);
     }
 
     /**
