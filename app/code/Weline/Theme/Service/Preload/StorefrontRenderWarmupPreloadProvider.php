@@ -96,14 +96,16 @@ final class StorefrontRenderWarmupPreloadProvider extends AbstractWorkerPreloadP
      * The storefront serves several languages, and each language partition stores
      * its own copy of the chrome templates. Building them at boot is a one-off cost
      * that is paid again only when the theme source changes; doing it lazily costs
-     * seconds on the first request of every new language. Kept below the startup
-     * readiness timeout so a large language set can never fail boot.
+     * seconds on the first request of every new language. Must stay WELL below the
+     * startup readiness timeout — some sites gate readiness at 30s, and a warm-up
+     * that consumes the whole window turns into WLS_STARTUP_READY_TIMEOUT. Languages
+     * that do not fit are simply picked up on a later worker boot.
      *
      * Currency is deliberately NOT a dimension here: it only switches the displayed
      * currency, so multiplying partitions by currency would explode the template
      * copies without changing the compiled output.
      */
-    private const COMPILE_BUDGET_SECONDS = 30.0;
+    private const COMPILE_BUDGET_SECONDS = 10.0;
 
     public function code(): string
     {
