@@ -566,6 +566,10 @@ class Update extends AbstractConsole
 
             // 命令结束后 CliCommandExecutedObserver 会触发 WLS 代码重载并清缓存，
             // 因此预热必须排在重载之后：默认派生一个延迟进程（--prewarm-delay=0 可改为内联）。
+            // 店面预热默认按站点全部语言铺：编译产物与 chrome 缓存都按语言分区，
+            // 只预热默认语言时其余语言的首访仍要现场构建（实测第二语言首访 15.3s）。
+            // 可用 --prewarm-languages=default 退回只预热默认语言。
+            $allLocales = \strtolower(\trim((string)($options['prewarm-languages'] ?? 'all'))) !== 'default';
             $delay = isset($options['prewarm-delay']) ? (int)$options['prewarm-delay'] : 15;
             if ($delay > 0) {
                 $cmd = 'sleep ' . $delay . ' && ' . \escapeshellarg(PHP_BINARY)
@@ -573,6 +577,7 @@ class Update extends AbstractConsole
                     . ' --site=' . \escapeshellarg($host)
                     . ' --website=' . (string)(int)($options['website'] ?? 0)
                     . ' --limit=' . (string)(int)($options['prewarm-limit'] ?? 6)
+                    . ' --all-locales=' . ($allLocales ? '1' : '0')
                     // 只靠 sleep 会与重载赛跑：再等 Worker 真就绪（x-wls-warmup-status: ready）才开跑。
                     . ' --wait-ready=' . (string)(int)($options['prewarm-wait-ready'] ?? 90);
                 \exec($cmd . ' > /dev/null 2>&1 &');
@@ -582,7 +587,12 @@ class Update extends AbstractConsole
             }
 
             $this->printing->note(__('预热店面 FPC：') . $host);
-            $paths = $prewarmer->discoverPaths((int)($options['website'] ?? 0), (int)($options['prewarm-limit'] ?? 6));
+            $paths = $prewarmer->discoverPaths(
+                (int)($options['website'] ?? 0),
+                (int)($options['prewarm-limit'] ?? 6),
+                [],
+                $allLocales,
+            );
             $result = $prewarmer->run($host, $paths);
             foreach ($result['details'] as $row) {
                 $this->printing->printing(\sprintf('  %-4s %-6d %7.1fms %s', $row['status'] === 200 ? 'OK' : 'FAIL', $row['status'], $row['ms'], $row['path']));
