@@ -686,9 +686,10 @@ private function assert_DeployWebhookQueue_testQueueAndDrainAndTriggerPath(): vo
     $base = '/Users/weline/Project/Official/框架/app/code/Weline/Deploy';
     self::assertFileExists($base . '/Service/DeployWebhookJobQueue.php');
     self::assertFileExists($base . '/Service/DeployWebhookJobDrainService.php');
-    // 两个轮询任务全部删除：发布由 webhook 命中直接派发，队列维护搬到触发路径。
-    self::assertFileDoesNotExist($base . '/Cron/DeployWebhookDrainCron.php');
-    self::assertFileDoesNotExist($base . '/Cron/DeployWebhookExpectCron.php');
+    // 2026-11-10 恢复：站点各自 cron 轮询远端 tag（产品默认 Cron+Tag），与 webhook 即时派发并存。
+    self::assertFileExists($base . '/Cron/DeployWebhookExpectCron.php');
+    self::assertFileExists($base . '/Cron/DeployWebhookDrainCron.php');
+    self::assertFileExists($base . '/Service/DeployWebhookExpectWatchService.php');
     self::assertFileExists($base . '/Console/Deploy/Webhook/Drain.php');
     $queue = (string) file_get_contents($base . '/Service/DeployWebhookJobQueue.php');
     self::assertStringContainsString('webhook-queue', $queue);

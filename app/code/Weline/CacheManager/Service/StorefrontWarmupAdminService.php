@@ -76,6 +76,17 @@ final class StorefrontWarmupAdminService
         $needsRewarm = (bool)($state['needs_rewarm'] ?? false);
         $ratio = (float)($sample['ratio'] ?? 0.0);
         $band = (string)($capacity['band'] ?? StorefrontWarmupCapacityPlanner::BAND_FULL);
+        $verdict = $this->verdict($phase, $needsRewarm, $lockFree, $age, $state);
+        // 高负载让出时把原因写进判定详情：否则「需要预热」看起来像卡住不动。
+        if ($band === StorefrontWarmupCapacityPlanner::BAND_YIELD
+            && !\in_array($verdict['state'], ['running', 'done'], true)
+        ) {
+            $verdict['detail'] = (string)__('%{1}；当前负载 %{2}% ≥ 中止阈值 %{3}%，本片只会让出，预热不会推进', [
+                $verdict['detail'],
+                \round($ratio * 100, 1),
+                \round((float)($sample['abort_threshold'] ?? 0.7) * 100, 1),
+            ]);
+        }
 
         return [
             'generated_at' => \gmdate('c', $now),
@@ -101,7 +112,7 @@ final class StorefrontWarmupAdminService
                 'skip' => (int)($state['skip'] ?? 0),
                 'fail' => (int)($state['fail'] ?? 0),
             ],
-            'verdict' => $this->verdict($phase, $needsRewarm, $lockFree, $age, $state),
+            'verdict' => $verdict,
             'generation' => [
                 'fingerprint' => (string)($state['storefront_generation_fingerprint'] ?? ''),
                 'short' => $this->shortHash((string)($state['storefront_generation_fingerprint'] ?? '')),

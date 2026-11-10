@@ -78,16 +78,6 @@ $settingDefault = static function (string $key) use ($settings): int {
                     </li>
                 <?php endforeach; ?>
             </ol>
-            <div class="sfw-progress">
-                <span><?= __('整体进度') ?></span>
-                <b id="sfw-progress-percent"><?= \htmlspecialchars((string)($progress['percent'] ?? 0)) ?>%</b>
-                <span class="sfw-muted" id="sfw-progress-count"><?= (int)($progress['done'] ?? 0) ?>/<?= (int)($progress['total'] ?? 0) ?></span>
-            </div>
-            <div class="sfw-bar sfw-bar--lg sfw-bar--progress" role="progressbar" id="sfw-progress-bar"
-                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= \min(100, \max(0, (float)($progress['percent'] ?? 0))) ?>"
-                 aria-label="<?= __('整体进度') ?>">
-                <span class="sfw-bar__fill" id="sfw-progress-fill" style="width:<?= \min(100, \max(0, (float)($progress['percent'] ?? 0))) ?>%"></span>
-            </div>
         </article>
 
         <article class="sfw-card">
@@ -112,6 +102,16 @@ $settingDefault = static function (string $key) use ($settings): int {
                 <span><?= __('跳过') ?> <b id="sfw-total-skip"><?= (int)($totals['skip'] ?? 0) ?></b></span>
                 <span><?= __('失败') ?> <b id="sfw-total-fail"><?= (int)($totals['fail'] ?? 0) ?></b></span>
                 <span><?= __('剩余') ?> <b id="sfw-remaining"><?= (int)($progress['remaining'] ?? 0) ?></b></span>
+            </div>
+            <div class="sfw-progress">
+                <span><?= __('整体进度') ?></span>
+                <b id="sfw-progress-percent"><?= \htmlspecialchars((string)($progress['percent'] ?? 0)) ?>%</b>
+                <span class="sfw-muted" id="sfw-progress-count"><?= (int)($progress['done'] ?? 0) ?>/<?= (int)($progress['total'] ?? 0) ?></span>
+            </div>
+            <div class="sfw-bar sfw-bar--lg sfw-bar--progress" role="progressbar" id="sfw-progress-bar"
+                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= \min(100, \max(0, (float)($progress['percent'] ?? 0))) ?>"
+                 aria-label="<?= __('整体进度') ?>">
+                <span class="sfw-bar__fill" id="sfw-progress-fill" style="width:<?= \min(100, \max(0, (float)($progress['percent'] ?? 0))) ?>%"></span>
             </div>
         </article>
 
