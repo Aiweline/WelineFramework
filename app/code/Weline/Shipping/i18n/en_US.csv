@@ -203,8 +203,8 @@ grid,grid
 取件,Pickup
 到达,Arrival
 派送,Delivery
-请先保存网站，再配置禁运区域。,"Save the website first, then configure embargo zones."
-请先保存网站，再配置可售目的地。,"Save the website first, then configure sellable destinations."
+收货地址,"Delivery Address"
+发货地址,"Shipping Address"
 发货地址加载失败，请稍后重试,"Failed to load shipping addresses. Please try again later."
 收货地址加载失败，请稍后重试,"Failed to load delivery addresses. Please try again later."
 中国,China
@@ -218,9 +218,7 @@ grid,grid
 请输入联系人,"Please enter the contact person"
 请输入联系电话,"Please enter contact phone"
 收货人,Recipient
-收货地址,"Delivery Address"
 联系人,Contact
-发货地址,"Shipping Address"
 选择收货地址,"Select a shipping address"
 名,名
 姓,姓
@@ -242,6 +240,8 @@ grid,grid
 电话号码格式不正确,"Invalid phone number format"
 电话号码格式不正确，示例：%{1},"Invalid phone number format, e.g. %{1}"
 请填写详细地址。,"Please enter the street address."
+请先保存网站，再配置禁运区域。,"Save the website first, then configure embargo zones."
+请先保存网站，再配置可售目的地。,"Save the website first, then configure sellable destinations."
 请先保存渠道，再配置禁运区域。,"Save the channel first, then configure embargo zones."
 请先保存渠道，再配置可售目的地。,"Save the channel first, then configure sellable destinations."
 请先保存商店，再配置禁运区域。,"Save the store first, then configure embargo zones."

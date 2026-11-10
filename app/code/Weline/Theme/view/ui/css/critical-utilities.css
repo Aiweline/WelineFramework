@@ -26,6 +26,20 @@
             var(--w-column-gap, var(--w-gap, var(--weline-space-4, 1rem)));
     }
     .w-grid > * { grid-column: span var(--w-span, 12); min-inline-size: 0; }
+    /*
+     * 本文件内联在首屏、位于 foundation 之后，且同处 @layer layout、同权重，
+     * 因此同层同权重的后到者会赢。只写基础 span 会把 foundation 的 md/lg 断点
+     * 覆盖掉，使全站后台的 --w-span-md / --w-span-lg 失效（栅格永远整行 12 列）。
+     * 这里补齐与 foundation.css 完全一致的断点语义，保持呼吸式 12 列栅格可用。
+     */
+    @media (min-width: 48rem) {
+        .w-grid > * { grid-column: span var(--w-span-md, var(--w-span, 12)); }
+        .w-auto-grid.w-grid > *, .w-stat-tiles.w-grid > * { grid-column: auto; }
+    }
+    @media (min-width: 64rem) {
+        .w-grid > * { grid-column: span var(--w-span-lg, var(--w-span-md, var(--w-span, 12))); }
+        .w-auto-grid.w-grid > *, .w-stat-tiles.w-grid > * { grid-column: auto; }
+    }
     .w-auto-grid,
     .w-stat-tiles {
         display: grid;

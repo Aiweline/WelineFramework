@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\CacheManager\Extends\Module\Weline_Framework\Query;
 
 use Weline\CacheManager\Service\CacheAdminService;
+use Weline\CacheManager\Service\StorefrontWarmupAdminService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
@@ -20,6 +21,8 @@ class CacheManagerAdminQueryProvider implements QueryProviderInterface
             'adminRequest' => $this->adminRequest($params),
             'clearPool' => $this->clearPool($params),
             'clearAll' => $this->clearAll($params),
+            'storefrontWarmupStatus' => $this->storefrontWarmupStatus(),
+            'saveStorefrontWarmupSettings' => $this->saveStorefrontWarmupSettings($params),
             default => throw new \InvalidArgumentException('Unsupported operation: ' . $operation),
         };
     }
@@ -77,8 +80,79 @@ class CacheManagerAdminQueryProvider implements QueryProviderInterface
                         ['name' => 'force', 'type' => 'bool', 'required' => false],
                     ],
                 ],
+                [
+                    'name' => 'storefrontWarmupStatus',
+                    'description' => '店面自动预热进度、阶段游标与当前机器负载',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_CacheManager::storefront_warmup_index',
+                    ],
+                    'mode' => 'read',
+                    'params' => [],
+                ],
+                [
+                    'name' => 'saveStorefrontWarmupSettings',
+                    'description' => '保存店面自动预热的负载阈值与容量参数（env.php）',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_CacheManager::storefront_warmup',
+                    ],
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'busy_start_pct', 'type' => 'int', 'required' => false],
+                        ['name' => 'busy_abort_pct', 'type' => 'int', 'required' => false],
+                        ['name' => 'concurrency', 'type' => 'int', 'required' => false],
+                        ['name' => 'shard', 'type' => 'int', 'required' => false],
+                        ['name' => 'wall_ms', 'type' => 'int', 'required' => false],
+                    ],
+                ],
             ],
         ];
+    }
+
+    /** @return array<string,mixed> */
+    private function storefrontWarmupStatus(): array
+    {
+        try {
+            /** @var StorefrontWarmupAdminService $service */
+            $service = ObjectManager::getInstance(StorefrontWarmupAdminService::class);
+
+            return [
+                'success' => true,
+                'status' => $service->status(),
+            ];
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'message' => $throwable->getMessage(),
+                'status' => null,
+            ];
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    private function saveStorefrontWarmupSettings(array $params): array
+    {
+        try {
+            /** @var StorefrontWarmupAdminService $service */
+            $service = ObjectManager::getInstance(StorefrontWarmupAdminService::class);
+
+            return $service->save($params);
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'message' => $throwable->getMessage(),
+            ];
+        }
     }
 
     /** @param array<string,mixed> $params */

@@ -26,8 +26,9 @@ trait TraitTemplate
 {
     // 路径映射和物理编译目录必须同时迁移格式，避免映射仍指向旧编译产物。
     // v10：模块 STATICS 主 URL/磁盘根改 Upgrade flat（PublicStaticUrl）；主题 ns 仅服务 theme assets。
+    // v11：编译维去掉 currency（货币只影响运行期价格，不进编译产物），避免同模板按币种重复编译。
     // hooks 变更靠编译文件头 compile_id 原地失效覆盖，不再新开目录堆产物。
-    private const TEMPLATE_COMPILE_SCOPE_SCHEMA = 'context-env-v10-module-static-flat';
+    private const TEMPLATE_COMPILE_SCOPE_SCHEMA = 'context-env-v11-lang-only-scope';
 
     /**
      * @DESC          # 读取页头代码

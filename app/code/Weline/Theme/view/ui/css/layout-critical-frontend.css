@@ -154,3 +154,21 @@ body, p, li { font-size: var(--weline-font-size-base, 1rem); }
         touch-action: manipulation;
     }
 }
+
+/* marker: header-cluster-reserve-v1 · 2026-11-07 · 语言/币种/权益部件在首帧后才写入文案，
+ * 内容宽度变化会推动同簇兄弟节点：.header-site-notice-links 432↔446（t≈0.5s/1.2s/4.1s 反复）。
+ * 按水合完成后的实测宽度预留槽位（locale 202.7px→12.75rem、rights 147.5px→9.25rem），
+ * 文案替换在槽内消化，不把整簇撑宽；超长文案裁切而不是换行撑高。
+ * 放在 layout-critical（首帧内联）而不是 header-default.css（发布型 layout 包），
+ * 因为后者需要 theme:update 重建代次才会生效。 */
+.header-site-notice-links .header-top-bar-locale {
+    inline-size: 12.75rem;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.header-site-notice-links .header-top-bar-rights-slot {
+    inline-size: 9.25rem;
+    overflow: hidden;
+    white-space: nowrap;
+}

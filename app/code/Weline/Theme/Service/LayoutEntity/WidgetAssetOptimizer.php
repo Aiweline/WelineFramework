@@ -98,25 +98,33 @@ final class WidgetAssetOptimizer
         $output = [];
         $pending = [];
         $pendingKey = null;
-        $flush = function () use (&$output, &$pending, &$pendingKey, $options): void {
+        $cssPackSeq = 0;
+        $flush = function () use (&$output, &$pending, &$pendingKey, &$cssPackSeq, $options): void {
             if ($pending === []) {
                 return;
             }
             $type = $pending[0]['type'];
             $earlyCount = max(1, (int)($options[$type . '_merge_start_widget'] ?? 6));
-            // Late pack only: source after the first N widgets (deferred CSS via media=print).
-            // 2026-10-29 全局默认（marker: widget-css-never-blocking-v1）：
-            // 部件 CSS 包一律非阻塞：这些是浮动层/客服/音乐等装饰性部件样式，首屏骨架与版心/hero
-            // 几何已由 layout-critical + 内联 tokens 兜住；阻塞它们等于让首屏多等 1 个 RTT
-            // （PIC 首页 PSI「渲染阻塞请求 160–450ms」即来自这类合并包）。
-            $deferred = $type === 'css'
-                || (($pending[0]['kind'] ?? '') === 'source'
-                    && ($pending[0]['first_widget_index'] ?? 0) > $earlyCount);
+            // marker: first-screen-css-tier-v1（2026-11-07）：部件 CSS 的关键性是「是否参与首屏
+            // 几何」而不是资产类型。首屏部件 CSS 走内联 critical（零额外 RTT），后段装饰部件
+            // （浮层/客服/音乐）仍走 media=print 非阻塞。
+            // 首屏判定 = 该流第一个 CSS 包（DOM 最靠前，且合并后通常就是唯一的部件包）或
+            // first_widget_index ≤ N（早期包）。实测默认主题 hero 属于第 13 个部件，只按 N 判定
+            // 会把 hero 样式整体判成 late → 首屏无 hero 几何，CSS 落地即整块重排（冷载 CLS 0.379）。
+            // 反例（改前）：全部 CSS 一律非阻塞 → hero 样式在 onload 换 rel 才生效。
+            $firstScreen = $type === 'css'
+                ? ($cssPackSeq === 0 || ($pending[0]['first_widget_index'] ?? 0) <= $earlyCount)
+                : (($pending[0]['first_widget_index'] ?? 0) <= $earlyCount);
+            $deferred = !$firstScreen
+                && ($type === 'css' || ($pending[0]['kind'] ?? '') === 'source');
             $published = $this->publishBatch($pending, $options, $deferred);
             if ($published !== null) {
                 $output[] = $published;
             } else {
                 array_push($output, ...$pending);
+            }
+            if ($type === 'css') {
+                $cssPackSeq++;
             }
             $pending = [];
             $pendingKey = null;
@@ -179,8 +187,10 @@ final class WidgetAssetOptimizer
         if ($type === 'js' && !preg_match('/\sdefer(?:\s|=|>|\/)/i', $asset['tag'])) {
             $asset['tag'] = preg_replace('/^<script\b/i', '<script defer', $asset['tag']) ?? $asset['tag'];
         }
-        if ($deferredCss && $type === 'css') {
-            $asset['tag'] = $this->applyDeferredCss($asset['tag'], $url);
+        if ($type === 'css') {
+            $asset['tag'] = $deferredCss
+                ? $this->applyDeferredCss($asset['tag'], $url)
+                : $this->inlineFirstScreenCss($asset['tag'], $url);
         }
         if ($type === 'js' && (string)($asset['position'] ?? '') === 'head') {
             // head 内的 widget JS 改声明加载：运行时包（data-order=20）先于业务包（30），
@@ -348,5 +358,58 @@ final class WidgetAssetOptimizer
         $noscript = '<noscript><link rel="stylesheet" href="' . $safe . '"/></noscript>';
 
         return $tag . $noscript;
+    }
+
+    /**
+     * 首屏部件 CSS：内联进 head，保证首屏与最终布局同一世代（marker: first-screen-css-tier-v1）。
+     *
+     * 内联位置不变（仍在原 link 的位置），层叠顺序与原 link 等价，额外收益是零 RTT。
+     * 安全边界：产物读不到 / 空 / >128KB 一律回退成**阻塞 link**（不是 media=print），
+     * 因为回退也必须保证「首屏几何在首帧前就位」。实测默认主题首个部件包 100,302 B
+     * （gzip 12,998 B），inline 后只多 ~13 KB 传输但省掉一次 100 KB 请求。
+     */
+    private function inlineFirstScreenCss(string $tag, string $url): string
+    {
+        if (!$this->firstScreenInlineEnabled()) {
+            return $tag;
+        }
+        $path = (string)\parse_url($url, PHP_URL_PATH);
+        if ($path === '' || !\str_starts_with($path, '/') || !\defined('BP')) {
+            return $tag;
+        }
+        $file = \rtrim((string)BP, '/\\') . '/pub' . $path;
+        if (!\is_file($file)) {
+            return $tag;
+        }
+        $raw = @\file_get_contents($file);
+        if (!\is_string($raw) || $raw === '' || \strlen($raw) > 131072) {
+            return $tag;
+        }
+        if (\stripos($raw, '<html') !== false || \stripos($raw, '<!doctype') !== false) {
+            return $tag;
+        }
+
+        return '<style data-weline-first-screen-css="1" data-weline-widget-asset="source">' . $raw . '</style>';
+    }
+
+    /**
+     * 首屏部件 CSS 是否内联（env `wls.performance.inline_first_screen_widget_css`，默认 true）。
+     */
+    private function firstScreenInlineEnabled(): bool
+    {
+        if (!\defined('BP')) {
+            return true;
+        }
+        try {
+            $value = \Weline\Framework\App\Env::get('wls.performance.inline_first_screen_widget_css', true);
+        } catch (\Throwable $e) {
+            return true;
+        }
+        if (\is_bool($value)) {
+            return $value;
+        }
+        $normalized = \strtolower(\trim((string)$value));
+
+        return !\in_array($normalized, ['0', 'false', 'off', 'no'], true);
     }
 }

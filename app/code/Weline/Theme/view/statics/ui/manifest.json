@@ -11,7 +11,7 @@
             "ui-core"
         ]
     },
-    "build_id": "f05d786c41b87c14293b84f66c805e90d94e298438083ea6a2e07967c33d6797",
+    "build_id": "1c2ac4b148ebdb7566ccfd91f3c31cda421622ddf8111995a6e625ac55ced61c",
     "bundles": {
         "acl-role-assign-css": {
             "bytes": 2945,
@@ -595,10 +595,10 @@
             "type": "js"
         },
         "ui-critical": {
-            "bytes": 4375,
+            "bytes": 4969,
             "file": "components/weline-ui-critical.css",
-            "gzip_bytes": 1365,
-            "sha256": "f80d26b4e1154f88a889778b3dcfdd24993fb14168571942928905e290175139",
+            "gzip_bytes": 1625,
+            "sha256": "a974081ff86f87a58f41f3baf5d03f27a7811b827a15584fc618e5f2e7d8e68e",
             "type": "css"
         },
         "ui-feedback": {

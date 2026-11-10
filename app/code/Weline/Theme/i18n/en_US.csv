@@ -883,26 +883,17 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-"WelineFramework Admin","WelineFramework Admin"
 面包屑,"bread crumbs"
-请先保存网站后，再为本站选择店面主题。,"Save the website first, then choose a storefront theme for this site."
-"本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。","本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。"
-"当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。"
-本站已配置专属主题应用引用。,本站已配置专属主题应用引用。
-本站范围尚无已发布主题版本；可在主题编辑器发布后再选。,"No published theme version for this website scope yet. Publish in the theme editor first."
-在主题编辑器中打开当前店面主题,在主题编辑器中打开当前店面主题
-请先选择前台主题后再打开编辑器,请先选择前台主题后再打开编辑器
-分类,Classification
-"Page %{1} of %{2}","Page %{1} of %{2}"
-分类展示图,"Category showcase image"
-查看全部,"View all"
 查看更多,"View more"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
 官方社交媒体,"Official social media"
+分类,Classification
+分类展示图,"Category showcase image"
+查看全部,"View all"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
 商品,Products
 查看商品图,"View product image"
 查看规格图,"View spec images"
@@ -936,11 +927,38 @@ FAQ/常见问题,FAQ
 展开明细,"Expand details"
 零售,Retail
 关闭通知,"Close notification"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+件商品,"items of goods"
+合作品牌,"Partner brands"
+"品牌 %{1}","品牌 %{1}"
+上一组,"Previous group"
+下一组,"Next group"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
+2026春季新品上市,"2026 spring new product launch"
+探索最新时尚潮流,"Explore the latest fashion trends"
+立即选购,"Buy Now"
+限时特惠,"Limited-Time Offer"
+全场满300减50,"Spend 300, Save 50 Storewide"
+查看详情,"View details"
+品质生活,"Quality living"
+精选优质好物,"Curated quality products"
+开始探索,"Start exploring"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
+"Page %{1} of %{2}","Page %{1} of %{2}"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
 卡片底部,"Card Bottom"
 拖入按钮或操作区,"Drag into button or action area"
 加载中,loading
+"WelineFramework Admin","WelineFramework Admin"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 概览,Overview
@@ -1064,8 +1082,6 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1107,7 +1123,6 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆活动,节庆活动
 日常通勤,"Everyday commute"
-件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1118,19 +1133,11 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
 查看地图,"View map"
-合作品牌,"Partner brands"
-"品牌 %{1}","品牌 %{1}"
-上一组,"Previous group"
-下一组,"Next group"
 您可能还喜欢,"You may also like"
 更大容量,"Larger capacity"
 更多功能,"More features"
@@ -1139,7 +1146,6 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-距离结束,"Ends in"
 精选轮播,"Featured Carousel"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
@@ -1168,25 +1174,12 @@ Logo,Logo
 热门分类,"Popular Categories"
 热卖精选,"Bestsellers picks"
 特色推荐,"Featured Recommendations"
-限时特惠,"Limited-Time Offer"
 博客,Blog
 热卖,"Hot selling."
 新品,"New Product"
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-2026春季新品上市,"2026 spring new product launch"
-探索最新时尚潮流,"Explore the latest fashion trends"
-立即选购,"Buy Now"
-全场满300减50,"Spend 300, Save 50 Storewide"
-查看详情,"View details"
-品质生活,"Quality living"
-精选优质好物,"Curated quality products"
-开始探索,"Start exploring"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1222,6 +1215,11 @@ Logo,Logo
 "共 %{1} 条","Total %{1} items"
 "您好, 登录","Hello, login"
 "登录 / 注册",Login/Register
+请先保存网站后，再为本站选择店面主题。,"Save the website first, then choose a storefront theme for this site."
+"本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。","本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。"
+"当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。"
+本站已配置专属主题应用引用。,本站已配置专属主题应用引用。
+本站范围尚无已发布主题版本；可在主题编辑器发布后再选。,"No published theme version for this website scope yet. Publish in the theme editor first."
 请先保存渠道后，再为本渠选择店面主题。,请先保存渠道后，再为本渠选择店面主题。
 "本渠店面主题写入渠道范围应用引用；未配置时继承商店/网站或 Theme 默认。","本渠店面主题写入渠道范围应用引用；未配置时继承商店/网站或 Theme 默认。"
 "当前显示为继承上级或 Theme 默认；保存时选择主题将写入本渠专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本渠专属应用引用。"
@@ -1578,6 +1576,8 @@ AI目录加载失败,"AI directory loading failed"
 当前生效,"Currently active"
 范围,Scope
 打开主题编辑器,打开主题编辑器
+在主题编辑器中打开当前店面主题,在主题编辑器中打开当前店面主题
+请先选择前台主题后再打开编辑器,请先选择前台主题后再打开编辑器
 "Theme 布局身份无效。","The Theme layout identity is invalid."
 布局语言代码无效：%{1},"Invalid layout language code: %{1}"
 "Theme 布局读取失败。","The Theme layout could not be read."
@@ -2405,6 +2405,7 @@ zone,zone
 编译less静态资源！,"Compile Less Static Resources!"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
+"把各设计主题的 layout-critical 自动物化副本同步到当前基线（fork 主题跳过）！","把各设计主题的 layout-critical 自动物化副本同步到当前基线（fork 主题跳过）！"
 "主题规范校验（head 预算 / 首屏图 / 字体 / SEO 单一出口）！","主题规范校验（head 预算 / 首屏图 / 字体 / SEO 单一出口）！"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。

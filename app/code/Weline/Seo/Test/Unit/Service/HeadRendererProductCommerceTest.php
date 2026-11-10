@@ -196,6 +196,111 @@ class HeadRendererProductCommerceTest extends TestCase
         self::assertMatchesRegularExpression('/"itemReviewed":\s*\{[^}]*"@type":\s*"ProductGroup"/s', $html);
     }
 
+    public function testProductGroupVariantsCarryDescription(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->method('resolve')->willReturn([
+            'page_type' => 'product',
+            'site_name' => 'Shop',
+            'title' => '飞天敦煌马面裙',
+            'description' => '新中式飞天敦煌马面裙。',
+            'canonical_url' => 'https://shop.test/product/feitian',
+            'url' => 'https://shop.test/product/feitian',
+            'organization' => ['name' => 'Shop', 'url' => 'https://shop.test/'],
+            'product' => [
+                'schema_type' => 'ProductGroup',
+                'name' => '飞天敦煌马面裙',
+                'product_group_id' => '94',
+                'description' => '飞天敦煌马面裙以敦煌飞天纹样织造，适合日常与礼仪场合穿着。',
+                'varies_by' => ['pattern', 'size'],
+                'variants' => [
+                    [
+                        'id' => 'offer-a',
+                        'name' => '飞天敦煌马面裙 - 长袖套装 / S',
+                        'description' => '长袖套装 A 版型，适合初秋单穿。',
+                        'sku' => 'FEITIAN-A-S',
+                        'price' => '71.10',
+                        'currency' => 'CNY',
+                        'availability' => 'https://schema.org/InStock',
+                        'size' => 'S',
+                        'pattern' => '长袖套装',
+                        'url' => 'https://shop.test/product/feitian?offer=offer-a',
+                        'image' => '/media/a.jpg',
+                    ],
+                    [
+                        'id' => 'offer-b',
+                        'name' => '飞天敦煌马面裙 - 单件 / M',
+                        'sku' => 'FEITIAN-B-M',
+                        'price' => '196.20',
+                        'currency' => 'CNY',
+                        'availability' => 'https://schema.org/InStock',
+                        'size' => 'M',
+                        'pattern' => '单件',
+                        'url' => 'https://shop.test/product/feitian?offer=offer-b',
+                    ],
+                ],
+            ],
+            'reviews' => [],
+        ]);
+
+        $html = (new HeadRenderer($resolver))->render(new ProductCommerceHeadTemplateStub());
+
+        self::assertStringContainsString('"@type": "ProductGroup"', $html);
+        self::assertStringContainsString('"description": "飞天敦煌马面裙以敦煌飞天纹样织造，适合日常与礼仪场合穿着。"', $html);
+
+        $graph = $this->decodeGraph($html);
+        $group = $this->findNode($graph, 'ProductGroup');
+        self::assertIsArray($group);
+        $variants = $group['hasVariant'] ?? [];
+        self::assertCount(2, $variants);
+        self::assertSame('长袖套装 A 版型，适合初秋单穿。', $variants[0]['description'] ?? null);
+        self::assertNotSame('', (string) ($variants[1]['description'] ?? ''), 'each hasVariant Product must carry a description');
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function decodeGraph(string $html): array
+    {
+        $nodes = [];
+        preg_match_all('/<script[^>]*type="application\/ld\+json"[^>]*>(.*?)<\/script>/s', $html, $matches);
+        foreach ($matches[1] as $raw) {
+            $decoded = json_decode(trim($raw), true);
+            if (!is_array($decoded)) {
+                continue;
+            }
+            if (isset($decoded['@graph']) && is_array($decoded['@graph'])) {
+                foreach ($decoded['@graph'] as $node) {
+                    if (is_array($node)) {
+                        $nodes[] = $node;
+                    }
+                }
+                continue;
+            }
+            $nodes[] = $decoded;
+        }
+
+        return $nodes;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $nodes
+     * @return array<string, mixed>|null
+     */
+    private function findNode(array $nodes, string $type): ?array
+    {
+        foreach ($nodes as $node) {
+            if (($node['@type'] ?? '') === $type) {
+                return $node;
+            }
+        }
+
+        return null;
+    }
+
     public function testDerivesAggregateRatingFromReviewNodesWhenProductRatingMissing(): void
     {
         $resolver = $this->getMockBuilder(PageSeoContextResolver::class)

@@ -785,12 +785,13 @@ private function assert_TemplateCompilePathUnification_testFetchFileFromSourceUs
     self::assertStringNotContainsString('__bytes_', $normalized);
     self::assertStringNotContainsString('__source_', $normalized);
     self::assertMatchesRegularExpression('#/src_unify-virtual_pin-a(?:_r[a-f0-9]{8})?/#', $normalized);
-    self::assertMatchesRegularExpression('#/frontend_w0_default_zh_Hans_CN_CNY#', $normalized);
+    self::assertMatchesRegularExpression('#/frontend_w0_default_zh_Hans_CN#', $normalized);
+    self::assertStringNotContainsString('_CNY', $normalized, 'v11: currency must not appear in compile dirs');
     $otherContext = $template->getFetchFileFromSource('unify-virtual.phtml', '<span>unify-b</span>', __FILE__, 'pin-b');
     $otherNormalized = \str_replace('\\', '/', $otherContext);
     self::assertNotSame($compiled, $otherContext);
     self::assertMatchesRegularExpression('#/src_unify-virtual_pin-b(?:_r[a-f0-9]{8})?/#', $otherNormalized);
-    self::assertMatchesRegularExpression('#/frontend_w0_default_zh_Hans_CN_CNY#', $otherNormalized);
+    self::assertMatchesRegularExpression('#/frontend_w0_default_zh_Hans_CN#', $otherNormalized);
     // Same stable scope root; only the plaintext src_ leaf differs.
     self::assertSame(\dirname(\dirname($normalized)), \dirname(\dirname($otherNormalized)));
 }
@@ -805,8 +806,9 @@ private function assert_TemplateCompilePathUnification_testLayoutPathResolverSha
     self::assertDoesNotMatchRegularExpression('#_ctx_[a-f0-9]{32}#i', $normalized);
     self::assertStringNotContainsString('__bytes_', $normalized);
     self::assertStringNotContainsString('__source_', $normalized);
-    // Must include currency leaf from Template scope (not bare lang-only).
-    self::assertMatchesRegularExpression('#/(?:frontend|backend)_[^/]+_[A-Za-z]{2,}[^/]*_[A-Z]{3}[^/]*/#', $normalized);
+    // Must include lang leaf from Template scope, and no currency leaf (v11).
+    self::assertMatchesRegularExpression('#/(?:frontend|backend)_[^/]+_[A-Za-z]{2,}[^/]*/#', $normalized);
+    self::assertStringNotContainsString('_CNY/', $normalized, 'v11: currency leaf removed from compile dirs');
     self::assertStringEndsWith('com_default.phtml', $path);
 }
 
@@ -1045,7 +1047,7 @@ private function assert_TraitTemplateModuleStaticFlat_testTraitTemplateBuildsMod
     self::assertStringContainsString('PublicStaticUrl::fromModuleSource', $src);
     self::assertStringContainsString('resolveFlatStaticModuleDiskRoot', $src);
     self::assertStringContainsString('prod|flat', $src);
-    self::assertStringContainsString('context-env-v10-module-static-flat', $src);
+    self::assertStringContainsString('context-env-v11-lang-only-scope', $src);
     // Theme-ns must not be used as module STATICS URL fallback under prod.
     self::assertDoesNotMatchRegularExpression("/useProductionStaticPublicUrls\\(\\)[\\s\\S]{0,200}resolvePublicThemeNamespace\\(\\)[\\s\\S]{0,120}view\\/statics/", $src, 'Module STATICS must not fall back to /static/{themeNs}/…/view/statics/');
 }

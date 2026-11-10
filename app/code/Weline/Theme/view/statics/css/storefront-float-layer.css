@@ -133,6 +133,26 @@
   display: none;
 }
 
+/* 八个方向的槽位（容器）自判空：宿主用 data-weline-collapse-empty 声明「没有内容时可以不展示」。
+ * 1) 槽里出现这种空宿主 → 整个槽不展示（CSS 不允许 :has() 嵌 :has()，故用 :empty 判定元素数）；
+ * 2) 宿主自身也不占位（槽外 / 非浮层场景兜底）。
+ * 只看 data-weline-mount-state 不够：水合失败（state=error）的宿主壳自带 padding/背景，
+ * 0 个子元素仍是 216×28 白色气泡，还会被 JS 当成真实内容挂上「×」。
+ * Marker: storefront-float-collapse-empty-v1 */
+#w-storefront-float-layer .w-storefront-float-layer__slot:has([data-weline-collapse-empty]:empty) {
+  display: none;
+}
+
+#w-storefront-float-layer [data-weline-collapse-empty]:not(:has(*)) {
+  display: none;
+}
+
+/* 八个方向的槽位（容器）本身没有元素子节点时同样不展示；部件注入后 :has(*) 自动恢复。
+ * Marker: storefront-float-slot-empty-hide-v1 */
+#w-storefront-float-layer .w-storefront-float-layer__slot:not(:has(*)) {
+  display: none;
+}
+
 /*
  * Social float is content-only inside the layer: the slot owns placement and
  * collapse. Its self `position: fixed` left the slot 0×0, so the × chip hung off

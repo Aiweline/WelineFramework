@@ -47,14 +47,21 @@ final class ProductCommerceFactsResolver
             if ($returnDays > 0) {
                 $policy['merchantReturnDays'] = $returnDays;
             }
-            $policy['returnFees'] = $this->returnFeesUrl($info, $product, $context);
-            // Google requires the amount whenever returnFees is ReturnShippingFees.
-            // Publish it only when the merchant saved an explicit amount.
-            if ($policy['returnFees'] === 'https://schema.org/ReturnShippingFees') {
+            // Google: ReturnShippingFees 必须同时给出非零 returnShippingFeesAmount；
+            // 商家不收固定退货运费（买家自行向承运商支付）时，真实值是
+            // ReturnFeesCustomerResponsibility，不能发一个缺金额的 ReturnShippingFees。
+            $returnFees = $this->returnFeesUrl($info, $product, $context);
+            $amount = null;
+            if ($returnFees === 'https://schema.org/ReturnShippingFees') {
                 $amount = $this->returnShippingFeesAmount($info, $product, $context);
-                if ($amount !== null) {
-                    $policy['returnShippingFeesAmount'] = $amount;
+                if ($amount === null || (float)($amount['value'] ?? 0.0) <= 0.0) {
+                    $returnFees = 'https://schema.org/ReturnFeesCustomerResponsibility';
+                    $amount = null;
                 }
+            }
+            $policy['returnFees'] = $returnFees;
+            if ($amount !== null) {
+                $policy['returnShippingFeesAmount'] = $amount;
             }
 
             $link = $this->absoluteUrl((string)$info['return_policy_url'], $context);

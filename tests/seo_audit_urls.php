@@ -160,6 +160,21 @@ $audit = static function (string $body) use ($strictMerchant): array {
         if (empty($product['description'])) {
             $issues[] = 'product_description_missing';
         }
+        if ($strictMerchant && is_array($product['hasVariant'] ?? null)) {
+            $variantsWithoutDescription = 0;
+            foreach ($product['hasVariant'] as $variant) {
+                if (!is_array($variant)) {
+                    continue;
+                }
+                if (trim((string)($variant['description'] ?? '')) === '') {
+                    $variantsWithoutDescription++;
+                }
+            }
+            $metrics['variant_description'] = (count($product['hasVariant']) - $variantsWithoutDescription) . '/' . count($product['hasVariant']);
+            if ($variantsWithoutDescription > 0) {
+                $issues[] = 'variant_description_missing';
+            }
+        }
         $offers = $product['offers'] ?? null;
         if (is_array($offers)) {
             $subs = isset($offers['offers']) && is_array($offers['offers']) ? $offers['offers'] : [$offers];
@@ -172,6 +187,11 @@ $audit = static function (string $body) use ($strictMerchant): array {
                 $policy = $offer['hasMerchantReturnPolicy'] ?? null;
                 if (is_array($policy) && (int)($policy['merchantReturnDays'] ?? 0) > 0) {
                     $withPolicy++;
+                }
+                if (is_array($policy)
+                    && (string)($policy['returnFees'] ?? '') === 'https://schema.org/ReturnShippingFees'
+                    && !isset($policy['returnShippingFeesAmount'])) {
+                    $issues[] = 'returnShippingFeesAmount_missing';
                 }
                 if (is_array($offer['shippingDetails'] ?? null)) {
                     $withShipping++;

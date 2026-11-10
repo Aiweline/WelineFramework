@@ -15,5 +15,8 @@
         <menu source="Weline_CacheManager::full_page_cache" name="full_page_cache" title="全页缓存 (FPC)"
               action="admin/system/full-page-cache"
               icon="settings" order="30"/>
+        <menu source="Weline_CacheManager::storefront_warmup" name="storefront_warmup" title="自动预热进度"
+              action="admin/system/storefront-warmup"
+              icon="fire" order="40"/>
     </menu>
 </menus>

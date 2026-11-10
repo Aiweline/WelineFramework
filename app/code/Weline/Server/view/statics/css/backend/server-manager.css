@@ -3,21 +3,27 @@
  * 只承载布局/尺寸；外观交给默认主题组件与 Token。
  */
 @layer page {
-    .server-manager .stat-card {
-        padding: var(--weline-space-4);
-        border-radius: var(--weline-radius-md);
-        background: var(--weline-theme-surface);
-        text-align: center;
+    /*
+     * 统计块用自适应 KPI 栅格：三格按容器宽度并排，窄屏自动回落，
+     * 不再依赖 --w-span-md（该变量会被内联关键 CSS 的整行 span 覆盖）。
+     */
+    .server-manager .w-grid:has(> * > .stat-card) {
+        grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+        --w-gap: var(--weline-space-3);
     }
 
-    .server-manager .stat-value {
-        font-size: var(--weline-font-size-xl);
-        font-weight: 700;
+    .server-manager .w-grid:has(> * > .stat-card) > * {
+        grid-column: auto;
+    }
+
+    .server-manager .stat-card {
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface);
+        text-align: start;
     }
 
     .server-manager .stat-label {
         color: var(--weline-theme-text-muted);
-        font-size: var(--weline-font-size-sm);
     }
 
     .server-manager .optimization-card {

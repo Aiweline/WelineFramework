@@ -1,0 +1,218 @@
+<css>Weline_CacheManager::css/backend/storefront-warmup.css</css>
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$status = \is_array($status ?? null) ? $status : [];
+$phases = \is_array($status['phases'] ?? null) ? $status['phases'] : [];
+$progress = \is_array($status['progress'] ?? null) ? $status['progress'] : [];
+$group = \is_array($status['current_group'] ?? null) ? $status['current_group'] : [];
+$last = \is_array($status['last'] ?? null) ? $status['last'] : [];
+$totals = \is_array($status['totals'] ?? null) ? $status['totals'] : [];
+$verdict = \is_array($status['verdict'] ?? null) ? $status['verdict'] : [];
+$generation = \is_array($status['generation'] ?? null) ? $status['generation'] : [];
+$load = \is_array($status['load'] ?? null) ? $status['load'] : [];
+$settings = \is_array($status['settings'] ?? null) ? $status['settings'] : [];
+
+$verdictState = (string)($verdict['state'] ?? 'never');
+$age = $last['age_seconds'] ?? null;
+$ageText = $age === null
+    ? (string)__('从未更新')
+    : (string)__('%{1} 秒前', (int)$age);
+$settingValue = static function (string $key) use ($settings): int {
+    return (int)($settings[$key]['value'] ?? 0);
+};
+$settingDefault = static function (string $key) use ($settings): int {
+    return (int)($settings[$key]['default'] ?? 0);
+};
+?>
+
+<div class="sfw-page" id="sfw-page">
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <h4 style="--w-mb-sm:0;"><?= __('自动预热进度') ?></h4>
+        <div class="w-cluster">
+            <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                <li class="w-breadcrumb__item"><a href="@backend-url{'admin/system/cache'}"><?= __('缓存管理') ?></a></li>
+                <li class="w-breadcrumb__item" data-state="active"><?= __('自动预热进度') ?></li>
+            </ol>
+        </div>
+    </div>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <section class="sfw-hero" data-tone="<?= \htmlspecialchars($verdictState) ?>">
+        <div class="sfw-hero__main">
+            <span class="sfw-badge" id="sfw-verdict"><?= \htmlspecialchars((string)($verdict['label'] ?? __('尚未运行'))) ?></span>
+            <h2><?= __('店面自动预热（FPC）') ?></h2>
+            <p id="sfw-verdict-detail"><?= \htmlspecialchars((string)($verdict['detail'] ?? '')) ?></p>
+            <p class="sfw-hero__meta">
+                <span><?= __('账本更新：') ?><b id="sfw-updated"><?= \htmlspecialchars((string)($last['updated_at'] ?? '')) ?></b>
+                    <span class="sfw-muted" id="sfw-age">（<?= \htmlspecialchars($ageText) ?>）</span></span>
+                <span><?= __('世代：') ?><code id="sfw-generation"><?= \htmlspecialchars((string)($generation['short'] ?? '')) ?></code></span>
+                <span class="sfw-rewarm" id="sfw-rewarm"<?= empty($generation['needs_rewarm']) ? ' hidden' : '' ?>><?= __('世代已变，需重新预热') ?></span>
+            </p>
+        </div>
+        <div class="sfw-hero__actions">
+            <span class="sfw-auto"><?= __('每 5 秒自动刷新') ?></span>
+            <button type="button" class="w-button sfw-gear" id="sfw-open-settings" data-tone="quiet"
+                    aria-label="<?= __('负载算法参数') ?>" title="<?= __('负载算法参数') ?>">
+                <w:icon name="settings" size="sm"></w:icon>
+            </button>
+        </div>
+    </section>
+
+    <section class="sfw-grid">
+        <article class="sfw-card">
+            <h3><?= __('预热阶段') ?></h3>
+            <p class="sfw-card__hint"><?= __('顺序 A→B→C→D；cron 每 5 分钟推进一片，忙时按负载让出。') ?></p>
+            <ol class="sfw-phases">
+                <?php foreach ($phases as $row): ?>
+                    <li class="sfw-phase" data-state="<?= !empty($row['current']) ? 'current' : (\htmlspecialchars((string)$row['percent']) === '100' ? 'done' : 'pending') ?>"
+                        id="sfw-phase-<?= \htmlspecialchars((string)$row['key']) ?>">
+                        <div class="sfw-phase__head">
+                            <span class="sfw-phase__label"><?= \htmlspecialchars((string)$row['label']) ?></span>
+                            <span class="sfw-phase__count"><b data-role="done"><?= (int)$row['done'] ?></b>/<span data-role="total"><?= (int)$row['total'] ?></span></span>
+                        </div>
+                        <div class="sfw-bar"><span class="sfw-bar__fill" data-role="fill" style="width:<?= \min(100, \max(0, (float)$row['percent'])) ?>%"></span></div>
+                    </li>
+                <?php endforeach; ?>
+            </ol>
+            <div class="sfw-progress">
+                <span><?= __('整体进度') ?></span>
+                <b id="sfw-progress-percent"><?= \htmlspecialchars((string)($progress['percent'] ?? 0)) ?>%</b>
+                <span class="sfw-muted" id="sfw-progress-count"><?= (int)($progress['done'] ?? 0) ?>/<?= (int)($progress['total'] ?? 0) ?></span>
+            </div>
+            <div class="sfw-bar sfw-bar--lg sfw-bar--progress" role="progressbar" id="sfw-progress-bar"
+                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= \min(100, \max(0, (float)($progress['percent'] ?? 0))) ?>"
+                 aria-label="<?= __('整体进度') ?>">
+                <span class="sfw-bar__fill" id="sfw-progress-fill" style="width:<?= \min(100, \max(0, (float)($progress['percent'] ?? 0))) ?>%"></span>
+            </div>
+        </article>
+
+        <article class="sfw-card">
+            <h3><?= __('正在预热哪一组') ?></h3>
+            <p class="sfw-card__hint"><?= __('当前相位里的游标位置与最近一条处理结果。') ?></p>
+            <dl class="sfw-pairs">
+                <dt><?= __('当前相位') ?></dt>
+                <dd id="sfw-phase-label"><?= \htmlspecialchars((string)($status['phase_label'] ?? '')) ?></dd>
+                <dt><?= __('当前组') ?></dt>
+                <dd><span id="sfw-group-label"><?= \htmlspecialchars((string)($group['label'] ?? '')) ?></span>
+                    <span class="sfw-muted" id="sfw-group-position"><?= \htmlspecialchars((string)($group['position'] ?? '')) ?></span></dd>
+                <dt><?= __('组内地址') ?></dt>
+                <dd><code class="sfw-break" id="sfw-group-item"><?= \htmlspecialchars((string)($group['item'] ?? '')) ?></code></dd>
+                <dt><?= __('最近一条') ?></dt>
+                <dd><code class="sfw-break" id="sfw-last-url"><?= \htmlspecialchars((string)($last['url'] ?? '')) ?></code></dd>
+                <dt><?= __('状态 / 原因') ?></dt>
+                <dd><span id="sfw-last-status"><?= \htmlspecialchars((string)($last['status'] ?? '')) ?></span>
+                    <span class="sfw-muted" id="sfw-last-reason"><?= \htmlspecialchars((string)($last['reason'] ?? '')) ?></span></dd>
+            </dl>
+            <div class="sfw-totals">
+                <span><?= __('成功') ?> <b id="sfw-total-ok"><?= (int)($totals['ok'] ?? 0) ?></b></span>
+                <span><?= __('跳过') ?> <b id="sfw-total-skip"><?= (int)($totals['skip'] ?? 0) ?></b></span>
+                <span><?= __('失败') ?> <b id="sfw-total-fail"><?= (int)($totals['fail'] ?? 0) ?></b></span>
+                <span><?= __('剩余') ?> <b id="sfw-remaining"><?= (int)($progress['remaining'] ?? 0) ?></b></span>
+            </div>
+        </article>
+
+        <article class="sfw-card sfw-card--wide">
+            <h3><?= __('当前机器负载') ?></h3>
+            <p class="sfw-card__hint" id="sfw-load-source">
+                <?= \htmlspecialchars((string)($load['source_label'] ?? '')) ?>
+                · <?= __('核数') ?> <b id="sfw-cores"><?= (int)($load['cores'] ?? 0) ?></b>
+                · load1 <b id="sfw-load1"><?= \htmlspecialchars((string)($load['load1'] ?? 0)) ?></b>
+            </p>
+            <div class="sfw-load">
+                <div class="sfw-load__gauge">
+                    <div class="sfw-bar sfw-bar--lg">
+                        <span class="sfw-bar__fill" id="sfw-load-fill" style="width:<?= \min(100, \max(0, (float)($load['ratio_percent'] ?? 0))) ?>%"></span>
+                        <span class="sfw-bar__mark" id="sfw-load-start" style="left:<?= \min(100, \max(0, (float)($load['start_percent'] ?? 40))) ?>%" title="<?= __('起控阈值') ?>"></span>
+                        <span class="sfw-bar__mark" id="sfw-load-abort" style="left:<?= \min(100, \max(0, (float)($load['abort_percent'] ?? 70))) ?>%" title="<?= __('中止阈值') ?>"></span>
+                    </div>
+                    <p>
+                        <b id="sfw-load-ratio"><?= \htmlspecialchars((string)($load['ratio_percent'] ?? 0)) ?>%</b>
+                        <span class="sfw-muted"><?= __('当前负载') ?></span>
+                        <span class="sfw-muted">· <?= __('起控') ?> <b id="sfw-start-pct"><?= \htmlspecialchars((string)($load['start_percent'] ?? 40)) ?>%</b></span>
+                        <span class="sfw-muted">· <?= __('中止') ?> <b id="sfw-abort-pct"><?= \htmlspecialchars((string)($load['abort_percent'] ?? 70)) ?>%</b></span>
+                    </p>
+                </div>
+                <dl class="sfw-pairs sfw-pairs--tight">
+                    <dt><?= __('容量带') ?></dt>
+                    <dd id="sfw-band"><?= \htmlspecialchars((string)($load['band_label'] ?? '')) ?></dd>
+                    <dt><?= __('设计并发 / 批量') ?></dt>
+                    <dd><span id="sfw-designed"><?= (int)($load['designed_concurrency'] ?? 0) ?> / <?= (int)($load['designed_shard'] ?? 0) ?></span></dd>
+                    <dt><?= __('本片生效并发 / 批量') ?></dt>
+                    <dd><span id="sfw-effective"><?= (int)($load['effective_concurrency'] ?? 0) ?> / <?= (int)($load['effective_shard'] ?? 0) ?></span></dd>
+                    <dt><?= __('本片时长上限') ?></dt>
+                    <dd><span id="sfw-wall"><?= (int)($load['effective_wall_ms'] ?? 0) ?></span> ms</dd>
+                </dl>
+            </div>
+        </article>
+    </section>
+</div>
+
+<div class="w-dialog" id="sfw-settings" tabindex="-1" data-w-component="dialog" data-state="closed" hidden aria-hidden="true">
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface" role="dialog" aria-modal="true" aria-labelledby="sfw-settings-title">
+            <div class="w-dialog__header">
+                <h2 class="w-dialog__title" id="sfw-settings-title"><?= __('负载算法参数') ?></h2>
+                <button type="button" class="w-button" data-w-action="dialog.close" data-w-close="1" data-tone="quiet" data-size="sm" aria-label="<?= __('关闭') ?>"></button>
+            </div>
+            <w:form id="sfw-settings-form">
+                <div class="w-dialog__body">
+                    <p class="sfw-card__hint"><?= __('写入 app/etc/env.php 的 framework.cache.storefront_warmup_*；预热由 CLI cron 读取，下一次 tick 生效。留空表示该项不修改。其他 WLS Worker 重载前可能仍显示旧值。') ?></p>
+                    <div class="sfw-field">
+                        <label class="w-field__label" for="sfw-input-start"><?= __('负载起控阈值（%）') ?></label>
+                        <input class="w-input" type="number" id="sfw-input-start" name="busy_start_pct" min="1" max="99"
+                               value="<?= $settingValue('busy_start_pct') ?>" placeholder="<?= $settingDefault('busy_start_pct') ?>">
+                        <div class="w-field__hint"><?= __('负载达到该值进入缩容推进，默认 %{1}%。', $settingDefault('busy_start_pct')) ?></div>
+                    </div>
+                    <div class="sfw-field">
+                        <label class="w-field__label" for="sfw-input-abort"><?= __('负载中止阈值（%）') ?></label>
+                        <input class="w-input" type="number" id="sfw-input-abort" name="busy_abort_pct" min="1" max="99"
+                               value="<?= $settingValue('busy_abort_pct') ?>" placeholder="<?= $settingDefault('busy_abort_pct') ?>">
+                        <div class="w-field__hint"><?= __('达到该值本片直接让出，必须不小于起控阈值，默认 %{1}%。', $settingDefault('busy_abort_pct')) ?></div>
+                    </div>
+                    <div class="sfw-field">
+                        <label class="w-field__label" for="sfw-input-concurrency"><?= __('并发数') ?></label>
+                        <input class="w-input" type="number" id="sfw-input-concurrency" name="concurrency" min="1" max="12"
+                               value="<?= $settingValue('concurrency') ?>" placeholder="<?= $settingDefault('concurrency') ?>">
+                        <div class="w-field__hint"><?= __('1–12，默认按核数取 %{1}。', $settingDefault('concurrency')) ?></div>
+                    </div>
+                    <div class="sfw-field">
+                        <label class="w-field__label" for="sfw-input-shard"><?= __('每片批量') ?></label>
+                        <input class="w-input" type="number" id="sfw-input-shard" name="shard" min="1" max="256"
+                               value="<?= $settingValue('shard') ?>" placeholder="<?= $settingDefault('shard') ?>">
+                        <div class="w-field__hint"><?= __('1–256，默认并发×16，默认值 %{1}。', $settingDefault('shard')) ?></div>
+                    </div>
+                    <div class="sfw-field">
+                        <label class="w-field__label" for="sfw-input-wall"><?= __('单片时长上限（ms）') ?></label>
+                        <input class="w-input" type="number" id="sfw-input-wall" name="wall_ms" min="5000" max="180000" step="1000"
+                               value="<?= $settingValue('wall_ms') ?>" placeholder="<?= $settingDefault('wall_ms') ?>">
+                        <div class="w-field__hint"><?= __('5000–180000，默认 %{1} ms。', $settingDefault('wall_ms')) ?></div>
+                    </div>
+                    <p class="sfw-form-message" id="sfw-settings-message" role="status"></p>
+                </div>
+                <div class="w-dialog__footer">
+                    <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                    <button type="submit" class="w-button" data-tone="primary" id="sfw-settings-save"><?= __('保存参数') ?></button>
+                </div>
+            </w:form>
+        </div>
+    </div>
+</div>
+
+<script id="sfw-page-config" type="application/json">{"strings":{
+    "never":"<?= \addslashes(__('尚未运行')) ?>",
+    "running":"<?= \addslashes(__('正在预热')) ?>",
+    "queued":"<?= \addslashes(__('待推进')) ?>",
+    "stalled":"<?= \addslashes(__('预热停滞')) ?>",
+    "done":"<?= \addslashes(__('已预热完成')) ?>",
+    "needs_rewarm":"<?= \addslashes(__('需要预热')) ?>",
+    "saved":"<?= \addslashes(__('预热负载参数已保存，下一次 cron tick 生效')) ?>",
+    "save_failed":"<?= \addslashes(__('保存失败')) ?>",
+    "load_failed":"<?= \addslashes(__('状态刷新失败，稍后重试')) ?>",
+    "seconds_ago":"<?= \addslashes(__('秒前')) ?>",
+    "never_updated":"<?= \addslashes(__('从未更新')) ?>"
+}}</script>
+<script src="@static(Weline_CacheManager::system/storefront-warmup.js)" defer></script>

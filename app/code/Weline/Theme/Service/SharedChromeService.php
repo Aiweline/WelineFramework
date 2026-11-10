@@ -148,6 +148,13 @@ final class SharedChromeService
      * 有内容后 :has() 会自动恢复显示。这是框架 chrome 语义，design 主题禁止再自行 !important 强藏。
      * Marker: storefront-float-edge-empty-shell-hide-v1 */
     #w-storefront-float-layer .w-storefront-float-layer__slot:has(> .w-storefront-float-edge__chrome > .w-storefront-float-edge__body:empty){display:none}
+    /* 宿主自声明可空隐藏（data-weline-collapse-empty）：八个方向的槽位（容器）按「有没有元素子节点」
+     * 判空，不等水合状态。未分层才能在首帧压过宿主壳的 padding/背景（sheet 同值镜像）。
+     * Marker: storefront-float-collapse-empty-v1 */
+    #w-storefront-float-layer .w-storefront-float-layer__slot:has([data-weline-collapse-empty]:empty){display:none}
+    #w-storefront-float-layer [data-weline-collapse-empty]:not(:has(*)){display:none}
+    /* 八个方向槽位本身没有元素子节点时不展示（部件注入后 :has(*) 自动恢复）。Marker: storefront-float-slot-empty-hide-v1 */
+    #w-storefront-float-layer .w-storefront-float-layer__slot:not(:has(*)){display:none}
     #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed{will-change:transform;overflow:visible;max-height:none}
     /* One dock rule per direction — every slot carrying data-float-dock collapses the same way. Marker: storefront-float-edge-dock-directions-v2 */
     #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed[data-float-dock=left]{left:max(0px,env(safe-area-inset-left,0px))!important;right:auto;transform:var(--w-float-dock-base,) translateX(-100%)}

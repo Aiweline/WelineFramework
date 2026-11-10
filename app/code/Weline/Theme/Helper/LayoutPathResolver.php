@@ -156,8 +156,8 @@ class LayoutPathResolver
     }
 
     /**
-     * Must share Template::resolveStableCompileRoot (plaintext scope + lang/currency).
-     * Do not invent lang-only or *_ctx_* parallel trees.
+     * Must share Template::resolveStableCompileRoot (plaintext scope + lang).
+     * Do not invent a parallel *_ctx_* or currency-partitioned tree.
      */
     public static function getCompiledLayoutPath(string $modulePath, string $lang): string
     {
@@ -189,7 +189,7 @@ class LayoutPathResolver
         try {
             /** @var \Weline\Framework\View\Template $template */
             $template = ObjectManager::getInstance(\Weline\Framework\View\Template::class);
-            // $lang is legacy; live State lang/currency already inside resolveStableCompileRoot.
+            // $lang is legacy; live State lang already inside resolveStableCompileRoot.
             unset($lang);
             $root = $template->resolveStableCompileRoot($compileDir);
 

@@ -39,9 +39,15 @@ final class TemplateCompileOriginScopeTest extends TestCase
             $directory = VAR_DIR . 'origin-fixture-compile/';
             $first = $method->invoke($template, $directory);
 
-            self::assertStringContainsString('frontend_w27_origin_shop_en_US_USD', $first);
+            self::assertStringContainsString('frontend_w27_origin_shop_en_US', $first);
+            self::assertStringNotContainsString('_USD', $first, 'v11: currency must not partition compiled templates');
             self::assertStringContainsString('_o_shop_test_9555', $first);
             self::assertStringNotContainsString('_ctx_', $first, 'v7 plain scope must not append ctx_ hash directories');
+
+            // v11：同一语言换币种必须复用同一编译根（货币只影响运行期价格）。
+            WelineEnv::set('user.currency', 'EUR', 'compile currency fixture');
+            self::assertSame($first, $method->invoke($template, $directory), 'Switching currency must not create a new compile directory.');
+            WelineEnv::set('user.currency', 'USD', 'compile currency fixture');
 
             // Legacy v6 ctx_ leaf must remap to current plain directory (idempotent strip).
             $legacyScope = [

@@ -295,7 +295,7 @@ private function assert_DeployModeSetStaging_testUpgradeAndTraitTemplateRespectS
     self::assertStringContainsString('DeployPublicUrlMode::useProduction', $trait);
     self::assertStringContainsString('useProductionStaticPublicUrls', $trait);
     self::assertStringContainsString('deploy_public_urls', $trait);
-    self::assertStringContainsString('context-env-v10-module-static-flat', $trait);
+    self::assertStringContainsString('context-env-v11-lang-only-scope', $trait);
     $publicUrlMode = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/Deploy/DeployPublicUrlMode.php');
     self::assertStringContainsString('forcesProductionPublicUrls', $publicUrlMode);
     self::assertStringContainsString("Env::system('deploy')", $publicUrlMode);

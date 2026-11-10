@@ -99,6 +99,22 @@ final class FloatChromeCriticalParityTest extends TestCase
         self::assertStringContainsString('.w-storefront-float-edge__recall:is(:hover,:focus-visible)', $css, 'emitter 缺 recall hover 镜像');
         // 空壳隐藏上收（原写在各 design 主题首页布局里）
         self::assertStringContainsString('__body:empty){display:none}', $css, 'emitter 必须承载空壳槽隐藏规则');
+        // 宿主自声明的可空隐藏（水合失败时宿主壳仍在，必须按元素数判空）
+        self::assertStringContainsString(
+            '[data-weline-collapse-empty]:not(:has(*)){display:none}',
+            $css,
+            'emitter 缺宿主判空收起规则'
+        );
+        self::assertStringContainsString(
+            '__slot:has([data-weline-collapse-empty]:empty){display:none}',
+            $css,
+            'emitter 缺八个方向槽位的整槽判空隐藏'
+        );
+        self::assertStringContainsString(
+            '__slot:not(:has(*)){display:none}',
+            $css,
+            'emitter 缺无子节点槽位的隐藏规则'
+        );
         // 让位规则必须也在 emitter（未分层）内：sheet 里这些规则在 @layer components 内，会被未分层的
         // 基线 bottom 规则压掉——实测曾导致同意条文字被悬浮件遮挡 41%。
         self::assertStringContainsString('storefront-float-critical-consent-clearance-v1', $css, 'emitter 缺让位规则 marker');

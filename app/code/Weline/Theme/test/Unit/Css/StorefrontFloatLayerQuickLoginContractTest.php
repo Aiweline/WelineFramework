@@ -40,6 +40,26 @@ final class StorefrontFloatLayerQuickLoginContractTest extends TestCase
         }
     }
 
+    public function testDeclaredEmptyHostCollapsesByElementCount(): void
+    {
+        $css = (string)\file_get_contents($this->cssPath());
+        self::assertMatchesRegularExpression(
+            '/#w-storefront-float-layer\s+\[data-weline-collapse-empty\]:not\(:has\(\*\)\)\s*\{\s*display:\s*none;/',
+            $css,
+            '声明 data-weline-collapse-empty 的宿主必须按「没有元素子节点」自判空收起（不等水合状态）'
+        );
+    }
+
+    public function testEmptySlotContainerHidesItself(): void
+    {
+        $css = (string)\file_get_contents($this->cssPath());
+        self::assertMatchesRegularExpression(
+            '/#w-storefront-float-layer\s+\.w-storefront-float-layer__slot:has\(\[data-weline-collapse-empty\]:empty\)\s*\{\s*display:\s*none;/',
+            $css,
+            '八个方向的槽位（容器）必须在装着空宿主时整槽隐藏'
+        );
+    }
+
     public function testContentReservesChromeClearanceAtTop(): void
     {
         $css = (string)\file_get_contents($this->cssPath());

@@ -1289,10 +1289,7 @@ HTML;
         $isProductGroup = $schemaType === 'ProductGroup'
             || $variants !== []
             || $this->readNonEmpty($product, ['product_group_id', 'productGroupID']) !== null;
-        $description = $this->cleanText((string) ($this->readNonEmpty($product, ['meta_description', 'short_description', 'description']) ?: ($context['description'] ?? '')));
-        if ($description === '') {
-            $description = $this->fallbackProductDescription($product, $context);
-        }
+        $description = $this->resolveProductDescription($product, $context);
         $node = [
             '@type' => $isProductGroup ? 'ProductGroup' : 'Product',
             '@id' => $url . '#product',
@@ -1361,7 +1358,7 @@ HTML;
             if ($variesBy !== []) {
                 $node['variesBy'] = $variesBy;
             }
-            $variantNodes = $this->productVariantNodes($variants, $url, $orgId, $context);
+            $variantNodes = $this->productVariantNodes($variants, $url, $orgId, $context, $description);
             if ($variantNodes !== []) {
                 $node['hasVariant'] = $variantNodes;
             }
@@ -1400,6 +1397,44 @@ HTML;
         $space = mb_strrpos($cut, ' ');
         $short = $space === false ? $cut : mb_substr($cut, 0, $space);
         return rtrim($short, " \t\n\r\0\x0B,;:·/|-.。，；：");
+    }
+
+    private function resolveProductDescription(mixed $product, array $context): string
+    {
+        $description = $this->cleanText((string) ($this->readNonEmpty($product, ['meta_description', 'short_description', 'description']) ?: ($context['description'] ?? '')));
+
+        return $description !== '' ? $description : $this->fallbackProductDescription($product, $context);
+    }
+
+    /**
+     * Google 商品变体文档建议每个 hasVariant Product 也带 description；
+     * 变体自身无描述时用商品级描述 + 该变体真实属性值区分，不编造卖点。
+     *
+     * @param array<string, mixed> $variant
+     * @param array<string, mixed> $context
+     */
+    private function variantDescription(array $variant, array $context, string $productDescription): string
+    {
+        $own = $this->cleanText((string) ($this->readNonEmpty($variant, ['meta_description', 'short_description', 'description']) ?? ''));
+        if ($own !== '') {
+            return $own;
+        }
+
+        $base = $productDescription !== ''
+            ? $productDescription
+            : $this->resolveProductDescription($context['product'] ?? [], $context);
+        $axes = [];
+        foreach (['color', 'size', 'material', 'pattern'] as $field) {
+            $value = $this->readNonEmpty($variant, [$field]);
+            if ($value !== null && !is_array($value) && trim((string) $value) !== '') {
+                $axes[] = trim((string) $value);
+            }
+        }
+        if ($axes === [] || $base === '') {
+            return $base;
+        }
+
+        return $this->cleanText($base . '（' . implode(' / ', $axes) . '）');
     }
 
     private function fallbackProductDescription(mixed $product, array $context): string
@@ -1948,7 +1983,7 @@ HTML;
      * @param array<int, mixed> $variants
      * @return array<int, array<string, mixed>>
      */
-    private function productVariantNodes(array $variants, string $url, string $orgId, array $context): array
+    private function productVariantNodes(array $variants, string $url, string $orgId, array $context, string $productDescription = ''): array
     {
         $nodes = [];
         foreach ($variants as $index => $variant) {
@@ -1963,6 +1998,10 @@ HTML;
                 'isVariantOf' => ['@id' => $url . '#product'],
                 'name' => $this->truncateSchemaName((string) ($name ?: ($context['title'] ?? ''))),
             ];
+            $variantDescription = $this->variantDescription($variant, $context, $productDescription);
+            if ($variantDescription !== '') {
+                $node['description'] = $variantDescription;
+            }
             foreach (['sku' => ['sku'], 'color' => ['color'], 'size' => ['size'], 'material' => ['material'], 'pattern' => ['pattern']] as $field => $keys) {
                 $value = $this->readNonEmpty($variant, $keys);
                 if ($value !== null && !is_array($value)) {

@@ -187,8 +187,18 @@ final class StaticBuildId
         }
         // 模块静态（/static/{模块}/…）：资源真实落盘在 pub/static/{模块}/，加了构建段就 404，
         // 也不应让未命中穿透进 WLS。只有设计主题命名空间（{Vendor}/{theme}）才隔离构建段。
-        $firstSegment = \explode('/', \trim((string)\strtok($path, '?'), '/'))[1] ?? '';
-        if ($firstSegment === '' || !self::isDesignNamespaceSegment($firstSegment)) {
+        // 注意：设计命名空间是**两段**（`/static/Weline/hanfu/…`），只看第一段会把 `Weline`
+        // 误判成模块名，主题图片因此永远拿不到代次段（线上 404）。代次段（12hex / tu-*）与
+        // 主题对段（`{code}/v{n}`）也必须放行，否则下面的替换分支永远走不到。
+        $pathParts = \explode('/', \trim((string)\strtok($path, '?'), '/'));
+        $firstSegment = $pathParts[1] ?? '';
+        $secondSegment = $pathParts[2] ?? '';
+        $isGenerationSegment = \preg_match('/^[0-9a-f]{12}$/i', $firstSegment) === 1
+            || \str_starts_with($firstSegment, 'tu-');
+        $isPairSegment = \preg_match('/^v[0-9]+$/', $secondSegment) === 1;
+        $isDesignNamespace = $secondSegment !== ''
+            && self::isDesignNamespaceSegment($firstSegment . '/' . $secondSegment);
+        if ($firstSegment === '' || (!$isGenerationSegment && !$isPairSegment && !$isDesignNamespace)) {
             return $path;
         }
         [$urlPath, $query] = \str_contains($path, '?') ? \explode('?', $path, 2) : [$path, null];
@@ -273,11 +283,15 @@ final class StaticBuildId
      * `/static/{X}/…` 的 X 是否是设计主题命名空间（`app/design/{Vendor}/{theme}`）。
      * 只有这类命名空间的产物有「按构建代次隔离」的镜像目录（`/{code}/v{n}/{build}/…`）；
      * 模块命名空间（Weline/Frontend/…）的静态就在 pub/static 原地，不参与构建段。
+     *
+     * 支持两种入参形状：
+     * - `{Vendor}/{theme}`：模板实际输出的设计命名空间（`/static/Weline/hanfu/…`）；
+     * - `{theme}`：主题对目录里的主题 code（`/static/hanfu/v{n}/…`），任意 Vendor 下同名主题。
      */
     private static function isDesignNamespaceSegment(string $name): bool
     {
         $name = \trim($name);
-        if ($name === '' || \preg_match('/^[A-Za-z0-9_.-]+$/D', $name) !== 1) {
+        if ($name === '' || \preg_match('/^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)?$/D', $name) !== 1) {
             return false;
         }
         try {
@@ -287,6 +301,9 @@ final class StaticBuildId
         }
         if ($designRoot === '' || !\is_dir($designRoot)) {
             return false;
+        }
+        if (\str_contains($name, '/')) {
+            return \is_dir($designRoot . \DIRECTORY_SEPARATOR . \str_replace('/', \DIRECTORY_SEPARATOR, $name));
         }
         $vendors = @\scandir($designRoot);
         if (!\is_array($vendors)) {
