@@ -16,10 +16,30 @@ final class StorefrontWarmupHttpClient
     private const TIMEOUT_SECONDS = 45;
 
     /**
+     * 具名站预热注入站点 Host：请求只走 loopback + 该 Host 头，写该站 FPC 叶。
+     * 默认站（空值）保持旧三目标解析逻辑不变。
+     */
+    public function __construct(private readonly string $hostOverride = '')
+    {
+    }
+
+    /**
      * @return list<array{scheme:string,connect:string,port:int,host:string}>
      */
     public function resolveTargets(): array
     {
+        $override = StorefrontWarmupScopeCatalog::normalizeHost($this->hostOverride);
+        if ($override !== '' && !$this->isLoopbackHost($override)) {
+            $instance = $this->readDefaultInstanceConfig();
+
+            return [[
+                'scheme' => 'http',
+                'connect' => '127.0.0.1',
+                'port' => $this->resolvePublicPort($instance),
+                'host' => $override,
+            ]];
+        }
+
         $targets = [];
         $seen = [];
         $push = static function (string $scheme, string $connect, int $port, string $host) use (&$targets, &$seen): void {
@@ -625,6 +645,14 @@ final class StorefrontWarmupHttpClient
      * browser-reachable origin: warming it renders/publishes URLs carrying the
      * Worker port into canonical/hreflang/storefront links.
      */
+    private function isLoopbackHost(string $host): bool
+    {
+        return $host === '127.0.0.1'
+            || $host === 'localhost'
+            || $host === '::1'
+            || \str_starts_with($host, '127.');
+    }
+
     private function isWorkerListenPort(int $port): bool
     {
         if ($port <= 0 || $port === 80 || $port === 443) {

@@ -102,6 +102,8 @@ class StorefrontWarmupAdminServiceTest extends TestCore
         $this->assertSame(12, $status['totals']['ok']);
         $this->assertSame(2, $status['totals']['fail']);
         $this->assertSame('queued', $status['verdict']['state']);
+        $this->assertArrayHasKey('clock_advance', $status['generation']);
+        $this->assertGreaterThanOrEqual(0, $status['generation']['clock_advance']);
         // phases 以相位字母为键：JSON 后是对象，前端必须按 Object.keys 遍历。
         $this->assertStringStartsWith('{', (string)\json_encode($status['phases']));
     }
@@ -231,5 +233,56 @@ class StorefrontWarmupAdminServiceTest extends TestCore
         $empty = $this->service()->validate(['busy_start_pct' => '', 'concurrency' => null]);
         $this->assertSame([], $empty['errors']);
         $this->assertSame([], $empty['values']);
+    }
+
+    public function testLoadYieldIsExplainedInVerdictDetail(): void
+    {
+        $sample = $this->quietSample();
+        $sample['ratio'] = 0.95;
+        $sample['busy'] = true;
+
+        $status = $this->service()->buildStatus(
+            $this->state(),
+            $sample,
+            $this->capacity(StorefrontWarmupCapacityPlanner::BAND_YIELD),
+            true,
+            self::NOW,
+            ['available' => false, 'max_percent' => 0, 'percent' => 0.0, 'blocked' => false]
+        );
+
+        $this->assertSame('queued', $status['verdict']['state']);
+        $this->assertStringContainsString('95', $status['verdict']['detail']);
+        $this->assertStringContainsString('70', $status['verdict']['detail']);
+    }
+
+    public function testCronGateBlockedIsExplainedInVerdictDetail(): void
+    {
+        $status = $this->service()->buildStatus(
+            $this->state(),
+            $this->quietSample(),
+            $this->capacity(),
+            true,
+            self::NOW,
+            ['available' => true, 'max_percent' => 70, 'percent' => 80.3, 'blocked' => true]
+        );
+
+        $this->assertSame(['available' => true, 'max_percent' => 70, 'percent' => 80.3, 'blocked' => true], $status['cron_gate']);
+        $this->assertStringContainsString('80.3', $status['verdict']['detail']);
+        $this->assertStringContainsString('70', $status['verdict']['detail']);
+    }
+
+    public function testCronGateOpenDoesNotAppendReason(): void
+    {
+        $status = $this->service()->buildStatus(
+            $this->state(),
+            $this->quietSample(),
+            $this->capacity(),
+            true,
+            self::NOW,
+            ['available' => true, 'max_percent' => 70, 'percent' => 12.0, 'blocked' => false]
+        );
+
+        $this->assertFalse($status['cron_gate']['blocked']);
+        $this->assertStringNotContainsString('80.3', $status['verdict']['detail']);
     }
 }

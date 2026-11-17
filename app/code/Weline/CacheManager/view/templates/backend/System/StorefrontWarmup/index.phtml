@@ -13,9 +13,38 @@ $totals = \is_array($status['totals'] ?? null) ? $status['totals'] : [];
 $verdict = \is_array($status['verdict'] ?? null) ? $status['verdict'] : [];
 $generation = \is_array($status['generation'] ?? null) ? $status['generation'] : [];
 $load = \is_array($status['load'] ?? null) ? $status['load'] : [];
+$cronGate = \is_array($status['cron_gate'] ?? null) ? $status['cron_gate'] : [];
 $settings = \is_array($status['settings'] ?? null) ? $status['settings'] : [];
+$scope = \is_array($status['scope'] ?? null) ? $status['scope'] : [];
+$scopeOptions = \is_array($scope['options'] ?? null) ? $scope['options'] : [];
+$scopeValue = (string)($scope['value'] ?? 'all');
+$isAllScope = !empty($scope['is_all']);
+$sites = \is_array($status['sites'] ?? null) ? $status['sites'] : [];
+
+$gateState = 'unavailable';
+$gateText = (string)__('取不到计划任务门禁状态');
+if (!empty($cronGate['available'])) {
+    $gateState = !empty($cronGate['blocked']) ? 'blocked' : 'open';
+    $gateText = $gateState === 'blocked'
+        ? (string)__('Cron 门禁已跳过整轮：负载 %{1}% ≥ 上限 %{2}%，cron 不会启动预热', [
+            \number_format((float)($cronGate['percent'] ?? 0), 1, '.', ''),
+            (int)($cronGate['max_percent'] ?? 0),
+        ])
+        : (string)__('Cron 门禁放行：负载 %{1}% < 上限 %{2}%', [
+            \number_format((float)($cronGate['percent'] ?? 0), 1, '.', ''),
+            (int)($cronGate['max_percent'] ?? 0),
+        ]);
+}
 
 $verdictState = (string)($verdict['state'] ?? 'never');
+$clockAdvance = (int)($generation['clock_advance'] ?? 0);
+$clockText = (string)__('世代时钟：账本 %{1} / 当前 %{2}', [
+    (int)($generation['authority_clock'] ?? 0),
+    (int)($generation['authority_clock_current'] ?? 0),
+]);
+if ($clockAdvance > 0) {
+    $clockText .= (string)__('（+%{1}，有发布在推进）', $clockAdvance);
+}
 $age = $last['age_seconds'] ?? null;
 $ageText = $age === null
     ? (string)__('从未更新')
@@ -32,6 +61,17 @@ $settingDefault = static function (string $key) use ($settings): int {
     <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
         <h4 style="--w-mb-sm:0;"><?= __('自动预热进度') ?></h4>
         <div class="w-cluster">
+            <label class="sfw-scope" for="sfw-scope-select">
+                <span><?= __('范围') ?></span>
+                <select class="w-select" id="sfw-scope-select" aria-label="<?= __('预热范围') ?>">
+                    <?php foreach ($scopeOptions as $option): ?>
+                        <option value="<?= \htmlspecialchars((string)($option['value'] ?? '')) ?>"
+                            <?= (string)($option['value'] ?? '') === $scopeValue ? 'selected' : '' ?>>
+                            <?= \htmlspecialchars((string)($option['label'] ?? '')) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
             <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
                 <li class="w-breadcrumb__item"><a href="@backend-url{'admin/system/cache'}"><?= __('缓存管理') ?></a></li>
                 <li class="w-breadcrumb__item" data-state="active"><?= __('自动预热进度') ?></li>
@@ -50,6 +90,7 @@ $settingDefault = static function (string $key) use ($settings): int {
                 <span><?= __('账本更新：') ?><b id="sfw-updated"><?= \htmlspecialchars((string)($last['updated_at'] ?? '')) ?></b>
                     <span class="sfw-muted" id="sfw-age">（<?= \htmlspecialchars($ageText) ?>）</span></span>
                 <span><?= __('世代：') ?><code id="sfw-generation"><?= \htmlspecialchars((string)($generation['short'] ?? '')) ?></code></span>
+                <span id="sfw-clock"><?= \htmlspecialchars($clockText) ?></span>
                 <span class="sfw-rewarm" id="sfw-rewarm"<?= empty($generation['needs_rewarm']) ? ' hidden' : '' ?>><?= __('世代已变，需重新预热') ?></span>
             </p>
         </div>
@@ -62,8 +103,40 @@ $settingDefault = static function (string $key) use ($settings): int {
         </div>
     </section>
 
+    <section class="sfw-card sfw-scope-sites" id="sfw-scope-sites"<?= $isAllScope ? '' : ' hidden' ?>>
+        <h3><?= __('各站点预热进度') ?></h3>
+        <p class="sfw-card__hint"><?= __('cron 每 5 分钟逐站推进一片；页面范围切换只改变这里的视图，不影响 cron 恒跑全部站点。') ?></p>
+        <div class="sfw-scope-table" id="sfw-scope-table">
+            <?php foreach ($sites as $row): ?>
+                <?php
+                $siteProgress = \is_array($row['progress'] ?? null) ? $row['progress'] : [];
+                $sitePct = \min(100, \max(0, (float)($siteProgress['percent'] ?? 0)));
+                $siteVerdict = \is_array($row['verdict'] ?? null) ? $row['verdict'] : [];
+                ?>
+                <div class="sfw-scope-row" data-code="<?= \htmlspecialchars((string)($row['code'] ?? '')) ?>">
+                    <div class="sfw-scope-row__head">
+                        <span class="sfw-scope-row__name"><?= \htmlspecialchars((string)($row['name'] ?? '')) ?></span>
+                        <span class="sfw-muted"><?= \htmlspecialchars((string)($row['host'] ?? '')) ?></span>
+                        <span class="sfw-badge" data-role="state"><?= \htmlspecialchars((string)($siteVerdict['label'] ?? '')) ?></span>
+                        <span class="sfw-scope-row__pct" data-role="percent"><?= \htmlspecialchars((string)$sitePct) ?>%</span>
+                    </div>
+                    <div class="sfw-bar sfw-bar--progress" role="progressbar"
+                         aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= $sitePct ?>"
+                         aria-label="<?= \htmlspecialchars((string)($row['name'] ?? '')) ?>">
+                        <span class="sfw-bar__fill" data-role="fill" style="width:<?= $sitePct ?>%"></span>
+                    </div>
+                    <div class="sfw-scope-row__meta">
+                        <span data-role="phase"><?= \htmlspecialchars((string)($row['phase_label'] ?? '')) ?></span>
+                        <span data-role="count"><?= (int)($siteProgress['done'] ?? 0) ?>/<?= (int)($siteProgress['total'] ?? 0) ?></span>
+                        <span data-role="reason"><?= \htmlspecialchars((string)($siteVerdict['detail'] ?? '')) ?></span>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </section>
+
     <section class="sfw-grid">
-        <article class="sfw-card">
+        <article class="sfw-card sfw-single-only"<?= $isAllScope ? ' hidden' : '' ?>>
             <h3><?= __('预热阶段') ?></h3>
             <p class="sfw-card__hint"><?= __('顺序 A→B→C→D；cron 每 5 分钟推进一片，忙时按负载让出。') ?></p>
             <ol class="sfw-phases">
@@ -82,8 +155,8 @@ $settingDefault = static function (string $key) use ($settings): int {
 
         <article class="sfw-card">
             <h3><?= __('正在预热哪一组') ?></h3>
-            <p class="sfw-card__hint"><?= __('当前相位里的游标位置与最近一条处理结果。') ?></p>
-            <dl class="sfw-pairs">
+            <p class="sfw-card__hint sfw-single-only"<?= $isAllScope ? ' hidden' : '' ?>><?= __('当前相位里的游标位置与最近一条处理结果。') ?></p>
+            <dl class="sfw-pairs sfw-single-only"<?= $isAllScope ? ' hidden' : '' ?>>
                 <dt><?= __('当前相位') ?></dt>
                 <dd id="sfw-phase-label"><?= \htmlspecialchars((string)($status['phase_label'] ?? '')) ?></dd>
                 <dt><?= __('当前组') ?></dt>
@@ -121,6 +194,9 @@ $settingDefault = static function (string $key) use ($settings): int {
                 <?= \htmlspecialchars((string)($load['source_label'] ?? '')) ?>
                 · <?= __('核数') ?> <b id="sfw-cores"><?= (int)($load['cores'] ?? 0) ?></b>
                 · load1 <b id="sfw-load1"><?= \htmlspecialchars((string)($load['load1'] ?? 0)) ?></b>
+            </p>
+            <p class="sfw-gate" id="sfw-cron-gate" data-state="<?= \htmlspecialchars($gateState) ?>">
+                <?= \htmlspecialchars($gateText) ?>
             </p>
             <div class="sfw-load">
                 <div class="sfw-load__gauge">
@@ -160,7 +236,7 @@ $settingDefault = static function (string $key) use ($settings): int {
             </div>
             <w:form id="sfw-settings-form">
                 <div class="w-dialog__body">
-                    <p class="sfw-card__hint"><?= __('写入 app/etc/env.php 的 framework.cache.storefront_warmup_*；预热由 CLI cron 读取，下一次 tick 生效。留空表示该项不修改。其他 WLS Worker 重载前可能仍显示旧值。') ?></p>
+                    <p class="sfw-card__hint"><?= __('写入 app/etc/env.php 的 framework.cache.storefront_warmup_*；预热由 CLI cron 读取，下一次 tick 生效。留空表示该项不修改。这里的起控/中止是预热容量阈值，和上方「Cron 门禁上限」是两套开关。保存后会广播一次缓存清理，让所有 Worker 立即读到新值。') ?></p>
                     <div class="sfw-field">
                         <label class="w-field__label" for="sfw-input-start"><?= __('负载起控阈值（%）') ?></label>
                         <input class="w-input" type="number" id="sfw-input-start" name="busy_start_pct" min="1" max="99"
@@ -213,6 +289,17 @@ $settingDefault = static function (string $key) use ($settings): int {
     "save_failed":"<?= \addslashes(__('保存失败')) ?>",
     "load_failed":"<?= \addslashes(__('状态刷新失败，稍后重试')) ?>",
     "seconds_ago":"<?= \addslashes(__('秒前')) ?>",
-    "never_updated":"<?= \addslashes(__('从未更新')) ?>"
+    "never_updated":"<?= \addslashes(__('从未更新')) ?>",
+    "gate_blocked_prefix":"<?= \addslashes(__('Cron 门禁已跳过整轮：负载')) ?>",
+    "gate_open_prefix":"<?= \addslashes(__('Cron 门禁放行：负载')) ?>",
+    "gate_above":"<?= \addslashes(__('≥ 上限')) ?>",
+    "gate_below":"<?= \addslashes(__('< 上限')) ?>",
+    "gate_blocked_tail":"<?= \addslashes(__('，cron 不会启动预热')) ?>",
+    "gate_unavailable":"<?= \addslashes(__('取不到计划任务门禁状态')) ?>",
+    "clock_prefix":"<?= \addslashes(__('世代时钟：账本')) ?>",
+    "clock_current":"<?= \addslashes(__('当前')) ?>",
+    "clock_ahead_prefix":"<?= \addslashes(__('（+')) ?>",
+    "clock_ahead_tail":"<?= \addslashes(__('，有发布在推进）')) ?>",
+    "no_sites":"<?= \addslashes(__('没有可预热的站点，检查网站清单与实例 public_host')) ?>"
 }}</script>
 <script src="@static(Weline_CacheManager::system/storefront-warmup.js)" defer></script>

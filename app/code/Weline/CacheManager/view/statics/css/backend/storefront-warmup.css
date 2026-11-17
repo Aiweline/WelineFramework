@@ -130,10 +130,47 @@
 .sfw-page .sfw-totals b { color: var(--backend-color-text, #172033); }
 
 .sfw-page .sfw-load { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr); gap: var(--backend-spacing-lg, 24px); align-items: start; }
+.sfw-page .sfw-gate {
+    margin: 0 0 var(--backend-spacing-md, 16px);
+    padding: 8px 12px;
+    border: 1px solid var(--backend-color-border-default, #d9e2ef);
+    border-radius: 8px;
+    background: var(--backend-color-bg-secondary, #f7f9fc);
+    color: var(--backend-color-text, #172033);
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.5;
+}
+.sfw-page .sfw-gate[data-state="blocked"] {
+    border-color: var(--backend-color-warning, #d99a1c);
+    background: var(--backend-color-warning-bg-subtle, rgba(217, 154, 28, 0.12));
+}
+.sfw-page .sfw-gate[data-state="open"] {
+    border-color: var(--backend-color-success, #0f9f6e);
+    background: var(--backend-color-success-bg-subtle, rgba(15, 159, 110, 0.1));
+}
 .sfw-page .sfw-load__gauge p { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: var(--backend-spacing-sm, 8px) 0 0; font-size: 13px; color: var(--backend-color-text, #172033); }
 .sfw-page .sfw-load__gauge b { color: var(--backend-color-text, #172033); }
 
 .sfw-page .sfw-muted { color: var(--backend-color-text, #172033); }
+
+.sfw-scope { display: inline-flex; align-items: center; gap: var(--backend-spacing-sm, 8px); font-size: 13px; color: var(--backend-color-text, #172033); }
+.sfw-scope .w-select { min-inline-size: 160px; }
+
+.sfw-page .sfw-scope-sites { margin: 0; }
+.sfw-page .sfw-scope-sites[hidden],
+.sfw-page .sfw-single-only[hidden] { display: none; }
+.sfw-page .sfw-scope-table { display: flex; flex-direction: column; gap: var(--backend-spacing-sm, 8px); }
+.sfw-page .sfw-scope-row {
+    padding: 10px 12px;
+    border: 1px solid var(--backend-color-border-default, #d9e2ef);
+    border-radius: 10px;
+}
+.sfw-page .sfw-scope-row__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--backend-spacing-sm, 8px); font-size: 13px; color: var(--backend-color-text, #172033); }
+.sfw-page .sfw-scope-row__name { font-weight: 700; }
+.sfw-page .sfw-scope-row__head .sfw-badge { font-size: 12px; padding: 2px 10px; }
+.sfw-page .sfw-scope-row__pct { margin-inline-start: auto; font-weight: 700; }
+.sfw-page .sfw-scope-row__meta { display: flex; flex-wrap: wrap; gap: var(--backend-spacing-md, 16px); margin-top: var(--backend-spacing-xs, 4px); font-size: 12px; color: var(--backend-color-text, #172033); }
 
 #sfw-settings .sfw-field { margin-bottom: var(--backend-spacing-md, 16px); }
 #sfw-settings .sfw-field:last-of-type { margin-bottom: 0; }

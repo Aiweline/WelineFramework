@@ -128,7 +128,7 @@ class Env extends DataObject
         // Never use bare VAR_DIR here: inside this namespace it resolves to
         // Weline\Framework\App\VAR_DIR and fatals.
         if (\defined('BP')) {
-            return \rtrim((string)\constant('BP'), '/\\') . \DIRECTORY_SEPARATOR . 'var' . \DIRECTORY_SEPARATOR;
+            return DirectoryList::bootstrapFromEnvFile((string)\constant('BP'))->getVar();
         }
 
         throw new \RuntimeException('VAR_DIR is not defined and BP is unavailable.');

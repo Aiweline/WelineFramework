@@ -114,7 +114,7 @@ final class HostLoadSampler
         if ($first === null) {
             return null;
         }
-        \usleep(120000);
+        \Weline\Framework\Runtime\SchedulerSystem::usleep(120000);
         $second = $this->readProcStatTotals();
         if ($second === null) {
             return null;

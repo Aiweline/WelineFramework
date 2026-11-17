@@ -19,6 +19,8 @@
     var pollTimer = 0;
     var polling = false;
     var lastPollAt = 0;
+    var scopeSelect = byId('sfw-scope-select');
+    var currentScope = scopeSelect ? String(scopeSelect.value || 'all') : 'all';
 
     function text(key, fallback) {
         var value = strings[key];
@@ -92,12 +94,99 @@
         item.setAttribute('data-state', row.current ? 'current' : (Number(row.percent) >= 100 ? 'done' : 'pending'));
     }
 
+    function renderScopeSites(status) {
+        var panel = byId('sfw-scope-sites');
+        if (!panel) {
+            return;
+        }
+        var scope = status.scope || {};
+        var isAll = !!scope.is_all;
+        panel.hidden = !isAll;
+        root.querySelectorAll('.sfw-single-only').forEach(function (node) {
+            node.hidden = isAll;
+        });
+        if (!isAll) {
+            return;
+        }
+        var sites = Array.isArray(status.sites) ? status.sites : [];
+        var host = byId('sfw-scope-table');
+        if (!host) {
+            return;
+        }
+        host.innerHTML = '';
+        sites.forEach(function (row) {
+            var progress = row.progress || {};
+            var verdict = row.verdict || {};
+            var pct = percent(progress.percent);
+            var wrap = document.createElement('div');
+            wrap.className = 'sfw-scope-row';
+            wrap.setAttribute('data-code', String(row.code || ''));
+            var head = document.createElement('div');
+            head.className = 'sfw-scope-row__head';
+            var name = document.createElement('span');
+            name.className = 'sfw-scope-row__name';
+            name.textContent = String(row.name || row.code || '');
+            var hostText = document.createElement('span');
+            hostText.className = 'sfw-muted';
+            hostText.textContent = String(row.host || '');
+            var state = document.createElement('span');
+            state.className = 'sfw-badge';
+            state.textContent = String(verdict.label || '');
+            var pctNode = document.createElement('span');
+            pctNode.className = 'sfw-scope-row__pct';
+            pctNode.textContent = pct + '%';
+            head.appendChild(name);
+            head.appendChild(hostText);
+            head.appendChild(state);
+            head.appendChild(pctNode);
+            var bar = document.createElement('div');
+            bar.className = 'sfw-bar sfw-bar--progress';
+            bar.setAttribute('role', 'progressbar');
+            bar.setAttribute('aria-valuemin', '0');
+            bar.setAttribute('aria-valuemax', '100');
+            bar.setAttribute('aria-valuenow', pct);
+            var fill = document.createElement('span');
+            fill.className = 'sfw-bar__fill';
+            fill.style.width = pct + '%';
+            bar.appendChild(fill);
+            var meta = document.createElement('div');
+            meta.className = 'sfw-scope-row__meta';
+            var phase = document.createElement('span');
+            phase.textContent = String(row.phase_label || '');
+            var count = document.createElement('span');
+            count.textContent = String(progress.done == null ? 0 : progress.done)
+                + '/' + String(progress.total == null ? 0 : progress.total);
+            var reason = document.createElement('span');
+            reason.textContent = String(verdict.detail || '');
+            meta.appendChild(phase);
+            meta.appendChild(count);
+            meta.appendChild(reason);
+            wrap.appendChild(head);
+            wrap.appendChild(bar);
+            wrap.appendChild(meta);
+            host.appendChild(wrap);
+        });
+        if (sites.length === 0) {
+            var empty = document.createElement('p');
+            empty.className = 'sfw-card__hint';
+            empty.textContent = text('no_sites', '没有可预热的站点，检查网站清单与实例 public_host');
+            host.appendChild(empty);
+        }
+    }
+
     function render(status) {
         if (!status) {
             return;
         }
+        renderScopeSites(status);
         var verdict = status.verdict || {};
         var load = status.load || {};
+        if (status.scope && typeof status.scope.value === 'string') {
+            currentScope = status.scope.value || 'all';
+            if (scopeSelect && scopeSelect.value !== currentScope) {
+                scopeSelect.value = currentScope;
+            }
+        }
         var last = status.last || {};
         var totals = status.totals || {};
         var group = status.current_group || {};
@@ -116,6 +205,17 @@
             ? '（' + text('never_updated', '从未更新') + '）'
             : '（' + String(last.age_seconds) + ' ' + text('seconds_ago', '秒前') + '）');
         setText('sfw-generation', generation.short || '');
+        var clockNode = byId('sfw-clock');
+        if (clockNode) {
+            var advance = Number(generation.clock_advance || 0);
+            clockNode.textContent = text('clock_prefix', '世代时钟：账本')
+                + ' ' + (generation.authority_clock == null ? 0 : generation.authority_clock)
+                + ' / ' + text('clock_current', '当前') + ' '
+                + (generation.authority_clock_current == null ? 0 : generation.authority_clock_current)
+                + (advance > 0
+                    ? text('clock_ahead_prefix', '（+') + advance + text('clock_ahead_tail', '，有发布在推进）')
+                    : '');
+        }
         var rewarm = byId('sfw-rewarm');
         if (rewarm) {
             rewarm.hidden = !generation.needs_rewarm;
@@ -173,6 +273,28 @@
             abortMark.style.left = percent(load.abort_percent) + '%';
         }
         setText('sfw-band', load.band_label || '');
+
+        var gate = status.cron_gate || {};
+        var gateNode = byId('sfw-cron-gate');
+        if (gateNode) {
+            if (!gate.available) {
+                gateNode.setAttribute('data-state', 'unavailable');
+                gateNode.textContent = text('gate_unavailable', '取不到计划任务门禁状态');
+            } else {
+                var gatePercent = percent(gate.percent);
+                var gateMax = String(gate.max_percent == null ? 0 : gate.max_percent);
+                if (gate.blocked) {
+                    gateNode.setAttribute('data-state', 'blocked');
+                    gateNode.textContent = text('gate_blocked_prefix', 'Cron 门禁已跳过整轮：负载')
+                        + ' ' + gatePercent + '% ' + text('gate_above', '≥ 上限') + ' ' + gateMax + '%'
+                        + text('gate_blocked_tail', '，cron 不会启动预热');
+                } else {
+                    gateNode.setAttribute('data-state', 'open');
+                    gateNode.textContent = text('gate_open_prefix', 'Cron 门禁放行：负载')
+                        + ' ' + gatePercent + '% ' + text('gate_below', '< 上限') + ' ' + gateMax + '%';
+                }
+            }
+        }
         setText('sfw-designed', (load.designed_concurrency == null ? 0 : load.designed_concurrency) + ' / ' + (load.designed_shard == null ? 0 : load.designed_shard));
         setText('sfw-effective', (load.effective_concurrency == null ? 0 : load.effective_concurrency) + ' / ' + (load.effective_shard == null ? 0 : load.effective_shard));
         setText('sfw-wall', load.effective_wall_ms == null ? 0 : load.effective_wall_ms);
@@ -186,7 +308,7 @@
         polling = true;
         lastPollAt = now;
         try {
-            api().storefrontWarmupStatus({}).then(function (response) {
+            api().storefrontWarmupStatus({ scope: currentScope }).then(function (response) {
                 var payload = unwrap(response);
                 if (!payload || payload.success === false || !payload.status) {
                     throw new Error((payload && payload.message) || text('load_failed', '状态刷新失败'));
@@ -312,7 +434,28 @@
         }, 5000);
     }
 
+    function onScopeChange(event) {
+        var value = String((event && event.target && event.target.value) || 'all');
+        currentScope = value === '' ? 'all' : value;
+        try {
+            var url = new URL(window.location.href);
+            if (currentScope === 'all') {
+                url.searchParams.delete('scope');
+            } else {
+                url.searchParams.set('scope', currentScope);
+            }
+            window.history.replaceState(null, '', url.toString());
+        } catch (error) {
+            console.warn('[Storefront Warmup] scope URL sync failed:', error && error.message ? error.message : error);
+        }
+        lastPollAt = 0;
+        refresh();
+    }
+
     function init() {
+        if (scopeSelect) {
+            scopeSelect.addEventListener('change', onScopeChange);
+        }
         var openButton = byId('sfw-open-settings');
         if (openButton) {
             openButton.addEventListener('click', openSettings);

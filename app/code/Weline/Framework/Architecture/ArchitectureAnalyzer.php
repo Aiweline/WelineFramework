@@ -17,6 +17,10 @@ final class ArchitectureAnalyzer
     private const BLOCKING_WAIT_ALLOWLIST = [
         '/Framework/Runtime/SchedulerSystem.php',
         '/Server/Service/MasterCleanupBootstrap.php',
+        // CronCpuGovernor sleeps inside a pcntl SIGALRM async signal handler:
+        // no event loop re-entry exists there, so the scheduler's Fiber suspend
+        // path would deadlock. Native usleep is required in that context.
+        '/Cron/Service/CronCpuGovernor.php',
     ];
     private readonly ModuleManifestReader $manifestReader;
     private readonly ModuleGraphValidator $graphValidator;

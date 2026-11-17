@@ -21,7 +21,7 @@ class CacheManagerAdminQueryProvider implements QueryProviderInterface
             'adminRequest' => $this->adminRequest($params),
             'clearPool' => $this->clearPool($params),
             'clearAll' => $this->clearAll($params),
-            'storefrontWarmupStatus' => $this->storefrontWarmupStatus(),
+            'storefrontWarmupStatus' => $this->storefrontWarmupStatus($params),
             'saveStorefrontWarmupSettings' => $this->saveStorefrontWarmupSettings($params),
             default => throw new \InvalidArgumentException('Unsupported operation: ' . $operation),
         };
@@ -91,7 +91,9 @@ class CacheManagerAdminQueryProvider implements QueryProviderInterface
                         'source_id' => 'Weline_CacheManager::storefront_warmup_index',
                     ],
                     'mode' => 'read',
-                    'params' => [],
+                    'params' => [
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                    ],
                 ],
                 [
                     'name' => 'saveStorefrontWarmupSettings',
@@ -116,8 +118,8 @@ class CacheManagerAdminQueryProvider implements QueryProviderInterface
         ];
     }
 
-    /** @return array<string,mixed> */
-    private function storefrontWarmupStatus(): array
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function storefrontWarmupStatus(array $params = []): array
     {
         try {
             /** @var StorefrontWarmupAdminService $service */
@@ -125,7 +127,7 @@ class CacheManagerAdminQueryProvider implements QueryProviderInterface
 
             return [
                 'success' => true,
-                'status' => $service->status(),
+                'status' => $service->status((string)($params['scope'] ?? '')),
             ];
         } catch (\Throwable $throwable) {
             return [

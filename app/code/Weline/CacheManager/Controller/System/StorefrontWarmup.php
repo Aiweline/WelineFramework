@@ -18,7 +18,8 @@ class StorefrontWarmup extends \Weline\Framework\App\Controller\BackendPageContr
     #[Acl('Weline_CacheManager::storefront_warmup_index', '查看自动预热进度', 'list', '查看预热相位、进度与机器负载')]
     public function index()
     {
-        $this->assign('status', $this->adminService->status());
+        $scope = \trim((string)($this->request->getParam('scope', '') ?? ''));
+        $this->assign('status', $this->adminService->status($scope));
 
         return $this->fetch();
     }

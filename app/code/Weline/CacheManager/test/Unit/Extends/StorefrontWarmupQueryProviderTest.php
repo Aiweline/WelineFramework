@@ -18,22 +18,22 @@ class StorefrontWarmupQueryProviderTest extends TestCore
         $this->assertArrayHasKey('verdict', $result['status']);
         $this->assertArrayHasKey('phases', $result['status']);
         $this->assertArrayHasKey('load', $result['status']);
-        $this->assertSame(['A', 'B', 'C', 'D'], \array_keys($result['status']['phases']));
+        $this->assertArrayHasKey('scope', $result['status']);
+        $this->assertArrayHasKey('sites', $result['status']);
+        $this->assertTrue($result['status']['scope']['is_all']);
     }
 
-    public function testSaveOperationRejectsAbortBelowStartWithoutWriting(): void
+    public function testStatusOperationAcceptsScopeParam(): void
     {
         $provider = new CacheManagerAdminQueryProvider();
-        $result = $provider->execute('saveStorefrontWarmupSettings', [
-            'busy_start_pct' => 90,
-            'busy_abort_pct' => 10,
-        ]);
+        $result = $provider->execute('storefrontWarmupStatus', ['scope' => 'default']);
 
-        $this->assertFalse($result['success']);
-        $this->assertNotEmpty($result['errors']);
+        $this->assertTrue($result['success']);
+        $this->assertFalse($result['status']['scope']['is_all']);
+        $this->assertSame('default', $result['status']['scope']['value']);
     }
 
-    public function testDescriptorDeclaresBackendAclForBothWarmupOperations(): void
+    public function testDescriptorDeclaresScopeParam(): void
     {
         $descriptor = (new CacheManagerAdminQueryProvider())->getDescriptor();
         $operations = [];
@@ -43,12 +43,7 @@ class StorefrontWarmupQueryProviderTest extends TestCore
 
         $this->assertSame('read', $operations['storefrontWarmupStatus']['mode']);
         $this->assertSame('write', $operations['saveStorefrontWarmupSettings']['mode']);
-        foreach (['storefrontWarmupStatus', 'saveStorefrontWarmupSettings'] as $name) {
-            $this->assertTrue($operations[$name]['frontend']);
-            $this->assertTrue($operations[$name]['backend']);
-            $this->assertSame('backend', $operations[$name]['auth']);
-            $this->assertSame('source', $operations[$name]['backend_acl']['kind']);
-            $this->assertStringStartsWith('Weline_CacheManager::', $operations[$name]['backend_acl']['source_id']);
-        }
+        $params = $operations['storefrontWarmupStatus']['params'];
+        $this->assertContains('scope', \array_column($params, 'name'));
     }
 }

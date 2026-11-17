@@ -11,6 +11,8 @@ namespace Weline\Framework\Cache\Service\StorefrontWarmup;
  */
 final class StorefrontWarmupProgressLedger
 {
+    public const SCOPE_DEFAULT = 'default';
+
     public const PHASE_A_HOMEPAGE = 'A';
     public const PHASE_B_SITEMAP_DOCS = 'B';
     public const PHASE_C_EXTRAS = 'C';
@@ -18,6 +20,16 @@ final class StorefrontWarmupProgressLedger
     public const PHASE_DONE = 'done';
 
     private const RELATIVE_PATH = 'var/cache/storefront_warmup_progress.json';
+
+    /** 每站点独立账本；default 复用旧文件，保证升级后续跑不丢进度。 */
+    public function __construct(private readonly string $scope = '')
+    {
+    }
+
+    public function scope(): string
+    {
+        return $this->normalizedScope();
+    }
 
     /**
      * @return array{
@@ -96,8 +108,25 @@ final class StorefrontWarmupProgressLedger
     public function path(): string
     {
         $root = \defined('BP') ? (string)BP : (\getcwd() ?: '.');
+        $scope = $this->normalizedScope();
+        $relative = $scope === self::SCOPE_DEFAULT
+            ? self::RELATIVE_PATH
+            : 'var/cache/storefront_warmup_progress.' . $scope . '.json';
 
-        return \rtrim($root, '/\\') . '/' . self::RELATIVE_PATH;
+        return \rtrim($root, '/\\') . '/' . $relative;
+    }
+
+    private function normalizedScope(): string
+    {
+        $scope = \strtolower(\trim($this->scope));
+        if ($scope === '' || $scope === self::SCOPE_DEFAULT) {
+            return self::SCOPE_DEFAULT;
+        }
+        $scope = \str_replace(['/', '\\', '..'], '.', $scope);
+        $scope = (string)\preg_replace('/[^a-z0-9._-]+/', '.', $scope);
+        $scope = \trim((string)\preg_replace('/\.{2,}/', '.', $scope), '.-_');
+
+        return $scope !== '' ? $scope : self::SCOPE_DEFAULT;
     }
 
     /**

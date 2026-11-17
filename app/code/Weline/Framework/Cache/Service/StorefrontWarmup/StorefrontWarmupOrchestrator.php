@@ -52,22 +52,48 @@ final class StorefrontWarmupOrchestrator
         return $this->runSlice(['source' => 'clear', 'reset' => true]);
     }
 
+    /** 多站点 tick：单片 wall 预算按站点数分摊，下限 1000ms。 */
+    public static function wallBudgetForScopes(int $designedWallMs, int $scopeCount): int
+    {
+        if ($scopeCount <= 0) {
+            return 0;
+        }
+
+        return \max(1000, \intdiv(\max(0, $designedWallMs), $scopeCount));
+    }
+
+    /** 逐站覆盖单片预算；0/负数表示不覆盖（沿用容量计划值），不得把让出带的 0 抬成正数。 */
+    public static function clampWallMs(int $effectiveWallMs, int $requestedWallMs): int
+    {
+        if ($requestedWallMs <= 0 || $effectiveWallMs <= 0) {
+            return $effectiveWallMs;
+        }
+
+        return \min($effectiveWallMs, $requestedWallMs);
+    }
+
     /**
      * Cron tick: resume ledger; designed budget + traffic bands (no sticky busy backoff).
      *
-     * @param array{source?:string,reset?:bool} $options
+     * @param array{source?:string,reset?:bool,wall_ms?:int,scope?:string} $options
      * @return array<string, mixed>
      */
     public function runSlice(array $options = []): array
     {
         $startedAt = \microtime(true);
         $source = (string)($options['source'] ?? 'cron');
+        $scope = \trim((string)($options['scope'] ?? StorefrontWarmupProgressLedger::SCOPE_DEFAULT));
+        if ($scope === '') {
+            $scope = StorefrontWarmupProgressLedger::SCOPE_DEFAULT;
+        }
+        $requestedWallMs = (int)($options['wall_ms'] ?? 0);
         $lock = $this->acquireLock();
         if ($lock === null) {
             return [
                 'ok' => false,
                 'reason' => 'lock_busy',
                 'source' => $source,
+                'scope' => $scope,
                 'elapsed_ms' => 0.0,
             ];
         }
@@ -106,6 +132,7 @@ final class StorefrontWarmupOrchestrator
                     'ok' => true,
                     'reason' => 'yield_traffic',
                     'source' => $source,
+                    'scope' => $scope,
                     'busy' => $busy,
                     'capacity' => $capacity,
                     'phase' => $state['phase'],
@@ -124,7 +151,7 @@ final class StorefrontWarmupOrchestrator
             }
 
             $shard = (int)$capacity['effective_shard'];
-            $wallMs = (int)$capacity['effective_wall_ms'];
+            $wallMs = self::clampWallMs((int)$capacity['effective_wall_ms'], $requestedWallMs);
             // 缩容带（主机已偏忙）强制逐条预热：批大小压到 1，
             // 保证「预热完一条就复查算力」，而不是一次并发 N 条把主机压垮。
             $concurrency = \max(1, (int)$capacity['effective_concurrency']);
@@ -248,6 +275,7 @@ final class StorefrontWarmupOrchestrator
                 'ok' => true,
                 'reason' => $generationChanged ? 'generation_changed' : 'slice',
                 'source' => $source,
+                'scope' => $scope,
                 'phase' => $state['phase'],
                 'warmed' => $warmed,
                 'skipped' => $skipped,

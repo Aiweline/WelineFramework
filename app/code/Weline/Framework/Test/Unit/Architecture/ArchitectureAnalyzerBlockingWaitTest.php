@@ -22,6 +22,7 @@ final class ArchitectureAnalyzerBlockingWaitTest extends TestCase
         return [
             'scheduler primitive' => ['/workspace/app/code/Weline/Framework/Runtime/SchedulerSystem.php'],
             'master cleanup bootstrap' => ['/workspace/app/code/Weline/Server/Service/MasterCleanupBootstrap.php'],
+            'cron cpu governor (pcntl signal handler)' => ['/workspace/app/code/Weline/Cron/Service/CronCpuGovernor.php'],
         ];
     }
 

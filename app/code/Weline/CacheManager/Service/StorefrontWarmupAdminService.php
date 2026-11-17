@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace Weline\CacheManager\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
 use Weline\Framework\Cache\Service\StorefrontWarmup\HostLoadSampler;
 use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupBusyGate;
 use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupCapacityPlanner;
 use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupProgressLedger;
+use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupScopeCatalog;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
 
 /**
  * 店面自动预热（FPC）后台看板数据与负载算法参数。
@@ -36,19 +40,190 @@ final class StorefrontWarmupAdminService
         private readonly StorefrontWarmupBusyGate $busyGate = new StorefrontWarmupBusyGate(),
         private readonly StorefrontWarmupCapacityPlanner $planner = new StorefrontWarmupCapacityPlanner(),
         private readonly HostLoadSampler $hostLoad = new HostLoadSampler(),
+        private readonly ?StorefrontWarmupScopeCatalog $scopeCatalog = null,
     ) {
     }
 
     /**
+     * 后台看板：scope 为 all/空时返回「全部站点」聚合视图（总体进度 + 逐站列表），
+     * 为某站 code 时返回该站明细视图。页面选择只影响视图，不影响 cron（cron 恒跑全部站点）。
+     *
      * @return array<string, mixed>
      */
-    public function status(): array
+    public function status(?string $scope = null): array
+    {
+        $catalog = $this->scopeCatalog ?? new StorefrontWarmupScopeCatalog();
+        $normalized = self::normalizeScope((string)$scope, $catalog);
+        $sample = $this->busyGate->sample();
+        $now = \time();
+        $lockFree = $this->probeLockFree();
+
+        if ($normalized !== StorefrontWarmupScopeCatalog::SCOPE_ALL) {
+            $scopeRow = $catalog->resolve($normalized);
+            $scoped = new self(
+                ledger: new StorefrontWarmupProgressLedger((string)($scopeRow['ledger_key'] ?? $normalized)),
+                busyGate: $this->busyGate,
+                planner: $this->planner,
+                hostLoad: $this->hostLoad,
+                scopeCatalog: $catalog,
+            );
+            $detail = $scoped->buildSingleStatus($sample, $lockFree, $now);
+            $detail['scope'] = [
+                'value' => $normalized,
+                'is_all' => false,
+                'name' => (string)($scopeRow['name'] ?? $normalized),
+                'host' => (string)($scopeRow['host'] ?? ''),
+                'options' => self::scopeOptions($catalog->all()),
+            ];
+            $detail['sites'] = [];
+
+            return $detail;
+        }
+
+        $sites = [];
+        foreach ($catalog->all() as $row) {
+            $scoped = new self(
+                ledger: new StorefrontWarmupProgressLedger((string)$row['ledger_key']),
+                busyGate: $this->busyGate,
+                planner: $this->planner,
+                hostLoad: $this->hostLoad,
+                scopeCatalog: $catalog,
+            );
+            $detail = $scoped->buildSingleStatus($sample, $lockFree, $now);
+            $sites[] = [
+                'code' => (string)$row['code'],
+                'name' => (string)$row['name'],
+                'host' => (string)$row['host'],
+                'phase' => (string)$detail['phase'],
+                'phase_label' => (string)$detail['phase_label'],
+                'progress' => $detail['progress'],
+                'current_group' => $detail['current_group'],
+                'last' => $detail['last'],
+                'totals' => $detail['totals'],
+                'verdict' => $detail['verdict'],
+            ];
+        }
+
+        $capacity = $this->planner->plan($this->ledger->read(), $sample);
+        $base = $this->buildStatus($this->ledger->read(), $sample, $capacity, $lockFree, $now);
+        $aggregate = self::aggregateSites($sites);
+        $aggregate['generated_at'] = \gmdate('c', $now);
+        $aggregate['scope'] = [
+            'value' => StorefrontWarmupScopeCatalog::SCOPE_ALL,
+            'is_all' => true,
+            'name' => (string)__('全部站点'),
+            'host' => '',
+            'options' => self::scopeOptions($catalog->all()),
+        ];
+        $aggregate['phases'] = $base['phases'];
+        $aggregate['load'] = $base['load'];
+        $aggregate['cron_gate'] = $base['cron_gate'];
+        $aggregate['settings'] = $this->settings();
+        $aggregate['current_group'] = ['label' => '', 'item' => '', 'position' => ''];
+        $aggregate['last'] = ['url' => '', 'status' => '', 'reason' => '', 'updated_at' => '', 'age_seconds' => null];
+        $aggregate['generation'] = $base['generation'];
+
+        return $aggregate;
+    }
+
+    /** 单站视图：复用既有 buildStatus，挂到该站账本。 */
+    private function buildSingleStatus(array $sample, bool $lockFree, int $now): array
     {
         $state = $this->ledger->read();
-        $sample = $this->busyGate->sample();
         $capacity = $this->planner->plan($state, $sample);
 
-        return $this->buildStatus($state, $sample, $capacity, $this->probeLockFree(), \time());
+        return $this->buildStatus($state, $sample, $capacity, $lockFree, $now);
+    }
+
+    /**
+     * 纯函数：把逐站状态折成「全部站点」聚合；done/total 逐站求和，不重复计。
+     *
+     * @param list<array<string,mixed>> $sites
+     * @return array<string,mixed>
+     */
+    public static function aggregateSites(array $sites): array
+    {
+        $done = 0;
+        $total = 0;
+        $remaining = 0;
+        $ok = 0;
+        $skip = 0;
+        $fail = 0;
+        $worst = 'never';
+        $rank = ['never' => 0, 'done' => 1, 'queued' => 2, 'running' => 3, 'needs_rewarm' => 4, 'stalled' => 5];
+        foreach ($sites as $site) {
+            if (!\is_array($site)) {
+                continue;
+            }
+            $progress = \is_array($site['progress'] ?? null) ? $site['progress'] : [];
+            $totals = \is_array($site['totals'] ?? null) ? $site['totals'] : [];
+            $done += (int)($progress['done'] ?? 0);
+            $total += (int)($progress['total'] ?? 0);
+            $remaining += (int)($progress['remaining'] ?? 0);
+            $ok += (int)($totals['ok'] ?? 0);
+            $skip += (int)($totals['skip'] ?? 0);
+            $fail += (int)($totals['fail'] ?? 0);
+            $state = (string)(($site['verdict']['state'] ?? 'never'));
+            if (($rank[$state] ?? 0) > ($rank[$worst] ?? 0)) {
+                $worst = $state;
+            }
+        }
+
+        return [
+            'progress' => [
+                'done' => $done,
+                'total' => $total,
+                'percent' => $total > 0 ? \round($done * 100 / $total, 1) : 0.0,
+                'remaining' => $remaining,
+            ],
+            'totals' => ['ok' => $ok, 'skip' => $skip, 'fail' => $fail],
+            'verdict' => [
+                'state' => $worst,
+                'label' => (string)__('全部站点'),
+                'detail' => (string)__('共 %{1} 个站点，cron 每 5 分钟逐站推进一片', [\count($sites)]),
+            ],
+            'sites' => $sites,
+        ];
+    }
+
+    /**
+     * @param list<array{code:string,name:string,host:string,ledger_key:string}> $scopes
+     * @return list<array{value:string,label:string}>
+     */
+    public static function scopeOptions(array $scopes): array
+    {
+        $options = [[
+            'value' => StorefrontWarmupScopeCatalog::SCOPE_ALL,
+            'label' => (string)__('全部站点'),
+        ]];
+        foreach ($scopes as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $code = (string)($row['code'] ?? '');
+            if ($code === '') {
+                continue;
+            }
+            $options[] = [
+                'value' => $code,
+                'label' => (string)($row['name'] ?? $code),
+            ];
+        }
+
+        return $options;
+    }
+
+    /** 未知 / 空 scope 一律回退到 all，避免 500 或读错账本。 */
+    public static function normalizeScope(string $scope, StorefrontWarmupScopeCatalog $catalog): string
+    {
+        $scope = \strtolower(\trim($scope));
+        if ($scope === '' || $scope === StorefrontWarmupScopeCatalog::SCOPE_ALL) {
+            return StorefrontWarmupScopeCatalog::SCOPE_ALL;
+        }
+
+        return $catalog->resolve($scope) !== null
+            ? $scope
+            : StorefrontWarmupScopeCatalog::SCOPE_ALL;
     }
 
     /**
@@ -59,7 +234,7 @@ final class StorefrontWarmupAdminService
      * @param array<string, mixed> $capacity
      * @return array<string, mixed>
      */
-    public function buildStatus(array $state, array $sample, array $capacity, bool $lockFree, int $now): array
+    public function buildStatus(array $state, array $sample, array $capacity, bool $lockFree, int $now, ?array $cronGate = null): array
     {
         $phase = (string)($state['phase'] ?? StorefrontWarmupProgressLedger::PHASE_A_HOMEPAGE);
         $phases = $this->phaseRows($state, $phase);
@@ -74,18 +249,26 @@ final class StorefrontWarmupAdminService
         $updatedTs = $updatedAt !== '' ? (int)\strtotime($updatedAt) : 0;
         $age = $updatedTs > 0 ? \max(0, $now - $updatedTs) : null;
         $needsRewarm = (bool)($state['needs_rewarm'] ?? false);
+        $currentClock = $this->currentAuthorityClock();
         $ratio = (float)($sample['ratio'] ?? 0.0);
         $band = (string)($capacity['band'] ?? StorefrontWarmupCapacityPlanner::BAND_FULL);
         $verdict = $this->verdict($phase, $needsRewarm, $lockFree, $age, $state);
-        // 高负载让出时把原因写进判定详情：否则「需要预热」看起来像卡住不动。
-        if ($band === StorefrontWarmupCapacityPlanner::BAND_YIELD
-            && !\in_array($verdict['state'], ['running', 'done'], true)
-        ) {
-            $verdict['detail'] = (string)__('%{1}；当前负载 %{2}% ≥ 中止阈值 %{3}%，本片只会让出，预热不会推进', [
-                $verdict['detail'],
-                \round($ratio * 100, 1),
-                \round((float)($sample['abort_threshold'] ?? 0.7) * 100, 1),
-            ]);
+        $cronGate = $cronGate ?? $this->cronGate();
+        // 高负载让出 / cron 整轮被跳过时把原因写进判定详情：否则「需要预热」看起来像卡住不动。
+        if (!\in_array($verdict['state'], ['running', 'done'], true)) {
+            if ($cronGate['available'] && $cronGate['blocked']) {
+                $verdict['detail'] = (string)__('%{1}；计划任务门禁：负载 %{2}% ≥ 上限 %{3}%，整轮 cron 已被跳过，预热不会推进', [
+                    $verdict['detail'],
+                    $cronGate['percent'],
+                    $cronGate['max_percent'],
+                ]);
+            } elseif ($band === StorefrontWarmupCapacityPlanner::BAND_YIELD) {
+                $verdict['detail'] = (string)__('%{1}；当前负载 %{2}% ≥ 中止阈值 %{3}%，本片只会让出，预热不会推进', [
+                    $verdict['detail'],
+                    \round($ratio * 100, 1),
+                    \round((float)($sample['abort_threshold'] ?? 0.7) * 100, 1),
+                ]);
+            }
         }
 
         return [
@@ -117,7 +300,10 @@ final class StorefrontWarmupAdminService
                 'fingerprint' => (string)($state['storefront_generation_fingerprint'] ?? ''),
                 'short' => $this->shortHash((string)($state['storefront_generation_fingerprint'] ?? '')),
                 'authority_clock' => (int)($state['generation_authority_clock'] ?? 0),
+                'authority_clock_current' => $currentClock,
+                'clock_advance' => \max(0, $currentClock - (int)($state['generation_authority_clock'] ?? 0)),
                 'needs_rewarm' => $needsRewarm,
+                'reset_reason' => $needsRewarm ? (string)($state['last_reason'] ?? '') : '',
             ],
             'load' => [
                 'available' => (bool)($sample['available'] ?? ($sample['source'] ?? '') !== 'unavailable'),
@@ -140,6 +326,7 @@ final class StorefrontWarmupAdminService
                 'effective_wall_ms' => (int)($capacity['effective_wall_ms'] ?? 0),
                 'scale_factor' => \round((float)($capacity['scale_factor'] ?? 1.0), 3),
             ],
+            'cron_gate' => $cronGate,
             'settings' => $this->settings(),
         ];
     }
@@ -190,11 +377,42 @@ final class StorefrontWarmupAdminService
             ];
         }
 
+        $sync = $this->broadcastConfigReload();
+
         return [
             'success' => true,
-            'message' => (string)__('预热负载参数已保存，下一次 cron tick 生效'),
+            'message' => $sync
+                ? (string)__('预热负载参数已保存并同步所有 Worker，下一次 cron tick 生效')
+                : (string)__('预热负载参数已保存，下一次 cron tick 生效（Worker 同步未确认）'),
+            'worker_sync' => $sync,
             'status' => $this->status(),
         ];
+    }
+
+    /**
+     * env.php 是各 WLS Worker 启动时记忆的：只写盘不广播，刷新页面会被别的
+     * Worker 用旧阈值回显（实测：env 已 90，页面仍显示 70）。
+     * cacheClear 控制命令内部会 reloadPersistentConfigFromDisk() + 清 ObjectManager，
+     * 是现有的 env 生效通道（FullPageCacheAdminService 同做法）。
+     */
+    private function broadcastConfigReload(): bool
+    {
+        try {
+            $broadcaster = ObjectManager::getInstance(RuntimeControlBroadcasterInterface::class);
+            if (!$broadcaster instanceof RuntimeControlBroadcasterInterface) {
+                return false;
+            }
+            if (\method_exists($broadcaster, 'cacheClearAndWait')) {
+                $broadcaster->cacheClearAndWait(null, 5.0);
+
+                return true;
+            }
+            $broadcaster->cacheClear(null);
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -436,6 +654,48 @@ final class StorefrontWarmupAdminService
             'min' => $min,
             'max' => $max,
         ];
+    }
+
+    /**
+     * 计划任务门禁（Weline_Cron 可选）：负载超过上限时 crontab 触发的整轮调度直接被跳过，
+     * 预热任务连子进程都不会起——这是「进度一直不动」的常见原因，页面必须显示。
+     *
+     * @return array{available:bool,max_percent:int,percent:float,blocked:bool}
+     */
+    private function cronGate(): array
+    {
+        $class = 'Weline\\Cron\\Service\\CronHostLoadGate';
+        if (!\class_exists($class)) {
+            return ['available' => false, 'max_percent' => 0, 'percent' => 0.0, 'blocked' => false];
+        }
+        try {
+            $gate = ObjectManager::getInstance($class);
+            $max = (int)$gate->maxPercent();
+            $measured = $gate->measure();
+            $percent = \round((float)($measured['percent'] ?? 0.0), 1);
+
+            return [
+                'available' => (bool)($measured['available'] ?? false),
+                'max_percent' => $max,
+                'percent' => $percent,
+                'blocked' => (bool)($measured['available'] ?? false) && $percent >= $max,
+            ];
+        } catch (\Throwable) {
+            return ['available' => false, 'max_percent' => 0, 'percent' => 0.0, 'blocked' => false];
+        }
+    }
+
+    /**
+     * 当前缓存命名空间权威时钟（DB 单调递增）。它比账本记录值大，
+     * 说明这段时间里有站点/主题发布推进过世代——预热会因此从相位 A 重来。
+     */
+    private function currentAuthorityClock(): int
+    {
+        try {
+            return (int)ObjectManager::getInstance(NamespaceGenerationRepository::class)->authorityClock();
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     /**
