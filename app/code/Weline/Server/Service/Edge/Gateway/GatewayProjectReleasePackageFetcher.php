@@ -563,7 +563,7 @@ final class GatewayProjectReleasePackageFetcher
         }
         while (!@\flock($handle, LOCK_EX | LOCK_NB)) {
             $this->assertDeadline($deadlineMonotonic);
-            \usleep(50_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(50_000);
         }
         return $handle;
     }

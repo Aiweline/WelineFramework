@@ -473,7 +473,7 @@ final class GatewayBoundedCommandRunner
             if ($remainingMicroseconds < 1) {
                 break;
             }
-            \usleep(\min(10_000, $remainingMicroseconds));
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(\min(10_000, $remainingMicroseconds));
         } while (true);
 
         if (!$provenExited) {
@@ -1517,7 +1517,7 @@ PHP;
             if ($remainingMicroseconds < 1) {
                 break;
             }
-            \usleep(\min(10_000, $remainingMicroseconds));
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(\min(10_000, $remainingMicroseconds));
         } while (true);
 
         if (!$provenExited) {
@@ -2111,7 +2111,7 @@ PHP;
             if ($remainingMicroseconds < 1) {
                 break;
             }
-            \usleep(\min(
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(\min(
                 self::SELECT_MICROSECONDS,
                 $remainingMicroseconds,
             ));
@@ -2151,7 +2151,7 @@ PHP;
                         return;
                     }
                 }
-                \usleep($waitMicroseconds);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep($waitMicroseconds);
             }
             return;
         }
@@ -2166,7 +2166,7 @@ PHP;
         );
         if (!\is_int($selected)) {
             if ($waitMicroseconds > 0) {
-                \usleep($waitMicroseconds);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep($waitMicroseconds);
             }
             return;
         }
@@ -2254,7 +2254,7 @@ PHP;
             if ($remainingMicroseconds < 1) {
                 return false;
             }
-            \usleep(\min(
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(\min(
                 self::SELECT_MICROSECONDS,
                 $remainingMicroseconds,
             ));

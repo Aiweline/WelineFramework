@@ -147,10 +147,15 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheBatchS
     {
         $filter = \is_array($options['filter'] ?? null) ? $options['filter'] : [];
         $limit = (int) ($options['limit'] ?? 50);
-        $response = $this->traceOperation('wls.memory.list', ['operation' => 'list'], fn(): mixed => $this->stateClient->request(SessionProtocol::CMD_LIST, [
+        $query = [
             'filter' => $filter,
             'limit' => $limit,
-        ]));
+        ];
+        $offset = \max(0, (int) ($options['offset'] ?? 0));
+        if ($offset > 0) {
+            $query['offset'] = $offset;
+        }
+        $response = $this->traceOperation('wls.memory.list', ['operation' => 'list'], fn(): mixed => $this->stateClient->request(SessionProtocol::CMD_LIST, $query));
 
         if (!\is_array($response) || !SessionProtocol::isSuccess($response)) {
             return [];

@@ -188,7 +188,7 @@ final class GatewayGuardianTransitionProtocol
                         'Recovery Guardian did not acknowledge a stable generation before the bounded deadline.',
                     );
                 }
-                \usleep(200_000);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(200_000);
                 continue;
             }
             $ack = $this->decodeAcknowledgement($ackRaw);
@@ -514,7 +514,7 @@ final class GatewayGuardianTransitionProtocol
                     'Recovery Guardian did not acknowledge the stable recovery generation before the bounded deadline.',
                 );
             }
-            \usleep(200_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(200_000);
         }
     }
 

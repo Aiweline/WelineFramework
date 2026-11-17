@@ -118,8 +118,9 @@ class SessionStateFacade implements SessionStateFacadeInterface, SharedSessionSt
     {
         $filter = \is_array($options['filter'] ?? null) ? $options['filter'] : [];
         $limit = (int) ($options['limit'] ?? 50);
+        $offset = \max(0, (int) ($options['offset'] ?? 0));
 
-        return $this->traceOperation('wls.session.list', ['operation' => 'list'], fn(): array => $this->sessionClient->list($filter, $limit));
+        return $this->traceOperation('wls.session.list', ['operation' => 'list'], fn(): array => $this->sessionClient->list($filter, $limit, $offset));
     }
 
     public function gc(int $maxLifetime): int

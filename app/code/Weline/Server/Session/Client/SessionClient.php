@@ -366,9 +366,9 @@ final class SessionClient
      * @param int $limit 最大返回数量
      * @return array Session 列表 [['session_id' => '...', 'data' => [...]], ...]
      */
-    public function list(array $filter = [], int $limit = 50): array
+    public function list(array $filter = [], int $limit = 50, int $offset = 0): array
     {
-        $request = SessionProtocol::buildList($filter, $limit);
+        $request = SessionProtocol::buildList($filter, $limit, $offset);
         $response = $this->sendRequest($request);
 
         if ($response === null || !SessionProtocol::isSuccess($response)) {

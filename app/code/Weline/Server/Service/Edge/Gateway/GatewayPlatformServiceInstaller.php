@@ -9448,7 +9448,7 @@ POWERSHELL
             if ($remaining <= 0.0) {
                 break;
             }
-            \usleep((int)\max(1, \min(
+            \Weline\Framework\Runtime\SchedulerSystem::usleep((int)\max(1, \min(
                 self::WINDOWS_SERVICE_POLL_MICROSECONDS,
                 \ceil($remaining * 1_000_000),
             )));
@@ -9503,7 +9503,7 @@ POWERSHELL
             if ($remaining <= 0.0) {
                 break;
             }
-            \usleep((int)\max(1, \min(
+            \Weline\Framework\Runtime\SchedulerSystem::usleep((int)\max(1, \min(
                 self::WINDOWS_SERVICE_POLL_MICROSECONDS,
                 \ceil($remaining * 1_000_000),
             )));

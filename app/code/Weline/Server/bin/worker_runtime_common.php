@@ -578,6 +578,7 @@ function wlsFiberAdmissionUnavailableResponse(string $reason = 'timeout'): strin
  *
  * @return array{
  *   admit:bool,
+ *   critical:bool,
  *   absolute_headroom_bytes:int,
  *   pressure:float,
  *   compacted:bool,
@@ -585,7 +586,7 @@ function wlsFiberAdmissionUnavailableResponse(string $reason = 'timeout'): strin
  * }
  */
 if (!\function_exists('wlsFiberAdmissionMemoryGateEvaluate')) {
-function wlsFiberAdmissionMemoryGateEvaluate(bool $compactIfNeeded = true): array
+function wlsFiberAdmissionMemoryGateEvaluate(bool $compactIfNeeded = true, ?int $activeFibers = null): array
 {
     if (!\class_exists(\Weline\Server\Service\WorkerResponseMemoryGuard::class, false)
         && !\class_exists(\Weline\Server\Service\WorkerResponseMemoryGuard::class)
@@ -600,7 +601,7 @@ function wlsFiberAdmissionMemoryGateEvaluate(bool $compactIfNeeded = true): arra
         ];
     }
 
-    return \Weline\Server\Service\WorkerResponseMemoryGuard::evaluateAdmissionMemoryGate($compactIfNeeded);
+    return \Weline\Server\Service\WorkerResponseMemoryGuard::evaluateAdmissionMemoryGate($compactIfNeeded, $activeFibers);
 }
 }
 
@@ -745,13 +746,14 @@ function wlsAwaitFiberAdmissionSlot(
                     $slotLimit = \Weline\Server\Service\AdaptiveFiberMaxActive::current();
                 }
             }
-            $slotFree = wlsCountActiveFibersForAdmission($activeFibers, $admissionWaiters) < $slotLimit;
+            $activeForAdmission = wlsCountActiveFibersForAdmission($activeFibers, $admissionWaiters);
+            $slotFree = $activeForAdmission < $slotLimit;
             if ($slotFree) {
                 $compactNow = $now >= $nextMemoryCompactAt;
                 if ($compactNow) {
                     $nextMemoryCompactAt = $now + 2.0;
                 }
-                $gate = wlsFiberAdmissionMemoryGateEvaluate($compactNow);
+                $gate = wlsFiberAdmissionMemoryGateEvaluate($compactNow, $activeForAdmission);
                 if (($gate['admit'] ?? false) === true) {
                     return true;
                 }
@@ -764,7 +766,7 @@ function wlsAwaitFiberAdmissionSlot(
             }
 
             if ($now >= $deadline) {
-                $gate = wlsFiberAdmissionMemoryGateEvaluate(false);
+                $gate = wlsFiberAdmissionMemoryGateEvaluate(false, $activeForAdmission);
                 $rejectReason = (($gate['admit'] ?? false) !== true)
                     ? 'memory_pressure'
                     : 'timeout';

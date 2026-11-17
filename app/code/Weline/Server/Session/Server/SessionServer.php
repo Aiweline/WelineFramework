@@ -954,7 +954,8 @@ final class SessionServer
             case SessionProtocol::CMD_LIST:
                 $filter = $msg['filter'] ?? [];
                 $limit = (int)($msg['limit'] ?? 50);
-                $result = $this->listSessions($filter, $limit);
+                $offset = \max(0, (int)($msg['offset'] ?? 0));
+                $result = $this->listSessions($filter, $limit, $offset);
                 $response = SessionProtocol::encodeSuccess($result);
                 break;
 
@@ -1640,11 +1641,12 @@ final class SessionServer
      * @param int $limit 最大返回数量
      * @return array Session 列表 [['session_id' => '...', 'data' => [...]], ...]
      */
-    private function listSessions(array $filter, int $limit): array
+    private function listSessions(array $filter, int $limit, int $offset = 0): array
     {
         $sessionIds = $this->store->getAllSessionIds();
         $result = [];
         $count = 0;
+        $skipped = 0;
         $sessionNamespaceStateId = '__ns__:sess:__kv__:sess';
         $domain = (string)($filter['__domain'] ?? '');
         $summaryOnly = $this->serviceRole === 'memory_server'
@@ -1666,6 +1668,10 @@ final class SessionServer
             $data = $this->store->getAll($sessionId);
 
             if ($summaryOnly) {
+                if ($skipped < $offset) {
+                    $skipped++;
+                    continue;
+                }
                 $result[] = $this->summarizeListEntry($sessionId, $data);
                 $count++;
                 continue;
@@ -1695,6 +1701,10 @@ final class SessionServer
                             continue;
                         }
                     }
+                    if ($skipped < $offset) {
+                        $skipped++;
+                        continue;
+                    }
                     $result[] = [
                         'session_id' => $realSessionId,
                         'data' => $sessionPayload,
@@ -1722,6 +1732,10 @@ final class SessionServer
                 }
             }
             
+            if ($skipped < $offset) {
+                $skipped++;
+                continue;
+            }
             $result[] = [
                 'session_id' => $sessionId,
                 'data' => $data,

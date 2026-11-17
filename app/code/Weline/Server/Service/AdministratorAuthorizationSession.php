@@ -306,13 +306,13 @@ final class AdministratorAuthorizationSession
                     if (!\is_array($status) || !(bool)($status['running'] ?? false)) {
                         break 2;
                     }
-                    \usleep(10_000);
+                    \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
                 } while (self::monotonicSeconds() < $terminationDeadline);
                 @\proc_terminate($process, 9);
                 $exitCode = 124;
                 break;
             }
-            \usleep(10_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
         } while (true);
 
         $closedCode = @\proc_close($process);

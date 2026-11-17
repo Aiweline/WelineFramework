@@ -202,7 +202,11 @@ private function assert_FiberAdmissionQueue_testAwaitSoftMemoryMissWaitsUntilDea
 {
     \Weline\Server\Service\WorkerResponseMemoryGuard::resetThresholdCache();
     // Soft miss host-agnostic: threshold above current headroom; hard floor tiny → wait then 503.
-    \Weline\Server\Service\WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(256 * 1024 * 1024);
+    // Headroom must also stay under the concurrency-scaled floor (64MiB), otherwise an
+    // idle Worker is admitted by design and this is no longer a soft miss.
+    \Weline\Server\Service\WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(
+        \memory_get_usage(true) + 40 * 1024 * 1024
+    );
     $headroom = \Weline\Server\Service\WorkerResponseMemoryGuard::absoluteHeadroomBytes();
     \Weline\Server\Service\WorkerResponseMemoryGuard::setAdmissionMemoryHeadroomBytes($headroom + 8 * 1024 * 1024);
     \Weline\Server\Service\WorkerResponseMemoryGuard::setAdmissionMemoryHardFloorBytes(1024);

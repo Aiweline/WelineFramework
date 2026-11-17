@@ -792,12 +792,17 @@ final class SessionProtocol
      * @param array $filter 过滤条件，如 ['type' => 'backend']
      * @param int $limit 最大返回数量
      */
-    public static function buildList(array $filter = [], int $limit = 50): string
+    public static function buildList(array $filter = [], int $limit = 50, int $offset = 0): string
     {
-        return self::encodeRequest(self::CMD_LIST, [
+        $payload = [
             'filter' => $filter,
             'limit' => $limit,
-        ]);
+        ];
+        if ($offset > 0) {
+            $payload['offset'] = $offset;
+        }
+
+        return self::encodeRequest(self::CMD_LIST, $payload);
     }
 
     // ==================== 响应解析器 ====================

@@ -19356,7 +19356,7 @@ PHP;
             $this->assertOperationDeadlineAvailable(
                 'opening the host-gateway ' . $label . ' lock',
             );
-            \usleep((int)\max(1, \min(
+            \Weline\Framework\Runtime\SchedulerSystem::usleep((int)\max(1, \min(
                 2_000,
                 \floor($this->remainingOperationDeadline(0.002) * 1_000_000),
             )));
@@ -19411,7 +19411,7 @@ PHP;
             if ($remainingNanoseconds <= 0) {
                 continue;
             }
-            \usleep((int)\min(20_000, \max(
+            \Weline\Framework\Runtime\SchedulerSystem::usleep((int)\min(20_000, \max(
                 1,
                 \floor($remainingNanoseconds / 1_000),
             )));

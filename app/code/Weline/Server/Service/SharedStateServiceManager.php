@@ -577,11 +577,7 @@ class SharedStateServiceManager
 
             $sleepUs = $pollIntervals[\min($pollIndex, \count($pollIntervals) - 1)];
             $pollIndex++;
-            if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() !== null) {
-                SchedulerSystem::yieldDelay((int)\max(1, \ceil($sleepUs / 1000)));
-            } else {
-                \usleep($sleepUs);
-            }
+            SchedulerSystem::usleep($sleepUs);
         }
 
         if ($pending !== []) {

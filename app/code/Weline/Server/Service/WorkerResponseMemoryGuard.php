@@ -62,10 +62,33 @@ final class WorkerResponseMemoryGuard
      */
     private const ADMISSION_MEMORY_HEADROOM_FRACTION = 0.40;
     /**
+     * Worker memory headroom policy (2026-11-11 design, dead-band fix 2026-11-11).
+     * Fixed mode (default) thresholds in absolute bytes ("remaining headroom"):
+     * - admit new Fiber while remaining headroom ≥ 50MiB;
+     * - drain Worker when remaining headroom ≤ 45MiB  (was 25MiB; raised to close the
+     *   (25, 50)MiB dead band where the Worker rejected every request but never drained);
+     * - schedule Worker restart when remaining headroom ≤ 10MiB.
+     * The resulting dead band is (45, 50)MiB = 5MiB, small enough that a single
+     * compaction cycle reliably clears it.
+     * Percent mode (configurable) thresholds are fractions of the Worker limit:
+     * - admit at ≥ 30% / drain at ≤ 15% / restart at ≤ 10% of remaining.
+     */
+    private const ADMISSION_FIXED_HEADROOM_BYTES = 50 * 1024 * 1024;
+    private const MEMORY_DRAIN_FIXED_HEADROOM_BYTES = 45 * 1024 * 1024;
+    private const WORKER_RESTART_FIXED_HEADROOM_BYTES = 10 * 1024 * 1024;
+    private const ADMISSION_PERCENT_HEADROOM_FRACTION = 0.30;
+    private const MEMORY_DRAIN_PERCENT_HEADROOM_FRACTION = 0.15;
+    private const WORKER_RESTART_PERCENT_HEADROOM_FRACTION = 0.10;
+    private const GUARD_HEADROOM_MODE_FIXED = 'fixed';
+    private const GUARD_HEADROOM_MODE_PERCENT = 'percent';
+    /**
      * Budget per admitted short-request Fiber when clamping configured max_active
      * to the Worker memory_limit (storefront render growth, not RSS snapshot).
      */
     private const ADMISSION_PER_ACTIVE_FIBER_BUDGET_BYTES = 32 * 1024 * 1024;
+    /** Admission rejects are logged unconditionally: this many, then at most one per interval. */
+    private const ADMISSION_REJECT_LOG_BURST = 5;
+    private const ADMISSION_REJECT_LOG_INTERVAL_SECONDS = 5.0;
     /** Zend shell (real−used) above this → gc_mem_caches without wiping bags. */
     private const LOOP_SHELL_TRIM_BYTES = 24 * 1024 * 1024;
     /** used above this → soft rebuildable process-cache reclaim (busy-safe OM when peers). */
@@ -105,6 +128,12 @@ final class WorkerResponseMemoryGuard
     private static ?int $admissionMemoryHeadroomBytes = null;
     /** Optional override for hard fail-closed floor (bytes). Null → {@see ADMISSION_MEMORY_HARD_FLOOR_BYTES}. */
     private static ?int $admissionMemoryHardFloorBytes = null;
+    /** Headroom policy mode: null → {@see GUARD_HEADROOM_MODE_FIXED}. */
+    private static ?string $headroomMode = null;
+    /** Optional fixed-mode drain headroom override (bytes); null → {@see MEMORY_DRAIN_FIXED_HEADROOM_BYTES}. */
+    private static ?int $drainHeadroomBytes = null;
+    /** Optional fixed-mode worker-restart headroom override (bytes); null → {@see WORKER_RESTART_FIXED_HEADROOM_BYTES}. */
+    private static ?int $restartHeadroomBytes = null;
     /** Lowest clean Zend-real seen after reclaim (framework warm floor). */
     private static ?int $warmRealBaselineBytes = null;
     private static ?string $drainAfterResponseReason = null;
@@ -116,6 +145,14 @@ final class WorkerResponseMemoryGuard
     private static float $lastPressure = 0.0;
     private static int $admissionMemoryRejects = 0;
     private static int $lastAbsoluteHeadroomBytes = 0;
+    /** Effective headroom required by the last admission evaluation (bytes). */
+    private static int $lastAdmissionHeadroomThresholdBytes = 0;
+    /** Active short-request Fibers seen by the last admission evaluation; null = legacy fixed fraction. */
+    private static ?int $lastAdmissionActiveFibers = null;
+    /** Rate limiting for reject `error_log` (admission rejects must stay visible without verbose logging). */
+    private static int $admissionRejectLogEmitted = 0;
+    private static int $admissionRejectLogSuppressed = 0;
+    private static float $lastAdmissionRejectLogAt = 0.0;
     /** Loop-shed hysteresis: avoid clearing rebuildable caches when the last attempt freed nothing. */
     private static float $lastLoopShedAt = 0.0;
     private static int $lastLoopShedUsed = 0;
@@ -281,6 +318,11 @@ final class WorkerResponseMemoryGuard
      * Policy: soft headroom miss → prefer queue/delay (`admit=false`, `critical=false`);
      * hard floor miss → fail-closed (`critical=true`). Callers MUST wait when not critical.
      *
+     * `$activeFibers` is the number of running non-SSE request Fibers (see
+     * `wlsCountActiveFibersForAdmission`). When supplied, the required headroom
+     * scales with the concurrency that can actually grow the heap; `null` keeps
+     * the legacy fixed fraction (unlimited / max_active=0 paths).
+     *
      * @return array{
      *   admit:bool,
      *   critical:bool,
@@ -290,13 +332,20 @@ final class WorkerResponseMemoryGuard
      *   reason:?string
      * }
      */
-    public static function evaluateAdmissionMemoryGate(bool $compactIfNeeded = true): array
-    {
+    public static function evaluateAdmissionMemoryGate(
+        bool $compactIfNeeded = true,
+        ?int $activeFibers = null,
+    ): array {
         $thresholds = self::getRuntimeCacheThresholds();
         $pressure = self::getMemoryPressure();
         self::$lastPressure = $pressure;
         $headroom = self::absoluteHeadroomBytes();
-        $threshold = self::admissionMemoryHeadroomThresholdBytes();
+        $baseThreshold = self::admissionMemoryHeadroomThresholdBytes();
+        $threshold = $activeFibers === null
+            ? $baseThreshold
+            : self::admissionHeadroomThresholdBytesForConcurrency($baseThreshold, $activeFibers);
+        self::$lastAdmissionHeadroomThresholdBytes = $threshold;
+        self::$lastAdmissionActiveFibers = $activeFibers;
         $hardFloor = self::admissionMemoryHardFloorBytes();
         $compacted = false;
 
@@ -334,6 +383,45 @@ final class WorkerResponseMemoryGuard
     }
 
     /**
+     * Headroom required for the given concurrency.
+     *
+     * {@see GUARD_HEADROOM_MODE_FIXED} (default): the Worker design headroom
+     * (`ADMISSION_FIXED_HEADROOM_BYTES` = 50MiB remaining) governs directly —
+     * admission is decided by the remaining headroom, not by an additive
+     * per-Fiber budget, so an idle Worker keeps accepting Fibers while a busy
+     * one is bounded only by the 50MiB / 25MiB / 10MiB chain.
+     *
+     * {@see GUARD_HEADROOM_MODE_PERCENT}: scales with the Worker limit
+     * (30% remaining for the next Fiber).
+     */
+    public static function admissionHeadroomThresholdBytesForConcurrency(
+        int $baseThresholdBytes,
+        int $activeFibers,
+    ): int {
+        unset($activeFibers);
+
+        $base = \max(0, $baseThresholdBytes);
+        if ($base <= 0) {
+            return 0;
+        }
+
+        if (self::fiberHeadroomMode() === self::GUARD_HEADROOM_MODE_PERCENT) {
+            $limitBytes = self::getMemoryLimitBytes();
+            if ($limitBytes <= 0) {
+                return self::admissionMemoryHardFloorBytes();
+            }
+
+            $threshold = (int) \floor($limitBytes * self::ADMISSION_PERCENT_HEADROOM_FRACTION);
+            $hardFloor = self::admissionMemoryHardFloorBytes();
+            $capped = \max($hardFloor, \min($threshold, \max($hardFloor, $limitBytes - $hardFloor)));
+
+            return $capped;
+        }
+
+        return $base;
+    }
+
+    /**
      * Optional hard-floor override (bytes). Pass 0 to clear.
      */
     public static function setAdmissionMemoryHardFloorBytes(int $bytes): void
@@ -344,13 +432,58 @@ final class WorkerResponseMemoryGuard
     public static function noteAdmissionMemoryReject(): void
     {
         self::$admissionMemoryRejects++;
+        self::logAdmissionMemoryReject();
     }
 
     /**
-     * Soft admission headroom. Explicit {@see setAdmissionMemoryHeadroomBytes()} or env
-     * `wls.fiber.admission_memory_headroom_bytes` wins; else scales with Worker
-     * `--memory-limit` ({@see ADMISSION_MEMORY_HEADROOM_FRACTION}) and never below
-     * {@see LOOP_HEADROOM_SHED_BYTES}.
+     * `WlsLogger::warning_()` is dropped unless `wls.log.verbose` is set, which
+     * turns a Worker that rejects 100% of uncached traffic into a silent 503.
+     * Emit one line per rejection (then rate-limited) straight to `error_log`
+     * so the reason is always visible on disk.
+     */
+    private static function logAdmissionMemoryReject(): void
+    {
+        try {
+            $now = \microtime(true);
+            $burst = self::$admissionRejectLogEmitted < self::ADMISSION_REJECT_LOG_BURST;
+            if (!$burst && ($now - self::$lastAdmissionRejectLogAt) < self::ADMISSION_REJECT_LOG_INTERVAL_SECONDS) {
+                self::$admissionRejectLogSuppressed++;
+
+                return;
+            }
+
+            $suppressed = self::$admissionRejectLogSuppressed;
+            self::$admissionRejectLogSuppressed = 0;
+            self::$admissionRejectLogEmitted++;
+            self::$lastAdmissionRejectLogAt = $now;
+
+            $threshold = self::$lastAdmissionHeadroomThresholdBytes > 0
+                ? self::$lastAdmissionHeadroomThresholdBytes
+                : self::admissionMemoryHeadroomThresholdBytes();
+            $limit = self::getMemoryLimitBytes();
+            \error_log(\sprintf(
+                '[WLS][admission] memory_pressure reject pid=%d headroom=%d bytes threshold=%d bytes'
+                . ' active_fibers=%s used=%d bytes real=%d bytes limit=%s rejects=%d suppressed=%d',
+                \getmypid(),
+                self::$lastAbsoluteHeadroomBytes,
+                $threshold,
+                self::$lastAdmissionActiveFibers === null ? 'legacy' : (string) self::$lastAdmissionActiveFibers,
+                \memory_get_usage(false),
+                \memory_get_usage(true),
+                $limit > 0 ? (string) $limit : 'unlimited',
+                self::$admissionMemoryRejects,
+                $suppressed
+            ));
+        } catch (\Throwable) {
+        }
+    }
+
+    /**
+     * Soft admission headroom. Mode {@link GUARD_HEADROOM_MODE_FIXED} (default):
+     * the Worker design headroom is used directly ({@see ADMISSION_FIXED_HEADROOM_BYTES});
+     * an explicit setter / env override wins. Mode
+     * {@link GUARD_HEADROOM_MODE_PERCENT}: scales with Worker `--memory-limit`
+     * ({@see ADMISSION_PERCENT_HEADROOM_FRACTION} remaining).
      */
     public static function admissionMemoryHeadroomThresholdBytes(): int
     {
@@ -358,9 +491,89 @@ final class WorkerResponseMemoryGuard
             return self::$admissionMemoryHeadroomBytes;
         }
 
-        $envRaw = $_ENV['wls.fiber.admission_memory_headroom_bytes']
-            ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal('wls.fiber.admission_memory_headroom_bytes', null)
-            ?? \getenv('wls.fiber.admission_memory_headroom_bytes');
+        if (self::fiberHeadroomMode() === self::GUARD_HEADROOM_MODE_PERCENT) {
+            $limitBytes = self::getMemoryLimitBytes();
+            if ($limitBytes <= 0) {
+                return self::LOOP_HEADROOM_SHED_BYTES;
+            }
+
+            $threshold = (int) \floor($limitBytes * self::ADMISSION_PERCENT_HEADROOM_FRACTION);
+            $hardFloor = self::admissionMemoryHardFloorBytes();
+            $capped = \max($hardFloor, \min($threshold, \max($hardFloor, $limitBytes - $hardFloor)));
+
+            return $capped;
+        }
+
+        // Fixed mode: explicit env override wins over the 50MiB design default.
+        foreach ([
+            'wls.memory_guard.fiber_admission_headroom_bytes',
+            'wls.fiber.admission_memory_headroom_bytes',
+        ] as $envKey) {
+            $envRaw = $_ENV[$envKey]
+                ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal($envKey, null)
+                ?? \getenv($envKey);
+            if (\is_string($envRaw) && $envRaw !== '' && \ctype_digit($envRaw)) {
+                $parsed = (int)$envRaw;
+                if ($parsed > 0) {
+                    return $parsed;
+                }
+            }
+        }
+
+        return self::ADMISSION_FIXED_HEADROOM_BYTES;
+    }
+
+    /**
+     * Headroom policy mode: {@see GUARD_HEADROOM_MODE_FIXED} (default) or
+     * {@see GUARD_HEADROOM_MODE_PERCENT}. Configurable via
+     * `wls.memory_guard.fiber_headroom_mode`.
+     */
+    public static function fiberHeadroomMode(): string
+    {
+        if (self::$headroomMode !== null && self::$headroomMode !== '') {
+            return self::$headroomMode;
+        }
+
+        $envRaw = $_ENV['wls.memory_guard.fiber_headroom_mode']
+            ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal('wls.memory_guard.fiber_headroom_mode', null)
+            ?? \getenv('wls.memory_guard.fiber_headroom_mode');
+        if (\is_string($envRaw) && \in_array(\trim($envRaw), [self::GUARD_HEADROOM_MODE_FIXED, self::GUARD_HEADROOM_MODE_PERCENT], true)) {
+            return \trim($envRaw);
+        }
+
+        return self::GUARD_HEADROOM_MODE_FIXED;
+    }
+
+    public static function setFiberHeadroomMode(string $mode): void
+    {
+        $normalized = \trim($mode);
+        self::$headroomMode = $normalized !== '' ? $normalized : self::GUARD_HEADROOM_MODE_FIXED;
+    }
+
+    /**
+     * Drain headroom in FIXED mode (remaining headroom ≤ this → drain) with
+     * {@see MEMORY_DRAIN_FIXED_HEADROOM_BYTES} default (45MiB, dead-band-fix); in PERCENT mode the
+     * threshold is {@see MEMORY_DRAIN_PERCENT_HEADROOM_FRACTION} of the limit.
+     * Optional override via `wls.memory_guard.fiber_drain_headroom_bytes`.
+     */
+    public static function memoryDrainHeadroomBytesForLimit(?int $limitBytes = null): int
+    {
+        $limitBytes ??= self::$pressureLimitBytes;
+        if ($limitBytes === null || $limitBytes <= 0) {
+            return self::MEMORY_DRAIN_FIXED_HEADROOM_BYTES;
+        }
+
+        if (self::fiberHeadroomMode() === self::GUARD_HEADROOM_MODE_PERCENT) {
+            return (int) \floor($limitBytes * self::MEMORY_DRAIN_PERCENT_HEADROOM_FRACTION);
+        }
+
+        if (self::$drainHeadroomBytes !== null && self::$drainHeadroomBytes > 0) {
+            return self::$drainHeadroomBytes;
+        }
+
+        $envRaw = $_ENV['wls.memory_guard.fiber_drain_headroom_bytes']
+            ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal('wls.memory_guard.fiber_drain_headroom_bytes', null)
+            ?? \getenv('wls.memory_guard.fiber_drain_headroom_bytes');
         if (\is_string($envRaw) && $envRaw !== '' && \ctype_digit($envRaw)) {
             $parsed = (int)$envRaw;
             if ($parsed > 0) {
@@ -368,7 +581,72 @@ final class WorkerResponseMemoryGuard
             }
         }
 
-        return self::scaledAdmissionMemoryHeadroomThresholdBytes(self::$pressureLimitBytes);
+        return self::MEMORY_DRAIN_FIXED_HEADROOM_BYTES;
+    }
+
+    /**
+     * Worker-restart headroom in FIXED mode (remaining headroom ≤ this → schedule
+     * worker restart) with {@see WORKER_RESTART_FIXED_HEADROOM_BYTES} default (10MiB);
+     * in PERCENT mode the threshold is {@see WORKER_RESTART_PERCENT_HEADROOM_FRACTION}
+     * of the limit. Optional override via `wls.memory_guard.fiber_restart_headroom_bytes`.
+     */
+    public static function workerRestartHeadroomBytesForLimit(?int $limitBytes = null): int
+    {
+        $limitBytes ??= self::$pressureLimitBytes;
+        if ($limitBytes === null || $limitBytes <= 0) {
+            return self::WORKER_RESTART_FIXED_HEADROOM_BYTES;
+        }
+
+        if (self::fiberHeadroomMode() === self::GUARD_HEADROOM_MODE_PERCENT) {
+            return (int) \floor($limitBytes * self::WORKER_RESTART_PERCENT_HEADROOM_FRACTION);
+        }
+
+        if (self::$restartHeadroomBytes !== null && self::$restartHeadroomBytes > 0) {
+            return self::$restartHeadroomBytes;
+        }
+
+        $envRaw = $_ENV['wls.memory_guard.fiber_restart_headroom_bytes']
+            ?? \Weline\Framework\Env\WelineEnv::serverOrGlobal('wls.memory_guard.fiber_restart_headroom_bytes', null)
+            ?? \getenv('wls.memory_guard.fiber_restart_headroom_bytes');
+        if (\is_string($envRaw) && $envRaw !== '' && \ctype_digit($envRaw)) {
+            $parsed = (int)$envRaw;
+            if ($parsed > 0) {
+                return $parsed;
+            }
+        }
+
+        return self::WORKER_RESTART_FIXED_HEADROOM_BYTES;
+    }
+
+    /**
+     * True when the current remaining headroom is within the Worker-restart band
+     * (FIXED default: ≤10MiB / PERCENT default: ≤10% of the Worker limit).
+     */
+    public static function shouldScheduleWorkerRestart(?int $limitBytes = null): bool
+    {
+        $limitBytes = $limitBytes !== null ? $limitBytes : self::getMemoryLimitBytes();
+        $limitBytes = $limitBytes > 0 ? $limitBytes : 0;
+        if ($limitBytes <= 0) {
+            return false;
+        }
+
+        $realBytes = \memory_get_usage(true);
+        $headroom = \max(0, $limitBytes - $realBytes);
+        $restartHeadroom = self::workerRestartHeadroomBytesForLimit($limitBytes);
+
+        return $headroom <= $restartHeadroom;
+    }
+
+    /** Optional fixed-mode drain headroom override in bytes (0 = unset → default). */
+    public static function setMemoryDrainHeadroomBytes(int $bytes): void
+    {
+        self::$drainHeadroomBytes = $bytes > 0 ? $bytes : null;
+    }
+
+    /** Optional fixed-mode worker-restart headroom override in bytes (0 = unset → default). */
+    public static function setMemoryRestartHeadroomBytes(int $bytes): void
+    {
+        self::$restartHeadroomBytes = $bytes > 0 ? $bytes : null;
     }
 
     /**
@@ -635,6 +913,8 @@ final class WorkerResponseMemoryGuard
      *   drain_request_count:int,
      *   last_pressure:float,
      *   admission_memory_rejects:int,
+     *   admission_headroom_threshold_bytes:int,
+     *   admission_active_fibers:int,
      *   absolute_headroom_bytes:int,
      *   fiber_max_active_effective:int,
      *   fiber_max_active_ceiling:int,
@@ -669,7 +949,28 @@ final class WorkerResponseMemoryGuard
             'last_pressure' => self::$lastPressure,
             'admission_memory_rejects' => self::$admissionMemoryRejects,
             'absolute_headroom_bytes' => self::$lastAbsoluteHeadroomBytes,
-        ] + $adaptive;
+        ] + self::admissionStatusScalars() + $adaptive;
+    }
+
+    /**
+     * Admission observability: what the next `memory_pressure` reject is measured
+     * against. `active_fibers` is -1 until a gate evaluation supplied a count
+     * (legacy fixed-fraction path). Also exposed on `/_wls/health?detail=1`.
+     *
+     * @return array{admission_headroom_threshold_bytes:int,admission_active_fibers:int,admission_memory_rejects:int,admission_headroom_mode:string,admission_drain_headroom_bytes:int,admission_restart_headroom_bytes:int}
+     */
+    public static function admissionStatusScalars(): array
+    {
+        return [
+            'admission_headroom_threshold_bytes' => self::$lastAdmissionHeadroomThresholdBytes > 0
+                ? self::$lastAdmissionHeadroomThresholdBytes
+                : self::admissionMemoryHeadroomThresholdBytes(),
+            'admission_active_fibers' => self::$lastAdmissionActiveFibers ?? -1,
+            'admission_memory_rejects' => self::$admissionMemoryRejects,
+            'admission_headroom_mode' => self::fiberHeadroomMode(),
+            'admission_drain_headroom_bytes' => self::memoryDrainHeadroomBytesForLimit(),
+            'admission_restart_headroom_bytes' => self::workerRestartHeadroomBytesForLimit(),
+        ];
     }
 
     public static function drainTimeoutSecondsForReason(string $reason, int $currentTimeout): int
@@ -1343,9 +1644,17 @@ final class WorkerResponseMemoryGuard
         self::$pressureLimitBytes = null;
         self::$admissionMemoryHeadroomBytes = null;
         self::$admissionMemoryHardFloorBytes = null;
+        self::$headroomMode = null;
+        self::$drainHeadroomBytes = null;
+        self::$restartHeadroomBytes = null;
         self::$warmRealBaselineBytes = null;
         self::$admissionMemoryRejects = 0;
         self::$lastAbsoluteHeadroomBytes = 0;
+        self::$lastAdmissionHeadroomThresholdBytes = 0;
+        self::$lastAdmissionActiveFibers = null;
+        self::$admissionRejectLogEmitted = 0;
+        self::$admissionRejectLogSuppressed = 0;
+        self::$lastAdmissionRejectLogAt = 0.0;
         self::$lastPressure = 0.0;
         self::$lastLoopShedAt = 0.0;
         self::$lastLoopShedUsed = 0;

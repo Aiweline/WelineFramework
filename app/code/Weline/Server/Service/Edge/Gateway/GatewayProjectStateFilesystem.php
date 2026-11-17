@@ -197,7 +197,7 @@ final class GatewayProjectStateFilesystem
             // never downgrade to fopen(c), which follows links and truncates
             // the distinction between creation and an existing lock.
             if ($attempt < 7) {
-                \usleep(self::lockRetryMicroseconds(
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(self::lockRetryMicroseconds(
                     2_000,
                     $deadlineMonotonic,
                 ));
@@ -233,7 +233,7 @@ final class GatewayProjectStateFilesystem
                     self::LOCK_RETRY_USEC,
                     $deadline,
                 );
-                \usleep($remainingUsec);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep($remainingUsec);
             } while (true);
             if (!$locked) {
                 throw new \RuntimeException('Timed out acquiring the WLS state lock.');

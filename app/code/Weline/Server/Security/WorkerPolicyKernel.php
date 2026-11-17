@@ -820,6 +820,10 @@ final class WorkerPolicyKernel
                 if ($this->isMaintenanceStaticAssetPath((string)($parsed['path'] ?? ''))) {
                     return null;
                 }
+                // 运维本人不应被自己开启的维护页挡住：面板开启维护时会种 bypass cookie。
+                if ($this->isMaintenancePreviewBypass($envelope)) {
+                    return null;
+                }
                 if ($this->maintenanceMode) {
                     return $this->maintenanceResponse(
                         $parsed,
@@ -2161,6 +2165,54 @@ final class WorkerPolicyKernel
 
         return \substr($reason, 0, 200);
     }
+    /**
+     * 维护模式的「运维自见」旁路：与 MaintenanceInterceptor::checkBypassKey() 同一份配置
+     * （maintenance.bypass.bypass_key），支持 Cookie / 请求头两种方式，密钥用常数时间比较。
+     * 匿名访客没有这个 Cookie，照常拿到维护页。
+     *
+     * @param array<string, mixed> $headers
+     */
+    private function isMaintenancePreviewBypass(\Weline\Framework\Runtime\Policy\RequestEnvelope $envelope): bool
+    {
+        $config = Env::getInstance()->getConfig('maintenance.bypass', []);
+        $keyConfig = \is_array($config) && \is_array($config['bypass_key'] ?? null) ? $config['bypass_key'] : [];
+        if (empty($keyConfig['enabled']) || empty($keyConfig['name']) || empty($keyConfig['value'])) {
+            return false;
+        }
+        $name = (string)$keyConfig['name'];
+        $expected = (string)$keyConfig['value'];
+        $methods = \is_array($keyConfig['methods'] ?? null) ? $keyConfig['methods'] : ['url', 'header', 'cookie'];
+
+        if (\in_array('cookie', $methods, true)) {
+            $rawCookie = (string)($envelope->headers['cookie'] ?? '');
+            if ($rawCookie !== '') {
+                foreach (\explode(';', $rawCookie) as $pair) {
+                    $sep = \strpos($pair, '=');
+                    if ($sep === false) {
+                        continue;
+                    }
+                    if (\trim(\substr($pair, 0, $sep)) !== $name) {
+                        continue;
+                    }
+                    $value = \urldecode(\trim(\substr($pair, $sep + 1)));
+                    if ($value !== '' && \hash_equals($expected, $value)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        if (\in_array('header', $methods, true)) {
+            $headerName = \strtolower($name);
+            $headerValue = (string)($envelope->headers[$headerName] ?? '');
+            if ($headerValue !== '' && \hash_equals($expected, $headerValue)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Policy action maintenance_response: framework maintenance HTML/JSON, never bare text.
      *

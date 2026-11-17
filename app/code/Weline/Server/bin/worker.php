@@ -2039,6 +2039,15 @@ if (isset($memoryGuardConfig['worker_memory_drain_threshold']) && \is_numeric($m
     // D22: unify with SSL default 0.92 when key absent.
     $memoryDrainThreshold = 0.92;
 }
+// 2026-11-11 memory headroom policy: drain when remaining headroom drops to the
+// configured drain band (fixed default ≤25MiB / percent default ≤15% of limit).
+$memoryDrainHeadroomBytes = \Weline\Server\Service\WorkerResponseMemoryGuard::memoryDrainHeadroomBytesForLimit($maxMemoryBytes);
+$memoryDrainPercentThreshold = ($maxMemoryBytes > 0 && $memoryDrainHeadroomBytes > 0)
+    ? (float)(1.0 - ($memoryDrainHeadroomBytes / $maxMemoryBytes))
+    : $memoryDrainThreshold;
+$memoryRestartPercentThreshold = ($maxMemoryBytes > 0 && $memoryDrainHeadroomBytes > 0)
+    ? (float)(1.0 - (\Weline\Server\Service\WorkerResponseMemoryGuard::workerRestartHeadroomBytesForLimit($maxMemoryBytes) / $maxMemoryBytes))
+    : $memoryDrainThreshold;
 // 内存回收窗口（全部可被 wls.memory_guard.* 覆盖；默认值经架构评审定稿）。
 $memoryRecyclePolicy = [
     // Master 已收到回收意向却迟迟不发 DRAIN 时，Worker 自排水前的等待秒数（旧值 5）。
@@ -3139,27 +3148,31 @@ while (true) {
         $currentMemory = \memory_get_usage(true);
         $currentMemoryUsed = \memory_get_usage(false);
         $memoryPercent = $maxMemoryBytes > 0 ? $currentMemoryUsed / $maxMemoryBytes : 0.0;
-        if ($memoryPercent < $memoryDrainThreshold) {
+        // 2026-11-11 memory headroom policy: the drain / restart bands are measured on
+        // remaining headroom (limit − Zend-real), matching the admission gate.
+        $memoryRealPercent = $maxMemoryBytes > 0 ? $currentMemory / $maxMemoryBytes : 0.0;
+        if ($memoryRealPercent < $memoryDrainPercentThreshold) {
             // 压力已回落（compact 见效或请求结束）：清掉忙态暂缓起点，
             // 避免下次超阈时立刻命中 defer_ceiling 提前回收。
             $pendingMemoryDrainSince = 0.0;
         }
 
-        if ($memoryPercent >= $memoryDrainThreshold) {
+        if ($memoryRealPercent >= $memoryDrainPercentThreshold) {
             $beforeMb = \round($currentMemoryUsed / 1024 / 1024, 1);
             $beforeAllocatedMb = \round($currentMemory / 1024 / 1024, 1);
             $compaction = wlsCompactWorkerMemoryCaches('drain_threshold', $maxMemoryBytes, 0.0, 0, true);
             $currentMemory = \memory_get_usage(true);
             $currentMemoryUsed = \memory_get_usage(false);
             $memoryPercent = $maxMemoryBytes > 0 ? $currentMemoryUsed / $maxMemoryBytes : 0.0;
+            $memoryRealPercent = $maxMemoryBytes > 0 ? $currentMemory / $maxMemoryBytes : 0.0;
             $afterMb = \round($currentMemoryUsed / 1024 / 1024, 1);
             $afterAllocatedMb = \round($currentMemory / 1024 / 1024, 1);
-            if ($memoryPercent < $memoryDrainThreshold) {
+            if ($memoryRealPercent < $memoryDrainPercentThreshold) {
                 // compact 已把压力压回阈值下：清掉忙态暂缓起点。
                 $pendingMemoryDrainSince = 0.0;
             }
 
-            if ($memoryPercent >= $memoryDrainThreshold) {
+            if ($memoryRealPercent >= $memoryDrainPercentThreshold) {
                 $memoryDrainBusy = wlsWorkerHasPendingRequestWork(
                     $activeRequests,
                     $requestBuffers,
@@ -3170,9 +3183,20 @@ while (true) {
                 $memoryDrainDeferMaxSec = (float)($memoryRecyclePolicy['recycle_defer_max_sec'] ?? 20.0);
                 $memoryDrainValve = 'idle';
                 $memoryDrainAllowed = !$memoryDrainBusy;
-                if (!$memoryDrainAllowed && $memoryPercent >= $memoryDrainForceRatio) {
+                // 2026-11-11 memory headroom policy: tighter band (remaining ≤ restart
+                // headroom) schedules a Worker restart instead of waiting for drain.
+                $memoryDrainExitReason = ($memoryRealPercent >= $memoryRestartPercentThreshold)
+                    ? 'memory_pressure_restart'
+                    : 'memory_pressure_drain';
+                if (!$memoryDrainAllowed && $memoryRealPercent >= $memoryDrainForceRatio) {
                     $memoryDrainAllowed = true;
                     $memoryDrainValve = 'force_ratio';
+                }
+                if (!$memoryDrainAllowed && $memoryRealPercent >= $memoryRestartPercentThreshold) {
+                    // Restart band (remaining ≤ restart headroom): too close to OOM to
+                    // keep deferring; schedule the replacement now even if busy.
+                    $memoryDrainAllowed = true;
+                    $memoryDrainValve = 'restart_band';
                 }
                 if (!$memoryDrainAllowed) {
                     if ($pendingMemoryDrainSince <= 0.0) {
@@ -3192,7 +3216,7 @@ while (true) {
                         . ', fibers=' . \count($activeFibers)
                         . ', deferred_sec=' . \round($now - $pendingMemoryDrainSince, 1)
                         . ', defer_ceiling_sec=' . $memoryDrainDeferMaxSec
-                        . ', threshold=' . \round($memoryDrainThreshold * 100, 1) . '%'
+                        . ', threshold=' . \round($memoryDrainPercentThreshold * 100, 1) . '%'
                     );
                 } else {
                 $pendingMemoryDrainSince = 0.0;
@@ -3201,14 +3225,14 @@ while (true) {
                     . "(before={$beforeMb}MB used, before_allocated={$beforeAllocatedMb}MB), "
                     . 'request Master planned recycle (keep listen until drain/timeout)'
                 );
-                $plannedExitReason = 'memory_pressure_drain'
+                $plannedExitReason = $memoryDrainExitReason
                     . ":worker={$workerId}"
                     . ",memory={$afterMb}MB"
                     . ",before={$beforeMb}MB"
                     . ",allocated={$afterAllocatedMb}MB"
                     . ",before_allocated={$beforeAllocatedMb}MB"
                     . ",limit={$wlsMemoryLimit}"
-                    . ',threshold=' . \round($memoryDrainThreshold * 100, 1) . '%'
+                    . ',threshold=' . \round($memoryDrainPercentThreshold * 100, 1) . '%'
                     . ",requests={$requestCount}"
                     . ',valve=' . $memoryDrainValve;
                 $memoryRecycleIntentReason = $plannedExitReason;
@@ -6660,6 +6684,8 @@ function handleRequest(
                 'php_version' => PHP_VERSION,
                 'timestamp' => \time(),
                 'fiber_count' => \count($fiberSnapshot),
+                // 准入可观测面：503 x-wls-admission 之前先看这三个数（threshold 随活跃 Fiber 数缩放）。
+                'admission' => \Weline\Server\Service\WorkerResponseMemoryGuard::admissionStatusScalars(),
                 // OPcache 实况（ini + 与当前代码期望值的漂移）：2026-10-30 事故里
                 // 88MB 段撑满、71% 脚本 miss，面板/巡检却看不到，只能从 CPU 反推。
                 'opcache' => \Weline\Server\Service\LongRunningPhpRuntime::effectiveOpcacheRuntime(),

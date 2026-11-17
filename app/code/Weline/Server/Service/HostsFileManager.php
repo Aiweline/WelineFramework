@@ -909,7 +909,7 @@ class HostsFileManager
                 $mustTerminate = true;
                 break;
             }
-            \usleep(10_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
         } while (true);
 
         if ($mustTerminate && !self::terminateMetadataCopyProcess($process)) {
@@ -934,7 +934,7 @@ class HostsFileManager
             if (!\is_array($status) || !(bool)($status['running'] ?? false)) {
                 return true;
             }
-            \usleep(10_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
         } while (self::monotonicSeconds() < $graceDeadline);
 
         @\proc_terminate($process, 9);
@@ -944,7 +944,7 @@ class HostsFileManager
             if (!\is_array($status) || !(bool)($status['running'] ?? false)) {
                 return true;
             }
-            \usleep(10_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
         } while (self::monotonicSeconds() < $killDeadline);
 
         return false;
@@ -1414,7 +1414,7 @@ class HostsFileManager
             if (self::monotonicSeconds() >= $deadline) {
                 return false;
             }
-            \usleep(20_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(20_000);
         } while (true);
     }
 

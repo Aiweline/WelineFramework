@@ -359,7 +359,7 @@ final class NginxLiveProbe
         if ($delay === null) {
             return false;
         }
-        \usleep((int)\max(1, \ceil($delay * 1_000_000)));
+        \Weline\Framework\Runtime\SchedulerSystem::usleep((int)\max(1, \ceil($delay * 1_000_000)));
         return $deadlineMonotonic === null
             || (\hrtime(true) / 1_000_000_000) < $deadlineMonotonic;
     }

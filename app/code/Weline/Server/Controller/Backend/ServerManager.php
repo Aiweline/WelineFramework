@@ -272,8 +272,13 @@ class ServerManager extends BackendController
             return $this->invalidInputResponse(__('实例名称不合法'));
         }
         $result = $this->ipcGateway->setMaintenanceMode($instance, true, 8.0);
+        $enabled = (bool)($result['success'] ?? false);
+        if ($enabled) {
+            // 操作者本人不应被自己开启的维护页挡住：种下维护预览 Cookie，匿名访客仍然看到维护页。
+            $this->applyMaintenancePreviewCookie(true);
+        }
         return [
-            'success' => (bool)($result['success'] ?? false),
+            'success' => $enabled,
             'message' => (string)($result['message'] ?? __('维护模式已启用')),
             'data' => $result['data'] ?? [],
         ];
@@ -287,21 +292,65 @@ class ServerManager extends BackendController
             return $this->invalidInputResponse(__('实例名称不合法'));
         }
         $result = $this->ipcGateway->setMaintenanceMode($instance, false, 8.0);
+        $disabled = (bool)($result['success'] ?? false);
+        if ($disabled) {
+            $this->applyMaintenancePreviewCookie(false);
+        }
         return [
-            'success' => (bool)($result['success'] ?? false),
+            'success' => $disabled,
             'message' => (string)($result['message'] ?? __('维护模式已禁用')),
             'data' => $result['data'] ?? [],
         ];
     }
 
+    /**
+     * 维护预览 Cookie：开启维护时种、关闭时清。
+     *
+     * 与 MaintenanceInterceptor::checkBypassKey() / WorkerPolicyKernel::isMaintenancePreviewBypass()
+     * 共用 maintenance.bypass.bypass_key 配置，因此运维浏览器在维护期间照常访问前台，
+     * 未携带该 Cookie 的匿名访客仍进入维护页。
+     */
+    private function applyMaintenancePreviewCookie(bool $enable): void
+    {
+        try {
+            $config = \Weline\Framework\App\Env::getInstance()->getConfig('maintenance.bypass', []);
+            $keyConfig = \is_array($config) && \is_array($config['bypass_key'] ?? null) ? $config['bypass_key'] : [];
+            if (empty($keyConfig['enabled']) || empty($keyConfig['name']) || empty($keyConfig['value'])) {
+                return;
+            }
+            $methods = \is_array($keyConfig['methods'] ?? null) ? $keyConfig['methods'] : ['url', 'header', 'cookie'];
+            if (!\in_array('cookie', $methods, true)) {
+                return;
+            }
+            $response = $this->request->getResponse();
+            $response->setCookie(
+                (string)$keyConfig['name'],
+                $enable ? (string)$keyConfig['value'] : '',
+                $enable ? \time() + 86400 : \time() - 3600,
+                '/',
+                '',
+                false,
+                true,
+                'Lax'
+            );
+        } catch (\Throwable) {
+            // Cookie 只是让运维自己不被维护页挡住；失败时不影响维护开关本身的结果。
+        }
+    }
+
     #[Acl('Weline_Server::server_manager_session_read', '查看 Weline Server Session', 'list', '查看 Weline Server Session 列表', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_READ)]
     public function getSessionList(): array
     {
-        $limit = $this->getValidatedInt((string)$this->request->getGet('limit', '50'), 1, 500, 50);
+        $perPage = $this->getValidatedInt((string)$this->request->getGet('per_page', '20'), 1, 100, 20);
+        $page = $this->getValidatedInt((string)$this->request->getGet('page', '1'), 1, 100000, 1);
+        $pageData = $this->sharedStateAdminService->listSessionsPage([], $perPage, ($page - 1) * $perPage);
         return [
             'success' => true,
             'message' => (string)__('Session 列表加载完成'),
-            'data' => $this->sharedStateAdminService->listSessions([], $limit),
+            'data' => $pageData['items'],
+            'page' => $page,
+            'per_page' => $perPage,
+            'has_more' => (bool)$pageData['has_more'],
         ];
     }
 
@@ -371,11 +420,16 @@ class ServerManager extends BackendController
     #[Acl('Weline_Server::server_manager_memory_read', '查看 Weline Server 内存服务', 'eye', '查看 Weline Server 内存命名空间', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_READ)]
     public function getMemoryNamespaces(): array
     {
-        $limit = $this->getValidatedInt((string)$this->request->getGet('limit', '200'), 1, 1000, 200);
+        $perPage = $this->getValidatedInt((string)$this->request->getGet('per_page', '20'), 1, 100, 20);
+        $page = $this->getValidatedInt((string)$this->request->getGet('page', '1'), 1, 100000, 1);
+        $pageData = $this->sharedStateAdminService->listMemoryNamespacesPage($perPage, ($page - 1) * $perPage);
         return [
             'success' => true,
             'message' => (string)__('内存命名空间加载完成'),
-            'data' => $this->sharedStateAdminService->listMemoryNamespaces($limit),
+            'data' => $pageData['items'],
+            'page' => $page,
+            'per_page' => $perPage,
+            'has_more' => (bool)$pageData['has_more'],
         ];
     }
 
@@ -383,7 +437,8 @@ class ServerManager extends BackendController
     public function getMemoryNamespaceDetail(): array
     {
         $namespace = $this->getValidatedOpaqueKey((string)$this->request->getGet('namespace', ''), 160);
-        $limit = $this->getValidatedInt((string)$this->request->getGet('limit', '100'), 1, 1000, 100);
+        $perPage = $this->getValidatedInt((string)$this->request->getGet('per_page', '20'), 1, 100, 20);
+        $page = $this->getValidatedInt((string)$this->request->getGet('page', '1'), 1, 100000, 1);
         if ($namespace === null) {
             return [
                 'success' => false,
@@ -391,10 +446,14 @@ class ServerManager extends BackendController
                 'data' => [],
             ];
         }
+        $pageData = $this->sharedStateAdminService->getMemoryKeysPage($namespace, $perPage, ($page - 1) * $perPage);
         return [
             'success' => true,
             'message' => (string)__('命名空间详情加载完成'),
-            'data' => $this->sharedStateAdminService->getMemoryNamespaceDetail($namespace, $limit),
+            'data' => $pageData['items'],
+            'page' => $page,
+            'per_page' => $perPage,
+            'has_more' => (bool)$pageData['has_more'],
         ];
     }
 

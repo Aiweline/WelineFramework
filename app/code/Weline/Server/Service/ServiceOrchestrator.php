@@ -20506,6 +20506,7 @@ class ServiceOrchestrator
 
         return \str_starts_with($reason, 'max_requests_recycle:')
             || \str_starts_with($reason, 'memory_pressure_drain')
+            || \str_starts_with($reason, 'memory_pressure_restart')
             || \str_starts_with($reason, 'zend_mm_ratchet');
     }
 

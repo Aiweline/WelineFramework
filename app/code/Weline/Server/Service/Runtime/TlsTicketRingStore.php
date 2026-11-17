@@ -186,7 +186,7 @@ final class TlsTicketRingStore
                     \ceil(($deadline - $now) * 1_000_000),
                 ),
             );
-            \usleep($remainingUsec);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep($remainingUsec);
         } while (true);
 
         throw new \RuntimeException('TLS ticket-ring store lock acquisition timed out.');

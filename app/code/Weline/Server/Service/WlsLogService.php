@@ -245,7 +245,10 @@ class WlsLogService
             return false;
         }
         if (!\defined('VAR_DIR')) {
-            \define('VAR_DIR', \rtrim((string)\BP, '/\\') . \DIRECTORY_SEPARATOR . 'var' . \DIRECTORY_SEPARATOR);
+            \define(
+                'VAR_DIR',
+                \Weline\Framework\App\DirectoryList::bootstrapFromEnvFile((string)\BP)->getVar()
+            );
         }
         $path = \VAR_DIR . 'server' . \DIRECTORY_SEPARATOR . 'instances'
             . DIRECTORY_SEPARATOR . $instanceName . '.json';

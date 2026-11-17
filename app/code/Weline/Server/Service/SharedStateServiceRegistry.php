@@ -794,7 +794,7 @@ class SharedStateServiceRegistry
                 ) {
                     throw $exception;
                 }
-                \usleep(self::READ_RACE_RETRY_DELAY_MICROSECONDS);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(self::READ_RACE_RETRY_DELAY_MICROSECONDS);
             }
         }
         if ($data === null) {

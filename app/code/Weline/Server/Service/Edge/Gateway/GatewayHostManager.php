@@ -7361,7 +7361,7 @@ final class GatewayHostManager implements GatewayStartupHostInterface
             if ($remaining <= 0.0) {
                 break;
             }
-            \usleep((int)\max(
+            \Weline\Framework\Runtime\SchedulerSystem::usleep((int)\max(
                 1_000,
                 \min(200_000, \ceil($remaining * 1_000_000)),
             ));

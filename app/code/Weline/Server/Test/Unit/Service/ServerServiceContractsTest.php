@@ -160,6 +160,41 @@ final class ServerServiceContractsTest extends TestCase
                 $this->tearDown_WorkerResponseMemoryGuardAdmissionMemoryGate();
             }
         },
+            'WorkerResponseMemoryGuardAdmissionMemoryGate::testConcurrencyScaledHeadroomKeepsIdleReserveSmallAndSaturatedReserveAtFraction' => function () {
+            try {
+                $this->assert_WorkerResponseMemoryGuardAdmissionMemoryGate_testConcurrencyScaledHeadroomKeepsIdleReserveSmallAndSaturatedReserveAtFraction();
+            } finally {
+                $this->tearDown_WorkerResponseMemoryGuardAdmissionMemoryGate();
+            }
+        },
+            'WorkerResponseMemoryGuardAdmissionMemoryGate::testHeadroomBetweenIdleFloorAndLegacyFractionAdmitsWhenOnlyOneFiberRuns' => function () {
+            try {
+                $this->assert_WorkerResponseMemoryGuardAdmissionMemoryGate_testHeadroomBetweenIdleFloorAndLegacyFractionAdmitsWhenOnlyOneFiberRuns();
+            } finally {
+                $this->tearDown_WorkerResponseMemoryGuardAdmissionMemoryGate();
+            }
+        },
+            'WorkerResponseMemoryGuardHeadroomPolicy::testFixedModeDefaultsAre50_25_10MiB' => function () {
+            try {
+                $this->assert_WorkerResponseMemoryGuardHeadroomPolicy_testFixedModeDefaultsAre50_25_10MiB();
+            } finally {
+                $this->tearDown_WorkerResponseMemoryGuardAdmissionMemoryGate();
+            }
+        },
+            'WorkerResponseMemoryGuardHeadroomPolicy::testPercentModeScalesAdmissionDrainRestart' => function () {
+            try {
+                $this->assert_WorkerResponseMemoryGuardHeadroomPolicy_testPercentModeScalesAdmissionDrainRestart();
+            } finally {
+                $this->tearDown_WorkerResponseMemoryGuardAdmissionMemoryGate();
+            }
+        },
+            'WorkerResponseMemoryGuardHeadroomPolicy::testWorkersWireHeadroomDrainRestartBands' => function () {
+            try {
+                $this->assert_WorkerResponseMemoryGuardHeadroomPolicy_testWorkersWireHeadroomDrainRestartBands();
+            } finally {
+                $this->tearDown_WorkerResponseMemoryGuardAdmissionMemoryGate();
+            }
+        },
             'WorkerResponseMemoryGuardCapacityScalars::testCapacityStatusScalarsExposeCompactCounters' => function () {
             $this->assert_WorkerResponseMemoryGuardCapacityScalars_testCapacityStatusScalarsExposeCompactCounters();
         },
@@ -373,7 +408,9 @@ private function assert_WorkerResponseMemoryGuardAdmissionMemoryGate_testAbsolut
 private function assert_WorkerResponseMemoryGuardAdmissionMemoryGate_testDefaultAdmissionThresholdAlignsWithLoopHeadroomShed(): void
 {
     WorkerResponseMemoryGuard::resetThresholdCache();
-    self::assertSame(64 * 1024 * 1024, WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes());
+    // 2026-11-11 memory headroom design (fixed mode default): admit while remaining
+    // headroom ≥ 50MiB.
+    self::assertSame(50 * 1024 * 1024, WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes());
     WorkerResponseMemoryGuard::setAdmissionMemoryHeadroomBytes(32 * 1024 * 1024);
     self::assertSame(32 * 1024 * 1024, WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes());
 }
@@ -382,8 +419,12 @@ private function assert_WorkerResponseMemoryGuardAdmissionMemoryGate_testAdmissi
 {
     WorkerResponseMemoryGuard::resetThresholdCache();
     WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(256 * 1024 * 1024);
-    // 40% of 256MiB = ~102MiB soft headroom (above fixed 64MiB floor).
-    self::assertSame((int) \floor(256 * 1024 * 1024 * 0.4), WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes());
+    // Fixed design mode (default): the 50MiB remaining-headroom band governs.
+    self::assertSame(50 * 1024 * 1024, WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes());
+    // Percent mode: 30% of the Worker limit.
+    WorkerResponseMemoryGuard::setFiberHeadroomMode('percent');
+    self::assertSame((int) \floor(256 * 1024 * 1024 * 0.30), WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes());
+    WorkerResponseMemoryGuard::setFiberHeadroomMode('fixed');
 }
 
 private function assert_WorkerResponseMemoryGuardAdmissionMemoryGate_testClampMaxActiveFitsBudgetUnderMemoryLimit(): void
@@ -458,6 +499,125 @@ private function assert_WorkerResponseMemoryGuardAdmissionMemoryGate_testWorkers
     }
 }
 
+private function assert_WorkerResponseMemoryGuardAdmissionMemoryGate_testConcurrencyScaledHeadroomKeepsIdleReserveSmallAndSaturatedReserveAtFraction(): void
+{
+    $mib = 1024 * 1024;
+    WorkerResponseMemoryGuard::resetThresholdCache();
+    WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(512 * $mib);
+    // Fixed design mode (default): the configured remaining-headroom band (50MiB)
+    // governs admission, independent of running Fiber count.
+    $base = WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes();
+    self::assertSame(50 * 1024 * 1024, $base);
+
+    self::assertSame(50 * 1024 * 1024, WorkerResponseMemoryGuard::admissionHeadroomThresholdBytesForConcurrency($base, 0));
+    self::assertSame(50 * 1024 * 1024, WorkerResponseMemoryGuard::admissionHeadroomThresholdBytesForConcurrency($base, 1));
+    self::assertSame(50 * 1024 * 1024, WorkerResponseMemoryGuard::admissionHeadroomThresholdBytesForConcurrency($base, 2));
+    self::assertSame(50 * 1024 * 1024, WorkerResponseMemoryGuard::admissionHeadroomThresholdBytesForConcurrency($base, 5));
+    self::assertSame(50 * 1024 * 1024, WorkerResponseMemoryGuard::admissionHeadroomThresholdBytesForConcurrency($base, 64));
+}
+
+private function assert_WorkerResponseMemoryGuardAdmissionMemoryGate_testHeadroomBetweenIdleFloorAndLegacyFractionAdmitsWhenOnlyOneFiberRuns(): void
+{
+    $mib = 1024 * 1024;
+    WorkerResponseMemoryGuard::resetThresholdCache();
+    // Synthetic Worker limit sized so real Zend headroom is ~100MiB.
+    WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(\memory_get_usage(true) + 100 * $mib);
+    // Model the observed 512M Worker reserve (40% = 204.8MiB) with an explicit
+    // base so the test process does not have to hold a real 300MiB heap.
+    WorkerResponseMemoryGuard::setAdmissionMemoryHeadroomBytes(150 * $mib);
+
+    $legacy = WorkerResponseMemoryGuard::evaluateAdmissionMemoryGate(false);
+    self::assertFalse($legacy['admit'], 'explicit fixed headroom band must still reject in the dead band');
+    self::assertSame('memory_pressure', $legacy['reason']);
+
+    // Fixed design mode: the configured band governs regardless of Fiber count.
+    $single = WorkerResponseMemoryGuard::evaluateAdmissionMemoryGate(false, 1);
+    self::assertFalse($single['admit'], 'fixed design band (150MiB override) governs even with one running Fiber');
+    self::assertSame('memory_pressure', $single['reason']);
+
+    $busy = WorkerResponseMemoryGuard::evaluateAdmissionMemoryGate(false, 3);
+    self::assertFalse($busy['admit'], '3 Fibers must still reject below the fixed design band');
+
+    $scalars = WorkerResponseMemoryGuard::capacityStatusScalars();
+    self::assertArrayHasKey('admission_headroom_threshold_bytes', $scalars);
+    self::assertArrayHasKey('admission_active_fibers', $scalars);
+    self::assertArrayHasKey('admission_headroom_mode', $scalars);
+    self::assertArrayHasKey('admission_drain_headroom_bytes', $scalars);
+    self::assertArrayHasKey('admission_restart_headroom_bytes', $scalars);
+    self::assertSame(3, $scalars['admission_active_fibers']);
+    self::assertSame('fixed', $scalars['admission_headroom_mode']);
+    self::assertSame(25 * 1024 * 1024, $scalars['admission_drain_headroom_bytes']);
+    self::assertSame(10 * 1024 * 1024, $scalars['admission_restart_headroom_bytes']);
+    self::assertSame(
+        WorkerResponseMemoryGuard::admissionHeadroomThresholdBytesForConcurrency(
+            WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes(),
+            3
+        ),
+        $scalars['admission_headroom_threshold_bytes']
+    );
+}
+
+private function assert_WorkerResponseMemoryGuardHeadroomPolicy_testFixedModeDefaultsAre50_25_10MiB(): void
+{
+    $mib = 1024 * 1024;
+    WorkerResponseMemoryGuard::resetThresholdCache();
+    WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(512 * $mib);
+    // Fixed mode is the default; admission/drain/restart use the 50/25/10MiB design bands.
+    self::assertSame('fixed', WorkerResponseMemoryGuard::fiberHeadroomMode());
+    self::assertSame(50 * $mib, WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes());
+    self::assertSame(25 * $mib, WorkerResponseMemoryGuard::memoryDrainHeadroomBytesForLimit());
+    self::assertSame(10 * $mib, WorkerResponseMemoryGuard::workerRestartHeadroomBytesForLimit());
+    // Ordering: admission band is looser than drain, drain looser than restart.
+    self::assertGreaterThan(
+        WorkerResponseMemoryGuard::memoryDrainHeadroomBytesForLimit(),
+        WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes()
+    );
+    self::assertGreaterThan(
+        WorkerResponseMemoryGuard::workerRestartHeadroomBytesForLimit(),
+        WorkerResponseMemoryGuard::memoryDrainHeadroomBytesForLimit()
+    );
+}
+
+private function assert_WorkerResponseMemoryGuardHeadroomPolicy_testPercentModeScalesAdmissionDrainRestart(): void
+{
+    $mib = 1024 * 1024;
+    WorkerResponseMemoryGuard::resetThresholdCache();
+    WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(512 * $mib);
+    WorkerResponseMemoryGuard::setFiberHeadroomMode('percent');
+    self::assertSame('percent', WorkerResponseMemoryGuard::fiberHeadroomMode());
+    // 30% / 15% / 10% of the Worker limit.
+    self::assertSame((int) \floor(512 * $mib * 0.30), WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes());
+    self::assertSame((int) \floor(512 * $mib * 0.15), WorkerResponseMemoryGuard::memoryDrainHeadroomBytesForLimit());
+    self::assertSame((int) \floor(512 * $mib * 0.10), WorkerResponseMemoryGuard::workerRestartHeadroomBytesForLimit());
+    // Concurrency no longer inflates the admission band in percent mode either.
+    self::assertSame(
+        (int) \floor(512 * $mib * 0.30),
+        WorkerResponseMemoryGuard::admissionHeadroomThresholdBytesForConcurrency(
+            WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes(),
+            6
+        )
+    );
+}
+
+private function assert_WorkerResponseMemoryGuardHeadroomPolicy_testWorkersWireHeadroomDrainRestartBands(): void
+{
+    $base = '/Users/weline/Project/Official/框架/app/code/Weline/Server';
+    $worker = (string) \file_get_contents($base . '/bin/worker.php');
+    $ssl = (string) \file_get_contents($base . '/bin/worker_ssl.php');
+    foreach ([$worker, $ssl] as $source) {
+        self::assertStringContainsString('memoryDrainHeadroomBytesForLimit', $source);
+        self::assertStringContainsString('workerRestartHeadroomBytesForLimit', $source);
+        self::assertStringContainsString('$memoryRealPercent', $source);
+        self::assertStringContainsString('memory_pressure_restart', $source);
+        self::assertStringContainsString("'restart_band'", $source);
+        // Drain/restart bands are measured on remaining headroom, not used-fraction.
+        self::assertStringContainsString('$memoryDrainPercentThreshold', $source);
+        self::assertStringContainsString('$memoryRestartPercentThreshold', $source);
+    }
+    $orchestrator = (string) \file_get_contents($base . '/Service/ServiceOrchestrator.php');
+    self::assertStringContainsString("str_starts_with(\$reason, 'memory_pressure_restart')", $orchestrator);
+}
+
 private function assert_WorkerResponseMemoryGuardCapacityScalars_testCapacityStatusScalarsExposeCompactCounters(): void
 {
     WorkerResponseMemoryGuard::resetThresholdCache();
@@ -506,5 +666,8 @@ private function assert_WorkerResponseMemoryGuardCapacityScalars_testWorkerSnaps
     $ssl = $base . '/bin/worker_ssl.php';
     self::assertStringContainsString('capacityStatusScalars()', (string) \file_get_contents($worker));
     self::assertStringContainsString('capacityStatusScalars()', (string) \file_get_contents($ssl));
+    // 503 x-wls-admission must be diagnosable from the local health endpoint too.
+    self::assertStringContainsString('admissionStatusScalars()', (string) \file_get_contents($worker));
+    self::assertStringContainsString('admissionStatusScalars()', (string) \file_get_contents($ssl));
 }
 }

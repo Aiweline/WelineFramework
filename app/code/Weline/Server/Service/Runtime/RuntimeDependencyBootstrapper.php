@@ -1960,7 +1960,7 @@ PHP;
         if ($remaining <= 0.0) {
             return;
         }
-        @\usleep((int)\max(
+        \Weline\Framework\Runtime\SchedulerSystem::usleep((int)\max(
             1,
             \min(
                 self::LOCK_RETRY_MICROSECONDS,

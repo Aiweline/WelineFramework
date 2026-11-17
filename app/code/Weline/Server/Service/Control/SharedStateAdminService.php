@@ -18,6 +18,8 @@ class SharedStateAdminService
     private const ROLE_MEMORY = 'memory';
     private const SESSION_NAMESPACE = 'sess';
     private const SESSION_NAMESPACE_STATE_ID = '__kv__:sess';
+    /** 会话分页单次最多扫描条数（保护 sidecar 与请求耗时）。 */
+    private const SESSION_PAGE_SCAN_CAP = 2000;
 
     private ?SessionStateFacade $sessionFacade = null;
     private ?MemoryStateFacade $memoryFacade = null;
@@ -43,7 +45,7 @@ class SharedStateAdminService
         return $this->getOverview(self::ROLE_MEMORY);
     }
 
-    public function listSessions(array $filter = [], int $limit = 50): array
+    public function listSessions(array $filter = [], int $limit = 50, int $offset = 0): array
     {
         $limit = $this->normalizeLimit($limit, 200);
         $payloadFilter = $this->sanitizePayloadFilter($filter);
@@ -53,6 +55,7 @@ class SharedStateAdminService
         $rawItems = $this->sessionFacade()->list([
             'filter' => $stateFilter,
             'limit' => $limit,
+            'offset' => \max(0, $offset),
         ]);
 
         $rows = [];
@@ -149,9 +152,10 @@ class SharedStateAdminService
         return $this->sessionFacade()->persist();
     }
 
-    public function listMemoryNamespaces(int $limit = 200): array
+    public function listMemoryNamespaces(int $limit = 200, int $offset = 0): array
     {
         $limit = $this->normalizeLimit($limit, 500);
+        $offset = \max(0, $offset);
         $items = $this->memoryFacade()->list([
             'filter' => [],
             'limit' => $limit,
@@ -186,7 +190,68 @@ class SharedStateAdminService
         return \array_values($result);
     }
 
-    public function getMemoryNamespaceDetail(string $namespace, int $limit = 100): array
+    /**
+     * 分页取内存命名空间：先聚合再按页切，避免把整表键名送进浏览器。
+     *
+     * @return array{items:array<int,array<string,mixed>>,has_more:bool}
+     */
+    public function listMemoryNamespacesPage(int $limit = 20, int $offset = 0): array
+    {
+        $limit = $this->normalizeLimit($limit, 500);
+        $offset = \max(0, $offset);
+        $namespaces = $this->listMemoryNamespaces(\max($limit + $offset + 1, 500));
+        $items = \array_slice($namespaces, $offset, $limit + 1);
+        $hasMore = \count($items) > $limit;
+        if ($hasMore) {
+            $items = \array_slice($items, 0, $limit);
+        }
+
+        return ['items' => $items, 'has_more' => $hasMore];
+    }
+
+    /**
+     * 会话列表分页：多取一条判 has_more，浏览器只拿到一页。
+     *
+     * @return array{items:array<int,array<string,mixed>>,has_more:bool}
+     */
+    public function listSessionsPage(array $filter = [], int $limit = 20, int $offset = 0): array
+    {
+        $limit = $this->normalizeLimit($limit, 200);
+        $offset = \max(0, $offset);
+        /*
+         * 共享态 LIST 的 offset 依赖 sidecar 版本：旧 sidecar 会忽略它（返回首页）。
+         * 分页因此在本地切片，只把「一页」交给浏览器；扫描量封顶，避免深页把 sidecar 拖垮。
+         */
+        $scan = \min($limit + $offset + 1, self::SESSION_PAGE_SCAN_CAP);
+        $rows = $this->listSessions($filter, $scan);
+        $items = \array_slice($rows, $offset, $limit + 1);
+        $hasMore = \count($items) > $limit;
+        if ($hasMore) {
+            $items = \array_slice($items, 0, $limit);
+        }
+
+        return ['items' => $items, 'has_more' => $hasMore];
+    }
+
+    /**
+     * 单个命名空间键列表分页（键总量可能上万，只回一页）。
+     *
+     * @return array{items:array<int,array<string,mixed>>,has_more:bool}
+     */
+    public function getMemoryKeysPage(string $namespace, int $limit = 20, int $offset = 0): array
+    {
+        $limit = $this->normalizeLimit($limit, 500);
+        $offset = \max(0, $offset);
+        $items = $this->getMemoryNamespaceDetail($namespace, $limit + 1, $offset);
+        $hasMore = \count($items) > $limit;
+        if ($hasMore) {
+            $items = \array_slice($items, 0, $limit);
+        }
+
+        return ['items' => $items, 'has_more' => $hasMore];
+    }
+
+    public function getMemoryNamespaceDetail(string $namespace, int $limit = 100, int $offset = 0): array
     {
         if ($namespace === '') {
             return [];
@@ -195,8 +260,13 @@ class SharedStateAdminService
         $payload = $this->memoryFacade()->getAll($namespace);
         $rows = [];
         $index = 0;
+        $offset = \max(0, $offset);
         foreach ($payload as $key => $value) {
-            if ($index >= $limit) {
+            if ($index < $offset) {
+                $index++;
+                continue;
+            }
+            if (\count($rows) >= $limit) {
                 break;
             }
             $rows[] = [
