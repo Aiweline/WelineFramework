@@ -401,7 +401,7 @@ final class ThemeLayoutEntitySolidifyQueue
             }
             $pending = $next;
             if ($pending !== []) {
-                usleep(1000);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(1000);
             }
         }
     }

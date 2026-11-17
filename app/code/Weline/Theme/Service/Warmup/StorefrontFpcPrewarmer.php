@@ -298,7 +298,7 @@ final class StorefrontFpcPrewarmer
             [$status, $ms] = $this->request($url, $host, $timeout);
             if ($status === 503 || $status === 0) {
                 // 突发预热会把 Worker 打到 503（准入/背压）：退避后重试一次。
-                \sleep(1);
+                \Weline\Framework\Runtime\SchedulerSystem::sleep(1);
                 [$status, $ms] = $this->request($url, $host, $timeout);
             }
             $result['details'][] = ['path' => $path, 'status' => $status, 'ms' => $ms];
@@ -309,7 +309,7 @@ final class StorefrontFpcPrewarmer
             }
             // 轻微节奏控制：避免连续冷渲染把两个 Worker 同时压满。
             if ($index < \count($paths) - 1) {
-                \usleep(200_000);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(200_000);
             }
         }
 
@@ -382,7 +382,7 @@ final class StorefrontFpcPrewarmer
             foreach ($result['failed'] as $entry) {
                 $retryPaths[] = (string)\preg_replace('/\(\d+\)$/', '', $entry);
             }
-            \sleep(1);
+            \Weline\Framework\Runtime\SchedulerSystem::sleep(1);
             foreach ($retryPaths as $path) {
                 $url = $scheme . '://127.0.0.1:' . $port . $path;
                 [$code, $ms] = $this->request($url, $host, $timeout);
@@ -459,7 +459,7 @@ final class StorefrontFpcPrewarmer
                     return;
                 }
             }
-            \sleep(1);
+            \Weline\Framework\Runtime\SchedulerSystem::sleep(1);
         }
     }
 

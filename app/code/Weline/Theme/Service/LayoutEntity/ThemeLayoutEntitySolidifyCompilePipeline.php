@@ -434,7 +434,7 @@ final class ThemeLayoutEntitySolidifyCompilePipeline
                 }
                 // Always yield while work remains (incl. owner-busy solidify waits).
                 if ($solidifyQueue !== [] || $compileQueue !== [] || $running !== [] || $pendingRollbacks !== []) {
-                    usleep($running !== [] ? 20000 : 5000);
+                    \Weline\Framework\Runtime\SchedulerSystem::usleep($running !== [] ? 20000 : 5000);
                 }
             }
 
@@ -446,7 +446,7 @@ final class ThemeLayoutEntitySolidifyCompilePipeline
                 if ($pendingRollbacks === []) {
                     break;
                 }
-                usleep(200_000);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(200_000);
             }
             if ($pendingRollbacks !== []) {
                 // Last attempt — surface lock timeout if an external holder remains.
@@ -732,7 +732,7 @@ final class ThemeLayoutEntitySolidifyCompilePipeline
         }
         // Final drain: reap immediately so flushPendingRollbacks sees owners free.
         if ($onlyOwners === null && $running !== []) {
-            usleep(100_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(100_000);
             foreach ($running as $key => $state) {
                 $proc = $state['proc'] ?? null;
                 if (is_resource($proc)) {
