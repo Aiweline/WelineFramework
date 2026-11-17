@@ -120,7 +120,7 @@ class DeployWebhookAsyncDispatcher
         }
         // Brief yield so killed release processes can drop the flock.
         if ($superseded !== [] || $stale !== []) {
-            \usleep(300000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(300000);
         }
 
         // Always enqueue first — the job row is the durable record the reconciler/CLI drain reads.
@@ -296,7 +296,7 @@ class DeployWebhookAsyncDispatcher
                 $pid = (int)$raw;
                 break;
             }
-            \usleep(50000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(50000);
         }
         if ($pid !== null) {
             @\file_put_contents($pidFile, (string)$pid);

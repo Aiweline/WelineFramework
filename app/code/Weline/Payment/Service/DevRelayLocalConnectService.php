@@ -125,7 +125,7 @@ final class DevRelayLocalConnectService
                 $this->start($online, $token);
             } catch (\Throwable $e) {
                 // 并发启动 / 宿主误杀后短暂存活：再读一次
-                usleep(600_000);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(600_000);
                 $status = $this->status();
                 if (!empty($status['running'])) {
                     // continue wait loop below
@@ -142,7 +142,7 @@ final class DevRelayLocalConnectService
         $deadline = time() + max(5, $waitSeconds);
         $sawRunning = false;
         do {
-            usleep(400_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(400_000);
             $status = $this->status();
             if (!empty($status['running'])) {
                 $sawRunning = true;
@@ -289,7 +289,7 @@ final class DevRelayLocalConnectService
         }
         // 再确认一次：避免「刚起就被宿主收走」的假阳性
         if ($pid > 0) {
-            usleep(400_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(400_000);
             if (!$this->isProcessAlive($pid)) {
                 $pid = $this->waitForWorkerPid(2.0);
             }
@@ -406,7 +406,7 @@ final class DevRelayLocalConnectService
                     return $pid;
                 }
             }
-            usleep(150_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(150_000);
         } while (microtime(true) < $deadline);
 
         $pid = $this->readPid();
@@ -457,7 +457,7 @@ final class DevRelayLocalConnectService
                 @posix_kill($pid, SIGTERM);
                 $deadline = time() + 5;
                 while (time() < $deadline && $this->isProcessAlive($pid)) {
-                    usleep(100_000);
+                    \Weline\Framework\Runtime\SchedulerSystem::usleep(100_000);
                 }
                 if ($this->isProcessAlive($pid)) {
                     @posix_kill($pid, SIGKILL);

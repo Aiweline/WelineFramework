@@ -357,7 +357,7 @@ final class Detail extends FrontendController
         if ($offers !== []) {
             return $offers;
         }
-        \usleep(80000);
+        \Weline\Framework\Runtime\SchedulerSystem::usleep(80000);
 
         return $load();
     }

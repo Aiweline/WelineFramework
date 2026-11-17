@@ -120,7 +120,7 @@ class WatcherService
         exec($cmd);
         
         // 等待一下，检查进程是否启动成功
-        sleep(1);
+        \Weline\Framework\Runtime\SchedulerSystem::sleep(1);
         
         if ($this->isWatcherRunning($mappingId)) {
             return [
@@ -205,7 +205,7 @@ class WatcherService
         }
 
         // 等待一下确保进程完全停止
-        sleep(1);
+        \Weline\Framework\Runtime\SchedulerSystem::sleep(1);
 
         // 再启动
         return $this->startWatcher($mappingId);

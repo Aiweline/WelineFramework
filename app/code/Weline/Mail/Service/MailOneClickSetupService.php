@@ -497,7 +497,7 @@ final class MailOneClickSetupService
         // launchctl 重启后常有数秒 HTTP 0（连接拒绝）；须重试，禁止把「认证」泛串当 401 提前中断。
         for ($attempt = 1; $attempt <= 20; $attempt++) {
             try {
-                usleep(min(1_200_000, 300_000 + ($attempt * 100_000)));
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(min(1_200_000, 300_000 + ($attempt * 100_000)));
                 if ($requireDomain) {
                     $mgmt->probeManagementApi();
                 } else {

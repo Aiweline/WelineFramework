@@ -82,7 +82,7 @@ class Stream extends BackendController
                 }
             }
 
-            sleep(2);
+            \Weline\Framework\Runtime\SchedulerSystem::sleep(2);
         }
 
         $sse->sendEvent('error', ['message' => '日志流超时']);

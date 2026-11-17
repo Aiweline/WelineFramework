@@ -168,7 +168,7 @@ class DeployWebhookJobQueue
         }
         if (\function_exists('posix_kill')) {
             @\posix_kill($pid, 15);
-            \usleep(200000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(200000);
             if ($this->isProcessAlive($pid)) {
                 @\posix_kill($pid, 9);
             }
@@ -179,7 +179,7 @@ class DeployWebhookJobQueue
             return;
         }
         @exec('kill -15 ' . $pid . ' 2>/dev/null');
-        \usleep(200000);
+        \Weline\Framework\Runtime\SchedulerSystem::usleep(200000);
         if ($this->isProcessAlive($pid)) {
             @exec('kill -9 ' . $pid . ' 2>/dev/null');
         }

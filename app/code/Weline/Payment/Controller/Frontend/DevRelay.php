@@ -253,7 +253,7 @@ final class DevRelay extends FrontendController
                 ) {
                     break;
                 }
-                usleep(400_000);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(400_000);
             }
 
             return [

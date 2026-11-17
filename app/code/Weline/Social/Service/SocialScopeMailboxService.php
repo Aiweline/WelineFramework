@@ -248,7 +248,7 @@ class SocialScopeMailboxService
             ]);
         }
 
-        \usleep(1500000);
+        \Weline\Framework\Runtime\SchedulerSystem::usleep(1500000);
         $rows = $this->readContactProbeRows($ops, $contactId, $token);
         if ($this->rowsContainToken($rows, $token)) {
             return $this->payload(true, (string)__('社媒邮箱已能发给本站 contact，可以拿去注册平台。'), [
