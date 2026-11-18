@@ -1,0 +1,19 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 0
+ * @hook-solo false
+ *
+ * footer 钩子实现：向店面下发当前 locale 的客户端词库（i18n-client bag）。
+ *
+ * 为什么需要这个文件：`Weline\Frontend\View\Blocks\Footer\Base`（内容同此一行）仍停在
+ * legacy 路径 `view/blocks/footer/base.phtml`，而 HookReader 只扫 `view/hooks/**`，
+ * 因此 `generated/hooks.php` 里 `footer` 钩子零实现，店面从不加载词库 —— 非中文
+ * locale 下所有前台 JS 提示都会经 weline-api.js `i18nText()` 回落成中文源文案。
+ *
+ * 注意：文件名即钩子名，扁平钩子 footer 必须叫 hooks/footer.phtml；写成
+ * hooks/footer/base.phtml 会被解析成 footer::base 并让 hook:rebuild 失败。
+ * 元数据里必须有 @hook-priority 或 @hook-sort-order，否则注册表拒绝该文件。
+ */
+?>
+<?= \Weline\I18n\Helper\ClientI18nBagScript::renderTag('frontend') ?>

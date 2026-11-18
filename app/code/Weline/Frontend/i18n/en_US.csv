@@ -1,4 +1,4 @@
-﻿"前端账户登录后（已废弃·迁 Customer）","After frontend account login (deprecated · moved to Customer)"
+"前端账户登录后（已废弃·迁 Customer）","After frontend account login (deprecated · moved to Customer)"
 前端账户注册后,"After Frontend Account Registration"
 "前端用户注册成功后触发（现由 CustomerAccountService 派发本事件名），允许其他模块监听注册事件并执行相应操作。","Triggered after a user successfully registers on the frontend (now handled by CustomerAccountService). Allows other modules to listen for registration events and perform corresponding actions."
 前端头部,"Frontend Header"
@@ -224,3 +224,5 @@ Weline,Weline
 当前页面商城范围与请求上下文不一致，正在重新获取。,"This page's store scope does not match the request context. Re-acquiring it now."
 站点已更新,"Site updated"
 更新到最新版本,"Update to latest version"
+页面需要更新后才能继续。,"This page needs to be updated before continuing."
+已暂停自动刷新。,"Auto-refresh paused."

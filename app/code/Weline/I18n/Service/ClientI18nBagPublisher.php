@@ -176,15 +176,24 @@ final class ClientI18nBagPublisher
             $json = '{}';
         }
 
-        return '(function(w){var D=' . $json . ';function install(){var i=w.Weline&&w.Weline.i18n;'
+        // 客户端词库必须自足：即使宿主 i18n 运行时已存在但字典不含本包条目（构建期快照旧），
+        // 也要让 translate() 先查本包字典，否则非中文环境会回落成中文源文案。
+        return '(function(w){var D=' . $json . ';function wrap(i){if(!i){return;}'
+            . 'i.dictionary=Object.assign(i.dictionary||{},D);'
+            . 'if(i.__welineBagWrapped&&i.translate===i.__welineBagFn){return;}'
+            . 'var prev=i.translate;'
+            . 'i.__welineBagFn=function(s,p){var d=i.dictionary||{},v=d[s];'
+            . 'if(v!=null&&v!==""){return v;}return typeof prev==="function"?prev(s,p):s;};'
+            . 'i.translate=i.__welineBagFn;i.__welineBagWrapped=true;}'
+            . 'function install(){var i=w.Weline&&w.Weline.i18n;'
             . 'if(i&&typeof i.setDictionary==="function"){i.setDictionary(D);'
             . 'if(typeof i.notifyBagReady==="function"){i.notifyBagReady();}else if(i.readyResolve){i.readyResolve();}}'
             . 'else{(w.__WelineI18nBagQueue=w.__WelineI18nBagQueue||[]).push(D);}'
+            . 'wrap(w.Weline&&(w.Weline.i18n=w.Weline.i18n||{}));'
             . 'if(w.site){w.site.i18n=D;}w.__WelineI18nDictionary=D;}'
-            . 'install();if(!(w.Weline&&w.Weline.i18n&&w.Weline.i18n.setDictionary)){'
-            . 'document.addEventListener("DOMContentLoaded",install,{once:true});'
+            . 'install();document.addEventListener("DOMContentLoaded",install,{once:true});'
             . 'var n=0,t=setInterval(function(){install();'
-            . 'if((w.Weline&&w.Weline.i18n&&w.Weline.i18n.setDictionary)||++n>40)clearInterval(t);},50);}'
+            . 'if(++n>200)clearInterval(t);},100);'
             . '})(window);';
     }
 
