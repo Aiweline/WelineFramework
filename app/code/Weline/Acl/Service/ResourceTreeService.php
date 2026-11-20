@@ -133,12 +133,19 @@ class ResourceTreeService implements ResourceTreeServiceInterface
             return $rows;
         }
 
-        $sharedKey = 'acl.enabled_menu_sources.' . (string)(self::$localMenuTreeGeneration ?? '0');
+        // Stable key + generation inside the value: a generation bump turns the
+        // stale entry into a miss and the next write overwrites the SAME file,
+        // so bumps cannot orphan files (FileAdapter has no sweeper).
+        $sharedKey = 'acl.enabled_menu_sources';
         try {
             $shared = w_cache('acl')->get($sharedKey);
-            if (\is_array($shared)) {
-                $needsRewrite = self::menuSourceRowsNeedSlimRewrite($shared);
-                $rows = self::projectMenuSourceRows($shared);
+            if (\is_array($shared)
+                && ($shared['gen'] ?? null) === self::$localMenuTreeGeneration
+                && \is_array($shared['data'] ?? null)
+            ) {
+                $sharedRows = $shared['data'];
+                $needsRewrite = self::menuSourceRowsNeedSlimRewrite($sharedRows);
+                $rows = self::projectMenuSourceRows($sharedRows);
                 self::$enabledMenuSourcesCache = [
                     'expires' => $now + self::BACKEND_MENU_TREE_CACHE_TTL,
                     'data' => $rows,
@@ -146,7 +153,7 @@ class ResourceTreeService implements ResourceTreeServiceInterface
                 // Rewrite shared entry if a prior generation stored full ACL rows.
                 if ($needsRewrite) {
                     try {
-                        w_cache('acl')->set($sharedKey, $rows, (int)self::BACKEND_MENU_TREE_CACHE_TTL);
+                        w_cache('acl')->set($sharedKey, ['gen' => self::$localMenuTreeGeneration, 'data' => $rows], (int)self::BACKEND_MENU_TREE_CACHE_TTL);
                     } catch (\Throwable) {
                     }
                 }
@@ -170,7 +177,7 @@ class ResourceTreeService implements ResourceTreeServiceInterface
             'data' => $rows,
         ];
         try {
-            w_cache('acl')->set($sharedKey, $rows, (int)self::BACKEND_MENU_TREE_CACHE_TTL);
+            w_cache('acl')->set($sharedKey, ['gen' => self::$localMenuTreeGeneration, 'data' => $rows], (int)self::BACKEND_MENU_TREE_CACHE_TTL);
         } catch (\Throwable) {
         }
         RequestContext::set($contextKey, ['generation' => self::$localMenuTreeGeneration, 'data' => $rows]);
