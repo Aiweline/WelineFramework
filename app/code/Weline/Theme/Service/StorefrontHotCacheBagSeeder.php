@@ -54,9 +54,36 @@ final class StorefrontHotCacheBagSeeder
         $bags = [];
         $errors = [];
 
-        // Layer A warmer seeds under acceptance Host + ThemeApplication + snapshot
-        // + freeze. Peer bag providers / Worker bind alone can leave a key fork —
-        // re-pin the shared chrome identity before Shared→Process peek.
+        // Peek-only passes pin identity dims (lang/currency/host/URI) to match Layer
+        // A warmer keys — they MUST NOT leak into the live request: downstream
+        // snapshot resolution and price stamping read them.
+        $prevLang = '';
+        $prevCurrency = '';
+        try {
+            $prevLang = \trim((string)RequestContext::getWelineUserLang());
+            $prevCurrency = \trim((string)RequestContext::getWelineUserCurrency());
+        } catch (\Throwable) {
+        }
+
+        try {
+            return $this->doHydrate($peeked, $bags, $errors);
+        } finally {
+            try {
+                RequestContext::setWelineUserLang($prevLang);
+                RequestContext::setWelineUserCurrency($prevCurrency);
+                RequestContext::remove('framework.cache.storefront_key_context.v2');
+            } catch (\Throwable) {
+            }
+        }
+    }
+
+    /**
+     * @param list<string> $bags
+     * @param list<string> $errors
+     * @return array{seeded:int,peeked:int,bags:list<string>,errors:list<string>}
+     */
+    private function doHydrate(int $peeked, array $bags, array $errors): array
+    {
         try {
             /** @var StorefrontChromeCacheKeyIdentityInstaller $identity */
             $identity = ObjectManager::getInstance(StorefrontChromeCacheKeyIdentityInstaller::class);

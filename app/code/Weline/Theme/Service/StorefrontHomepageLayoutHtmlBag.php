@@ -367,19 +367,27 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
             $policy = self::cachePolicy();
             $peeked = $this->hotCache->peekPolicy($policy, $logicalKey);
             if ($this->unpackPayload($peeked) === null) {
-                foreach ($this->hydrateCurrencyCandidates() as $currency) {
-                    try {
-                        RequestContext::setWelineUserCurrency($currency);
-                        RequestContext::remove('framework.cache.storefront_key_context.v2');
-                        ObjectManager::getInstance(StorefrontCacheKeyContextResolver::class)
-                            ->freezeCurrent();
-                    } catch (\Throwable) {
-                        continue;
+                // Cross-currency peeks must not leak the candidate currency into the
+                // live request — snapshot resolution downstream keys off it.
+                $prevCurrency = \trim((string)RequestContext::getWelineUserCurrency());
+                try {
+                    foreach ($this->hydrateCurrencyCandidates() as $currency) {
+                        try {
+                            RequestContext::setWelineUserCurrency($currency);
+                            RequestContext::remove('framework.cache.storefront_key_context.v2');
+                            ObjectManager::getInstance(StorefrontCacheKeyContextResolver::class)
+                                ->freezeCurrent();
+                        } catch (\Throwable) {
+                            continue;
+                        }
+                        $peeked = $this->hotCache->peekPolicy($policy, $logicalKey);
+                        if ($this->unpackPayload($peeked) !== null) {
+                            break;
+                        }
                     }
-                    $peeked = $this->hotCache->peekPolicy($policy, $logicalKey);
-                    if ($this->unpackPayload($peeked) !== null) {
-                        break;
-                    }
+                } finally {
+                    RequestContext::setWelineUserCurrency($prevCurrency);
+                    RequestContext::remove('framework.cache.storefront_key_context.v2');
                 }
             }
             if ($this->unpackPayload($peeked) === null) {

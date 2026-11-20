@@ -369,11 +369,13 @@ final class StorefrontCatalogCacheCoordinator
     {
         $limit = max(1, min(2000, $limit));
         $canonical = StorefrontCatalogViewService::CANONICAL_SUMMARY_LIMIT;
+        // v5: v4 bags froze lang-surface rows priced under the builder's currency
+        // (symbol stamped to request currency without FX conversion).
         if ($limit <= $canonical) {
-            return 'product.catalog_offers.summary.v4.' . max(0, $websiteId);
+            return 'product.catalog_offers.summary.v5.' . max(0, $websiteId);
         }
 
-        return 'product.catalog_offers.summary.v4.'
+        return 'product.catalog_offers.summary.v5.'
             . max(0, $websiteId)
             . '.'
             . $limit;
@@ -402,7 +404,9 @@ final class StorefrontCatalogCacheCoordinator
         $window = $limit <= $canonical ? $canonical : $limit;
         $lang = trim($lang);
 
-        return 'product.catalog_offers.summary_lang.v1.'
+        // v2: surface carries BASE-currency catalog minors (FX-free canonical layer);
+        // v1 bags resolved minors in the builder's currency → cross-currency poisoning.
+        return 'product.catalog_offers.summary_lang.v2.'
             . max(0, $websiteId)
             . '.'
             . $window

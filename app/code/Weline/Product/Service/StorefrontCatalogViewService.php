@@ -338,13 +338,16 @@ final class StorefrontCatalogViewService
             $lang,
             $buildLimit,
         );
+        // Lang surface is the FX-free canonical layer: minors resolve in the website
+        // BASE currency so a single lang bag can reprice into every display currency.
+        $baseCurrency = $this->storefrontBaseCurrencyCode();
         /** @var list<array<string, mixed>> $surface */
         $surface = $this->hotCache->rememberPolicy(
             StorefrontCatalogCacheCoordinator::catalogSummaryLangSurfacePolicy(),
             $langKey,
             fn(): array => TraceGate::measurePhase(
                 'product.catalog.build_summary_lang_surface',
-                function () use ($websiteId, $scope, $buildLimit): array {
+                function () use ($websiteId, $scope, $buildLimit, $baseCurrency): array {
                     $prepared = $this->rememberSummarySkeletonOffers($websiteId, $buildLimit);
                     if ($prepared === []) {
                         return [];
@@ -357,17 +360,26 @@ final class StorefrontCatalogViewService
                         }
                     }
 
-                    return $this->buildPublishedOffers(
-                        $websiteId,
-                        $scope,
-                        array_keys($productIds),
-                        true,
-                        false,
-                        $buildLimit,
-                        $prepared,
-                        true,
-                        false,
-                    );
+                    $prevCurrency = trim((string)RequestContext::getWelineUserCurrency());
+                    try {
+                        if ($baseCurrency !== '') {
+                            RequestContext::setWelineUserCurrency($baseCurrency);
+                        }
+
+                        return $this->buildPublishedOffers(
+                            $websiteId,
+                            $scope,
+                            array_keys($productIds),
+                            true,
+                            false,
+                            $buildLimit,
+                            $prepared,
+                            true,
+                            false,
+                        );
+                    } finally {
+                        RequestContext::setWelineUserCurrency($prevCurrency);
+                    }
                 },
                 ['website_id' => $websiteId, 'limit' => $buildLimit, 'lang' => $lang],
             ),
@@ -375,6 +387,9 @@ final class StorefrontCatalogViewService
         if (!is_array($surface) || $surface === []) {
             return [];
         }
+
+        $displayCurrency = \strtoupper(\trim((string)RequestContext::getWelineUserCurrency())) ?: 'CNY';
+        $surface = $this->repriceSurfaceRowsToDisplayCurrency($websiteId, $surface, $displayCurrency);
 
         $priced = [];
         foreach ($surface as $row) {
@@ -409,6 +424,163 @@ final class StorefrontCatalogViewService
         );
 
         return is_array($rows) ? $rows : [];
+    }
+
+    /**
+     * Website base currency for the FX-free lang surface. Mirrors the snapshot
+     * resolver's CurrencyRateService lookup (soft cross-module dep).
+     */
+    private function storefrontBaseCurrencyCode(): string
+    {
+        try {
+            if (!class_exists(\Weline\Currency\Service\CurrencyRateService::class)) {
+                return 'CNY';
+            }
+            /** @var \Weline\Currency\Service\CurrencyRateService $rates */
+            $rates = ObjectManager::getInstance(\Weline\Currency\Service\CurrencyRateService::class);
+            $base = \strtoupper(\trim((string)$rates->getBaseCurrency()));
+
+            return $base !== '' ? $base : 'CNY';
+        } catch (\Throwable) {
+            return 'CNY';
+        }
+    }
+
+    /**
+     * Reprice lang-surface rows (base-currency catalog minors) into the request
+     * display currency. Mirrors the snapshot resolver contract: explicit
+     * display-currency row wins; otherwise convert base→display via
+     * CurrencyRateService; no rate → currency_unavailable (never a silent
+     * symbol-stamp on a foreign minor).
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function repriceSurfaceRowsToDisplayCurrency(
+        int $websiteId,
+        array $rows,
+        string $displayCurrency,
+    ): array {
+        $displayCurrency = \strtoupper(\trim($displayCurrency)) ?: 'CNY';
+        $offerIds = [];
+        $baseCurrency = '';
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $offerId = (int)($row['offer_id'] ?? 0);
+            if ($offerId > 0) {
+                $offerIds[$offerId] = $offerId;
+            }
+            if ($baseCurrency === '') {
+                $baseCurrency = \strtoupper(\trim((string)($row['currency'] ?? '')));
+            }
+        }
+        if ($offerIds === []) {
+            return $rows;
+        }
+        if ($baseCurrency === '') {
+            $baseCurrency = $this->storefrontBaseCurrencyCode();
+        }
+        if ($displayCurrency === $baseCurrency) {
+            return $rows;
+        }
+
+        $storeId = \max(0, (int)RequestContext::getWelineStoreId());
+        $storeIds = \array_values(\array_unique([0, $storeId]));
+        try {
+            /** @var \Weline\Product\Repository\PriceRepository $prices */
+            $prices = ObjectManager::getInstance(\Weline\Product\Repository\PriceRepository::class);
+            /** @var list<array<string, mixed>> $priceRows */
+            $priceRows = $prices->listExplicitRows($websiteId, \array_values($offerIds), $storeIds);
+        } catch (\Throwable) {
+            return $rows;
+        }
+
+        $displayRowsByOffer = [];
+        $baseRowsByOffer = [];
+        foreach ($priceRows as $priceRow) {
+            if (!\is_array($priceRow)) {
+                continue;
+            }
+            $rowCurrency = \strtoupper(\trim((string)($priceRow['currency'] ?? '')));
+            $offerId = (int)($priceRow['offer_id'] ?? 0);
+            if ($offerId <= 0) {
+                continue;
+            }
+            $normalized = [
+                'store_id' => (int)($priceRow['store_id'] ?? 0),
+                'cleared' => !empty($priceRow['cleared']),
+                'value' => $priceRow['amount_minor'] ?? null,
+            ];
+            if ($rowCurrency === $displayCurrency) {
+                $displayRowsByOffer[$offerId][] = $normalized;
+            }
+            if ($rowCurrency === $baseCurrency) {
+                $baseRowsByOffer[$offerId][] = $normalized;
+            }
+        }
+
+        $overlay = new CatalogOverlayResolver();
+        foreach ($rows as $index => $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $offerId = (int)($row['offer_id'] ?? 0);
+            if ($offerId <= 0) {
+                continue;
+            }
+            $displayPrice = $overlay->resolvePrice($displayRowsByOffer[$offerId] ?? [], $storeId);
+            if ($displayPrice->isCleared()) {
+                $rows[$index]['currency'] = $displayCurrency;
+                $rows[$index]['unit_price_minor'] = 0;
+                $rows[$index]['catalog_price_minor'] = 0;
+                $rows[$index]['currency_unavailable'] = true;
+                $rows[$index]['sellable'] = false;
+                continue;
+            }
+            if (!$displayPrice->isUnresolved()) {
+                $minor = \max(0, (int)$displayPrice->value);
+            } else {
+                $basePrice = $overlay->resolvePrice($baseRowsByOffer[$offerId] ?? [], $storeId);
+                if ($basePrice->isCleared() || $basePrice->isUnresolved()) {
+                    $rows[$index]['currency'] = $displayCurrency;
+                    $rows[$index]['unit_price_minor'] = 0;
+                    $rows[$index]['catalog_price_minor'] = 0;
+                    $rows[$index]['currency_unavailable'] = true;
+                    $rows[$index]['sellable'] = false;
+                    continue;
+                }
+                $convertedMajor = null;
+                try {
+                    if (\class_exists(\Weline\Currency\Service\CurrencyRateService::class)) {
+                        /** @var \Weline\Currency\Service\CurrencyRateService $rates */
+                        $rates = ObjectManager::getInstance(\Weline\Currency\Service\CurrencyRateService::class);
+                        $convertedMajor = $rates->tryConvert(
+                            \max(0, (int)$basePrice->value) / 100,
+                            $baseCurrency,
+                            $displayCurrency,
+                        );
+                    }
+                } catch (\Throwable) {
+                    $convertedMajor = null;
+                }
+                if ($convertedMajor === null) {
+                    $rows[$index]['currency'] = $displayCurrency;
+                    $rows[$index]['unit_price_minor'] = 0;
+                    $rows[$index]['catalog_price_minor'] = 0;
+                    $rows[$index]['currency_unavailable'] = true;
+                    $rows[$index]['sellable'] = false;
+                    continue;
+                }
+                $minor = \max(0, (int)\round($convertedMajor * 100));
+            }
+            $rows[$index]['currency'] = $displayCurrency;
+            $rows[$index]['unit_price_minor'] = $minor;
+            $rows[$index]['catalog_price_minor'] = $minor;
+        }
+
+        return $rows;
     }
 
     /**
