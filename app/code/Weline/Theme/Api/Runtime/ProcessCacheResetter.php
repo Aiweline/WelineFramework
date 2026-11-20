@@ -54,7 +54,9 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
             \Weline\Theme\Service\ThemeComponentCatalog::clearProcessSnapshot();
             \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
             Template::clearProcessViewFileCache();
-            TemplateFragmentOutputCache::resetProcessCaches();
+            // Keep one chrome set (~64KB floor): a full wipe forces 11 widget
+            // re-renders (~110ms) on the very next request.
+            TemplateFragmentOutputCache::trimToBudget(65_536);
             try {
                 \Weline\Framework\Runtime\StorefrontProcessL1HydrateCoordinator::requestAfterReclaim('hard_reclaim');
             } catch (\Throwable) {
@@ -68,9 +70,11 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
         Partials::clearMetaCache();
         $partialFreed = Partials::trimOutputCacheToBudget(1_048_576);
         $hotFreed = \Weline\Framework\Cache\Service\StorefrontScopeHotCache::trimProcessCacheToBudget(1_048_576);
-        TemplateFragmentOutputCache::resetProcessCaches();
+        // Fragments cost a full widget render each when lost — trim oldest to a
+        // budget instead of wiping (was an unconditional bag reset every shed).
+        $fragmentFreed = TemplateFragmentOutputCache::trimToBudget(262_144);
         // Layer B: only queue hydrate when soft trim actually dropped process bags.
-        if ($partialFreed > 0 || $hotFreed > 0) {
+        if ($partialFreed > 0 || $hotFreed > 0 || $fragmentFreed > 0) {
             try {
                 \Weline\Framework\Runtime\StorefrontProcessL1HydrateCoordinator::requestAfterReclaim('soft_reclaim');
             } catch (\Throwable) {

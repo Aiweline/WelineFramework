@@ -14,12 +14,59 @@ final class TemplateFragmentOutputCache
 {
     private const CAP = 96;
 
+    /** Hard byte ceiling — entries are small HTML fragments; bound regardless of CAP. */
+    private const MAX_BYTES = 1048576;
+
+    /** Per-entry bookkeeping estimate beyond strlen(html). */
+    private const ENTRY_OVERHEAD = 128;
+
     /** @var array<string, array{html:string,fresh_until:float,stale_until:float}> */
     private static array $bag = [];
 
     public static function resetProcessCaches(): void
     {
         self::$bag = [];
+    }
+
+    public static function itemCount(): int
+    {
+        return \count(self::$bag);
+    }
+
+    public static function estimateBytes(): int
+    {
+        $bytes = 0;
+        foreach (self::$bag as $key => $entry) {
+            $bytes += \strlen((string)$key) + \strlen((string)($entry['html'] ?? '')) + self::ENTRY_OVERHEAD;
+        }
+
+        return $bytes;
+    }
+
+    /**
+     * Drop expired entries first, then coldest (insertion order keeps hot at the
+     * tail via soft-LRU touch), until the estimate fits $maxBytes.
+     *
+     * @return int freed bytes
+     */
+    public static function trimToBudget(int $maxBytes): int
+    {
+        $maxBytes = \max(0, $maxBytes);
+        $before = self::estimateBytes();
+        if ($before <= $maxBytes) {
+            return 0;
+        }
+        $now = \microtime(true);
+        foreach (self::$bag as $key => $entry) {
+            if ($now > (float)($entry['stale_until'] ?? 0)) {
+                unset(self::$bag[$key]);
+            }
+        }
+        while (self::estimateBytes() > $maxBytes && self::$bag !== []) {
+            \array_shift(self::$bag);
+        }
+
+        return \max(0, $before - self::estimateBytes());
     }
 
     /**
@@ -67,6 +114,9 @@ final class TemplateFragmentOutputCache
             'fresh_until' => $now + $ttl,
             'stale_until' => $now + ($ttl * 10),
         ];
+        if (self::estimateBytes() > self::MAX_BYTES) {
+            self::trimToBudget(self::MAX_BYTES);
+        }
 
         return true;
     }

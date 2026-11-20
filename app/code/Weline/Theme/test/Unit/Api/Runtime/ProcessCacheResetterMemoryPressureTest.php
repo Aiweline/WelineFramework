@@ -18,6 +18,7 @@ final class ProcessCacheResetterMemoryPressureTest extends TestCase
         Partials::clearAllCaches();
         StorefrontScopeHotCache::resetProcessCache();
         StorefrontProcessL1HydrateCoordinator::resetForTests();
+        \Weline\Framework\View\Cache\TemplateFragmentOutputCache::resetProcessCaches();
         parent::tearDown();
     }
 
@@ -70,6 +71,59 @@ final class ProcessCacheResetterMemoryPressureTest extends TestCase
         $rp = new \ReflectionProperty(StorefrontScopeHotCache::class, 'processCache');
         $rp->setAccessible(true);
         self::assertSame([], $rp->getValue());
+    }
+
+    public function testSoftPressureTrimsFragmentsInsteadOfWiping(): void
+    {
+        $source = (string)\file_get_contents(
+            dirname(__DIR__, 4) . '/Api/Runtime/ProcessCacheResetter.php'
+        );
+        $softBody = $this->extractSoftBranch($source);
+        self::assertStringContainsString('TemplateFragmentOutputCache::trimToBudget', $softBody);
+        self::assertStringNotContainsString('TemplateFragmentOutputCache::resetProcessCaches', $softBody);
+
+        // A typical chrome widget set (~11 fragments) must survive soft pressure.
+        for ($i = 0; $i < 11; $i++) {
+            $this->seedFragment('w' . $i, 4096);
+        }
+        (new ProcessCacheResetter())->resetProcessCaches(
+            new ProcessCacheResetContext(ProcessCacheResetContext::REASON_MEMORY_PRESSURE, false),
+        );
+        self::assertSame(11, \Weline\Framework\View\Cache\TemplateFragmentOutputCache::itemCount());
+    }
+
+    public function testHardPressureTrimsFragmentsToFloorNotEmpty(): void
+    {
+        // Realistic chrome set: 11 widgets × ~6KB; the 64KB floor retains most of it.
+        // The oversize entry is seeded first (coldest) so the trim drops it, not the widgets.
+        $this->seedFragment('fat_extra', 300_000);
+        for ($i = 0; $i < 11; $i++) {
+            $this->seedFragment('w' . $i, 6144);
+        }
+        (new ProcessCacheResetter())->resetProcessCaches(
+            new ProcessCacheResetContext(ProcessCacheResetContext::REASON_MEMORY_PRESSURE, true),
+        );
+        self::assertLessThanOrEqual(
+            65_536,
+            \Weline\Framework\View\Cache\TemplateFragmentOutputCache::estimateBytes(),
+        );
+        self::assertGreaterThan(
+            0,
+            \Weline\Framework\View\Cache\TemplateFragmentOutputCache::itemCount(),
+        );
+    }
+
+    public function testFragmentTrimToBudgetDropsColdestFirst(): void
+    {
+        $this->seedFragment('oldest', 100_000);
+        $this->seedFragment('middle', 100_000);
+        $this->seedFragment('newest', 100_000);
+        $freed = \Weline\Framework\View\Cache\TemplateFragmentOutputCache::trimToBudget(210_000);
+        self::assertGreaterThan(0, $freed);
+        self::assertSame(
+            ['middle', 'newest'],
+            \array_keys($this->fragmentBag()),
+        );
     }
 
     public function testTrimOutputCacheToBudgetFreesOldest(): void
@@ -135,6 +189,32 @@ final class ProcessCacheResetterMemoryPressureTest extends TestCase
         $cache = $rp->getValue();
 
         return \is_array($cache) ? \count($cache) : 0;
+    }
+
+    private function seedFragment(string $key, int $htmlBytes): void
+    {
+        $rp = new \ReflectionProperty(\Weline\Framework\View\Cache\TemplateFragmentOutputCache::class, 'bag');
+        $rp->setAccessible(true);
+        $bag = $rp->getValue();
+        if (!\is_array($bag)) {
+            $bag = [];
+        }
+        $bag[$key] = [
+            'html' => \str_repeat('f', \max(1, $htmlBytes)),
+            'fresh_until' => \microtime(true) + 60,
+            'stale_until' => \microtime(true) + 120,
+        ];
+        $rp->setValue(null, $bag);
+    }
+
+    /** @return array<string, mixed> */
+    private function fragmentBag(): array
+    {
+        $rp = new \ReflectionProperty(\Weline\Framework\View\Cache\TemplateFragmentOutputCache::class, 'bag');
+        $rp->setAccessible(true);
+        $bag = $rp->getValue();
+
+        return \is_array($bag) ? $bag : [];
     }
 
     private function seedHotCacheEntries(int $n): void

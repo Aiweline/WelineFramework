@@ -44,6 +44,7 @@ final class ProcessMemoryReclaimFacade
         }
         $registry->register(new TemplateCacheProcessReclaimable());
         $registry->register(new AstNodePoolReclaimable());
+        $registry->register(new \Weline\Framework\View\Cache\TemplateFragmentOutputReclaimable());
         $registry->register(new FullPageCacheReclaimableAdapter());
     }
 }
