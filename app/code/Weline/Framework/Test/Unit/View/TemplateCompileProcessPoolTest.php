@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\View;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\View\Template;
 use Weline\Framework\View\TemplateCompileService;
 
 /**
@@ -41,6 +42,13 @@ final class TemplateCompileProcessPoolTest extends TestCase
         $prevWorker = getenv('WLS_WORKER_ID');
         putenv('WLS_WORKER_ID');
         unset($_ENV['WLS_WORKER_ID'], $_SERVER['WLS_WORKER_ID']);
+        // v12: per-locale fan-out only remains when global-region inline baking is on
+        // (its output carries locale text). Flag off collapses to a single shared
+        // compile; enable it so the pool path and distinct per-locale artifacts are
+        // exercised. putenv propagates the flag into worker subprocesses.
+        $prevInline = Template::inlineGlobalRegionsAtCompileEnabled();
+        Template::setInlineGlobalRegionsAtCompile(true);
+        putenv('WELINE_INLINE_GLOBAL_REGIONS=1');
 
         $bytes = '<div><?= \'pool-smoke\' ?></div>';
         $logical = 'framework://test/template-compile-pool-smoke.phtml';
@@ -73,6 +81,8 @@ final class TemplateCompileProcessPoolTest extends TestCase
             self::assertArrayHasKey('zh_Hans_CN', $progressLocales);
             self::assertArrayHasKey('en_US', $progressLocales);
         } finally {
+            Template::setInlineGlobalRegionsAtCompile($prevInline);
+            putenv('WELINE_INLINE_GLOBAL_REGIONS');
             if ($prevWorker === false || $prevWorker === '') {
                 putenv('WLS_WORKER_ID');
             } else {
@@ -88,6 +98,10 @@ final class TemplateCompileProcessPoolTest extends TestCase
         $prev = getenv('WLS_WORKER_ID');
         putenv('WLS_WORKER_ID=ut-pool');
         $_ENV['WLS_WORKER_ID'] = 'ut-pool';
+        // Same v12 carve-out: keep per-locale units by enabling the inline-region
+        // bake flag, so the serial in-process path still compiles twice.
+        $prevInline = Template::inlineGlobalRegionsAtCompileEnabled();
+        Template::setInlineGlobalRegionsAtCompile(true);
         try {
             $paths = $svc->compilePinnedSources(
                 [
@@ -108,6 +122,7 @@ final class TemplateCompileProcessPoolTest extends TestCase
                 self::assertFileExists($path);
             }
         } finally {
+            Template::setInlineGlobalRegionsAtCompile($prevInline);
             if ($prev === false || $prev === '') {
                 putenv('WLS_WORKER_ID');
                 unset($_ENV['WLS_WORKER_ID']);
@@ -115,6 +130,27 @@ final class TemplateCompileProcessPoolTest extends TestCase
                 putenv('WLS_WORKER_ID=' . $prev);
                 $_ENV['WLS_WORKER_ID'] = $prev;
             }
+        }
+    }
+
+    /**
+     * v12: flag-off compiles collapse the locale list — one shared artifact
+     * covers every language; per-locale stays only for inline-region baking.
+     */
+    public function testEffectiveCompileLocalesCollapsesUnlessInlineRegions(): void
+    {
+        $method = new \ReflectionMethod(TemplateCompileService::class, 'effectiveCompileLocales');
+        $method->setAccessible(true);
+        $svc = new TemplateCompileService();
+        $locales = ['zh_Hans_CN', 'en_US', 'ja_JP'];
+
+        self::assertSame(['zh_Hans_CN'], $method->invoke($svc, $locales));
+
+        Template::setInlineGlobalRegionsAtCompile(true);
+        try {
+            self::assertSame($locales, $method->invoke($svc, $locales));
+        } finally {
+            Template::setInlineGlobalRegionsAtCompile(false);
         }
     }
 }

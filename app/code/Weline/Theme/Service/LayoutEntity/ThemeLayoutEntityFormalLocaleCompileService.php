@@ -30,9 +30,10 @@ use Weline\Widget\Api\WidgetRegistryInterface;
 
 /**
  * Formal Theme layout publish gate: Taglib-compile entity sources → com_*.phtml.
- * This is Template/Taglib compilation (per locale cache files), not layout/widget
- * relationship solidify and not i18n dictionary compile. Failures throw (caller
- * rolls back entity bytes). Draft identities are skipped.
+ * This is Template/Taglib compilation (one shared artifact per scope since v12 —
+ * locale is not a compile dimension), not layout/widget relationship solidify
+ * and not i18n dictionary compile. Failures throw (caller rolls back entity
+ * bytes). Draft identities are skipped.
  *
  * Before compile, pins Website/RequestContext from the identity storage scope so
  * literal @url / <url> bake carries the publish-site mount (not default-site).
@@ -144,12 +145,9 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         $previousArea = ThemeData::getCurrentArea();
         ThemeData::setCurrentTheme($theme);
         ThemeData::setCurrentArea($identity->area);
-        // 发布编译：全局区在编译期展开成静态 HTML，hook 按生产口径烘成 include，
-        // 运行时不再逐请求走 GlobalRegion::render() / getHook() 事件派发。
-        $previousInlineGlobalRegions = Template::inlineGlobalRegionsAtCompileEnabled();
-        Template::setInlineGlobalRegionsAtCompile(true);
-        \putenv('WELINE_INLINE_GLOBAL_REGIONS=1');
-        \putenv('WELINE_BAKE_TEMPLATE_TAGS=1');
+        // v12：发布编译与运行时同口径（不烘全局区/标签）——产物落 shared 叶且
+        // 管线 digest 与运行时一致，预热结果可被请求路径直接消费；locale 由
+        // 编译服务内部折叠为单趟（每 locale 编译相同字节是重复工）。
         try {
         $this->runPinnedToIdentityWebsite($identity, function () use (
             $identity,
@@ -323,9 +321,6 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             $this->clearCachesAfterCompileWarm($theme, $identity, $pages, $invalidation);
         });
         } finally {
-            Template::setInlineGlobalRegionsAtCompile($previousInlineGlobalRegions);
-            \putenv('WELINE_INLINE_GLOBAL_REGIONS');
-            \putenv('WELINE_BAKE_TEMPLATE_TAGS');
             ThemeData::setCurrentTheme($previousTheme);
             ThemeData::setCurrentArea($previousArea);
         }

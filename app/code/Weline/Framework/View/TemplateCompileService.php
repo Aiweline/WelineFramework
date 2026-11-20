@@ -10,12 +10,14 @@ use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Runtime\RequestContext;
 
 /**
- * Framework-level Taglib → language/currency com_*.phtml compilation.
+ * Framework-level Taglib → com_*.phtml compilation.
  * Callers supply locales and currency (no Website module dependency).
  *
- * When multiple locales and CLI (non-WLS-worker), fans out locale jobs to a
- * process pool (default 10) for true multi-core speedup. Fiber is not used
- * for CPU-bound Taglib compile.
+ * v12: one shared artifact covers every language, so the locale list collapses
+ * to a single compile pass unless global-region inline baking is enabled (the
+ * only remaining per-locale output). With multiple effective locales and CLI
+ * (non-WLS-worker), locale jobs fan out to a process pool (default 10) for
+ * true multi-core speedup. Fiber is not used for CPU-bound Taglib compile.
  */
 final class TemplateCompileService
 {
@@ -49,6 +51,7 @@ final class TemplateCompileService
         }
         $this->assertPinnedShape($pinned);
 
+        $locales = $this->effectiveCompileLocales($locales);
         $concurrency = $this->resolveConcurrency($options['concurrency'] ?? null);
         if (
             $concurrency <= 1
@@ -98,6 +101,7 @@ final class TemplateCompileService
         }
         $this->assertPinnedShape($pinned);
 
+        $locales = $this->effectiveCompileLocales($locales);
         $units = [];
         foreach ($locales as $locale) {
             foreach ($pinned as $logical => $source) {
@@ -488,6 +492,24 @@ final class TemplateCompileService
         }
 
         return $locales;
+    }
+
+    /**
+     * v12：编译 scope 无 locale 维——一份产物服务全部语言（URL/译文运行时解析）。
+     * 唯一仍按 locale 分叶的产物是发布期「全局区内联烘焙」
+     * ({@see Template::inlineGlobalRegionsAtCompileEnabled()})；该 flag 关闭时
+     * N 个 locale 只会把相同字节反复写进同一 shared 产物，折叠为单趟编译。
+     *
+     * @param list<string> $locales
+     * @return list<string>
+     */
+    private function effectiveCompileLocales(array $locales): array
+    {
+        if (Template::inlineGlobalRegionsAtCompileEnabled()) {
+            return $locales;
+        }
+
+        return [reset($locales)];
     }
 
     private function normalizeCurrency(string $currency): string
