@@ -28,7 +28,7 @@ trait TraitTemplate
     // v10：模块 STATICS 主 URL/磁盘根改 Upgrade flat（PublicStaticUrl）；主题 ns 仅服务 theme assets。
     // v11：编译维去掉 currency（货币只影响运行期价格，不进编译产物），避免同模板按币种重复编译。
     // hooks 变更靠编译文件头 compile_id 原地失效覆盖，不再新开目录堆产物。
-    private const TEMPLATE_COMPILE_SCOPE_SCHEMA = 'context-env-v11-lang-only-scope';
+    private const TEMPLATE_COMPILE_SCOPE_SCHEMA = 'context-env-v12-lang-free-scope';
 
     /**
      * @DESC          # 读取页头代码
@@ -829,9 +829,17 @@ trait TraitTemplate
      */
     protected function fetchFile(string $filename): mixed
     {
-        $cache_key = $filename . '|' . $this->viewEnvironmentCacheSuffix('fetch-file') . '|' . $this->resolveThemeCacheKeyForFetchFile($filename);
         $forceModuleThemeSource = (bool)$this->getData('__weline_force_module_theme_source');
         $skipCache = $forceModuleThemeSource || (isset($this->request) && $this->request && $this->request->getData('skip_view_file_cache'));
+        // 编译固化导航：命中即一次数组查表返回，跳过共享缓存磁盘读与事件派发。
+        $manifestCtx = $skipCache ? null : $this->viewManifestScopeContext($filename);
+        if ($manifestCtx !== null) {
+            $manifestResolved = ViewPathManifest::resolve($filename, $manifestCtx[0], $manifestCtx[1]);
+            if ($manifestResolved !== null) {
+                return $manifestResolved;
+            }
+        }
+        $cache_key = $filename . '|' . $this->viewEnvironmentCacheSuffix('fetch-file') . '|' . $this->resolveThemeCacheKeyForFetchFile($filename);
         // In a persistent development worker, Template owns a bounded process-local
         // path map. Avoid a shared-memory round trip on every first-time resolution;
         // production keeps the shared cache for cross-worker reuse.
@@ -839,6 +847,9 @@ trait TraitTemplate
         if ($useSharedViewFileCache) {
             $cache_filename = $this->viewCache->get($cache_key);
             if ($cache_filename && is_file($cache_filename)) {
+                if ($manifestCtx !== null && \is_string($cache_filename)) {
+                    ViewPathManifest::record($filename, $cache_filename, $manifestCtx[0], $manifestCtx[1]);
+                }
                 return $cache_filename;
             }
         }
@@ -852,18 +863,68 @@ trait TraitTemplate
         if ($useSharedViewFileCache) {
             $this->viewCache->set($cache_key, $event_filename);
         }
+        if ($manifestCtx !== null && \is_string($event_filename)) {
+            ViewPathManifest::record($filename, $event_filename, $manifestCtx[0], $manifestCtx[1]);
+        }
         return $event_filename;
+    }
+
+    /**
+     * 导航 manifest 的 scope 上下文：[scopeKey, env]，每请求每 area 只算一次。
+     * scopeKey 来自 resolve_theme_cache_suffix 空 filename 派发（无 file: 段）；
+     * 预览/显式主题上下文返回 null（不固化、不命中，仍走全链活解析）。
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    private function viewManifestScopeContext(string $filename): ?array
+    {
+        if (!ViewPathManifest::enabled()) {
+            return null;
+        }
+        $area = self::fetchFileArea($filename);
+        $memoKey = 'view.nav_manifest.scope.v1|' . $area;
+        if (\Weline\Framework\Runtime\RequestContext::isInitialized()
+            && \Weline\Framework\Runtime\RequestContext::has($memoKey)
+        ) {
+            $cached = \Weline\Framework\Runtime\RequestContext::get($memoKey);
+            return \is_array($cached) ? $cached : null;
+        }
+        $result = null;
+        try {
+            $eventData = new DataObject(['filename' => '', 'area' => $area, 'suffix' => '']);
+            $this->eventsManager->dispatch('Weline_Framework_View::resolve_theme_cache_suffix', $eventData);
+            $suffix = \trim((string)$eventData->getData('suffix'));
+            if ($suffix !== ''
+                && !\str_contains($suffix, 'request_theme:')
+                && !\str_contains($suffix, 'preview_token:')) {
+                $result = [
+                    'area:' . $area . '|' . $suffix,
+                    $this->viewEnvironmentCacheSuffix('nav-manifest'),
+                ];
+            }
+        } catch (\Throwable) {
+            $result = null;
+        }
+        if (\Weline\Framework\Runtime\RequestContext::isInitialized()) {
+            \Weline\Framework\Runtime\RequestContext::set($memoKey, $result ?? '');
+        }
+        return $result;
+    }
+
+    private static function fetchFileArea(string $filename): string
+    {
+        $norm = \str_replace('\\', '/', \strtolower($filename));
+
+        return (
+            \str_contains($norm, '/templates/backend/')
+            || \str_contains($norm, '/theme/backend/')
+            || \str_contains($norm, '/backend/')
+        ) ? 'backend' : 'frontend';
     }
 
     protected function resolveThemeCacheKeyForFetchFile(string $filename): string
     {
-        $path = str_replace('\\', '/', $filename);
-        $norm = str_replace('\\', '/', strtolower((string)$path));
-        $area = (
-            str_contains($norm, '/templates/backend/')
-            || str_contains($norm, '/theme/backend/')
-            || str_contains($norm, '/backend/')
-        ) ? 'backend' : 'frontend';
+        $area = self::fetchFileArea($filename);
         $baseKey = 'area:' . $area;
 
         // Request-scoped memo.

@@ -42,6 +42,9 @@ final class Compile extends CommandAbstract
 
         $result = $this->compiler->compile(BP . 'app' . DS . 'code' . DS . 'Weline', $output);
 
+        // 编译期导航 manifest 随编译产物整体重建（模块/事件表变化即分辨率变化）。
+        \Weline\Framework\View\ViewPathManifest::clearAll();
+
         $this->printing->success(__(
             '框架编译完成：%{1} 个模块，%{2} 个 QueryProvider，%{3} 个延迟 Provider。',
             [

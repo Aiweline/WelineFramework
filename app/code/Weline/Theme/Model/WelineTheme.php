@@ -537,6 +537,8 @@ class WelineTheme extends Model
         self::bumpCatalogGeneration();
         // 请求间驻留的运行时主题行（ThemeContextService L1/L2）也必须跟着失效。
         \Weline\Theme\Service\ThemeContextService::invalidateSharedCache();
+        // 模板导航 manifest：主题维度的解析结果跨 Worker 失效。
+        \Weline\Framework\View\ViewPathManifest::bumpGeneration();
         if (!$this->getId()) {
             return;
         }
@@ -550,6 +552,7 @@ class WelineTheme extends Model
         self::bumpLoadMemoGeneration();
         self::bumpCatalogGeneration();
         \Weline\Theme\Service\ThemeContextService::invalidateSharedCache();
+        \Weline\Framework\View\ViewPathManifest::bumpGeneration();
         parent::delete_after();
     }
 /**

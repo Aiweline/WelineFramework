@@ -775,7 +775,9 @@ class Template extends DataObject implements RequestLocalInterface
             'area' => $dimension('area', 'frontend', '/^[a-z][a-z0-9_-]{0,31}$/i'),
             'website_id' => $dimension('website_id', '0', '/^[0-9]{1,10}$/'),
             'website_code' => $dimension('website_code', 'default', '/^[a-z0-9][a-z0-9_.-]{0,63}$/i'),
-            'lang' => $dimension('user.lang', 'default', '/^[a-z]{2,3}(?:_[A-Za-z]{2,12}){0,2}$/'),
+            // 语言不进编译维（v12）：翻译本就走运行期 __()/InlinePhraseMarker::emit，
+            // 每 locale 一份编译副本是纯重复；前台 URL 家族改发运行期 stub（Taglib::urlBakeIsLocaleSensitive），
+            // 产物内不再有任何 locale 相关烘焙 → 一份 artifact 服务全部 locale。
             // 货币只影响运行期价格展示，不进编译维：同模板 EUR/USD 编译产物实测逐字节相同（v11）。
             // 站柜登记源（挂载 path / 匹配身份）；绝对 URL 烘焙以 site_address 为准。
             'website_url' => \function_exists('w_env') ? (string)\w_env('website_url', '') : '',
@@ -901,7 +903,6 @@ class Template extends DataObject implements RequestLocalInterface
             $scope['area'],
             'w' . $scope['website_id'],
             $scope['website_code'],
-            $scope['lang'],
         ];
         // 站点地址必须排在 theme 之前：长 theme path 截断时不得吃掉 _o_{host}。
         $originLeaf = $this->compileOriginPathLeaf((string)($scope['site_address'] ?: $scope['website_url']));
@@ -1149,15 +1150,10 @@ class Template extends DataObject implements RequestLocalInterface
 
     private function templateCompileContextDir(): string
     {
-        $lang = (string)WelineEnv::getLang();
-        if (\preg_match('/^[a-z]{2,3}(?:_[A-Za-z]{2,12}){0,2}$/', $lang) !== 1) {
-            $lang = \function_exists('w_env_get') ? (string)\w_env_get('user.lang', 'default') : 'default';
-        }
-        if (\preg_match('/^[a-z]{2,3}(?:_[A-Za-z]{2,12}){0,2}$/', $lang) !== 1) {
-            $lang = 'default';
-        }
-
-        return $this->sanitizeCompileContextSegment($lang);
+        // v12：locale 不再是编译维度——同一 scope 一份产物服务全部语言。
+        // 固定叶名保留目录层级结构（上游拼接假定存在一层），同时使旧
+        // per-locale 目录自然作废，由 generated/complicate GC 回收。
+        return 'shared';
     }
 
     private function sanitizeCompileContextSegment(string $segment): string

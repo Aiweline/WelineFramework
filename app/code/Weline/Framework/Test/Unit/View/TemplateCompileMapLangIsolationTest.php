@@ -14,13 +14,14 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\View\Template;
 
 /**
- * Regression: processViewFileCache / shared template-file-map must not reuse a
- * Hindi-baked &lt;lang&gt; compile under an English request when the storefront
- * fence was installed before route localization finished.
+ * Regression guard for the v12 contract: locale must NOT partition compile
+ * scope. Artifacts are lang-free (translations run at runtime via __()/
+ * InlinePhraseMarker), so flipping w_env user.lang must reuse the same
+ * compile map key — this is what collapses N_locales copies into one.
  */
 final class TemplateCompileMapLangIsolationTest extends TestCase
 {
-    public function testCompileScopeMapKeyFollowsWenvLangEvenAfterEarlyFence(): void
+    public function testCompileScopeMapKeyIgnoresWenvLangAfterEarlyFence(): void
     {
         require_once BP . 'app/code/Weline/Framework/Common/functions.php';
         $previousContext = Context::getCurrent();
@@ -53,11 +54,11 @@ final class TemplateCompileMapLangIsolationTest extends TestCase
             $enKey = $mapKey->invoke($template);
 
             WelineEnv::set('user.lang', 'hi_IN', 'compile map lang fixture');
-            // Fence stays en_US (request-local install-once), but compile map must move.
+            // Fence stays en_US (request-local install-once); compile map must NOT move either — v12 is lang-free.
             self::assertSame('en_US', StorefrontCacheKeyContext::current()?->lang);
             $hiKey = $mapKey->invoke($template);
 
-            self::assertNotSame($enKey, $hiKey, 'Baked <lang> path maps must not collide across w_env locales.');
+            self::assertSame($enKey, $hiKey, 'v12: one compiled artifact serves all locales; lang must not shard the compile map.');
             self::assertSame($hiKey, $mapKey->invoke($template));
         } finally {
             Context::leave();

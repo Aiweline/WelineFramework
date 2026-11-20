@@ -380,7 +380,7 @@ private function assert_ForbidHardcodedModuleStaticUrl_testTraitTemplateModuleSt
 private function assert_FormFiberCapture_testFormTaglibCallbackUsesFiberOutputBufferNotNativeOb(): void
 {
     $source = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/View/Taglib.php');
-    self::assertSame('20261023-compile-scope-v13', Taglib::COMPILER_GENERATION);
+    self::assertSame('20261120-compile-scope-v14-lang-free', Taglib::COMPILER_GENERATION);
     self::assertStringContainsString('FiberOutputBuffer::beginCapture()', $source);
     self::assertStringContainsString('FiberOutputBuffer::endCapture()', $source);
     self::assertStringContainsString('Taglib__form_body', $source);
@@ -785,13 +785,15 @@ private function assert_TemplateCompilePathUnification_testFetchFileFromSourceUs
     self::assertStringNotContainsString('__bytes_', $normalized);
     self::assertStringNotContainsString('__source_', $normalized);
     self::assertMatchesRegularExpression('#/src_unify-virtual_pin-a(?:_r[a-f0-9]{8})?/#', $normalized);
-    self::assertMatchesRegularExpression('#/frontend_w0_default_zh_Hans_CN#', $normalized);
+    self::assertMatchesRegularExpression('#/frontend_w0_default(_o_|/)#', $normalized);
+    self::assertStringContainsString('/shared/', $normalized, 'v12: fixed shared leaf replaces per-locale compile leaves');
+    self::assertStringNotContainsString('_zh_Hans_CN', $normalized, 'v12: lang must not appear in compile dirs');
     self::assertStringNotContainsString('_CNY', $normalized, 'v11: currency must not appear in compile dirs');
     $otherContext = $template->getFetchFileFromSource('unify-virtual.phtml', '<span>unify-b</span>', __FILE__, 'pin-b');
     $otherNormalized = \str_replace('\\', '/', $otherContext);
     self::assertNotSame($compiled, $otherContext);
     self::assertMatchesRegularExpression('#/src_unify-virtual_pin-b(?:_r[a-f0-9]{8})?/#', $otherNormalized);
-    self::assertMatchesRegularExpression('#/frontend_w0_default_zh_Hans_CN#', $otherNormalized);
+    self::assertMatchesRegularExpression('#/frontend_w0_default(_o_|/)#', $otherNormalized);
     // Same stable scope root; only the plaintext src_ leaf differs.
     self::assertSame(\dirname(\dirname($normalized)), \dirname(\dirname($otherNormalized)));
 }
@@ -806,8 +808,8 @@ private function assert_TemplateCompilePathUnification_testLayoutPathResolverSha
     self::assertDoesNotMatchRegularExpression('#_ctx_[a-f0-9]{32}#i', $normalized);
     self::assertStringNotContainsString('__bytes_', $normalized);
     self::assertStringNotContainsString('__source_', $normalized);
-    // Must include lang leaf from Template scope, and no currency leaf (v11).
-    self::assertMatchesRegularExpression('#/(?:frontend|backend)_[^/]+_[A-Za-z]{2,}[^/]*/#', $normalized);
+    // v12: fixed shared leaf replaces the per-locale leaf; no currency leaf.
+    self::assertMatchesRegularExpression('#/(?:frontend|backend)_[^/]+/shared/#', $normalized);
     self::assertStringNotContainsString('_CNY/', $normalized, 'v11: currency leaf removed from compile dirs');
     self::assertStringEndsWith('com_default.phtml', $path);
 }
@@ -1047,7 +1049,7 @@ private function assert_TraitTemplateModuleStaticFlat_testTraitTemplateBuildsMod
     self::assertStringContainsString('PublicStaticUrl::fromModuleSource', $src);
     self::assertStringContainsString('resolveFlatStaticModuleDiskRoot', $src);
     self::assertStringContainsString('prod|flat', $src);
-    self::assertStringContainsString('context-env-v11-lang-only-scope', $src);
+    self::assertStringContainsString('context-env-v12-lang-free-scope', $src);
     // Theme-ns must not be used as module STATICS URL fallback under prod.
     self::assertDoesNotMatchRegularExpression("/useProductionStaticPublicUrls\\(\\)[\\s\\S]{0,200}resolvePublicThemeNamespace\\(\\)[\\s\\S]{0,120}view\\/statics/", $src, 'Module STATICS must not fall back to /static/{themeNs}/…/view/statics/');
 }
@@ -1074,7 +1076,7 @@ private function assert_TraitTemplateTagSourceAreaRoute_testFetchTagSourceDisabl
 
 private function assert_UrlLiteralBake_testCompilerGenerationBumpsForUrlLiteralBake(): void
 {
-    self::assertSame('20261023-compile-scope-v13', Taglib::COMPILER_GENERATION);
+    self::assertSame('20261120-compile-scope-v14-lang-free', Taglib::COMPILER_GENERATION);
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/View/Taglib.php');
     self::assertStringContainsString('function tryBakeUrlFamily', $source);
     self::assertStringContainsString('adjustBakedStaticInlineReplacement', $source);
@@ -1083,25 +1085,41 @@ private function assert_UrlLiteralBake_testCompilerGenerationBumpsForUrlLiteralB
 
 private function assert_UrlLiteralBake_testLiteralPathBakesWithoutGetUrlStub(): void
 {
-    $template = $this->createMock(Template::class);
-    $template->method('getUrl')->willReturnCallback(static fn(string $path, array $params = []): string => '/~site/grocery/' . ltrim($path, '/'));
-    $baked = $this->tryBake_UrlLiteralBake($template, 'getUrl', '@url{}', ["@url{'product/list'}", "'product/list'", ''], []);
-    self::assertSame('/~site/grocery/product/list', $baked);
-    $bakedXml = $this->tryBake_UrlLiteralBake($template, 'getUrl', 'tag-self-close-with-attrs', ['<url path="product/list"/>', '', ''], ['path' => 'product/list']);
-    self::assertSame('/~site/grocery/product/list', $bakedXml);
+    // v12：烘焙仅对后台 area 存活；前台 URL 家族一律发运行期 stub（locale 前缀无法烘死）。
+    WelineEnv::set('area', 'backend', 'url bake area fixture');
+    try {
+        $template = $this->createMock(Template::class);
+        $template->method('getUrl')->willReturnCallback(static fn(string $path, array $params = []): string => '/~site/grocery/' . ltrim($path, '/'));
+        $baked = $this->tryBake_UrlLiteralBake($template, 'getUrl', '@url{}', ["@url{'product/list'}", "'product/list'", ''], []);
+        self::assertSame('/~site/grocery/product/list', $baked);
+        $bakedXml = $this->tryBake_UrlLiteralBake($template, 'getUrl', 'tag-self-close-with-attrs', ['<url path="product/list"/>', '', ''], ['path' => 'product/list']);
+        self::assertSame('/~site/grocery/product/list', $bakedXml);
+    } finally {
+        WelineEnv::set('area', 'frontend', 'url bake area fixture');
+    }
+    // 前台 area：同一字面量 path 也必须回退 stub（不能烘死 /{locale}/ 前缀）。
+    $frontend = $this->createMock(Template::class);
+    $frontend->expects(self::never())->method('getUrl');
+    self::assertNull($this->tryBake_UrlLiteralBake($frontend, 'getUrl', '@url{}', ["@url{'product/list'}", "'product/list'", ''], []));
+    self::assertNull($this->tryBake_UrlLiteralBake($frontend, 'getFrontendUrl', '@url{}', ["@url{'product/list'}", "'product/list'", ''], []));
 }
 
 private function assert_UrlLiteralBake_testDocumentRootPathBakesRootRelative(): void
 {
-    $template = $this->createMock(Template::class);
-    $template->method('getUrl')->willReturn('https://pf14955e2.test.weline.com/');
-    self::assertSame('/', $this->tryBake_UrlLiteralBake($template, 'getUrl', '@url{}', ["@url{'/'}", "'/'", ''], []));
-    $templateMount = $this->createMock(Template::class);
-    $templateMount->method('getUrl')->willReturn('https://p84697b73.test.weline.com/~site/grocery/product/list');
-    self::assertSame(
-        '/~site/grocery/product/list',
-        $this->tryBake_UrlLiteralBake($templateMount, 'getUrl', '@url{}', ["@url{'product/list'}", "'product/list'", ''], [])
-    );
+    WelineEnv::set('area', 'backend', 'url bake area fixture');
+    try {
+        $template = $this->createMock(Template::class);
+        $template->method('getUrl')->willReturn('https://pf14955e2.test.weline.com/');
+        self::assertSame('/', $this->tryBake_UrlLiteralBake($template, 'getUrl', '@url{}', ["@url{'/'}", "'/'", ''], []));
+        $templateMount = $this->createMock(Template::class);
+        $templateMount->method('getUrl')->willReturn('https://p84697b73.test.weline.com/~site/grocery/product/list');
+        self::assertSame(
+            '/~site/grocery/product/list',
+            $this->tryBake_UrlLiteralBake($templateMount, 'getUrl', '@url{}', ["@url{'product/list'}", "'product/list'", ''], [])
+        );
+    } finally {
+        WelineEnv::set('area', 'frontend', 'url bake area fixture');
+    }
 }
 
 private function assert_UrlLiteralBake_testDynamicPathKeepsNullSoStubRemains(): void
@@ -1114,13 +1132,18 @@ private function assert_UrlLiteralBake_testDynamicPathKeepsNullSoStubRemains(): 
 
 private function assert_UrlLiteralBake_testLiteralParamsBakeWithResolvedUrl(): void
 {
-    $template = $this->createMock(Template::class);
-    $template->method('getUrl')->willReturnCallback(static function (string $path, array $params = []): string {
-        $q = $params === [] ? '' : '?' . http_build_query($params);
-        return '/u/' . ltrim($path, '/') . $q;
-    });
-    $baked = $this->tryBake_UrlLiteralBake($template, 'getUrl', '@url{}', ["@url{'product/view'|['id'=>1]}", "'product/view'|['id'=>1]", ''], []);
-    self::assertSame('/u/product/view?id=1', $baked);
+    WelineEnv::set('area', 'backend', 'url bake area fixture');
+    try {
+        $template = $this->createMock(Template::class);
+        $template->method('getUrl')->willReturnCallback(static function (string $path, array $params = []): string {
+            $q = $params === [] ? '' : '?' . http_build_query($params);
+            return '/u/' . ltrim($path, '/') . $q;
+        });
+        $baked = $this->tryBake_UrlLiteralBake($template, 'getUrl', '@url{}', ["@url{'product/view'|['id'=>1]}", "'product/view'|['id'=>1]", ''], []);
+        self::assertSame('/u/product/view?id=1', $baked);
+    } finally {
+        WelineEnv::set('area', 'frontend', 'url bake area fixture');
+    }
 }
 
 private function assert_UrlLiteralBake_testPhpContextVarExportsBakedUrl(): void

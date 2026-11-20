@@ -53,7 +53,7 @@ class Taglib
      * Bumped when compiled Taglib output shape changes (e.g. form body capture).
      * Embedded into Template compile hash so view/tpl cannot keep stale PHP.
      */
-    public const COMPILER_GENERATION = '20261023-compile-scope-v13';
+    public const COMPILER_GENERATION = '20261120-compile-scope-v14-lang-free';
 
     /** 回调 `$config` 中的渲染阶段键；只有 {@see renderRuntimeTag()} 会写入 runtime。 */
     public const RENDER_PHASE_KEY = 'render_phase';
@@ -591,6 +591,14 @@ class Taglib
             return null;
         }
 
+        // v12：编译产物按 locale 收敛为单份。前台 URL 解析经 getLocalePrefix()/getPrefix()
+        // 输出随请求 locale/currency 变化，烘死字面量会让非默认 locale 拿到错链；
+        // 同一份编译产物无法证明站点单语言 → 前台家族一律回退运行期 stub。
+        // 后台链路（getBackendUrl/getBackendApiUrl）不带本地化段，仍可烘。
+        if ($this->urlBakeIsLocaleSensitive($method)) {
+            return null;
+        }
+
         $path = null;
         $params = [];
 
@@ -665,6 +673,27 @@ class Taglib
 
         // Bake document-root-relative paths only — never lock compile-time Host into com_*.
         return Url::toDocumentRootRelative($url);
+    }
+
+    /**
+     * 前台 URL 家族是否 locale 敏感：frontend-url/frontend-api 恒真；
+     * url/api 按编译期 area 分流——前台经本地化前缀，后台可烘。
+     */
+    private function urlBakeIsLocaleSensitive(string $method): bool
+    {
+        if ($method === 'getFrontendUrl' || $method === 'getFrontendApiUrl') {
+            return true;
+        }
+        $area = '';
+        try {
+            $area = \function_exists('w_env')
+                ? \strtolower(\trim((string)\w_env('area', '')))
+                : '';
+        } catch (\Throwable) {
+            $area = '';
+        }
+
+        return $area !== 'backend' && $area !== 'admin';
     }
 
     private function extractLiteralUrlPath(string $pathExpr): ?string

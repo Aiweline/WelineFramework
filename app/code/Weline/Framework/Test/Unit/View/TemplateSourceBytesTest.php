@@ -120,7 +120,8 @@ final class TemplateSourceBytesTest extends TestCase
         $english = $template->getFetchFile('language-source.phtml');
         State::setRequestLanguageOverride('zh_Hans_CN');
         $chinese = $template->getFetchFile('language-source.phtml');
-        self::assertNotSame($english, $chinese);
+        // v12：locale 不再是编译维——同一 pinned 源在任意语言下复用同一份编译产物。
+        self::assertSame($english, $chinese);
         self::assertSame('<b>same</b>', $template->ob_file($chinese));
         self::assertSame(1, $this->phaseCalls('template.source_bytes_digest'));
     }
@@ -257,7 +258,8 @@ final class TemplateSourceBytesTest extends TestCase
             $english = $runtime->materializeContent('<strong>{{shared_value}}</strong>', __FILE__);
             State::setRequestLanguageOverride('zh_Hans_CN');
             $chinese = $runtime->materializeContent('<strong>{{shared_value}}</strong>', __FILE__);
-            self::assertNotSame($english, $chinese);
+            // v12：同一物化内容跨语言共享编译产物，语言差异由运行期 __()/数据承担。
+            self::assertSame($english, $chinese);
             self::assertStringContainsString('<strong>survives</strong>', $runtime->renderContent('<strong>{{shared_value}}</strong>', [], __FILE__));
             self::assertSame('survives', $template->getData('shared_value'));
         } finally {

@@ -39,7 +39,8 @@ final class TemplateCompileOriginScopeTest extends TestCase
             $directory = VAR_DIR . 'origin-fixture-compile/';
             $first = $method->invoke($template, $directory);
 
-            self::assertStringContainsString('frontend_w27_origin_shop_en_US', $first);
+            self::assertStringContainsString('frontend_w27_origin_shop', $first);
+            self::assertStringNotContainsString('_en_US', $first, 'v12: lang must not partition compiled templates');
             self::assertStringNotContainsString('_USD', $first, 'v11: currency must not partition compiled templates');
             self::assertStringContainsString('_o_shop_test_9555', $first);
             self::assertStringNotContainsString('_ctx_', $first, 'v7 plain scope must not append ctx_ hash directories');
@@ -98,7 +99,8 @@ final class TemplateCompileOriginScopeTest extends TestCase
             $enMap = $compileMapKey->invoke($template);
             WelineEnv::set('user.lang', 'hi_IN', 'compile origin fixture');
             $hiMap = $compileMapKey->invoke($template);
-            self::assertNotSame($enMap, $hiMap, 'Compile path maps must shard by live w_env lang so baked <lang> cannot cross locales.');
+            // v12：lang 不进编译维——同一 artifact 服务全部 locale（翻译运行期），map key 必须不变。
+            self::assertSame($enMap, $hiMap, 'v12: one compiled artifact serves all locales; lang must not shard the compile map.');
             WelineEnv::set('user.lang', 'en_US', 'compile origin fixture');
 
             // v8：站点地址维 = 文档公开源；站柜登记 url 与请求 Host 不一致时按文档源分区。
