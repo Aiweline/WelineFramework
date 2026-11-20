@@ -122,6 +122,7 @@ class FileAdapter implements CacheAdapterInterface
         if ($this->memoryHeadroomBytes() < self::NEAR_LIMIT_HEADROOM_BYTES) {
             return false;
         }
+        $this->maybeSweepExpired();
 
         $file = $this->getFilePath($key);
         $dir = dirname($file);
@@ -130,10 +131,12 @@ class FileAdapter implements CacheAdapterInterface
             mkdir($dir, 0775, true);
         }
         
+        // expires/created first so a bounded header read can check expiry
+        // without unserializing the whole payload (see maybeSweepExpired).
         $data = [
-            'value' => $value,
             'expires' => $ttl > 0 ? time() + $ttl : 0,
             'created' => time(),
+            'value' => $value,
         ];
 
         try {
@@ -193,6 +196,60 @@ class FileAdapter implements CacheAdapterInterface
             return hash('xxh3', $key);
         }
         return sprintf('%08x%08x', crc32($key), crc32(strrev($key)));
+    }
+
+    /**
+     * Probabilistic expired-file sweep. get() deletes expired entries only on
+     * read; orphaned files (e.g. entries superseded without another read) would
+     * otherwise live on disk forever. ~1% of set() calls scan ONE random hash
+     * subdirectory and unlink files whose stored `expires` has passed — bounded
+     * cost (one dir, ≤512 header reads of 64B each), amortized full coverage.
+     * Entries written before the expires-first envelope can't be parsed from a
+     * header and are conservatively kept; expires=0 entries never expire.
+     */
+    private const SWEEP_TRIGGER_OUT_OF = 100;
+    private const SWEEP_HEADER_BYTES = 64;
+    private const SWEEP_MAX_FILES = 512;
+
+    private function maybeSweepExpired(): void
+    {
+        if (\mt_rand(1, self::SWEEP_TRIGGER_OUT_OF) !== 1) {
+            return;
+        }
+        try {
+            $subdirs = \glob($this->cachePath . '*', \GLOB_ONLYDIR);
+            if (!\is_array($subdirs) || $subdirs === []) {
+                return;
+            }
+            $dir = $subdirs[\array_rand($subdirs)];
+            $files = \glob($dir . \DIRECTORY_SEPARATOR . '*');
+            if (!\is_array($files)) {
+                return;
+            }
+            $now = \time();
+            $checked = 0;
+            foreach ($files as $file) {
+                if ($checked++ >= self::SWEEP_MAX_FILES) {
+                    break;
+                }
+                if (!\is_file($file)) {
+                    continue;
+                }
+                $head = @\file_get_contents($file, false, null, 0, self::SWEEP_HEADER_BYTES);
+                if (!\is_string($head)) {
+                    continue;
+                }
+                // a:3:{s:7:"expires";i:<unix>;s:7:"created";...
+                if (\preg_match('/^a:3:\{s:7:"expires";i:(\d+);/', $head, $m) !== 1) {
+                    continue;
+                }
+                $expires = (int)$m[1];
+                if ($expires > 0 && $expires < $now) {
+                    @\unlink($file);
+                }
+            }
+        } catch (\Throwable) {
+        }
     }
 
     /**
