@@ -41,9 +41,11 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
     /**
      * Shared layer (w_cache('acl')) between process statics and DB so a cold
      * WLS worker reuses ACL facts another worker already resolved. Fact keys
-     * embed a generation: writers (model save/delete hooks,
-     * AclCacheInvalidator) bump FACTS_GENERATION_KEY and stale workers drop
-     * local copies on the next read — no per-write pool wipe needed.
+     * are STABLE (one file per fact); the generation lives inside the stored
+     * value. Writers (model save/delete hooks, AclCacheInvalidator) bump
+     * FACTS_GENERATION_KEY; readers compare the stored generation and treat
+     * mismatches as misses, overwriting the entry under the same key — so a
+     * generation bump cannot orphan files on disk.
      */
     private const SHARED_FACTS_TTL_SECONDS = 300;
     /**
@@ -93,6 +95,32 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             self::$localFactsGeneration = $generation;
         }
         return $generation;
+    }
+
+    /**
+     * @return array{hit: bool, value: mixed}
+     */
+    private static function sharedFactGet(object $cache, string $key, string $generation): array
+    {
+        try {
+            $cached = $cache->get($key);
+            if (\is_array($cached)
+                && ($cached['gen'] ?? null) === $generation
+                && \array_key_exists('data', $cached)
+            ) {
+                return ['hit' => true, 'value' => $cached['data']];
+            }
+        } catch (\Throwable) {
+        }
+        return ['hit' => false, 'value' => null];
+    }
+
+    private static function sharedFactSet(object $cache, string $key, string $generation, mixed $value): void
+    {
+        try {
+            $cache->set($key, ['gen' => $generation, 'data' => $value], self::SHARED_FACTS_TTL_SECONDS);
+        } catch (\Throwable) {
+        }
     }
 
     /**
@@ -192,20 +220,17 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             return self::$processRouteResources[$processKey];
         }
 
-        $sharedKey = self::SHARED_KEY_ROUTE_RESOURCE . $generation . '.' . \md5($processKey);
+        $sharedKey = self::SHARED_KEY_ROUTE_RESOURCE . \md5($processKey);
         if ($cache !== null) {
-            try {
-                $cached = $cache->get($sharedKey);
-                if (\is_array($cached)) {
-                    $aclId = (int)($cached['acl_id'] ?? 0);
-                    $resource = $aclId > 0
-                        ? new RouteResource($aclId, (string)($cached['source_name'] ?? ''))
-                        : null;
-                    self::rememberProcessRouteResource($processKey, $resource);
+            $shared = self::sharedFactGet($cache, $sharedKey, $generation);
+            if ($shared['hit'] && \is_array($shared['value'])) {
+                $aclId = (int)($shared['value']['acl_id'] ?? 0);
+                $resource = $aclId > 0
+                    ? new RouteResource($aclId, (string)($shared['value']['source_name'] ?? ''))
+                    : null;
+                self::rememberProcessRouteResource($processKey, $resource);
 
-                    return $resource;
-                }
-            } catch (\Throwable) {
+                return $resource;
             }
         }
 
@@ -232,10 +257,7 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             ];
         }
         if ($cache !== null) {
-            try {
-                $cache->set($sharedKey, $sharedValue, self::SHARED_FACTS_TTL_SECONDS);
-            } catch (\Throwable) {
-            }
+            self::sharedFactSet($cache, $sharedKey, $generation, $sharedValue);
         }
         self::rememberProcessRouteResource($processKey, $resource);
 
@@ -265,15 +287,12 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
         }
         // Shared layer holds raw DB rows; role_acl_entries_after still runs once
         // per worker so scope-varying observers keep their existing semantics.
-        $sharedKey = self::SHARED_KEY_ROLE_ENTRIES . $generation . '.' . $roleId;
+        $sharedKey = self::SHARED_KEY_ROLE_ENTRIES . $roleId;
         $rawEntries = null;
         if ($cache !== null) {
-            try {
-                $cached = $cache->get($sharedKey);
-                if (\is_array($cached)) {
-                    $rawEntries = $cached;
-                }
-            } catch (\Throwable) {
+            $shared = self::sharedFactGet($cache, $sharedKey, $generation);
+            if ($shared['hit'] && \is_array($shared['value'])) {
+                $rawEntries = $shared['value'];
             }
         }
         if ($rawEntries === null) {
@@ -283,10 +302,7 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
                 TraceGate::recordSpan('acl::AclService::getRoleAclEntries_db', (microtime(true) - $t0) * 1000, 'observer');
             }
             if ($cache !== null && self::sharedEntriesWithinLimit($rawEntries)) {
-                try {
-                    $cache->set($sharedKey, $rawEntries, self::SHARED_FACTS_TTL_SECONDS);
-                } catch (\Throwable) {
-                }
+                self::sharedFactSet($cache, $sharedKey, $generation, $rawEntries);
             }
         }
         $entries = $this->dispatchRoleAclEntriesAfter($roleId, $rawEntries);
@@ -458,18 +474,15 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             self::storeRequestState($state);
             return $protected;
         }
-        $sharedKey = self::SHARED_KEY_ROUTE_PROTECTED . $generation . '.' . \md5($routePath);
+        $sharedKey = self::SHARED_KEY_ROUTE_PROTECTED . \md5($routePath);
         if ($cache !== null) {
-            try {
-                $cached = $cache->get($sharedKey);
-                if ($cached !== false && $cached !== null) {
-                    $protected = (bool)(int)$cached;
-                    self::rememberProcessRouteProtected($routePath, $protected);
-                    $state['route_protected'][$routePath] = $protected;
-                    self::storeRequestState($state);
-                    return $protected;
-                }
-            } catch (\Throwable) {
+            $shared = self::sharedFactGet($cache, $sharedKey, $generation);
+            if ($shared['hit'] && $shared['value'] !== null) {
+                $protected = (bool)(int)$shared['value'];
+                self::rememberProcessRouteProtected($routePath, $protected);
+                $state['route_protected'][$routePath] = $protected;
+                self::storeRequestState($state);
+                return $protected;
             }
         }
         $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
@@ -501,10 +514,7 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             TraceGate::recordSpan('acl::AclService::isRouteProtected_db', (microtime(true) - $t0) * 1000, 'observer');
         }
         if ($cache !== null) {
-            try {
-                $cache->set($sharedKey, $protected ? 1 : 0, self::SHARED_FACTS_TTL_SECONDS);
-            } catch (\Throwable) {
-            }
+            self::sharedFactSet($cache, $sharedKey, $generation, $protected ? 1 : 0);
         }
         self::rememberProcessRouteProtected($routePath, $protected);
         $state = self::requestState();
