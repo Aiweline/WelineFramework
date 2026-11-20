@@ -1153,6 +1153,17 @@ class Template extends DataObject implements RequestLocalInterface
         // v12：locale 不再是编译维度——同一 scope 一份产物服务全部语言。
         // 固定叶名保留目录层级结构（上游拼接假定存在一层），同时使旧
         // per-locale 目录自然作废，由 generated/complicate GC 回收。
+        //
+        // 唯一例外：发布固化期「全局区内联烘焙」产物承载语种（烘入的是
+        // 渲染后文本；见 ThemeLayoutEntityFormalLocaleCompileService），
+        // 该模式下仍按 locale 分叶，避免最后编译的语种污染共享产物。
+        // 运行时该 flag 恒关 → 运行期读取恒走 shared。
+        if (self::inlineGlobalRegionsAtCompileEnabled()) {
+            $lang = (string)WelineEnv::getLang();
+            if (\preg_match('/^[a-z]{2,3}(?:_[A-Za-z]{2,12}){0,2}$/', $lang) === 1) {
+                return $this->sanitizeCompileContextSegment($lang);
+            }
+        }
         return 'shared';
     }
 
