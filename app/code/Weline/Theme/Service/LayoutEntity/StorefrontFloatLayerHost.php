@@ -122,6 +122,16 @@ final class StorefrontFloatLayerHost
             return $html;
         }
 
+        // Scoped pass: all mutations live inside #w-storefront-float-layer, so parse
+        // only that subtree instead of the full document (~446KB → ~30KB).
+        $span = self::floatLayerSpan($html);
+        if ($span !== null) {
+            $scoped = self::ensureFloatEdgeShellsInLayerFragment($html, $span);
+            if ($scoped !== null) {
+                return $scoped;
+            }
+        }
+
         $hadDoctype = (bool)preg_match('/^\s*<!DOCTYPE\s+html\b/i', $html);
         $previous = libxml_use_internal_errors(true);
         $dom = new \DOMDocument('1.0', 'UTF-8');
@@ -134,9 +144,153 @@ final class StorefrontFloatLayerHost
         }
 
         $xpath = new \DOMXPath($dom);
+        $changed = self::transformFloatSlots($dom, $xpath);
+        if ($changed !== 1) {
+            return $html;
+        }
+
+        $htmlEl = $dom->getElementsByTagName('html')->item(0);
+        if (!$htmlEl instanceof \DOMElement) {
+            return $html;
+        }
+        $serialized = $dom->saveHTML($htmlEl);
+        if (!is_string($serialized) || $serialized === '') {
+            return $html;
+        }
+        // Drop the encoding PI loadHTML may leave ahead of <html>.
+        $serialized = (string)preg_replace('/^\s*<\?xml[^?]*\?>\s*/i', '', $serialized);
+        $serialized = ltrim($serialized);
+        if ($hadDoctype && !preg_match('/^<!DOCTYPE\s+html\b/i', $serialized)) {
+            $serialized = "<!DOCTYPE html>\n" . $serialized;
+        }
+
+        return $serialized;
+    }
+
+    /**
+     * Byte span [start,end) of the #w-storefront-float-layer element, found by
+     * balanced <div>/</div> counting. Null when the tag is absent or unbalanced.
+     */
+    private static function floatLayerSpan(string $html): ?array
+    {
+        // The layer id literal must occur exactly once and not inside a script
+        // or comment — otherwise the byte scan cannot prove it found the real
+        // element, so defer to the full-document path.
+        if (substr_count($html, 'id="w-storefront-float-layer"')
+            + substr_count($html, "id='w-storefront-float-layer'") !== 1) {
+            return null;
+        }
+        if (!preg_match(
+            '/<div\b[^>]*\bid\s*=\s*(["\'])w-storefront-float-layer\1[^>]*>/i',
+            $html,
+            $m,
+            PREG_OFFSET_CAPTURE
+        )) {
+            return null;
+        }
+        $start = $m[0][1];
+        $before = substr($html, 0, $start);
+        foreach (['<script' => '</script', '<!--' => '-->'] as $open => $close) {
+            $lastOpen = strripos($before, $open);
+            $lastClose = strripos($before, $close);
+            if ($lastOpen !== false && ($lastClose === false || $lastOpen > $lastClose)) {
+                return null;
+            }
+        }
+        $pos = $start + strlen($m[0][0]);
+        $depth = 1;
+        $len = strlen($html);
+        while ($pos < $len && $depth > 0) {
+            if (!preg_match(
+                '/<div\b[^>]*>|<\/div\s*>|<script\b[^>]*>|<!--/i',
+                $html,
+                $mm,
+                PREG_OFFSET_CAPTURE,
+                $pos
+            )) {
+                return null;
+            }
+            $tag = $mm[0][0];
+            $at = $mm[0][1];
+            // Script bodies and comments are CDATA to the parser but plain bytes
+            // to this scan — skip them so a literal </div> can't cut the span.
+            if (strtolower(substr($tag, 0, 7)) === '<script') {
+                $close = stripos($html, '</script', $at + strlen($tag));
+                if ($close === false) {
+                    return null;
+                }
+                $pos = $close;
+                continue;
+            }
+            if (substr($tag, 0, 4) === '<!--') {
+                $close = strpos($html, '-->', $at + 4);
+                if ($close === false) {
+                    return null;
+                }
+                $pos = $close + 3;
+                continue;
+            }
+            $pos = $at + strlen($tag);
+            $depth += $tag[1] === '/' ? -1 : 1;
+        }
+        return $depth === 0 ? [$start, $pos] : null;
+    }
+
+    /**
+     * Scoped pass: parse only the float-layer subtree, run the shared slot
+     * transform, splice the serialized layer back. Null → caller falls back to
+     * the full-document path; unchanged $html → proven no-op.
+     */
+    private static function ensureFloatEdgeShellsInLayerFragment(string $html, array $span): ?string
+    {
+        [$start, $end] = $span;
+        $fragment = substr($html, $start, $end - $start);
+        if ($fragment === '') {
+            return null;
+        }
+
+        $previous = libxml_use_internal_errors(true);
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $ok = @$dom->loadHTML('<?xml encoding="UTF-8">' . $fragment, LIBXML_HTML_NODEFDTD | LIBXML_NONET);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+        if ($ok !== true) {
+            return null;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $changed = self::transformFloatSlots($dom, $xpath);
+        if ($changed === -1) {
+            // Span may have hit a non-element occurrence (script/comment text);
+            // let the full-document path decide.
+            return null;
+        }
+        if ($changed !== 1) {
+            return $html;
+        }
+
+        $layerEl = $xpath->query('//*[@id="w-storefront-float-layer"]')->item(0);
+        if (!$layerEl instanceof \DOMElement) {
+            return null;
+        }
+        $serialized = $dom->saveHTML($layerEl);
+        if (!is_string($serialized) || $serialized === '') {
+            return null;
+        }
+
+        return substr($html, 0, $start) . $serialized . substr($html, $end);
+    }
+
+    /**
+     * Per-slot edge-shell repair shared by the full-document and scoped-fragment
+     * passes: strip stale chrome, create/adopt the edge body, pin dock attrs.
+     * Returns -1 when no slots exist, 0 when nothing changed, 1 when mutated.
+     */
+    private static function transformFloatSlots(\DOMDocument $dom, \DOMXPath $xpath): int
+    {
         $slots = $xpath->query('//*[@id="w-storefront-float-layer"]//*[contains(concat(" ", normalize-space(@class), " "), " w-storefront-float-layer__slot ")]');
         if (!$slots instanceof \DOMNodeList || $slots->length < 1) {
-            return $html;
+            return -1;
         }
 
         $changed = false;
@@ -207,26 +361,7 @@ final class StorefrontFloatLayerHost
             }
         }
 
-        if (!$changed) {
-            return $html;
-        }
-
-        $htmlEl = $dom->getElementsByTagName('html')->item(0);
-        if (!$htmlEl instanceof \DOMElement) {
-            return $html;
-        }
-        $serialized = $dom->saveHTML($htmlEl);
-        if (!is_string($serialized) || $serialized === '') {
-            return $html;
-        }
-        // Drop the encoding PI loadHTML may leave ahead of <html>.
-        $serialized = (string)preg_replace('/^\s*<\?xml[^?]*\?>\s*/i', '', $serialized);
-        $serialized = ltrim($serialized);
-        if ($hadDoctype && !preg_match('/^<!DOCTYPE\s+html\b/i', $serialized)) {
-            $serialized = "<!DOCTYPE html>\n" . $serialized;
-        }
-
-        return $serialized;
+        return $changed ? 1 : 0;
     }
 
     /**
