@@ -76,8 +76,6 @@ final class LayoutResolveObserver implements ObserverInterface
 
     private function layoutExists(string $layoutPath, string $layoutOption): bool
     {
-        $tmpDebugDirs = (new \ReflectionProperty($this->layoutLocator, 'themeDirectoryResolver'))->getValue($this->layoutLocator)->getAreaDirectories('frontend'); // TMPDEBUG
-        file_put_contents(BP . 'tmp/theme-pollution/debug-router.log', date('c') . ' OBS ' . $layoutPath . '/' . $layoutOption . ' dirs=' . json_encode(array_map(static fn($d) => [$d['layer_type'] ?? '', $d['path'] ?? ''], $tmpDebugDirs)) . "\n", FILE_APPEND); // TMPDEBUG
         return $this->layoutLocator->moduleDefaultFile($layoutPath, $layoutOption) !== null
             || $this->layoutLocator->themeDeclaredFile($layoutPath, $layoutOption) !== null;
     }
