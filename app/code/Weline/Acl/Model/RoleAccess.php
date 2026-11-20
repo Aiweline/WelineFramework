@@ -324,4 +324,28 @@ class RoleAccess extends Model
         
         return $types;
     }
+
+    public function save_after()
+    {
+        parent::save_after();
+        self::invalidateRoleAccessCaches();
+    }
+
+    public function delete_after()
+    {
+        parent::delete_after();
+        self::invalidateRoleAccessCaches();
+    }
+
+    /**
+     * role_access rows feed per-role ACL entries; writes outside the role
+     * controller (setup, imports, tests) must still drop shared facts.
+     */
+    private static function invalidateRoleAccessCaches(): void
+    {
+        try {
+            \Weline\Acl\Service\AclService::invalidateAclFacts();
+        } catch (\Throwable) {
+        }
+    }
 }

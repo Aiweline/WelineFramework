@@ -348,5 +348,29 @@ class Acl extends \Weline\Framework\Database\Model
         return (bool)$this->getData(self::schema_fields_API_EXPOSABLE);
     }
 
+    public function save_after()
+    {
+        parent::save_after();
+        self::invalidateAclResourceCaches();
+    }
+
+    public function delete_after()
+    {
+        parent::delete_after();
+        self::invalidateAclResourceCaches();
+    }
+
+    /**
+     * weline_acl rows feed route protection facts and backend menu sources;
+     * writes must drop every ACL fact layer, not only this worker's statics.
+     */
+    private static function invalidateAclResourceCaches(): void
+    {
+        try {
+            \Weline\Acl\Service\AclService::invalidateAclFacts();
+        } catch (\Throwable) {
+        }
+    }
+
 }
 

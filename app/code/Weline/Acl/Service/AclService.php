@@ -38,6 +38,81 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
     private const PROCESS_ROLE_ENTRIES_MAX = 256;
     private const PROCESS_ROUTE_RESOURCES_MAX = 2048;
 
+    /**
+     * Shared layer (w_cache('acl')) between process statics and DB so a cold
+     * WLS worker reuses ACL facts another worker already resolved. Fact keys
+     * embed a generation: writers (model save/delete hooks,
+     * AclCacheInvalidator) bump FACTS_GENERATION_KEY and stale workers drop
+     * local copies on the next read — no per-write pool wipe needed.
+     */
+    private const SHARED_FACTS_TTL_SECONDS = 300;
+    /**
+     * FileAdapter refuses reads for files >8MB; a payload near that size would
+     * be written but never served, so skip the shared write instead. Role
+     * entries join a.* including resource_metadata (MB-scale JSON), which can
+     * push a full-privilege role far past this cap — those degrade to the
+     * process-local cache exactly as before this layer existed.
+     */
+    private const SHARED_ROLE_ENTRIES_MAX_BYTES = 4194304;
+    private const FACTS_GENERATION_KEY = 'acl.service.facts_generation';
+    private const SHARED_KEY_ROUTE_PROTECTED = 'acl.service.route_protected.';
+    private const SHARED_KEY_ROLE_ENTRIES = 'acl.service.role_entries.';
+    private const SHARED_KEY_ROUTE_RESOURCE = 'acl.service.route_resource.';
+
+    private static ?string $localFactsGeneration = null;
+
+    private static function sharedFactsCache(): ?object
+    {
+        try {
+            return w_cache('acl');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Generation-gated local fact caches (same pattern as the menu tree).
+     * A writer anywhere bumps FACTS_GENERATION_KEY; workers observe the new
+     * generation, drop stale process/request copies and rebuild under fresh keys.
+     */
+    private static function syncFactsGeneration(?object $cache): string
+    {
+        $generation = '0';
+        if ($cache !== null) {
+            try {
+                $cached = $cache->get(self::FACTS_GENERATION_KEY);
+                if ($cached !== false && $cached !== null && $cached !== '') {
+                    $generation = (string)$cached;
+                }
+            } catch (\Throwable) {
+            }
+        }
+        if (self::$localFactsGeneration !== $generation) {
+            self::resetRequestCache();
+            self::clearProcessCache();
+            self::$localFactsGeneration = $generation;
+        }
+        return $generation;
+    }
+
+    /**
+     * Drop every ACL fact layer without touching unrelated cache pools.
+     * Model save/delete hooks call this; heavier flows keep using
+     * AclCacheInvalidator::flushAfterRoleAccessChange() (also flushes CacheManager).
+     * Generation bump invalidates shared keys, so bulk row writes stay cheap.
+     */
+    public static function invalidateAclFacts(): void
+    {
+        self::resetRequestCache();
+        self::clearProcessCache();
+        ResourceTreeService::invalidateBackendMenuTreeCache();
+        self::$localFactsGeneration = null;
+        try {
+            w_cache('acl')->set(self::FACTS_GENERATION_KEY, (string)\microtime(true));
+        } catch (\Throwable) {
+        }
+    }
+
     public function __construct(
         Role       $roleModel,
         RoleAccess $roleAccessModel,
@@ -110,9 +185,28 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
      */
     public function findRouteResource(string $className, string $httpMethod, string $routePath): ?RouteResource
     {
+        $cache = self::sharedFactsCache();
+        $generation = self::syncFactsGeneration($cache);
         $processKey = $className . '|' . \strtoupper($httpMethod) . '|' . $routePath;
         if (\array_key_exists($processKey, self::$processRouteResources)) {
             return self::$processRouteResources[$processKey];
+        }
+
+        $sharedKey = self::SHARED_KEY_ROUTE_RESOURCE . $generation . '.' . \md5($processKey);
+        if ($cache !== null) {
+            try {
+                $cached = $cache->get($sharedKey);
+                if (\is_array($cached)) {
+                    $aclId = (int)($cached['acl_id'] ?? 0);
+                    $resource = $aclId > 0
+                        ? new RouteResource($aclId, (string)($cached['source_name'] ?? ''))
+                        : null;
+                    self::rememberProcessRouteResource($processKey, $resource);
+
+                    return $resource;
+                }
+            } catch (\Throwable) {
+            }
         }
 
         /** @var Acl $acl */
@@ -129,8 +223,19 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             ->fetch();
 
         $resource = null;
+        $sharedValue = [];
         if ($acl->getId()) {
             $resource = new RouteResource($acl->getAclId(), $acl->getSourceName());
+            $sharedValue = [
+                'acl_id' => (int)$acl->getAclId(),
+                'source_name' => (string)$acl->getSourceName(),
+            ];
+        }
+        if ($cache !== null) {
+            try {
+                $cache->set($sharedKey, $sharedValue, self::SHARED_FACTS_TTL_SECONDS);
+            } catch (\Throwable) {
+            }
         }
         self::rememberProcessRouteResource($processKey, $resource);
 
@@ -146,6 +251,8 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             return [];
         }
         self::registerStateManager();
+        $cache = self::sharedFactsCache();
+        $generation = self::syncFactsGeneration($cache);
         $state = self::requestState();
         if (isset($state['role_acl_entries'][$roleId])) {
             return $state['role_acl_entries'][$roleId];
@@ -156,17 +263,47 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             self::storeRequestState($state);
             return $entries;
         }
-        $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
-        $entries = $this->roleAccessModel->getRoleAccessListArrayByRoleId($roleId);
-        if ($t0 > 0) {
-            TraceGate::recordSpan('acl::AclService::getRoleAclEntries_db', (microtime(true) - $t0) * 1000, 'observer');
+        // Shared layer holds raw DB rows; role_acl_entries_after still runs once
+        // per worker so scope-varying observers keep their existing semantics.
+        $sharedKey = self::SHARED_KEY_ROLE_ENTRIES . $generation . '.' . $roleId;
+        $rawEntries = null;
+        if ($cache !== null) {
+            try {
+                $cached = $cache->get($sharedKey);
+                if (\is_array($cached)) {
+                    $rawEntries = $cached;
+                }
+            } catch (\Throwable) {
+            }
         }
-        $entries = $this->dispatchRoleAclEntriesAfter($roleId, $entries);
+        if ($rawEntries === null) {
+            $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
+            $rawEntries = $this->roleAccessModel->getRoleAccessListArrayByRoleId($roleId);
+            if ($t0 > 0) {
+                TraceGate::recordSpan('acl::AclService::getRoleAclEntries_db', (microtime(true) - $t0) * 1000, 'observer');
+            }
+            if ($cache !== null && self::sharedEntriesWithinLimit($rawEntries)) {
+                try {
+                    $cache->set($sharedKey, $rawEntries, self::SHARED_FACTS_TTL_SECONDS);
+                } catch (\Throwable) {
+                }
+            }
+        }
+        $entries = $this->dispatchRoleAclEntriesAfter($roleId, $rawEntries);
         self::rememberProcessRoleAclEntries($roleId, $entries);
         $state = self::requestState();
         $state['role_acl_entries'][$roleId] = $entries;
         self::storeRequestState($state);
         return $entries;
+    }
+
+    private static function sharedEntriesWithinLimit(array $entries): bool
+    {
+        try {
+            return \strlen(\serialize($entries)) <= self::SHARED_ROLE_ENTRIES_MAX_BYTES;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -309,6 +446,8 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             return false;
         }
         self::registerStateManager();
+        $cache = self::sharedFactsCache();
+        $generation = self::syncFactsGeneration($cache);
         $state = self::requestState();
         if (array_key_exists($routePath, $state['route_protected'])) {
             return $state['route_protected'][$routePath];
@@ -318,6 +457,20 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             $state['route_protected'][$routePath] = $protected;
             self::storeRequestState($state);
             return $protected;
+        }
+        $sharedKey = self::SHARED_KEY_ROUTE_PROTECTED . $generation . '.' . \md5($routePath);
+        if ($cache !== null) {
+            try {
+                $cached = $cache->get($sharedKey);
+                if ($cached !== false && $cached !== null) {
+                    $protected = (bool)(int)$cached;
+                    self::rememberProcessRouteProtected($routePath, $protected);
+                    $state['route_protected'][$routePath] = $protected;
+                    self::storeRequestState($state);
+                    return $protected;
+                }
+            } catch (\Throwable) {
+            }
         }
         $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
         $protected = false;
@@ -346,6 +499,12 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
         }
         if ($t0 > 0) {
             TraceGate::recordSpan('acl::AclService::isRouteProtected_db', (microtime(true) - $t0) * 1000, 'observer');
+        }
+        if ($cache !== null) {
+            try {
+                $cache->set($sharedKey, $protected ? 1 : 0, self::SHARED_FACTS_TTL_SECONDS);
+            } catch (\Throwable) {
+            }
         }
         self::rememberProcessRouteProtected($routePath, $protected);
         $state = self::requestState();

@@ -118,4 +118,25 @@ class Role extends Model implements RoleIdentityInterface
         $roleAccess = ObjectManager::getInstance(RoleAccess::class);
         return $roleAccess->getRoleAccessList($this);
     }
+
+    public function save_after()
+    {
+        parent::save_after();
+        self::invalidateRoleCaches();
+    }
+
+    public function delete_after()
+    {
+        parent::delete_after();
+        self::invalidateRoleCaches();
+    }
+
+    /** Role writes (rename, delete, website rescope) change effective ACL facts. */
+    private static function invalidateRoleCaches(): void
+    {
+        try {
+            \Weline\Acl\Service\AclService::invalidateAclFacts();
+        } catch (\Throwable) {
+        }
+    }
 }

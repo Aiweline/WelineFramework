@@ -37,7 +37,13 @@ final class BlogContentCache
             return $builder();
         }
         $key = 'blog.public.v1:' . hash('sha256', serialize([$websiteId, $locale, $resource, $parameters]));
-        return $this->hotCache->rememberPolicy(self::policy($websiteId), $key, $builder);
+        try {
+            return $this->hotCache->rememberPolicy(self::policy($websiteId), $key, $builder);
+        } catch (\Throwable) {
+            // Shared pool unavailable (unit contexts without BP/CacheManager):
+            // degrade to the per-request memo — same correctness, no cross-worker reuse.
+            return $this->rememberForRequest($resource, [$websiteId, $locale, $parameters], $builder);
+        }
     }
 
     /** Request snapshots may include EAV values whose shared invalidation is separate. */

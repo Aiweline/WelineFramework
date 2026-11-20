@@ -32,7 +32,7 @@ final class BlogCategoryAdminService
         }
         $locale = trim(str_replace('-', '_', $locale !== '' ? $locale : (string)\Weline\Framework\Env\WelineEnv::getLangLocal()));
         $this->contentCache ??= \Weline\Framework\Manager\ObjectManager::getInstance(BlogContentCache::class);
-        return $this->contentCache->rememberForRequest('category_tree', [$websiteId, $locale], fn(): array => $this->buildTree($websiteId, $locale, true));
+        return $this->contentCache->remember($websiteId, $locale, 'category_tree', [], fn(): array => $this->buildTree($websiteId, $locale, true));
     }
 
     /**
@@ -52,9 +52,11 @@ final class BlogCategoryAdminService
         }
         $locale = trim(str_replace('-', '_', $locale !== '' ? $locale : (string)\Weline\Framework\Env\WelineEnv::getLangLocal()));
         $this->contentCache ??= \Weline\Framework\Manager\ObjectManager::getInstance(BlogContentCache::class);
-        return $this->contentCache->rememberForRequest(
+        return $this->contentCache->remember(
+            $websiteId,
+            $locale,
             'category_tree_owned',
-            [$websiteId, $locale],
+            [],
             fn(): array => $this->buildTree($websiteId, $locale, false)
         );
     }
@@ -179,7 +181,9 @@ final class BlogCategoryAdminService
         if ($model->getCategoryId() <= 0) {
             throw new \InvalidArgumentException((string)__('分类不存在'));
         }
+        $rowWebsiteId = max(0, (int)$model->getData(Category::schema_fields_WEBSITE_ID));
         $model->delete();
+        $this->bumpContentNamespaces($rowWebsiteId);
     }
 
     /**
@@ -208,6 +212,7 @@ final class BlogCategoryAdminService
         $model->setData(Category::schema_fields_SORT_ORDER, max(0, $position));
         $model->setData(Category::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
         $model->save();
+        $this->bumpContentNamespaces($websiteId, max(0, (int)$model->getData(Category::schema_fields_WEBSITE_ID)));
 
         return [
             'id' => $categoryId,
@@ -415,6 +420,29 @@ final class BlogCategoryAdminService
             ->fetchArray();
 
         return is_array($rows) ? array_values(array_filter($rows, static fn($row): bool => is_array($row))) : [];
+    }
+
+    /**
+     * Category base-row writes (delete/reorder) bypass attribute writes, so the
+     * shared 'blog' pool entries (category trees, slug lookups) need an explicit
+     * namespace bump — same idiom as BlogCategoryAttributeService::write().
+     */
+    private function bumpContentNamespaces(int $websiteId, int $rowWebsiteId = -1): void
+    {
+        BlogContentCache::clearRequestSnapshots();
+        try {
+            $namespaces = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Cache\Contract\NamespaceGenerationInterface::class,
+            );
+            if ($namespaces instanceof \Weline\Framework\Cache\Contract\NamespaceGenerationInterface) {
+                $namespaces->bumpMany(BlogContentCache::changedPaths(
+                    $websiteId,
+                    $rowWebsiteId >= 0 ? $rowWebsiteId : $websiteId,
+                ));
+            }
+        } catch (\Throwable) {
+            // Row write is authoritative; namespace bump is an accelerator.
+        }
     }
 
     private function resolveCode(string $code, string $name): string
