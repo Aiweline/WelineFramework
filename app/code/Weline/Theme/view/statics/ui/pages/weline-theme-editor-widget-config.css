@@ -243,7 +243,7 @@
     margin: 0;
     padding: 1rem 1.25rem;
     background: linear-gradient(135deg, 
-        var(--w-theme-editor-bg-hover, var(--weline-theme-surface-hover)) 0%, 
+        var(--w-theme-editor-bg-hover, var(--weline-theme-surface-hover)) 0%,
         var(--w-theme-editor-bg-card, var(--weline-theme-surface)) 100%);
     font-size: 0.9375rem;
     font-weight: 600;
@@ -262,8 +262,8 @@
     bottom: 0;
     width: 4px;
     background: linear-gradient(180deg, 
-        var(--w-theme-editor-accent, var(--weline-theme-primary)) 0%, 
-        var(--w-theme-editor-accent-hover, var(--weline-theme-primary-hover)) 50%, 
+        var(--w-theme-editor-accent, var(--weline-theme-primary)) 0%,
+        var(--w-theme-editor-accent-hover, var(--weline-theme-primary-hover)) 50%,
         var(--weline-theme-info) 100%);
     opacity: 0;
     transition: opacity 0.3s ease;
@@ -275,7 +275,7 @@
 
 .config-group-title:hover {
     background: linear-gradient(135deg, 
-        color-mix(in srgb, var(--w-theme-editor-accent, var(--weline-theme-primary)) 5%, transparent) 0%, 
+        color-mix(in srgb, var(--w-theme-editor-accent, var(--weline-theme-primary)) 5%, transparent) 0%,
         var(--w-theme-editor-bg-card, var(--weline-theme-surface)) 100%);
     padding-left: 1.5rem;
 }
@@ -367,8 +367,8 @@
     width: 4px;
     height: calc(100% - 0.5rem);
     background: linear-gradient(180deg, 
-        var(--w-theme-editor-accent, var(--weline-theme-primary)) 0%, 
-        var(--w-theme-editor-accent-hover, var(--weline-theme-primary-hover)) 50%, 
+        var(--w-theme-editor-accent, var(--weline-theme-primary)) 0%,
+        var(--w-theme-editor-accent-hover, var(--weline-theme-primary-hover)) 50%,
         var(--weline-theme-info) 100%);
     border-radius: 3px;
     opacity: 0.6;
@@ -600,7 +600,7 @@
 .config-empty-state .w-icon {
     font-size: 4rem;
     background: linear-gradient(135deg, 
-        color-mix(in srgb, var(--w-theme-editor-accent, var(--weline-theme-primary)) 20%, transparent) 0%, 
+        color-mix(in srgb, var(--w-theme-editor-accent, var(--weline-theme-primary)) 20%, transparent) 0%,
         color-mix(in srgb, var(--w-theme-editor-accent-hover, var(--weline-theme-primary-hover)) 20%, transparent) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -692,7 +692,7 @@
     border-top: 1px solid var(--w-theme-editor-border, var(--weline-theme-border));
     padding: 1.25rem;
     background: linear-gradient(135deg, 
-        var(--w-theme-editor-bg-hover, var(--weline-theme-surface-hover)) 0%, 
+        var(--w-theme-editor-bg-hover, var(--weline-theme-surface-hover)) 0%,
         var(--w-theme-editor-bg-card, var(--weline-theme-surface)) 100%);
     animation: slideDown 0.3s ease;
 }
@@ -1036,7 +1036,7 @@
 div.i18n-edit-panel:not(dialog):not(.w-param-i18n-dialog) {
     margin-top: 0.75rem;
     background: linear-gradient(135deg, 
-        color-mix(in srgb, var(--w-theme-editor-accent, var(--weline-theme-primary)) 3%, transparent) 0%, 
+        color-mix(in srgb, var(--w-theme-editor-accent, var(--weline-theme-primary)) 3%, transparent) 0%,
         color-mix(in srgb, var(--w-theme-editor-accent-hover, var(--weline-theme-primary-hover)) 3%, transparent) 100%);
     border: 1px solid color-mix(in srgb, var(--w-theme-editor-accent, var(--weline-theme-primary)) 15%, transparent);
     border-radius: 10px;
@@ -1050,7 +1050,7 @@ div.i18n-edit-panel:not(dialog) .i18n-panel-header {
     justify-content: space-between;
     padding: 0.75rem 1rem;
     background: linear-gradient(135deg, 
-        color-mix(in srgb, var(--w-theme-editor-accent, var(--weline-theme-primary)) 8%, transparent) 0%, 
+        color-mix(in srgb, var(--w-theme-editor-accent, var(--weline-theme-primary)) 8%, transparent) 0%,
         color-mix(in srgb, var(--w-theme-editor-accent-hover, var(--weline-theme-primary-hover)) 8%, transparent) 100%);
     border-bottom: 1px solid color-mix(in srgb, var(--w-theme-editor-accent, var(--weline-theme-primary)) 10%, transparent);
 }
