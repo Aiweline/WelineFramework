@@ -4,9 +4,7 @@
  */
 declare(strict_types=1);
 
-require_once rtrim((string)BP, '/\\') . '/app/design/Amayum/official/frontend/includes/AmayumView.php';
-
-use AmayumDesign\Official\AmayumView as A;
+use Amayum\Website\Helper\AmayumView as A;
 
 $guides = is_array($guides ?? null) ? $guides : [];
 $readingOrder = is_array($reading_order ?? null) ? array_values(array_filter($reading_order, 'is_string')) : [];

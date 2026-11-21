@@ -51,6 +51,27 @@ final class SiteProfileService
         return $code !== '' ? \strtolower($code) : 'amayum';
     }
 
+    /**
+     * 「当前请求是否落在 Amayum 站」唯一判据；本模块所有站点门禁都走这里。
+     *
+     * 直接问 WebsiteData，不能用 currentWebsiteCode()：它取不到 code 时回退
+     * 'amayum'，「无上下文」和「真是 Amayum」无法区分，门禁形同虚设。拿不到
+     * code（CLI / 无站点上下文）一律视为不适用，返回 false。
+     *
+     * SeoDecodeObserver 另有请求级探测（website_id / Host / ~site URI 多信号），
+     * 因为 seo_decode 阶段 WebsiteData 未必就绪——那是检测层，不复用本判据。
+     */
+    public static function isAmayumSite(): bool
+    {
+        try {
+            $code = \strtolower(\trim((string)(WebsiteData::getCode() ?? '')));
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $code === 'amayum';
+    }
+
     public function scope(string $websiteCode = ''): string
     {
         $code = \strtolower(\trim($websiteCode !== '' ? $websiteCode : $this->currentWebsiteCode()));

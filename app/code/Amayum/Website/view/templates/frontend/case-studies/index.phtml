@@ -7,9 +7,7 @@
  */
 declare(strict_types=1);
 
-require_once rtrim((string)BP, '/\\') . '/app/design/Amayum/official/frontend/includes/AmayumView.php';
-
-use AmayumDesign\Official\AmayumView as A;
+use Amayum\Website\Helper\AmayumView as A;
 
 $examples = is_array($examples ?? null) ? array_values(array_filter($examples, 'is_array')) : [];
 $notProven = is_array($examples_not_proven ?? null) ? array_values(array_filter($examples_not_proven, 'is_string')) : [];

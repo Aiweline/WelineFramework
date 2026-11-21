@@ -7,9 +7,7 @@
  */
 declare(strict_types=1);
 
-require_once rtrim((string)BP, '/\\') . '/app/design/Amayum/official/frontend/includes/AmayumView.php';
-
-use AmayumDesign\Official\AmayumView as A;
+use Amayum\Website\Helper\AmayumView as A;
 
 $site = is_array($site ?? null) ? $site : A::profile();
 $siteUrl = (string)($site['site_url'] ?? 'https://amayum.com');

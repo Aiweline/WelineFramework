@@ -6,9 +6,7 @@
  */
 declare(strict_types=1);
 
-require_once rtrim((string)BP, '/\\') . '/app/design/Amayum/official/frontend/includes/AmayumView.php';
-
-use AmayumDesign\Official\AmayumView as A;
+use Amayum\Website\Helper\AmayumView as A;
 
 $guide = is_array($guide ?? null) ? $guide : [];
 $slug = (string)($guide['slug'] ?? '');
