@@ -346,7 +346,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         width: min(100%, var(--weline-layout-content-max-width));
         margin: 0 auto;
         padding: 40px var(--weline-layout-content-padding-inline) 64px;
-        color: var(--checkout-text);
+        color: var(--checkout-text, var(--color-text-primary));
     }
     .weline-checkout__header {
         display: flex;
@@ -369,7 +369,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     }
     .weline-checkout__eyebrow {
         margin: 0 0 6px;
-        color: var(--checkout-link);
+        color: var(--checkout-link, var(--color-link));
         font-weight: 700;
         font-size: 13px;
     }
@@ -380,38 +380,38 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         margin: 0;
     }
     .weline-checkout h1 {
-        color: var(--checkout-heading);
+        color: var(--checkout-heading, var(--weline-checkout-heading-color, var(--color-text-primary, #0f1111)));
         font-size: 28px;
         line-height: 1.25;
         font-weight: 700;
     }
     .weline-checkout__header p:not(.weline-checkout__eyebrow) {
         margin-top: 8px;
-        color: var(--checkout-text-secondary);
+        color: var(--checkout-text-secondary, var(--color-text-secondary));
     }
     .weline-checkout__back {
         display: inline-flex;
         align-items: center;
         min-height: 40px;
         padding: 0 14px;
-        border: 1px solid var(--checkout-border);
+        border: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
         border-radius: 8px;
         text-decoration: none;
-        color: var(--checkout-link);
+        color: var(--checkout-link, var(--color-link));
         font-weight: 700;
         white-space: nowrap;
     }
     .weline-checkout__back:hover {
-        color: var(--checkout-link-hover);
+        color: var(--checkout-link-hover, var(--color-link-hover));
         text-decoration: underline;
     }
     .weline-checkout__notice {
         margin-bottom: 16px;
         padding: 12px 14px;
-        border: 1px solid var(--checkout-border);
+        border: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
         border-radius: 8px;
-        background: var(--checkout-surface-muted);
-        color: var(--checkout-text-secondary);
+        background: var(--checkout-surface-muted, var(--color-bg-secondary, #eaeded));
+        color: var(--checkout-text-secondary, var(--color-text-secondary));
     }
     .weline-checkout__notice:empty {
         display: none !important;
@@ -420,21 +420,21 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         border: 0;
     }
     .weline-checkout__notice.is-error {
-        border-color: var(--checkout-error-border);
-        background: var(--checkout-error-bg);
-        color: var(--checkout-error-text);
+        border-color: var(--checkout-error-border, #f5c2b5);
+        background: var(--checkout-error-bg, #fff5f3);
+        color: var(--checkout-error-text, #b12704);
     }
     .weline-checkout__notice.is-success {
-        border-color: var(--checkout-success-border);
-        background: var(--checkout-success-bg);
-        color: var(--checkout-success-text);
+        border-color: var(--checkout-success-border, #c7e8c7);
+        background: var(--checkout-success-bg, #f0faf0);
+        color: var(--checkout-success-text, #007600);
     }
     .weline-checkout__empty-state,
     .weline-checkout__payment-recovery {
         padding: clamp(28px, 6vw, 56px);
-        border: 1px solid var(--checkout-border);
+        border: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
         border-radius: 8px;
-        background: var(--checkout-surface);
+        background: var(--checkout-surface, var(--color-bg-primary, #fff));
         box-shadow: none;
         text-align: center;
     }
@@ -480,17 +480,17 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     .weline-checkout__continue-chrome {
         margin: 0 0 16px;
         padding: 14px 16px;
-        border: 1px solid var(--checkout-border);
+        border: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
         border-radius: 8px;
-        background: var(--checkout-surface-muted);
-        color: var(--checkout-text);
+        background: var(--checkout-surface-muted, var(--color-bg-secondary, #eaeded));
+        color: var(--checkout-text, var(--color-text-primary));
         display: grid;
         gap: 4px;
     }
     .weline-checkout[data-address-incomplete="1"] .weline-checkout__continue-chrome {
-        border-color: var(--checkout-error-border);
-        background: var(--checkout-error-bg);
-        color: var(--checkout-error-text);
+        border-color: var(--checkout-error-border, #f5c2b5);
+        background: var(--checkout-error-bg, #fff5f3);
+        color: var(--checkout-error-text, #b12704);
     }
     .weline-checkout__continue-chrome strong { font-size: 1.05rem; }
     .weline-checkout__continue-chrome-ref {
@@ -511,7 +511,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         border: 1px solid var(--checkout-border, #ddd);
         border-radius: 8px;
         background: var(--checkout-surface, #fff);
-        color: var(--checkout-link);
+        color: var(--checkout-link, var(--color-link));
         font: inherit;
         font-weight: 700;
         cursor: pointer;
@@ -554,28 +554,28 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     }
     .weline-checkout__empty-state h2 {
         margin-top: 4px;
-        color: var(--checkout-text);
+        color: var(--checkout-text, var(--color-text-primary));
         font-size: clamp(24px, 4vw, 34px);
     }
     .weline-checkout__payment-recovery h2 {
         margin-top: 4px;
-        color: var(--checkout-text);
+        color: var(--checkout-text, var(--color-text-primary));
         font-size: clamp(24px, 4vw, 34px);
     }
     .weline-checkout__empty-state > p:not(.weline-checkout__eyebrow) {
         margin-top: 12px;
-        color: var(--checkout-text-secondary);
+        color: var(--checkout-text-secondary, var(--color-text-secondary));
     }
     .weline-checkout__payment-recovery > p:not(.weline-checkout__eyebrow) {
         margin-top: 12px;
-        color: var(--checkout-text-secondary);
+        color: var(--checkout-text-secondary, var(--color-text-secondary));
     }
     .weline-checkout__payment-reference {
         display: flex;
         justify-content: center;
         gap: 8px;
         overflow-wrap: anywhere;
-        color: var(--checkout-text);
+        color: var(--checkout-text, var(--color-text-primary));
     }
     .weline-checkout__empty-actions {
         display: flex;
@@ -590,7 +590,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         justify-content: center;
         min-height: 44px;
         padding: 0 18px;
-        border: 1px solid var(--checkout-cta-border);
+        border: 1px solid var(--checkout-cta-border, var(--color-primary-border));
         border-radius: 8px;
         text-decoration: none;
         font-weight: 700;
@@ -601,7 +601,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         justify-content: center;
         min-height: 44px;
         padding: 0 18px;
-        border: 1px solid var(--checkout-cta-border);
+        border: 1px solid var(--checkout-cta-border, var(--color-primary-border));
         border-radius: 8px;
         font: inherit;
         font-weight: 700;
@@ -612,20 +612,20 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         cursor: wait;
     }
     .weline-checkout__empty-primary {
-        background: var(--checkout-cta-bg);
-        color: var(--checkout-cta-text);
-        border-color: var(--checkout-cta-border);
+        background: var(--checkout-cta-bg, var(--color-primary));
+        color: var(--checkout-cta-text, var(--color-on-primary));
+        border-color: var(--checkout-cta-border, var(--color-primary-border));
     }
     .weline-checkout__empty-primary:hover {
-        background: var(--checkout-cta-bg-hover);
+        background: var(--checkout-cta-bg-hover, var(--color-primary-hover));
     }
     .weline-checkout__empty-secondary {
-        background: var(--checkout-surface);
-        color: var(--checkout-link);
-        border-color: var(--checkout-border);
+        background: var(--checkout-surface, var(--color-bg-primary, #fff));
+        color: var(--checkout-link, var(--color-link));
+        border-color: var(--checkout-border, var(--color-border-default, #ddd));
     }
     .weline-checkout__empty-secondary:hover {
-        color: var(--checkout-link-hover);
+        color: var(--checkout-link-hover, var(--color-link-hover));
     }
     .weline-checkout__grid {
         display: grid;
@@ -639,9 +639,9 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     }
     .weline-checkout__panel,
     .weline-checkout__summary {
-        border: 1px solid var(--checkout-border);
+        border: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
         border-radius: 8px;
-        background: var(--checkout-surface);
+        background: var(--checkout-surface, var(--color-bg-primary, #fff));
         box-shadow: none;
     }
     .weline-checkout__panel {
@@ -649,7 +649,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     }
     .weline-checkout__panel h2,
     .weline-checkout__summary h2 {
-        color: var(--checkout-heading);
+        color: var(--checkout-heading, var(--weline-checkout-heading-color, var(--color-text-primary, #0f1111)));
         font-size: 18px;
         line-height: 1.25;
         font-weight: 700;
@@ -666,7 +666,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         gap: 7px;
     }
     .weline-checkout__fields span {
-        color: var(--checkout-text);
+        color: var(--checkout-text, var(--color-text-primary));
         font-size: 13px;
         font-weight: 700;
     }
@@ -674,11 +674,11 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         min-height: 42px;
         width: 100%;
         box-sizing: border-box;
-        border: 1px solid var(--checkout-border);
+        border: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
         border-radius: 8px;
         padding: 0 12px;
-        background: var(--checkout-surface);
-        color: var(--checkout-text);
+        background: var(--checkout-surface, var(--color-bg-primary, #fff));
+        color: var(--checkout-text, var(--color-text-primary));
         font: inherit;
     }
     .weline-checkout__fields input:focus {
@@ -735,9 +735,9 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         align-items: center;
         min-height: 54px;
         padding: 12px;
-        border: 1px solid var(--checkout-border);
+        border: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
         border-radius: 8px;
-        color: var(--checkout-text);
+        color: var(--checkout-text, var(--color-text-primary));
     }
     .weline-checkout__option--payment {
         grid-template-columns: 20px 40px minmax(0, 1fr);
@@ -813,7 +813,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         display: block;
         overflow: hidden;
         margin: 0;
-        color: var(--checkout-text-secondary);
+        color: var(--checkout-text-secondary, var(--color-text-secondary));
         font-size: 13px;
         line-height: 1.45;
         max-height: calc(1.45em * 2);
@@ -841,12 +841,12 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     }
     .weline-checkout__option strong {
         display: block;
-        color: var(--checkout-text);
+        color: var(--checkout-text, var(--color-text-primary));
     }
     .weline-checkout__option small {
         display: block;
         margin-top: 2px;
-        color: var(--checkout-text-secondary);
+        color: var(--checkout-text-secondary, var(--color-text-secondary));
     }
     .weline-checkout__summary {
         position: sticky;
@@ -871,8 +871,8 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         gap: 12px;
         align-items: start;
         padding-bottom: 10px;
-        border-bottom: 1px solid var(--checkout-border);
-        color: var(--checkout-text);
+        border-bottom: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
+        color: var(--checkout-text, var(--color-text-primary));
     }
     .weline-checkout__item-thumb {
         width: 64px;
@@ -880,7 +880,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         object-fit: cover;
         border-radius: 8px;
         background: #f3f3f3;
-        border: 1px solid var(--checkout-border);
+        border: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
     }
     .weline-checkout__item-thumb--empty {
         display: block;
@@ -945,13 +945,13 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         display: block;
         clear: both;
         margin-top: 4px;
-        color: var(--checkout-text-secondary);
+        color: var(--checkout-text-secondary, var(--color-text-secondary));
     }
     .weline-checkout__item-sku {
         display: block;
         clear: both;
         margin-top: 4px;
-        color: var(--checkout-text-secondary);
+        color: var(--checkout-text-secondary, var(--color-text-secondary));
         overflow-wrap: anywhere;
         word-break: break-word;
         line-height: 1.35;
@@ -969,7 +969,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     }
     .weline-checkout__item-options {
         clear: both;
-        color: var(--checkout-text-secondary);
+        color: var(--checkout-text-secondary, var(--color-text-secondary));
     }
     .weline-checkout__item-options {
         display: flex;
@@ -991,10 +991,10 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         max-width: 100%;
         min-width: 0;
         padding: 4px 10px;
-        border: 1px solid var(--checkout-border);
+        border: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
         border-radius: 8px;
         background: #f7f8fa;
-        color: var(--checkout-text-secondary);
+        color: var(--checkout-text-secondary, var(--color-text-secondary));
         font-size: 12px;
         writing-mode: horizontal-tb;
     }
@@ -1013,7 +1013,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         flex: 0 0 auto;
         width: 16px;
         height: 16px;
-        border: 1px solid var(--checkout-border);
+        border: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
         border-radius: 3px;
         object-fit: cover;
         background: #fff;
@@ -1035,9 +1035,9 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         display: grid;
         gap: 12px;
         padding: 16px;
-        border: 1px solid var(--checkout-border);
+        border: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
         border-radius: 12px;
-        background: var(--checkout-surface);
+        background: var(--checkout-surface, var(--color-bg-primary, #fff));
         box-shadow: 0 16px 40px rgba(15, 17, 17, 0.18);
     }
     .weline-checkout__swatch-preview-img {
@@ -1055,10 +1055,10 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         justify-content: center;
         min-height: 36px;
         width: 100%;
-        border: 1px solid var(--checkout-border);
+        border: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
         border-radius: 8px;
         background: #fff;
-        color: var(--checkout-text);
+        color: var(--checkout-text, var(--color-text-primary));
         cursor: pointer;
         font-size: 14px;
     }
@@ -1069,7 +1069,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         min-width: 0;
     }
     .weline-checkout__item-option-label {
-        color: var(--checkout-text-secondary);
+        color: var(--checkout-text-secondary, var(--color-text-secondary));
         flex: 0 0 auto;
     }
     .weline-checkout__item-option-sep {
@@ -1077,7 +1077,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         flex: 0 0 auto;
     }
     .weline-checkout__item-option-value {
-        color: var(--checkout-text);
+        color: var(--checkout-text, var(--color-text-primary));
         font-weight: 600;
         min-width: 0;
         writing-mode: horizontal-tb;
@@ -1089,7 +1089,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     }
     .weline-checkout__totals {
         margin-top: 4px;
-        color: var(--checkout-text);
+        color: var(--checkout-text, var(--color-text-primary));
     }
     .weline-checkout__coupon-slot,
     .weline-checkout__note-slot,
@@ -1102,13 +1102,13 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         justify-content: space-between;
         gap: 12px;
         padding: 10px 0;
-        border-bottom: 1px solid var(--checkout-border);
+        border-bottom: 1px solid var(--checkout-border, var(--color-border-default, #ddd));
     }
     .weline-checkout__totals span {
-        color: var(--checkout-text-secondary);
+        color: var(--checkout-text-secondary, var(--color-text-secondary));
     }
     .weline-checkout__totals strong {
-        color: var(--checkout-text);
+        color: var(--checkout-text, var(--color-text-primary));
     }
     .weline-checkout__grand {
         border-bottom: 0;
@@ -1117,22 +1117,22 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     }
     .weline-checkout__grand span,
     .weline-checkout__grand strong {
-        color: var(--checkout-text);
+        color: var(--checkout-text, var(--color-text-primary));
     }
     .weline-checkout__submit {
         width: 100%;
         min-height: 46px;
         margin-top: 18px;
-        border: 1px solid var(--checkout-cta-border);
+        border: 1px solid var(--checkout-cta-border, var(--color-primary-border));
         border-radius: 8px;
-        background: var(--checkout-cta-bg);
-        color: var(--checkout-cta-text);
+        background: var(--checkout-cta-bg, var(--color-primary));
+        color: var(--checkout-cta-text, var(--color-on-primary));
         font: inherit;
         font-weight: 700;
         cursor: pointer;
     }
     .weline-checkout__submit:hover:not(:disabled) {
-        background: var(--checkout-cta-bg-hover);
+        background: var(--checkout-cta-bg-hover, var(--color-primary-hover));
     }
     .weline-checkout__submit:disabled {
         opacity: .55;

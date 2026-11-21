@@ -169,9 +169,9 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
             $label = basename($path);
             // 前台不加载 theme.css 时 --weline-layout-spacing-* 未定义；无 fallback 大屏 gap/padding 会为 0。
             $this->assertStringContainsString(
-                'gap: var(--weline-layout-spacing-xl, var(--spacing-xl, 2rem));',
+                'gap: var(--weline-layout-spacing-xl, var(--spacing-xl, var(--token-size-2rem)));',
                 $content,
-                $label . ' 大屏 gap 须带 spacing-xl/2rem fallback'
+                $label . ' 大屏 gap 须带 spacing-xl/token-size-2rem fallback'
             );
             $this->assertStringContainsString(
                 'padding-inline: var(--weline-layout-content-padding-inline);',

@@ -55,4 +55,21 @@ final class QuickLoginInlineVariantContractTest extends TestCase
             '裸 min-height:44px 应只剩页角块一处（内联面已改为变量驱动）'
         );
     }
+
+    public function testSyncDedupsDuplicateInlineCards(): void
+    {
+        // 同一 async region 可被投递进两个浮层槽（slot-multiple），每个宿主各自
+        // mount 一张内联卡 → 视觉双卡。syncFloatingVisibility 必须收敛到一张：
+        // 只保留第一张可见的非抽屉卡，其余宿主回 empty 并清空。
+        $js = (string)\file_get_contents($this->jsPath());
+        self::assertStringContainsString('data-w-social-quick-inline-ui', $js);
+        self::assertStringContainsString('inlineCards', $js);
+        self::assertStringContainsString('keepCard', $js);
+        // 抽屉（B2B 显式登录面板）里的卡不参与去重。
+        self::assertStringContainsString(
+            "[data-b2b-apply-drawer], [data-w-component=\"drawer\"]",
+            $js
+        );
+        self::assertStringContainsString("'empty'", $js);
+    }
 }

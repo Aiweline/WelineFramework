@@ -3012,7 +3012,7 @@
   }
 
   /**
-   * 脚本尚未加载完时用户已点了 CTA：widget 内联 onclick 会把元素压进
+   * 脚本尚未加载完时用户已点了 CTA：eager 模块 helppay-cta-capture.js 会把元素压进
    * window.__helppayPendingOpen（见 checkout-summary-help-pay / product-help-pay 模板）。
    * 绑定完委托后立刻补放这次点击，避免「慢网首点无反应」（2026-10-30 实测：
    * e2e 在模块就绪前点击 → 弹层永不出现）。

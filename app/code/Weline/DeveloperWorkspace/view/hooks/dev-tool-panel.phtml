@@ -235,8 +235,8 @@ $apiDocsUrl = '/dev/tool/docs/api';
     }
 
     .dev-tool-container {
-        width: var(--dev-panel-width);
-        height: var(--dev-panel-height);
+        width: var(--dev-panel-width, min(1440px, calc(100vw - 20px)));
+        height: var(--dev-panel-height, min(930px, calc(100vh - 20px)));
         max-width: calc(100vw - 24px);
         max-height: calc(100vh - 24px);
         background: white;
@@ -1255,8 +1255,8 @@ $apiDocsUrl = '/dev/tool/docs/api';
     }
 
     .dev-tool-container {
-        background: var(--dev-panel-shell);
-        border: 1px solid var(--dev-panel-line);
+        background: var(--dev-panel-shell, #f5f7fb);
+        border: 1px solid var(--dev-panel-line, #d8e1ec);
         border-radius: 8px;
         box-shadow: 0 24px 90px rgba(15, 23, 42, 0.24);
     }
@@ -1428,7 +1428,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
         padding: 8px 10px 0;
         overflow-x: auto;
         background: #e9eff6;
-        border-bottom: 1px solid var(--dev-panel-line);
+        border-bottom: 1px solid var(--dev-panel-line, #d8e1ec);
         scrollbar-width: thin;
     }
 
@@ -1449,13 +1449,13 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     .dev-tool-tab:hover {
         background: rgba(255, 255, 255, 0.58);
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
     }
 
     .dev-tool-tab.active {
-        background: var(--dev-panel-surface);
-        border-color: var(--dev-panel-line);
-        color: var(--dev-panel-accent);
+        background: var(--dev-panel-surface, #ffffff);
+        border-color: var(--dev-panel-line, #d8e1ec);
+        color: var(--dev-panel-accent, #2563eb);
         box-shadow: 0 -1px 0 #ffffff inset;
     }
 
@@ -1464,15 +1464,15 @@ $apiDocsUrl = '/dev/tool/docs/api';
         right: 12px;
         bottom: 0;
         height: 2px;
-        background: var(--dev-panel-accent);
+        background: var(--dev-panel-accent, #2563eb);
         border-radius: 999px 999px 0 0;
     }
 
     .dev-tool-search-area {
         flex: 0 0 auto;
         padding: 10px 14px;
-        border-bottom: 1px solid var(--dev-panel-line);
-        background: var(--dev-panel-surface);
+        border-bottom: 1px solid var(--dev-panel-line, #d8e1ec);
+        background: var(--dev-panel-surface, #ffffff);
     }
 
     .dev-tool-search-mode {
@@ -1480,7 +1480,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
         gap: 3px;
         padding: 3px;
         margin-bottom: 10px;
-        border: 1px solid var(--dev-panel-line);
+        border: 1px solid var(--dev-panel-line, #d8e1ec);
         border-radius: 7px;
         background: #f8fafc;
     }
@@ -1491,7 +1491,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
         gap: 4px;
         padding: 3px;
         margin-bottom: 10px;
-        border: 1px solid var(--dev-panel-line);
+        border: 1px solid var(--dev-panel-line, #d8e1ec);
         border-radius: 8px;
         background: #eef3f8;
     }
@@ -1515,12 +1515,12 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     .dev-tool-framework-tab:hover {
         background: #f8fbff;
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
     }
 
     .dev-tool-framework-tab.active {
         background: #ffffff;
-        color: var(--dev-panel-accent);
+        color: var(--dev-panel-accent, #2563eb);
         border-color: #cddbf0;
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
     }
@@ -1552,12 +1552,12 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     .search-mode-btn:hover {
         background: #eef4fb;
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
     }
 
     .search-mode-btn.active {
         background: #ffffff;
-        color: var(--dev-panel-accent);
+        color: var(--dev-panel-accent, #2563eb);
         border-color: #dbe6f5;
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
     }
@@ -1567,20 +1567,20 @@ $apiDocsUrl = '/dev/tool/docs/api';
         min-height: 36px;
         border-color: #cbd5e1;
         border-radius: 6px;
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         background: #ffffff;
     }
 
     .dev-tool-search-area input[type="text"]:focus,
     .dev-tool-module-select:focus {
-        border-color: var(--dev-panel-accent);
+        border-color: var(--dev-panel-accent, #2563eb);
         box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
         outline: none;
     }
 
     .dev-tool-content {
-        background: var(--dev-panel-surface);
-        color: var(--dev-panel-ink);
+        background: var(--dev-panel-surface, #ffffff);
+        color: var(--dev-panel-ink, #162033);
         scrollbar-color: #b6c3d3 #eef3f8;
     }
 
@@ -1596,7 +1596,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
     .module-group,
     .performance-section,
     .api-request-item {
-        border-color: var(--dev-panel-line);
+        border-color: var(--dev-panel-line, #d8e1ec);
         border-radius: 8px;
         background: #ffffff;
         box-shadow: none;
@@ -1610,22 +1610,22 @@ $apiDocsUrl = '/dev/tool/docs/api';
     }
 
     .doc-list-item.active {
-        border-color: var(--dev-panel-accent);
-        background: var(--dev-panel-accent-soft);
+        border-color: var(--dev-panel-accent, #2563eb);
+        background: var(--dev-panel-accent-soft, #eaf2ff);
     }
 
     .doc-title,
     .doc-content-title,
     .module-name,
     .performance-section-title {
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
     }
 
     .doc-meta,
     .route-info,
     .performance-label,
     .api-request-time {
-        color: var(--dev-panel-muted);
+        color: var(--dev-panel-muted, #64748b);
     }
 
     .doc-module-tag,
@@ -1637,7 +1637,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
     }
 
     .doc-back-btn {
-        background: var(--dev-panel-accent);
+        background: var(--dev-panel-accent, #2563eb);
         border-radius: 6px;
     }
 
@@ -1647,7 +1647,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     .module-header {
         background: #f8fafc;
-        border-bottom-color: var(--dev-panel-line);
+        border-bottom-color: var(--dev-panel-line, #d8e1ec);
     }
 
     .module-header:hover,
@@ -1660,7 +1660,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
     .api-request-url,
     .doc-content-body a,
     #dev-tool-panel .dev-tool-trace-db-table .dev-tool-db-expand-btn {
-        color: var(--dev-panel-accent);
+        color: var(--dev-panel-accent, #2563eb);
     }
 
     .performance-stats {
@@ -1670,17 +1670,17 @@ $apiDocsUrl = '/dev/tool/docs/api';
     .performance-section {
         margin-bottom: 14px;
         padding: 14px;
-        border-left: 1px solid var(--dev-panel-line);
+        border-left: 1px solid var(--dev-panel-line, #d8e1ec);
     }
 
     .performance-value {
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
 
     .performance-value.fast,
     .performance-badge.fast {
-        color: var(--dev-panel-success) !important;
+        color: var(--dev-panel-success, #12805c) !important;
     }
 
     .performance-value.medium,
@@ -1690,7 +1690,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     .performance-value.slow,
     .performance-badge.slow {
-        color: var(--dev-panel-danger) !important;
+        color: var(--dev-panel-danger, #b42318) !important;
     }
 
     .performance-badge.fast,
@@ -1707,7 +1707,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-performance-hero,
     #dev-tool-panel .dev-tool-performance-panel {
-        border: 1px solid var(--dev-panel-line);
+        border: 1px solid var(--dev-panel-line, #d8e1ec);
         border-radius: 10px;
         background: #ffffff;
     }
@@ -1725,14 +1725,14 @@ $apiDocsUrl = '/dev/tool/docs/api';
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        color: var(--dev-panel-accent);
+        color: var(--dev-panel-accent, #2563eb);
         font-size: 12px;
         font-weight: 750;
     }
 
     #dev-tool-panel .dev-tool-performance-title {
         margin-top: 6px;
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         font-size: 20px;
         font-weight: 800;
         line-height: 1.2;
@@ -1740,7 +1740,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-performance-subtitle {
         margin-top: 6px;
-        color: var(--dev-panel-muted);
+        color: var(--dev-panel-muted, #64748b);
         font-size: 12px;
         line-height: 1.45;
     }
@@ -1804,7 +1804,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
     }
 
     #dev-tool-panel .dev-tool-performance-total-value {
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 28px;
         font-weight: 850;
@@ -1835,7 +1835,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-performance-status.fast {
         background: #dcfce7;
-        color: var(--dev-panel-success);
+        color: var(--dev-panel-success, #12805c);
     }
 
     #dev-tool-panel .dev-tool-performance-status.medium {
@@ -1845,7 +1845,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-performance-status.slow {
         background: #fee2e2;
-        color: var(--dev-panel-danger);
+        color: var(--dev-panel-danger, #b42318);
     }
 
     #dev-tool-panel .dev-tool-performance-summary {
@@ -1857,7 +1857,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
     #dev-tool-panel .dev-tool-performance-card {
         min-width: 0;
         padding: 12px 13px;
-        border: 1px solid var(--dev-panel-line);
+        border: 1px solid var(--dev-panel-line, #d8e1ec);
         border-radius: 8px;
         background: #ffffff;
     }
@@ -1878,7 +1878,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
     }
 
     #dev-tool-panel .dev-tool-performance-card-label {
-        color: var(--dev-panel-muted);
+        color: var(--dev-panel-muted, #64748b);
         font-size: 11px;
         font-weight: 700;
         line-height: 1.25;
@@ -1886,7 +1886,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-performance-weline-card-value {
         margin-top: 7px;
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 18px;
         font-weight: 850;
@@ -1905,7 +1905,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
         gap: 12px;
         min-height: 44px;
         padding: 11px 14px;
-        border-bottom: 1px solid var(--dev-panel-line);
+        border-bottom: 1px solid var(--dev-panel-line, #d8e1ec);
         background: #f8fafc;
     }
 
@@ -1914,17 +1914,17 @@ $apiDocsUrl = '/dev/tool/docs/api';
         align-items: center;
         gap: 7px;
         min-width: 0;
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         font-size: 13px;
         font-weight: 800;
     }
 
     #dev-tool-panel .dev-tool-performance-panel-title i {
-        color: var(--dev-panel-accent);
+        color: var(--dev-panel-accent, #2563eb);
     }
 
     #dev-tool-panel .dev-tool-performance-panel-note {
-        color: var(--dev-panel-muted);
+        color: var(--dev-panel-muted, #64748b);
         font-size: 11px;
         font-weight: 650;
         white-space: nowrap;
@@ -1954,7 +1954,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-performance-stage-name {
         min-width: 0;
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         font-size: 12px;
         font-weight: 750;
         overflow-wrap: break-word;
@@ -1962,7 +1962,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-performance-stage-desc {
         margin-top: 2px;
-        color: var(--dev-panel-muted);
+        color: var(--dev-panel-muted, #64748b);
         font-size: 10px;
         font-weight: 600;
         line-height: 1.3;
@@ -1984,7 +1984,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
     }
 
     #dev-tool-panel .dev-tool-performance-stage-row.fast .dev-tool-performance-stage-bar span {
-        background: var(--dev-panel-success);
+        background: var(--dev-panel-success, #12805c);
     }
 
     #dev-tool-panel .dev-tool-performance-stage-row.medium .dev-tool-performance-stage-bar span {
@@ -1992,11 +1992,11 @@ $apiDocsUrl = '/dev/tool/docs/api';
     }
 
     #dev-tool-panel .dev-tool-performance-stage-row.slow .dev-tool-performance-stage-bar span {
-        background: var(--dev-panel-danger);
+        background: var(--dev-panel-danger, #b42318);
     }
 
     #dev-tool-panel .dev-tool-performance-stage-value {
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 13px;
         font-weight: 850;
@@ -2019,7 +2019,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
     }
 
     #dev-tool-panel .dev-tool-performance-metric-label {
-        color: var(--dev-panel-muted);
+        color: var(--dev-panel-muted, #64748b);
         font-size: 11px;
         font-weight: 700;
         line-height: 1.25;
@@ -2027,7 +2027,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-performance-metric-value {
         margin-top: 6px;
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 15px;
         font-weight: 850;
@@ -2062,7 +2062,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
     }
 
     #dev-tool-panel .dev-tool-performance-row-title {
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         font-size: 12px;
         font-weight: 750;
         overflow: hidden;
@@ -2072,7 +2072,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-performance-row-meta {
         margin-top: 3px;
-        color: var(--dev-panel-muted);
+        color: var(--dev-panel-muted, #64748b);
         font-size: 10px;
         font-weight: 600;
         line-height: 1.3;
@@ -2086,9 +2086,9 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-performance-empty {
         padding: 18px;
-        border: 1px dashed var(--dev-panel-line);
+        border: 1px dashed var(--dev-panel-line, #d8e1ec);
         border-radius: 8px;
-        color: var(--dev-panel-muted);
+        color: var(--dev-panel-muted, #64748b);
         font-size: 13px;
         text-align: center;
         background: #fbfdff;
@@ -2150,24 +2150,24 @@ $apiDocsUrl = '/dev/tool/docs/api';
     }
 
     #dev-tool-panel .dev-tool-trace-db-wrap {
-        border-color: var(--dev-panel-line);
+        border-color: var(--dev-panel-line, #d8e1ec);
         background: #ffffff;
     }
 
     #dev-tool-panel .dev-tool-trace-db-table thead {
         background: #f1f5f9;
-        box-shadow: 0 1px 0 var(--dev-panel-line);
+        box-shadow: 0 1px 0 var(--dev-panel-line, #d8e1ec);
     }
 
     #dev-tool-panel .dev-tool-trace-db-table th,
     #dev-tool-panel .dev-tool-trace-db-table td {
-        color: var(--dev-panel-ink);
-        border-color: var(--dev-panel-line);
+        color: var(--dev-panel-ink, #162033);
+        border-color: var(--dev-panel-line, #d8e1ec);
     }
 
     #dev-tool-panel .dev-tool-trace-db-table td.col-parent,
     #dev-tool-panel .dev-tool-trace-db-table td.col-duration {
-        color: var(--dev-panel-muted);
+        color: var(--dev-panel-muted, #64748b);
     }
 
     #dev-tool-panel .dev-tool-trace-db-table tr.dev-tool-db-expand-row td {
@@ -2176,7 +2176,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-trace-db-table .dev-tool-db-sql-block,
     #dev-tool-panel .dev-tool-trace-db-table .dev-tool-db-explain-result {
-        border-color: var(--dev-panel-line);
+        border-color: var(--dev-panel-line, #d8e1ec);
         background: #ffffff;
     }
 
@@ -2192,7 +2192,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
         justify-content: space-between;
         gap: 12px;
         padding: 10px 12px;
-        border: 1px solid var(--dev-panel-line);
+        border: 1px solid var(--dev-panel-line, #d8e1ec);
         border-radius: 9px;
         background: #f8fafc;
     }
@@ -2201,7 +2201,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
         display: flex;
         align-items: center;
         gap: 8px;
-        color: var(--dev-panel-muted);
+        color: var(--dev-panel-muted, #64748b);
         font-size: 11px;
         font-weight: 650;
         white-space: nowrap;
@@ -2223,7 +2223,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
     #dev-tool-panel .dev-tool-trace-overview-card {
         min-width: 0;
         padding: 11px 12px;
-        border: 1px solid var(--dev-panel-line);
+        border: 1px solid var(--dev-panel-line, #d8e1ec);
         border-radius: 8px;
         background: #ffffff;
         box-shadow: 0 7px 18px rgba(15, 23, 42, 0.04);
@@ -2246,7 +2246,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-trace-overview-label {
         margin-bottom: 7px;
-        color: var(--dev-panel-muted);
+        color: var(--dev-panel-muted, #64748b);
         font-size: 11px;
         font-weight: 750;
         line-height: 1.2;
@@ -2254,7 +2254,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-trace-overview-value {
         min-width: 0;
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         font-size: 20px;
         font-weight: 800;
         line-height: 1.1;
@@ -2333,7 +2333,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
         align-items: center;
         gap: 3px;
         padding: 3px;
-        border: 1px solid var(--dev-panel-line);
+        border: 1px solid var(--dev-panel-line, #d8e1ec);
         border-radius: 8px;
         background: #eef3f8;
     }
@@ -2366,20 +2366,20 @@ $apiDocsUrl = '/dev/tool/docs/api';
     #dev-tool-panel .dev-tool-trace-view-tab:hover,
     #dev-tool-panel .dev-tool-trace-layout-btn:hover {
         background: #f8fbff;
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
     }
 
     #dev-tool-panel .dev-tool-trace-view-tab.active,
     #dev-tool-panel .dev-tool-trace-layout-btn.active {
         border-color: #cddbf0;
         background: #ffffff;
-        color: var(--dev-panel-accent);
+        color: var(--dev-panel-accent, #2563eb);
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
     }
 
     #dev-tool-panel .dev-tool-trace-panel {
         overflow: hidden;
-        border: 1px solid var(--dev-panel-line);
+        border: 1px solid var(--dev-panel-line, #d8e1ec);
         border-radius: 10px;
         background: #ffffff;
     }
@@ -2391,7 +2391,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
         gap: 12px;
         min-height: 46px;
         padding: 10px 12px;
-        border-bottom: 1px solid var(--dev-panel-line);
+        border-bottom: 1px solid var(--dev-panel-line, #d8e1ec);
         background: #f8fafc;
     }
 
@@ -2400,13 +2400,13 @@ $apiDocsUrl = '/dev/tool/docs/api';
         align-items: center;
         gap: 7px;
         min-width: 0;
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         font-size: 13px;
         font-weight: 750;
     }
 
     #dev-tool-panel .dev-tool-trace-panel-title i {
-        color: var(--dev-panel-accent);
+        color: var(--dev-panel-accent, #2563eb);
     }
 
     #dev-tool-panel .dev-tool-trace-panel-body {
@@ -2416,7 +2416,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
     #dev-tool-panel .dev-tool-trace-total {
         margin-top: 8px;
         padding-top: 8px;
-        border-top: 1px solid var(--dev-panel-line);
+        border-top: 1px solid var(--dev-panel-line, #d8e1ec);
     }
 
     #dev-tool-panel .dev-tool-trace-target {
@@ -2426,7 +2426,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
         gap: 8px;
         margin: 0 0 10px;
         padding: 8px 10px;
-        border: 1px solid var(--dev-panel-line);
+        border: 1px solid var(--dev-panel-line, #d8e1ec);
         border-radius: 8px;
         background: #f8fafc;
         font-size: 12px;
@@ -2477,7 +2477,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
     #dev-tool-panel .dev-tool-lifecycle-map,
     #dev-tool-panel .dev-tool-lifecycle-detail {
         min-width: 0;
-        border: 1px solid var(--dev-panel-line);
+        border: 1px solid var(--dev-panel-line, #d8e1ec);
         border-radius: 9px;
         background: #fbfdff;
     }
@@ -2594,7 +2594,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
     #dev-tool-panel .dev-tool-lifecycle-title {
         min-width: 0;
         overflow: hidden;
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         font-size: 12px;
         font-weight: 790;
         line-height: 1.35;
@@ -2652,7 +2652,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-lifecycle-detail h4 {
         margin: 0 0 8px;
-        color: var(--dev-panel-ink);
+        color: var(--dev-panel-ink, #162033);
         font-size: 14px;
         line-height: 1.35;
     }
@@ -2781,7 +2781,7 @@ $apiDocsUrl = '/dev/tool/docs/api';
 
     #dev-tool-panel .dev-tool-api-error-btn:hover {
         border-color: #9bb7da;
-        color: var(--dev-panel-accent);
+        color: var(--dev-panel-accent, #2563eb);
         background: #f8fbff;
     }
 

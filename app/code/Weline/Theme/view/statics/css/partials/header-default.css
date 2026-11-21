@@ -604,21 +604,21 @@ textarea::-webkit-scrollbar-thumb:hover,
     --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
     --_paper-text: var(--amz-drawer-text, #0f1111);
     --_paper-muted: var(--amz-drawer-muted, #565959);
-    --_inverse-text: var(--_paper-text);
-    --_inverse-muted: var(--_paper-muted);
-    --color-text: var(--_paper-text);
-    --color-text-primary: var(--_paper-text);
-    --color-text-secondary: var(--_paper-muted);
-    --color-text-muted: var(--_paper-muted);
-    --color-text-placeholder: var(--_paper-muted);
-    --weline-chrome-text-primary: var(--_paper-text);
-    --weline-chrome-text-secondary: var(--_paper-muted);
-    --weline-chrome-text-muted: var(--_paper-muted);
-    --weline-theme-text: var(--_paper-text);
-    --weline-theme-text-secondary: var(--_paper-muted);
-    --weline-theme-text-muted: var(--_paper-muted);
-    --w-surface-fg: var(--_paper-text);
-    color: var(--_paper-text);
+    --_inverse-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    --_inverse-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --color-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    --color-text-primary: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    --color-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --color-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --color-text-placeholder: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --weline-chrome-text-primary: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    --weline-chrome-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --weline-chrome-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --weline-theme-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    --weline-theme-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --weline-theme-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --w-surface-fg: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    color: var(--_paper-text, var(--amz-drawer-text, #0f1111));
 }
 
 /* 聚焦时整条搜索栏统一高亮，避免中段单独描边造成断裂感 */
@@ -786,7 +786,7 @@ textarea::-webkit-scrollbar-thumb:hover,
     --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
     --_paper-text: var(--amz-drawer-text, #0f1111);
     --_paper-muted: var(--amz-drawer-muted, #565959);
-    color: var(--_paper-text);
+    color: var(--_paper-text, var(--amz-drawer-text, #0f1111));
 }
 
 /* Category tree flies right; opaque paper surface (not transparent inline stack). */

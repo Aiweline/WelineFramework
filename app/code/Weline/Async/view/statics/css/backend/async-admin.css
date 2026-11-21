@@ -4,7 +4,7 @@
 .async-directory-tree {
     /* Firefox滚动条 */
     scrollbar-width: thin;
-    scrollbar-color: var(--weline-theme-border-strong)) var(--weline-theme-surface-muted);
+    scrollbar-color: var(--weline-theme-border-strong) var(--weline-theme-surface-muted);
 }
 
 /* Webkit浏览器滚动条 */
@@ -19,26 +19,26 @@
 }
 
 .async-directory-tree::-webkit-scrollbar-thumb {
-    background: var(--weline-theme-border-strong));
+    background: var(--weline-theme-border-strong);
     border-radius: 3px;
     transition: background 0.2s ease;
 }
 
 .async-directory-tree::-webkit-scrollbar-thumb:hover {
-    background: var(--weline-theme-border-strong));
+    background: var(--weline-theme-border-strong);
 }
 
 /* 暗色主题支持 */
 [data-theme="dark"] .async-directory-tree {
-    scrollbar-color: var(--weline-theme-border-strong)) var(--weline-theme-surface-muted);
+    scrollbar-color: var(--weline-theme-border-strong) var(--weline-theme-surface-muted);
 }
 
 [data-theme="dark"] .async-directory-tree::-webkit-scrollbar-thumb {
-    background: var(--weline-theme-border-strong));
+    background: var(--weline-theme-border-strong);
 }
 
 [data-theme="dark"] .async-directory-tree::-webkit-scrollbar-thumb:hover {
-    background: var(--weline-theme-border-strong));
+    background: var(--weline-theme-border-strong);
 }
 
 .async-dialog-sm { inline-size: 90%; max-inline-size: 600px; }

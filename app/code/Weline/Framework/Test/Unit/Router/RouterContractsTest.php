@@ -193,9 +193,11 @@ private function assert_FullPageCacheDiagTrack_testProductQueryIsPathOnlyButStor
 {
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/Router/FullPageCacheCoordinator.php');
     self::assertStringContainsString('isCacheKeyRetainedQueryParam', $source);
-    self::assertStringContainsString("'_wb_nc'", $source);
-    self::assertStringContainsString("'wls_tpl_perf'", $source);
     self::assertStringContainsString('FpcPierceStamp::isValidCurrentRequest', $source);
+    // storm keys 的保留判定已委托给 FpcAllowlistedQueryIdentity（协调器只传 pierce 结果）。
+    $identity = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/Http/Fpc/FpcAllowlistedQueryIdentity.php');
+    self::assertStringContainsString("'_wb_nc'", $identity);
+    self::assertStringContainsString("'wls_tpl_perf'", $identity);
     $coordinator = (new \ReflectionClass(FullPageCacheCoordinator::class))->newInstanceWithoutConstructor();
     $filter = new \ReflectionMethod(FullPageCacheCoordinator::class, 'filterQueryStringForCacheKey');
     $filter->setAccessible(true);

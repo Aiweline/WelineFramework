@@ -40,7 +40,7 @@
 } .account-address-form__field--wide { grid-column: 1 / -1;
 } .account-address-form__grid [data-account-address-cascade],
 .account-address-form__grid [data-w-address-shell],
-.account-address-form__grid .w-address-shell { grid-column: 1 / -1; display: grid; gap: var(--weline-theme-space-3);
+.account-address-form__grid .w-address-shell { grid-column: 1 / -1; display: grid; gap: var(--weline-space-3);
 } .account-address-form__grid .w-address__postal.w-field,
 .account-address-form__grid .w-address__detail.w-field,
 .account-address-form__grid .w-field.w-address__item {

@@ -486,6 +486,20 @@
             load: "eager",
             description: "博客分类侧栏两级树展开"
         },
+        blogCategoryDrawer: {
+            origin_paths: ["app/code/Weline/Blog/view/statics/js/blog-category-drawer.js?v=20261121-blog-category-drawer-1"],
+            paths: ["Weline_Blog::js/blog-category-drawer.js?v=20261121-blog-category-drawer-1"],
+            globalVar: null,
+            load: "eager",
+            description: "博客分类移动端抽屉（侧栏开关/遮罩/焦点陷阱）"
+        },
+        subscriptionBuyer: {
+            origin_paths: ["app/code/Weline/Subscription/view/statics/js/subscription-buyer.js?v=20261121-subscription-buyer-1"],
+            paths: ["Weline_Subscription::js/subscription-buyer.js?v=20261121-subscription-buyer-1"],
+            globalVar: null,
+            load: "eager",
+            description: "订阅买家屏：订阅/续订/取消表单 API 提交与消息提示"
+        },
         b2bSellingMode: {
             origin_paths: ["app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261014-extras-boot-preserve1"],
             paths: ["Weline_B2B::js/selling-mode.js?v=20261014-extras-boot-preserve1"],
@@ -555,6 +569,13 @@
             globalVar: "WelineAffiliateFloat",
             description: "右侧中悬浮分销面板（游客展示规则，登录后水合个人分销信息）"
         },
+        helpPayCtaCapture: {
+            origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-cta-capture.js?v=20261121-cta-capture1"],
+            paths: ["Weline_HelpPay::js/helppay-cta-capture.js?v=20261121-cta-capture1"],
+            globalVar: null,
+            load: "eager",
+            description: "帮我付 CTA 预捕获：主模块延迟加载前的首点入队 __helppayPendingOpen"
+        },
         helpPayShare: {
             origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20261006-cartamt1"],
             paths: ["Weline_HelpPay::js/helppay-share.js?v=20261006-cartamt1"],
@@ -601,6 +622,13 @@
             globalVar: null,
             load: "defer",
             description: "下载 App 悬浮部件的异步模块（占位注入后接管二维码与版本水合）"
+        },
+        appDownloadPage: {
+            origin_paths: ["app/code/Weline/App/view/statics/js/app-download-page.js?v=20261121-app-download-page-1"],
+            paths: ["Weline_App::js/app-download-page.js?v=20261121-app-download-page-1"],
+            globalVar: null,
+            load: "eager",
+            description: "App 下载落地页：PWA beforeinstallprompt 捕获与安装按钮"
         },
         pointsCheckout: {
             origin_paths: ["app/code/Weline/Points/view/statics/js/points-discount.js?v=20261027-1"],

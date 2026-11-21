@@ -1091,10 +1091,9 @@ class App
 
         $output = (string)$result;
         $rewriter = \Weline\Framework\Deploy\StaticAssetHtmlRewriter::class;
-        if (\str_contains($output, $rewriter::PAIR_PLACEHOLDER)
-            || \str_contains($output, $rewriter::DEPLOY_PLACEHOLDER)
-        ) {
-            // WLS 正常响应不走 response_ready，这里兜底解析主题更新固化物里的占位符。
+        if (\str_contains($output, '/static/')) {
+            // WLS 正常响应不走 response_ready，这里兜底：占位符解析 + 字面 /static/ 按代次改写。
+            // rewrite() 内部对无可改写内容自行早退。
             $output = $rewriter::rewrite($output);
         }
 

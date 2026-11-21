@@ -237,6 +237,7 @@
     cursor: not-allowed;
     opacity: 0.72;
 
+}
 /* from backend/partials/website-social-embed-section.phtml */
 
 .website-social-embed-frame-wrap {
@@ -252,7 +253,6 @@
     background: var(--weline-theme-surface, var(--backend-theme-surface, var(--weline-theme-text-muted)));
 }
 
-}
 
 /* C 方案：邮箱/手机号作为「范围属性」并入当前配置范围卡片 */
 .weline-social-admin__scope-attributes {
@@ -294,4 +294,5 @@
     .weline-social-admin__scope-attributes {
         margin-top: var(--weline-space-3);
     }
+}
 }

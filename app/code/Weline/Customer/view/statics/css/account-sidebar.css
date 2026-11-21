@@ -13,8 +13,8 @@
 } .account-sidebar__nav { display: flex; flex-direction: column; gap: var(--weline-space-1);
 } .account-sidebar__nav-link[data-section="profile"] { order: 10;
 } .account-sidebar__nav-link[data-section="security"] { order: 20;
-} .account-sidebar__nav-link { display: flex; align-items: center; gap: var(--weline-space-3); padding: var(--weline-space-3) var(--weline-space-4); font-size: var(--font-size-sm); font-weight: 500; color: var(--color-text-primary); text-decoration: none; border-radius: var(--as-border-radius); transition: var(--as-transition);
-} .account-sidebar__nav-link i { font-size: var(--weline-font-size-lg); color: var(--color-text-secondary); transition: var(--as-transition);
+} .account-sidebar__nav-link { display: flex; align-items: center; gap: var(--weline-space-3); padding: var(--weline-space-3) var(--weline-space-4); font-size: var(--font-size-sm); font-weight: 500; color: var(--color-text-primary); text-decoration: none; border-radius: var(--as-border-radius, var(--border-radius-lg)); transition: var(--as-transition, var(--transition-base, 0.2s ease));
+} .account-sidebar__nav-link i { font-size: var(--weline-font-size-lg); color: var(--color-text-secondary); transition: var(--as-transition, var(--transition-base, 0.2s ease));
 } .account-sidebar__nav-link:hover { background: var(--color-bg-secondary); color: var(--color-primary-dark);
 } .account-sidebar__nav-link:hover i { color: var(--color-primary);
 } .account-sidebar__nav-link--active { background: var(--color-primary); color: var(--weline-theme-on-primary, var(--color-on-primary)); font-weight: 600;
@@ -30,7 +30,7 @@
 } .account-hook-nav-group--legacy { order: 95;
 } .account-hook-nav-title { padding: 0 var(--weline-space-4) var(--weline-space-1); font-size: var(--weline-font-size-xs); font-weight: 700; color: var(--color-text-secondary); letter-spacing: var(--letter-spacing-wide);
 } .account-hook-nav-group--security .account-hook-nav-title { display: none;
-} .account-hook-nav-link { display: flex; align-items: center; justify-content: flex-start; gap: var(--weline-space-3); width: 100%; padding: var(--weline-space-3) var(--weline-space-4); border: var(--border-width-thin) solid transparent; border-radius: var(--as-border-radius); background: transparent; color: var(--color-text-primary); text-decoration: none; transition: var(--as-transition); order: 0;
+} .account-hook-nav-link { display: flex; align-items: center; justify-content: flex-start; gap: var(--weline-space-3); width: 100%; padding: var(--weline-space-3) var(--weline-space-4); border: var(--border-width-thin) solid transparent; border-radius: var(--as-border-radius, var(--border-radius-lg)); background: transparent; color: var(--color-text-primary); text-decoration: none; transition: var(--as-transition, var(--transition-base, 0.2s ease)); order: 0;
 } .account-hook-nav-link:hover { background: var(--color-overlay-dark); color: var(--color-text-primary); text-decoration: none;
 } .account-hook-nav-link.is-active:not([data-account-nav-parent]) { background: var(--color-primary); border-color: transparent; box-shadow: none; color: var(--weline-theme-on-primary, var(--color-on-primary)); font-weight: 700; transform: none;
 } .account-hook-nav-link.is-active:not([data-account-nav-parent]) .account-hook-nav-link__label i,

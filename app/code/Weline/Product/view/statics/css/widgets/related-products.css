@@ -10,8 +10,8 @@
   --wpr-star: var(--color-literal-de7921);
   margin: var(--weline-space-6) 0 0;
   padding: var(--weline-space-5) var(--weline-space-4) var(--weline-space-2);
-  border-top: var(--border-width-thin) solid var(--wpr-border);
-  color: var(--wpr-ink);
+  border-top: var(--border-width-thin) solid var(--wpr-border, var(--color-literal-d5d9d9));
+  color: var(--wpr-ink, var(--color-text-primary));
   font-family: "Weline Ember", Arial, sans-serif;
 }
 
@@ -35,7 +35,7 @@
 
 .weline-product-related .wpr-subtitle {
   margin: var(--spacing-0_2) 0 0;
-  color: var(--wpr-muted);
+  color: var(--wpr-muted, var(--color-text-gray));
   font-size: var(--spacing-0_9);
 }
 
@@ -54,8 +54,8 @@
 .weline-product-related .wpr-viewport {
   overflow: hidden;
   border-radius: var(--token-size-10px);
-  background: linear-gradient(180deg, var(--wpr-stage) 0%, var(--color-bg-primary) 42%);
-  border: var(--border-width-thin) solid var(--wpr-border);
+  background: linear-gradient(180deg, var(--wpr-stage, var(--color-bg-secondary)) 0%, var(--color-bg-primary) 42%);
+  border: var(--border-width-thin) solid var(--wpr-border, var(--color-literal-d5d9d9));
 }
 
 .weline-product-related .wpr-track {
@@ -101,7 +101,7 @@
   width: var(--token-size-2-1rem);
   height: var(--token-size-2-1rem);
   border-radius: var(--token-size-999px);
-  border: var(--border-width-thin) solid var(--wpr-border);
+  border: var(--border-width-thin) solid var(--wpr-border, var(--color-literal-d5d9d9));
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-size: var(--token-size-1-35rem);

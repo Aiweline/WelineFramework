@@ -897,6 +897,7 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             'url' => Url::$parserServer['WELINE_WEBSITE_URL'] ?? null,
             'area' => Url::$parserServer['WELINE_AREA'] ?? null,
         ];
+        $prevWebsite = WebsiteData::getWebsite();
 
         RequestContext::runWithCompileTimeWebsitePin($scopeIdentity, $websiteUrl, function () use (
             $website,
@@ -904,6 +905,7 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             $websiteCode,
             $websiteUrl,
             $prevParser,
+            $prevWebsite,
             $fn,
         ): void {
             WebsiteData::setWebsite($website);
@@ -933,6 +935,11 @@ final class ThemeLayoutEntityFormalLocaleCompileService
                     unset(Url::$parserServer['WELINE_AREA']);
                 } else {
                     Url::$parserServer['WELINE_AREA'] = $prevParser['area'];
+                }
+                if ($prevWebsite instanceof Website) {
+                    WebsiteData::setWebsite($prevWebsite);
+                } else {
+                    WebsiteData::resetRequestState();
                 }
             }
         });

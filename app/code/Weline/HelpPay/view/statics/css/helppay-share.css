@@ -120,7 +120,7 @@
   width: auto;
   margin: 0;
   padding: 0 var(--weline-space-3, var(--space-3));
-  border: var(--weline-border-width) solid var(--color-primary, var(--weline-theme-primary));
+  border: var(--weline-theme-border-width) solid var(--color-primary, var(--weline-theme-primary));
   border-radius: var(--radius-full);
   background: var(--color-surface, var(--weline-theme-surface));
   color: var(--color-primary-text-emphasis, var(--color-primary, var(--weline-theme-primary)));
@@ -138,8 +138,8 @@
 }
 
 .product-native-detail__secondary:focus-visible {
-  outline: var(--weline-focus-ring-width) solid var(--color-primary, var(--weline-theme-primary));
-  outline-offset: var(--weline-focus-ring-offset);
+  outline: var(--focus-ring-width) solid var(--color-primary, var(--weline-theme-primary));
+  outline-offset: 2px;
 }
 
 .product-native-detail__secondary:disabled,
@@ -201,7 +201,7 @@
   display: grid;
   gap: var(--weline-space-3, var(--space-3));
   padding: var(--weline-space-5, var(--space-5));
-  border: var(--weline-border-width) solid var(--color-border, var(--weline-theme-border));
+  border: var(--weline-theme-border-width) solid var(--color-border, var(--weline-theme-border));
   border-radius: var(--radius-md, var(--weline-radius-md));
   background: var(--color-surface, var(--weline-theme-surface));
   color: var(--color-text-primary, var(--weline-theme-text));
@@ -214,7 +214,7 @@
 
 .w-helppay-panel__shipping {
   padding-block-start: var(--weline-space-2, var(--space-2));
-  border-block-start: var(--weline-border-width) solid var(--color-border, var(--weline-theme-border));
+  border-block-start: var(--weline-theme-border-width) solid var(--color-border, var(--weline-theme-border));
 }
 
 .w-helppay-pay-summary {
@@ -240,7 +240,7 @@
   display: grid;
   gap: var(--weline-space-2, var(--space-2));
   padding-block-start: var(--weline-space-3, var(--space-3));
-  border-block-start: var(--weline-border-width) solid var(--color-border, var(--weline-theme-border));
+  border-block-start: var(--weline-theme-border-width) solid var(--color-border, var(--weline-theme-border));
 }
 
 .w-helppay-pay-summary__row {
@@ -252,7 +252,7 @@
 
 .w-helppay-pay-summary__row--total {
   padding-block-start: var(--weline-space-2, var(--space-2));
-  border-block-start: var(--weline-border-width) solid var(--color-border, var(--weline-theme-border));
+  border-block-start: var(--weline-theme-border-width) solid var(--color-border, var(--weline-theme-border));
 }
 
 .w-helppay-pay-summary__row--total .w-helppay-panel__amount {
@@ -323,7 +323,7 @@ dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-pu
 .w-helppay-dialog__step-sep {
   flex: 1 1 auto;
   min-inline-size: var(--weline-space-3, var(--space-3));
-  block-size: var(--weline-border-width);
+  block-size: var(--weline-theme-border-width);
   background: var(--color-border, var(--weline-theme-border));
 }
 
@@ -338,7 +338,7 @@ dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-pu
   align-items: flex-start;
   gap: var(--weline-space-2, var(--space-2));
   padding: var(--weline-space-3, var(--space-3));
-  border: var(--weline-border-width) solid var(--color-border, var(--weline-theme-border));
+  border: var(--weline-theme-border-width) solid var(--color-border, var(--weline-theme-border));
   border-radius: var(--weline-radius-md, var(--radius-md));
   background: var(--color-surface, var(--weline-theme-surface));
   cursor: pointer;
@@ -410,7 +410,7 @@ dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-pu
   gap: var(--weline-space-2, var(--space-2));
   border-radius: var(--radius-md, var(--weline-radius-md));
   background: var(--color-bg-secondary, var(--weline-theme-surface-subtle, var(--color-surface-subtle)));
-  border: var(--weline-border-width) solid var(--color-border, var(--weline-theme-border));
+  border: var(--weline-theme-border-width) solid var(--color-border, var(--weline-theme-border));
 }
 
 .w-helppay-dialog__bullets li {
@@ -474,7 +474,7 @@ dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-pu
   /* theme.css 未分层 .w-button 会压过 foundation @layer outline，此处显式弱化返回 */
   background: transparent;
   background-image: none;
-  border: var(--weline-border-width) solid var(--color-border-strong, var(--weline-theme-border-strong, var(--color-border, var(--weline-theme-border))));
+  border: var(--weline-theme-border-width) solid var(--color-border-strong, var(--weline-theme-border-strong, var(--color-border, var(--weline-theme-border))));
   color: var(--color-text-secondary, var(--weline-theme-text-muted, var(--weline-theme-text)));
   box-shadow: none;
   transform: none;
@@ -758,7 +758,7 @@ dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-pu
   display: grid;
   gap: var(--weline-space-2, var(--space-2));
   padding: var(--weline-space-3, var(--space-3));
-  border: var(--weline-border-width) solid var(--color-border, var(--weline-theme-border));
+  border: var(--weline-theme-border-width) solid var(--color-border, var(--weline-theme-border));
   border-radius: var(--radius-md, var(--weline-radius-md));
   background: var(--color-bg-secondary, var(--weline-theme-surface-subtle, var(--color-surface-subtle)));
 }
@@ -779,7 +779,7 @@ dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-pu
   block-size: 4.5rem;
   object-fit: cover;
   border-radius: var(--radius-sm, var(--weline-radius-sm));
-  border: var(--weline-border-width) solid var(--color-border, var(--weline-theme-border));
+  border: var(--weline-theme-border-width) solid var(--color-border, var(--weline-theme-border));
   background: var(--color-surface, var(--weline-theme-surface));
 }
 
@@ -850,7 +850,7 @@ dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-pu
   flex-direction: column;
   gap: var(--weline-space-3, var(--space-3));
   padding: var(--weline-space-4, var(--space-4));
-  border: var(--weline-border-width) solid var(--color-border, var(--weline-theme-border));
+  border: var(--weline-theme-border-width) solid var(--color-border, var(--weline-theme-border));
   border-radius: var(--radius-md, var(--weline-radius-md));
   background: var(--color-surface-elevated, var(--color-surface, var(--weline-theme-surface)));
   min-block-size: 100%;
@@ -886,7 +886,7 @@ dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-pu
 .w-helppay-share-result__actions .w-button[data-variant="outline"] {
   background: transparent;
   color: var(--weline-theme-primary, var(--color-primary));
-  border: var(--weline-border-width) solid var(--weline-theme-primary, var(--color-primary));
+  border: var(--weline-theme-border-width) solid var(--weline-theme-primary, var(--color-primary));
 }
 
 .w-helppay-share-result__actions .w-button[data-variant="outline"]:hover,
@@ -933,7 +933,7 @@ dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-pu
   flex: 1 1 auto;
   min-block-size: 10rem;
   padding: var(--weline-space-4, var(--space-4));
-  border: var(--weline-border-width) solid var(--color-border, var(--weline-theme-border));
+  border: var(--weline-theme-border-width) solid var(--color-border, var(--weline-theme-border));
   border-radius: var(--radius-md, var(--weline-radius-md));
   background: var(--color-surface, var(--weline-theme-surface));
 }
@@ -1000,7 +1000,7 @@ dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-pu
 .w-helppay-payer__totals {
   margin-block: var(--weline-space-4, var(--space-4));
   padding-block: var(--weline-space-3, var(--space-3));
-  border-block: 1px solid var(--weline-color-border, var(--color-border));
+  border-block: 1px solid var(--weline-theme-border-color, var(--color-border));
 }
 
 .w-helppay-payer__totals .w-helppay-pay-summary__money {

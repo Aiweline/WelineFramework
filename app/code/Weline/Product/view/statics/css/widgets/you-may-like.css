@@ -9,7 +9,7 @@
   margin-inline: auto;
   padding: 0;
   border: none;
-  color: var(--wym-ink);
+  color: var(--wym-ink, var(--weline-theme-text, var(--color-text)));
 }
 
 .weline-product-you-may-like .wym-header {
@@ -27,12 +27,12 @@
   line-height: 1.25;
   font-weight: 700;
   letter-spacing: calc(-1 * var(--token-size-0-01em));
-  color: var(--wym-ink);
+  color: var(--wym-ink, var(--weline-theme-text, var(--color-text)));
 }
 
 .weline-product-you-may-like .wym-subtitle {
   margin: var(--weline-space-1) 0 0;
-  color: var(--wym-muted);
+  color: var(--wym-muted, var(--weline-theme-text-muted, var(--color-text-secondary)));
   font-size: var(--spacing-0_9);
   line-height: 1.35;
   font-weight: 400;
@@ -56,8 +56,8 @@
 
 .weline-product-you-may-like[data-layout="carousel"] .wym-viewport {
   border-radius: var(--token-size-10px);
-  background: linear-gradient(180deg, var(--wym-stage) 0%, var(--color-bg-primary) 42%);
-  border: var(--border-width-thin) solid var(--wym-border);
+  background: linear-gradient(180deg, var(--wym-stage, var(--weline-theme-surface-subtle, var(--color-surface-subtle))) 0%, var(--color-bg-primary) 42%);
+  border: var(--border-width-thin) solid var(--wym-border, var(--weline-theme-border, var(--color-border)));
 }
 
 .weline-product-you-may-like[data-layout="grid"] .wym-viewport {
@@ -121,7 +121,7 @@
   width: var(--token-size-2-1rem);
   height: var(--token-size-2-1rem);
   border-radius: var(--token-size-999px);
-  border: var(--border-width-thin) solid var(--wym-border);
+  border: var(--border-width-thin) solid var(--wym-border, var(--weline-theme-border, var(--color-border)));
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-size: var(--token-size-1-35rem);

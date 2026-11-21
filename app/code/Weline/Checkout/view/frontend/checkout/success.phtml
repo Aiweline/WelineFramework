@@ -551,7 +551,7 @@ foreach ($orderItems as $pixelItemRow) {
     min-width: 0;
     margin: 0 auto;
     padding: var(--weline-space-5, 24px) var(--weline-layout-content-padding-inline) var(--weline-space-8, 48px);
-    color: var(--amz-text);
+    color: var(--amz-text, var(--color-text, #0f1111));
     font-size: var(--weline-font-size-sm, 14px);
     line-height: 1.5;
 }
@@ -565,7 +565,7 @@ foreach ($orderItems as $pixelItemRow) {
     text-align: center;
     padding-bottom: var(--weline-space-5, 20px);
     margin-bottom: var(--weline-space-5, 20px);
-    border-bottom: 1px solid var(--amz-border);
+    border-bottom: 1px solid var(--amz-border, var(--color-border, #d5d9d9));
 }
 .amz-order-confirm__banner-inner {
     display: flex;
@@ -584,7 +584,7 @@ foreach ($orderItems as $pixelItemRow) {
     place-items: center;
     border-radius: 50%;
     background: var(--weline-theme-success-surface, var(--color-success-surface, #e4efe7));
-    color: var(--amz-success);
+    color: var(--amz-success, var(--color-success, #067d62));
     font-size: calc(var(--size-panel-120, 7.5rem) * 0.42);
     font-weight: 700;
     line-height: 1;
@@ -610,12 +610,12 @@ foreach ($orderItems as $pixelItemRow) {
 }
 .amz-order-confirm__banner-copy > p {
     margin-top: var(--weline-space-2, 8px);
-    color: var(--amz-muted);
+    color: var(--amz-muted, var(--color-text-muted, #565959));
     font-size: var(--weline-font-size-sm, 14px);
 }
 .amz-order-confirm__order-no {
     margin-top: var(--weline-space-3, 10px) !important;
-    color: var(--amz-text) !important;
+    color: var(--amz-text, var(--color-text, #0f1111)) !important;
     font-size: var(--weline-font-size-sm, 15px);
 }
 .amz-order-confirm__order-no strong { font-weight: 700; }
@@ -623,10 +623,10 @@ foreach ($orderItems as $pixelItemRow) {
     margin-top: var(--weline-space-1, 4px) !important;
     font-size: var(--weline-font-size-xs, 13px);
 }
-.amz-order-confirm__email-hint span { color: var(--amz-link); }
+.amz-order-confirm__email-hint span { color: var(--amz-link, var(--color-link)); }
 .amz-order-confirm__panel {
-    background: var(--amz-panel-bg);
-    border: 1px solid var(--amz-border);
+    background: var(--amz-panel-bg, var(--color-surface, #fff));
+    border: 1px solid var(--amz-border, var(--color-border, #d5d9d9));
     border-radius: 8px;
     padding: 18px 20px;
     margin-bottom: 14px;
@@ -645,15 +645,15 @@ foreach ($orderItems as $pixelItemRow) {
     margin-bottom: 10px;
 }
 .amz-order-confirm__meta-block p {
-    color: var(--amz-muted);
+    color: var(--amz-muted, var(--color-text-muted, #565959));
     margin-top: 2px;
 }
 .amz-order-confirm__meta-strong {
-    color: var(--amz-text) !important;
+    color: var(--amz-text, var(--color-text, #0f1111)) !important;
     font-weight: 700;
 }
 .amz-order-confirm__meta-label {
-    color: var(--amz-muted);
+    color: var(--amz-muted, var(--color-text-muted, #565959));
     margin-right: 4px;
 }
 .amz-order-confirm__panel-head {
@@ -671,14 +671,14 @@ foreach ($orderItems as $pixelItemRow) {
     display: inline-flex;
     align-items: center;
     padding: 2px 10px;
-    border: 1px solid var(--amz-border);
+    border: 1px solid var(--amz-border, var(--color-border, #d5d9d9));
     border-radius: 999px;
     font-size: 12px;
-    color: var(--amz-muted);
+    color: var(--amz-muted, var(--color-text-muted, #565959));
     background: #f0f2f2;
 }
 .amz-order-confirm__status-pill--paid {
-    color: var(--amz-success);
+    color: var(--amz-success, var(--color-success, #067d62));
     border-color: #b7e4d8;
     background: #f0faf7;
 }
@@ -686,11 +686,11 @@ foreach ($orderItems as $pixelItemRow) {
     margin: 0 0 12px;
     padding-bottom: 12px;
     border-bottom: 1px solid #e7e7e7;
-    color: var(--amz-muted);
+    color: var(--amz-muted, var(--color-text-muted, #565959));
     font-size: 13px;
 }
 .amz-order-confirm__ship-method--estimate {
-    color: var(--amz-success);
+    color: var(--amz-success, var(--color-success, #067d62));
     font-weight: 600;
 }
 .amz-order-confirm__items {
@@ -713,7 +713,7 @@ foreach ($orderItems as $pixelItemRow) {
 .amz-order-confirm__item-media {
     width: 80px;
     height: 80px;
-    border: 1px solid var(--amz-border);
+    border: 1px solid var(--amz-border, var(--color-border, #d5d9d9));
     border-radius: 4px;
     overflow: hidden;
     background: #fff;
@@ -727,13 +727,13 @@ foreach ($orderItems as $pixelItemRow) {
 .amz-order-confirm__item-title {
     font-size: 14px;
     line-height: 1.45;
-    color: var(--amz-link);
+    color: var(--amz-link, var(--color-link));
     font-weight: 400;
 }
 .amz-order-confirm__item-qty {
     margin-top: 6px !important;
     font-size: 12px;
-    color: var(--amz-muted);
+    color: var(--amz-muted, var(--color-text-muted, #565959));
 }
 .amz-order-confirm__item-price {
     font-size: 14px;
@@ -763,10 +763,10 @@ foreach ($orderItems as $pixelItemRow) {
     gap: 12px;
     padding: 4px 0;
     font-size: 14px;
-    color: var(--amz-muted);
+    color: var(--amz-muted, var(--color-text-muted, #565959));
 }
 .amz-order-confirm__total-row strong {
-    color: var(--amz-text);
+    color: var(--amz-text, var(--color-text, #0f1111));
     font-size: 14px;
     font-weight: 600;
     min-width: 96px;
@@ -776,7 +776,7 @@ foreach ($orderItems as $pixelItemRow) {
     margin-top: 8px;
     padding-top: 10px;
     border-top: 1px solid #e7e7e7;
-    color: var(--amz-text);
+    color: var(--amz-text, var(--color-text, #0f1111));
     font-size: 15px;
 }
 .amz-order-confirm__total-row--grand strong {
@@ -792,7 +792,7 @@ foreach ($orderItems as $pixelItemRow) {
     border-top: 1px solid #e7e7e7;
 }
 .amz-order-confirm__kv:first-of-type { border-top: none; }
-.amz-order-confirm__kv span:first-child { color: var(--amz-muted); }
+.amz-order-confirm__kv span:first-child { color: var(--amz-muted, var(--color-text-muted, #565959)); }
 .amz-order-confirm__actions {
     display: flex;
     flex-wrap: wrap;
@@ -817,28 +817,28 @@ foreach ($orderItems as $pixelItemRow) {
     box-shadow: none;
 }
 .amz-order-confirm__btn--primary {
-    background: var(--amz-btn-primary-bg);
-    border: 1px solid var(--amz-btn-primary-border);
-    color: var(--amz-btn-primary-fg);
+    background: var(--amz-btn-primary-bg, var(--color-primary, #b84a3c));
+    border: 1px solid var(--amz-btn-primary-border, var(--color-primary-dark, #963b30));
+    color: var(--amz-btn-primary-fg, var(--color-on-primary, #fff));
 }
 .amz-order-confirm__btn--primary:hover {
-    background: var(--amz-btn-primary-hover);
-    color: var(--amz-btn-primary-fg);
+    background: var(--amz-btn-primary-hover, var(--color-primary-hover, #963b30));
+    color: var(--amz-btn-primary-fg, var(--color-on-primary, #fff));
 }
 .amz-order-confirm__btn--secondary {
-    background: var(--amz-panel-bg);
-    border: 1px solid var(--amz-border);
-    color: var(--amz-text);
+    background: var(--amz-panel-bg, var(--color-surface, #fff));
+    border: 1px solid var(--amz-border, var(--color-border, #d5d9d9));
+    color: var(--amz-text, var(--color-text, #0f1111));
 }
 .amz-order-confirm__btn--secondary:hover {
-    background: var(--amz-banner-bg);
-    color: var(--amz-text);
+    background: var(--amz-banner-bg, var(--color-surface-subtle, #f7fafa));
+    color: var(--amz-text, var(--color-text, #0f1111));
 }
 .amz-order-confirm__btn--link {
     background: transparent;
     border: none;
     box-shadow: none;
-    color: var(--amz-link);
+    color: var(--amz-link, var(--color-link));
     padding: 0 var(--weline-space-1, 4px);
     min-height: 2.5rem;
     font-weight: 500;

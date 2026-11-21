@@ -147,6 +147,34 @@ final class DetectWebsiteProjectHostSiteCodeTest extends TestCase
         ));
     }
 
+    public function testSiteInheritedPathKeepsSyntheticMountInCacheIdentity(): void
+    {
+        $observer = (new \ReflectionClass(DetectWebsite::class))->newInstanceWithoutConstructor();
+        $resolve = new \ReflectionMethod($observer, 'resolveSiteInheritedPath');
+
+        // /~site/{code} mounts must not collapse into the bare-Host '/' cache
+        // identity — otherwise whichever site lands first is served for every
+        // mounted path on the reserved project Host.
+        self::assertSame('/~site/grocery', $resolve->invoke($observer, [
+            'scheme' => 'https',
+            'host' => 'p05113ef3.test.weline.com',
+            'port' => 0,
+            'path' => '/~site/grocery/',
+        ]));
+        self::assertSame('/~site/daocharms', $resolve->invoke($observer, [
+            'scheme' => 'https',
+            'host' => 'p05113ef3.test.weline.com',
+            'port' => 0,
+            'path' => '/~site/daocharms/en_US/products',
+        ]));
+        self::assertNotSame('/', $resolve->invoke($observer, [
+            'scheme' => 'https',
+            'host' => 'p05113ef3.test.weline.com',
+            'port' => 0,
+            'path' => '/~site/',
+        ]));
+    }
+
     public function testResolveMatchedSiteAppliesVisitorUriNormalizeBeforeProbe(): void
     {
         $root = dirname(__DIR__, 3);

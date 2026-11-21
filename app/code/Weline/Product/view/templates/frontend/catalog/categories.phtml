@@ -181,8 +181,8 @@ foreach ($children as $child) {
         min-height: var(--control-height-md);
         padding: var(--weline-space-2) var(--spacing-4_5);
         border-radius: var(--weline-theme-radius-sm);
-        background: var(--weline-theme-accent, var(--color-primary));
-        color: var(--color-text-on-accent);
+        background: var(--weline-theme-primary, var(--color-primary));
+        color: var(--color-on-primary);
         text-decoration: none;
         font-weight: 650;
         transition: filter 0.15s ease, transform 0.15s ease;
@@ -191,7 +191,7 @@ foreach ($children as $child) {
         filter: brightness(1.05);
     }
     .storefront-categories-hub__cta:focus-visible {
-        outline: var(--border-width-medium) solid var(--weline-theme-accent);
+        outline: var(--border-width-medium) solid var(--weline-theme-primary);
         outline-offset: 2px;
     }
     .storefront-categories-hub__mosaic {
@@ -267,7 +267,7 @@ foreach ($children as $child) {
         transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
     .storefront-categories-hub__link:hover {
-        border-color: var(--weline-theme-accent);
+        border-color: var(--weline-theme-primary);
         box-shadow: var(--weline-shadow-md);
     }
     .storefront-categories-hub__media-wrap {
@@ -319,8 +319,8 @@ foreach ($children as $child) {
         transition: border-color 0.15s ease, color 0.15s ease;
     }
     .storefront-categories-hub__chips a:hover {
-        border-color: var(--weline-theme-accent);
-        color: var(--weline-theme-accent);
+        border-color: var(--weline-theme-primary);
+        color: var(--weline-theme-primary);
     }
     @media (max-width: 720px) {
         .storefront-categories-hub__header--split {

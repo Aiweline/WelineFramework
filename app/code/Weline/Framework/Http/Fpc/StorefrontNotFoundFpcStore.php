@@ -75,7 +75,7 @@ final class StorefrontNotFoundFpcStore
                 continue;
             }
 
-            return ['body' => $body, 'path' => $path, 'lang' => $candidate];
+            return ['body' => self::scrubVolatileGenerationClaims($body), 'path' => $path, 'lang' => $candidate];
         }
 
         return null;
@@ -83,7 +83,7 @@ final class StorefrontNotFoundFpcStore
 
     public static function publish(string $websiteCode, string $lang, string $html): bool
     {
-        $html = (string)$html;
+        $html = self::scrubVolatileGenerationClaims((string)$html);
         if (\trim($html) === '') {
             return false;
         }
@@ -183,6 +183,43 @@ final class StorefrontNotFoundFpcStore
         } finally {
             @\fclose($handle);
         }
+    }
+
+    /**
+     * Stable cache documents must not carry volatile storefront generation
+     * stamps. `themePublishedVersionId` / `generationUid` are baked at render
+     * time and can never match a later publish/promote — the QueryBin handshake
+     * would keep answering 409 `deploy_reload_required`, and clicking
+     * 「更新到最新版本」 reloads the same cached leaf forever.
+     *
+     * Empty ids are the documented off switch along the whole chain:
+     * weline-api.js skips the 409 branch when the page stamp is '', the
+     * generation anchor treats an empty page anchor as a legacy leaf
+     * (aligned, no navigation), QueryBin skips generation enforcement for
+     * an empty client id, and assertSession only enforces when the stored
+     * session id is non-empty.
+     */
+    public static function scrubVolatileGenerationClaims(string $html): string
+    {
+        $html = (string)\preg_replace(
+            '/"(themePublishedVersionId|theme_published_version_id|themePublishedVersion|generationUid|generation_uid)"\s*:\s*"[^"]*"/',
+            '"$1":""',
+            $html
+        );
+        // Region/shell URLs carry `v=t{gen}` as a browser immutable-cache key;
+        // a stale value would pin fragments fetched under it to the bake-time
+        // content forever. Emptying falls back to short-TTL freshness.
+        $html = (string)\preg_replace(
+            '/([?&]|&amp;)v=t\d+\.[a-z]+\.[a-z]+\.[0-9a-f]+\.v\d+(?:\.e\d+)?/i',
+            '$1v=',
+            $html
+        );
+
+        return (string)\preg_replace(
+            '/data-weline-generation="[^"]*"/',
+            'data-weline-generation=""',
+            $html
+        );
     }
 
     private static function okToken(string $html): string

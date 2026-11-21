@@ -120,31 +120,31 @@ if (is_array($selectedMessage)) {
 
 ?>
 <style data-no-extract="true">
-.weline-mail-client{display:grid;gap:var(--weline-space-5);font-family:Inter,var(--weline-font-family)}
-.weline-mail-client__hero,.weline-mail-client__panel{background:var(--weline-color-surface);border:var(--border-width-thin) solid var(--weline-color-border);border-radius:var(--weline-radius-lg)}
+.weline-mail-client{display:grid;gap:var(--weline-space-5);font-family:Inter,var(--weline-font-sans)}
+.weline-mail-client__hero,.weline-mail-client__panel{background:var(--weline-theme-surface);border:var(--border-width-thin) solid var(--weline-theme-border-color);border-radius:var(--weline-radius-lg)}
 .weline-mail-client__hero{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--weline-space-4);padding:var(--weline-space-5)}
-.weline-mail-client__hero h2,.weline-mail-client__reader h3{margin:0}.weline-mail-client__hero p{margin:.4rem 0 0;color:var(--weline-color-text-secondary)}
+.weline-mail-client__hero h2,.weline-mail-client__reader h3{margin:0}.weline-mail-client__hero p{margin:.4rem 0 0;color:var(--weline-theme-body-text-secondary)}
 .weline-mail-client__tabs{display:flex;gap:var(--weline-space-2);flex-wrap:wrap}
-.weline-mail-client__tabs a{padding:.65rem .95rem;border:var(--border-width-thin) solid var(--weline-color-border);border-radius:var(--weline-radius-md);color:inherit;text-decoration:none}
-.weline-mail-client__tabs a[aria-current=true]{background:var(--weline-color-primary);border-color:var(--weline-color-primary);color:var(--weline-color-on-primary)}
+.weline-mail-client__tabs a{padding:.65rem .95rem;border:var(--border-width-thin) solid var(--weline-theme-border-color);border-radius:var(--weline-radius-md);color:inherit;text-decoration:none}
+.weline-mail-client__tabs a[aria-current=true]{background:var(--weline-theme-primary);border-color:var(--weline-theme-primary);color:var(--weline-theme-on-primary)}
 .weline-mail-client__toolbar{display:grid;grid-template-columns:minmax(12rem,1fr) auto;gap:var(--weline-space-3);align-items:end}
 .weline-mail-client__layout{display:grid;grid-template-columns:minmax(17rem,2fr) minmax(20rem,3fr);gap:var(--weline-space-4)}
-.weline-mail-client__panel{overflow:hidden}.weline-mail-client__panel-head,.weline-mail-client__reader-head,.weline-mail-client__compose{padding:var(--weline-space-4);border-bottom:var(--border-width-thin) solid var(--weline-color-border)}
+.weline-mail-client__panel{overflow:hidden}.weline-mail-client__panel-head,.weline-mail-client__reader-head,.weline-mail-client__compose{padding:var(--weline-space-4);border-bottom:var(--border-width-thin) solid var(--weline-theme-border-color)}
 .weline-mail-client__reader-head{display:grid;gap:var(--weline-space-3)}
 .weline-mail-client__reader-actions{display:flex;flex-wrap:wrap;gap:var(--weline-space-2)}
-.weline-mail-client__row{display:block;padding:var(--weline-space-4);border-bottom:var(--border-width-thin) solid var(--weline-color-border);color:inherit;text-decoration:none}
-.weline-mail-client__row:hover,.weline-mail-client__row.is-active{background:var(--weline-color-surface-subtle)}
-.weline-mail-client__meta{display:flex;justify-content:space-between;gap:var(--weline-space-3);color:var(--weline-color-text-secondary);font-size:.82rem}
-.weline-mail-client__subject{margin:.35rem 0;font-weight:650}.weline-mail-client__preview{margin:0;color:var(--weline-color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.weline-mail-client__row{display:block;padding:var(--weline-space-4);border-bottom:var(--border-width-thin) solid var(--weline-theme-border-color);color:inherit;text-decoration:none}
+.weline-mail-client__row:hover,.weline-mail-client__row.is-active{background:var(--weline-theme-surface-subtle)}
+.weline-mail-client__meta{display:flex;justify-content:space-between;gap:var(--weline-space-3);color:var(--weline-theme-body-text-secondary);font-size:.82rem}
+.weline-mail-client__subject{margin:.35rem 0;font-weight:650}.weline-mail-client__preview{margin:0;color:var(--weline-theme-body-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .weline-mail-client__reader-body{padding:var(--weline-space-5);white-space:pre-wrap;word-break:break-word;line-height:1.65}
 .weline-mail-client__reader-body--html{white-space:normal}
 .weline-mail-client__reader-html{display:block;width:100%;min-height:18rem;border:var(--border-width-thin) solid var(--weline-theme-border,var(--color-border));border-radius:var(--weline-radius-md);background:var(--color-bg-primary)}
-.weline-mail-client__empty{display:grid;place-items:center;min-height:14rem;padding:var(--weline-space-5);color:var(--weline-color-text-secondary);text-align:center}
+.weline-mail-client__empty{display:grid;place-items:center;min-height:14rem;padding:var(--weline-space-5);color:var(--weline-theme-body-text-secondary);text-align:center}
 .weline-mail-client__compose-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--weline-space-3)}.weline-mail-client__compose-grid .is-wide{grid-column:1/-1}
 .weline-mail-client__accounts{display:grid;gap:var(--weline-space-3)}
-.weline-mail-client__account{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:var(--weline-space-3);align-items:center;padding:var(--weline-space-3);border:var(--border-width-thin) solid var(--weline-color-border);border-radius:var(--weline-radius-md)}
-.weline-mail-client__account strong{display:block}.weline-mail-client__account span{color:var(--weline-color-text-secondary);font-size:.85rem}
-.weline-mail-client__badge{display:inline-flex;align-items:center;padding:.2rem .55rem;border-radius:var(--radius-full);background:var(--weline-color-surface-subtle);font-size:.78rem}
+.weline-mail-client__account{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:var(--weline-space-3);align-items:center;padding:var(--weline-space-3);border:var(--border-width-thin) solid var(--weline-theme-border-color);border-radius:var(--weline-radius-md)}
+.weline-mail-client__account strong{display:block}.weline-mail-client__account span{color:var(--weline-theme-body-text-secondary);font-size:.85rem}
+.weline-mail-client__badge{display:inline-flex;align-items:center;padding:.2rem .55rem;border-radius:var(--radius-full);background:var(--weline-theme-surface-subtle);font-size:.78rem}
 @media (max-width:767px){.weline-mail-client__hero,.weline-mail-client__meta,.weline-mail-client__account{flex-direction:column;grid-template-columns:1fr}.weline-mail-client__toolbar,.weline-mail-client__layout,.weline-mail-client__compose-grid{grid-template-columns:1fr}}
 @media (min-width:768px) and (max-width:1023px){.weline-mail-client__layout{grid-template-columns:minmax(15rem,1fr) minmax(18rem,1.4fr)}}
 @media (min-width:1024px){.weline-mail-client__layout{min-height:34rem}}

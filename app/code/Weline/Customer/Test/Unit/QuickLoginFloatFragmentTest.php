@@ -35,6 +35,7 @@ class QuickLoginFloatFragmentTest extends TestCase
         self::assertStringContainsString('data-weline-mount="customer/social-quick"', $src);
         self::assertStringContainsString('data-weline-mount-load="account,customerSocialQuick"', $src);
         self::assertStringContainsString('data-weline-mount-variant="inline"', $src);
+        self::assertStringContainsString('data-weline-mount-suppress-floating="1"', $src);
         self::assertStringContainsString('class="w-float-quick-login"', $src);
         self::assertStringContainsString('data-weline-collapse-empty', $src);
     }

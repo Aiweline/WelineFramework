@@ -146,6 +146,10 @@ private function assert_QueryBinDeployGeneration_testHandshakeAssertsClientTheme
     self::assertStringNotContainsString('currentServerDeployVersion', $src);
     // Backend-attested handshake must not 409 on missing storefront theme stamp.
     self::assertMatchesRegularExpression('/\$backendBootstrapId\s*===\s*\'\'\s*\)\s*\{\s*\$this->assertClientThemeGenerationCurrent/', $src);
+    // Empty client stamp = generationless document (not-found FPC strips volatile
+    // stamps; legacy pages predate stamping) — documented off switch: enforcement
+    // is skipped because a 409 reload can never converge an unstamped leaf.
+    self::assertMatchesRegularExpression('/if\s*\(\$clientId\s*===\s*\'\'\)\s*\{\s*return;/', $src);
 
     // TU epoch must move both the wire generation and the FPC slot token.
     $resolver = (string) \file_get_contents(BP . 'app/code/Weline/Theme/Service/ThemePublishedVersionRuntimeResolver.php');

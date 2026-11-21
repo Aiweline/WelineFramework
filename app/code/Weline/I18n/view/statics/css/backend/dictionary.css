@@ -40,7 +40,7 @@
         max-height: 90vh;
         background: var(--backend-color-card-bg);
         border-radius: var(--weline-radius-md);
-        box-shadow: var(--weline-shadow-lg);
+        box-shadow: var(--weline-shadow-lg, var(--shadow-lg, var(--weline-theme-shadow-lg)));
         display: flex;
         flex-direction: column;
         overflow: hidden;

@@ -7,6 +7,7 @@
     align-items: center;
     margin-bottom: 20px;
     color: var(--weline-theme-text);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -305,7 +306,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -315,6 +315,7 @@ code {
     font-size: 1.75rem;
     font-weight: 600;
     margin: 0;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -613,13 +614,13 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
 
 .page-actions .btn {
     margin-left: 10px;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -918,7 +919,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 /* 统计卡片样式 */
@@ -927,6 +927,7 @@ code {
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 20px;
     margin-bottom: 30px;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -1225,7 +1226,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .card {
@@ -1235,6 +1235,7 @@ code {
     padding: 20px;
     border: 1px solid var(--weline-theme-text-muted);
     transition: all 0.2s ease-in-out;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -1533,7 +1534,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -1541,6 +1541,7 @@ code {
 .card:hover {
     box-shadow: 0 5px 12px var(--backend-shadow-sm);
     transform: translateY(-2px);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -1839,13 +1840,13 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
 
 .weline-card-content {
     text-align: center;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -2144,7 +2145,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .card-title {
@@ -2152,6 +2152,7 @@ code {
     font-size: 14px;
     margin-bottom: 10px;
     font-weight: 500;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -2450,7 +2451,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -2460,6 +2460,7 @@ code {
     font-weight: bold;
     color: var(--weline-theme-text);
     line-height: 1.2;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -2758,7 +2759,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -2776,6 +2776,7 @@ code {
     border-radius: 8px;
     box-shadow: 0 1px 1px var(--backend-shadow-sm);
     overflow: hidden;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -3074,13 +3075,13 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
 
 .weline-table-container {
     overflow-x: auto;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -3380,12 +3381,12 @@ code {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
 }
-}
 
 .table {
     width: 100%;
     border-collapse: collapse;
     color: var(--weline-theme-text);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -3684,7 +3685,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -3695,6 +3695,7 @@ code {
     text-align: left;
     border-bottom: 1px solid var(--weline-theme-text-muted);
     vertical-align: middle;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -3993,7 +3994,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -4005,6 +4005,7 @@ code {
     position: sticky;
     top: 0;
     z-index: 10;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -4303,13 +4304,13 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
 
 .table tbody tr {
     transition: all 0.2s ease-in-out;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -4608,11 +4609,11 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .table tbody tr:hover {
     background-color: var(--weline-theme-surface-muted);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -4911,7 +4912,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -4925,6 +4925,7 @@ code {
     color: var(--weline-theme-text-muted);
     font-family: 'Courier New', Courier, monospace;
     border: 1px solid var(--weline-theme-text-muted);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -5223,13 +5224,13 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
 
 .hook-display-name {
     margin-bottom: 4px;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -5528,11 +5529,11 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .hook-description {
     margin-top: 4px;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -5831,13 +5832,13 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .hook-status {
     display: flex;
     gap: 4px;
     flex-wrap: wrap;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -6136,13 +6137,13 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .hook-files {
     display: flex;
     flex-direction: column;
     gap: 4px;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -6441,11 +6442,11 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .using-modules {
     margin-top: 4px;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -6744,12 +6745,12 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .actions {
     display: flex;
     gap: 4px;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -7048,7 +7049,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 /* 空状态样式 */
@@ -7056,6 +7056,7 @@ code {
     text-align: center;
     padding: 60px 20px;
     color: var(--weline-theme-text-muted);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -7354,7 +7355,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -7364,6 +7364,7 @@ code {
     color: var(--weline-theme-text-muted);
     margin-bottom: 20px;
     opacity: 0.5;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -7662,7 +7663,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -7671,6 +7671,7 @@ code {
     color: var(--weline-theme-text);
     margin-bottom: 10px;
     font-weight: 600;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -7969,7 +7970,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -7978,6 +7978,7 @@ code {
     color: var(--weline-theme-text-muted);
     margin: 0;
     line-height: 1.6;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -8276,7 +8277,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -8290,6 +8290,7 @@ code {
     border-radius: 12px;
     line-height: 1.5;
     white-space: nowrap;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -8588,12 +8589,12 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-badge-primary { 
     background-color: var(--weline-theme-surface-muted); 
     color: white; 
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -8892,12 +8893,12 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-badge-info { 
     background-color: var(--weline-theme-surface-muted); 
     color: white; 
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -9196,12 +9197,12 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-badge-success { 
     background-color: var(--weline-theme-surface-muted); 
     color: white; 
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -9500,12 +9501,12 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-badge-warning { 
     background-color: var(--weline-theme-surface-muted); 
     color: var(--weline-theme-text); 
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -9804,7 +9805,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -9812,6 +9812,7 @@ code {
 .weline-badge-danger { 
     background-color: var(--weline-theme-surface-muted); 
     color: white; 
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -10110,12 +10111,12 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-badge-secondary { 
     background-color: var(--weline-theme-surface-muted); 
     color: white; 
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -10414,7 +10415,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 /* 按钮样式 */
@@ -10431,6 +10431,7 @@ code {
     line-height: 1.5;
     text-align: center;
     vertical-align: middle;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -10729,12 +10730,12 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-btn-sm {
     padding: 4px 8px;
     font-size: 12px;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -11033,13 +11034,13 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-btn-primary {
     background: var(--weline-theme-surface-muted);
     color: white;
     border: 1px solid var(--weline-theme-text-muted);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -11338,7 +11339,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-btn-primary:hover {
@@ -11346,6 +11346,7 @@ code {
     opacity: 0.9;
     transform: translateY(-1px);
     box-shadow: 0 1px 1px var(--backend-shadow-sm);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -11644,13 +11645,13 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-btn-outline-primary {
     color: var(--weline-theme-text-muted);
     border-color: var(--weline-theme-border);
     background: transparent;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -11949,7 +11950,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-btn-outline-primary:hover {
@@ -11957,6 +11957,7 @@ code {
     color: white;
     transform: translateY(-1px);
     box-shadow: 0 1px 1px var(--backend-shadow-sm);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -12255,13 +12256,13 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-btn-secondary {
     background: var(--weline-theme-surface-muted);
     color: white;
     border: 1px solid var(--weline-theme-text-muted);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -12560,7 +12561,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-btn-secondary:hover {
@@ -12568,6 +12568,7 @@ code {
     opacity: 0.9;
     transform: translateY(-1px);
     box-shadow: 0 1px 1px var(--backend-shadow-sm);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -12866,13 +12867,13 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-btn-warning {
     background: var(--weline-theme-surface-muted);
     color: var(--weline-theme-text);
     border: 1px solid var(--weline-theme-text-muted);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -13171,7 +13172,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -13181,6 +13181,7 @@ code {
     opacity: 0.9;
     transform: translateY(-1px);
     box-shadow: 0 1px 1px var(--backend-shadow-sm);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -13479,11 +13480,11 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .text-muted {
     color: var(--weline-theme-text-muted);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -13782,7 +13783,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -13795,6 +13795,7 @@ code {
     padding: 20px;
     margin-bottom: 20px;
     border: 1px solid var(--weline-theme-text-muted);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -14093,13 +14094,13 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
 
 .filter-form {
     width: 100%;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -14398,7 +14399,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .filter-row {
@@ -14406,6 +14406,7 @@ code {
     flex-wrap: wrap;
     gap: 15px;
     align-items: flex-end;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -14704,12 +14705,12 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .filter-group {
     flex: 1;
     min-width: 150px;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -15008,7 +15009,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .filter-group label {
@@ -15018,6 +15018,7 @@ code {
     font-weight: 600;
     color: var(--weline-theme-text-muted);
     line-height: 1.5;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -15316,7 +15317,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -15325,6 +15325,7 @@ code {
     display: flex;
     gap: 8px;
     align-items: flex-end;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -15623,7 +15624,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 /* 表单控件样式 */
@@ -15637,6 +15637,7 @@ code {
     color: var(--weline-theme-text);
     transition: all 0.2s ease-in-out;
     line-height: 1.5;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -15935,7 +15936,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -15943,6 +15943,7 @@ code {
 .w-input-sm::placeholder {
     color: var(--weline-theme-text-muted);
     opacity: 0.6;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -16241,13 +16242,13 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
 
 .w-input-sm:hover {
     border-color: var(--weline-theme-border);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -16546,7 +16547,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -16556,6 +16556,7 @@ code {
     border-color: var(--weline-theme-border);
     border-width: 2px;
     background-color: var(--weline-theme-surface);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -16854,7 +16855,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -16863,6 +16863,7 @@ code {
     background-color: var(--weline-theme-surface-muted);
     opacity: 0.6;
     cursor: not-allowed;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -17161,7 +17162,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -17175,6 +17175,7 @@ select.w-input-sm {
     background-position: right 8px center;
     background-size: 16px 12px;
     padding-right: 30px;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -17473,7 +17474,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -17487,6 +17487,7 @@ code {
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -17785,7 +17786,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -17794,6 +17794,7 @@ code {
     font-size: 14px;
     color: var(--weline-theme-text-muted);
     line-height: 1.5;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -18092,7 +18093,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -18101,6 +18101,7 @@ code {
     display: flex;
     gap: 8px;
     align-items: center;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -18399,12 +18400,12 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .list-info strong {
     color: var(--weline-theme-text);
     font-weight: 600;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -18703,7 +18704,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -18717,6 +18717,7 @@ code {
     gap: 4px;
     font-weight: 600;
     transition: all 0.2s ease-in-out;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -19015,7 +19016,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -19023,6 +19023,7 @@ code {
 .sort-link:hover {
     color: var(--weline-theme-text-muted);
     text-decoration: none;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -19321,12 +19322,12 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .sort-link i {
     font-size: 14px;
     color: var(--weline-theme-text-muted);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -19625,7 +19626,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 @media (max-width: 768px) {
@@ -19952,6 +19952,7 @@ code {
     border-right-color: transparent;
     border-radius: 50%;
     animation: spinner-border 0.75s linear infinite;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -20250,7 +20251,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 @keyframes spinner-border {
@@ -20563,6 +20563,7 @@ code {
     margin-bottom: 1rem;
     border: 1px solid transparent;
     border-radius: 0.25rem;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -20861,7 +20862,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 .weline-alert-danger {
@@ -20869,6 +20869,7 @@ code {
     background-color: var(--weline-theme-surface);
     border: 1px solid var(--weline-theme-text-muted);
     border-left-width: 4px;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -21167,7 +21168,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -21179,6 +21179,7 @@ code {
     max-width: 75% ;
     background-color: var(--weline-theme-surface);
     border-right: 1px solid var(--weline-theme-text-muted);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -21477,7 +21478,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -21486,6 +21486,7 @@ code {
     background-color: var(--weline-theme-surface-muted);
     border-bottom: 1px solid var(--weline-theme-text-muted);
     padding: 1rem 1.25rem;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -21784,7 +21785,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -21793,6 +21793,7 @@ code {
     color: var(--weline-theme-text);
     font-weight: 600;
     font-size: 1.25rem;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -22091,7 +22092,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -22099,6 +22099,7 @@ code {
 #hookDetailOffcanvas .weline-btn-close {
     filter: invert(1);
     opacity: 0.5;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -22397,7 +22398,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -22715,6 +22715,7 @@ code {
     /* 滚动条样式 - Webkit浏览器 */
     scrollbar-width: thin; /* Firefox */
     scrollbar-color: var(--scrollbar-thumb, var(--weline-theme-text-muted)) var(--scrollbar-track, transparent);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -23013,11 +23014,11 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 #hookDetailOffcanvas .w-drawer__body::-webkit-scrollbar {
     width: 6px;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -23316,11 +23317,11 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 #hookDetailOffcanvas .w-drawer__body::-webkit-scrollbar-track {
     background: var(--scrollbar-track, transparent);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -23619,12 +23620,12 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 #hookDetailOffcanvas .w-drawer__body::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb, var(--weline-theme-text-muted));
     border-radius: 3px;
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -23923,11 +23924,11 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 #hookDetailOffcanvas .w-drawer__body::-webkit-scrollbar-thumb:hover {
     background: var(--scrollbar-thumb-hover, var(--weline-theme-text-muted));
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -24226,7 +24227,6 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 
 
@@ -24234,6 +24234,7 @@ code {
 /* Offcanvas 背景遮罩 */
 .w-drawer-backdrop {
     background-color: var(--backend-shadow-sm);
+}
 /* from backend/Hook/detail-content.phtml */
 .hook-overview {
     background: var(--weline-theme-surface);
@@ -24532,6 +24533,5 @@ code {
 .module-name {
     color: var(--weline-theme-text-muted);
     font-weight: 500;
-}
 }
 }

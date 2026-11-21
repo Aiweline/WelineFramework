@@ -586,6 +586,11 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 'method' => $method,
             ]);
         }
+        // 与 FpcHtmlDiskStore::publish 同一契约：烘焙前把字面 /static/ 资产 URL
+        // 按代次改写。否则命中路径绕过 normalizeOutput，直接回放未重写字面 → 404。
+        if (\str_contains($body, '/static/')) {
+            $body = \Weline\Framework\Deploy\StaticAssetHtmlRewriter::rewrite($body);
+        }
         if (!\Weline\Framework\View\Helper\HtmlCacheAdmission::admit($body)) {
             $this->logFpcWarning('skip publish html cache admission rejected', [
                 'cache_key_full_uri' => $fullUri,
@@ -6925,6 +6930,27 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         foreach ($routingKeys as $routingKey) {
             if (\array_key_exists($routingKey, $originalGet)) {
                 $preservedRouting[$routingKey] = $originalGet[$routingKey];
+            }
+        }
+
+        // Module routers inject internal params during process_uri_before via
+        // input.query (Blog: slug/category_slug, Product: id/slug/path, Faq:
+        // slug, Promotion: page_slug, Payment: action/method_code, Customer:
+        // provider_code, plus per-module dynamic keys). They derive from the
+        // PATH (already inside the cache key) — never visitor input — so they
+        // must survive canonicalize. Anything in input.query that the visitor
+        // QUERY_STRING did not carry is router-injected; preserve it all, and
+        // let the router's value win over a colliding visitor key. Wiping them
+        // turned every /blog/{slug}?utm_/fbclid/?v=… request into a 404
+        // (View::index saw getParam('slug') === '' → noRouter).
+        $rawQueryString = (string)(\parse_url($rawFullUri, \PHP_URL_QUERY) ?? '');
+        $visitorGet = [];
+        if ($rawQueryString !== '') {
+            \parse_str($rawQueryString, $visitorGet);
+        }
+        foreach ($originalGet as $getKey => $getValue) {
+            if (!\array_key_exists($getKey, $visitorGet) || $visitorGet[$getKey] !== $getValue) {
+                $preservedRouting[$getKey] = $getValue;
             }
         }
 

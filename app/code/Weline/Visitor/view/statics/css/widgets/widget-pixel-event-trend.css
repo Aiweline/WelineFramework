@@ -25,14 +25,14 @@
     background: linear-gradient(180deg, var(--color-literal-06b6d4) 0%, var(--color-accent-hover) 100%);
 }
 .pixel-trend-bars strong {
-    color: var(--w-dashboard-heading);
+    color: var(--w-dashboard-heading, var(--weline-theme-text));
     font-size: var(--token-size-11px);
     line-height: 1;
     overflow-wrap: anywhere;
 }
 .pixel-trend-bars span,
 .pixel-empty {
-    color: var(--w-dashboard-muted);
+    color: var(--w-dashboard-muted, var(--weline-theme-text-muted));
     font-size: var(--spacing-3);
     line-height: 1.2;
 }
@@ -57,6 +57,6 @@
     min-height: var(--size-panel-150);
     display: grid;
     place-items: center;
-    border: var(--border-width-thin) dashed var(--w-dashboard-border);
+    border: var(--border-width-thin) dashed var(--w-dashboard-border, var(--weline-theme-border));
     border-radius: var(--spacing-2);
 }

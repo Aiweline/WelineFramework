@@ -163,7 +163,7 @@
     border: 0;
     border-radius: var(--radius-full);
     background: var(--color-on-dark-92);
-    color: var(--weline-theme-color-text);
+    color: var(--weline-theme-color-text, var(--_paper-text));
     line-height: 1;
     cursor: pointer;
     box-shadow: var(--weline-shadow-lg);

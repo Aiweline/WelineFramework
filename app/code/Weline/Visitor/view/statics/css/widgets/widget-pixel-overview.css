@@ -14,7 +14,7 @@
 .pixel-overview-grid div {
     min-width: 0;
     border-radius: var(--size-scrollbar);
-    background: var(--w-dashboard-surface-soft);
+    background: var(--w-dashboard-surface-soft, var(--weline-theme-surface-muted));
     padding: var(--spacing-3) var(--spacing-2);
     text-align: center;
 }
@@ -34,7 +34,7 @@
 .pixel-overview-grid small {
     display: block;
     margin-top: var(--border-width-thick);
-    color: var(--w-dashboard-muted);
+    color: var(--w-dashboard-muted, var(--weline-theme-text-muted));
     font-size: var(--spacing-3);
     line-height: 1.25;
 }
@@ -43,7 +43,7 @@
     align-items: center;
     gap: var(--size-scrollbar);
     flex-wrap: wrap;
-    color: var(--w-dashboard-muted);
+    color: var(--w-dashboard-muted, var(--weline-theme-text-muted));
     font-size: var(--spacing-3);
 }
 .pixel-widget-foot .positive {

@@ -59,6 +59,16 @@ $actionLabels = [
  */
 $themeTokensHtml = '';
 $themeOverlayHtml = '';
+$welineBootHtml = '';
+try {
+    // 自包含页也要走声明式加载：渲染 header/base 引导块（boot stub + runtime config +
+    // weline.js defer），使 data-weline-load 可用，页面 JS 注册进 weline.modules.js。
+    $welineBootHtml = (string)\Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Frontend\Block\Header\Base::class
+    )->render();
+} catch (\Throwable) {
+    $welineBootHtml = '';
+}
 try {
     $cssPack = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeCssPack::class
@@ -80,32 +90,33 @@ try {
 ?>
 <?= $themeTokensHtml ?>
 <?= $themeOverlayHtml ?>
+<?= $welineBootHtml ?>
 <style>
   :root {
     /* 只消费语义色盘叶子（--color-*）；设计主题在 overlay 里覆盖色盘即自动生效。兜底=默认主题盘叶子 */
-    --paper: var(--color-bg-canvas, #ffffff);
-    --card: var(--color-bg-primary, #ffffff);
-    --ink: var(--color-text, #111827);
-    --muted: var(--color-text-secondary, #4b5563);
-    --line: var(--color-border-default, #e5e7eb);
-    --accent: var(--color-primary, #0f766e);
-    --accent-ink: var(--color-on-primary, #f8fafc);
-    --space-2: var(--weline-space-2, .5rem);
-    --space-3: var(--weline-space-3, .75rem);
-    --space-4: var(--weline-space-4, 1rem);
-    --space-5: var(--weline-space-5, 1.25rem);
-    --space-6: var(--weline-space-6, 1.5rem);
-    --space-8: var(--weline-space-8, 2rem);
-    --radius: var(--weline-radius-lg, 16px);
-    --radius-sm: var(--weline-radius-md, 10px);
-    --shadow: var(--weline-shadow-sm, 0 2px 10px rgba(17, 24, 39, .08));
+    --paper: var(--color-bg-canvas);
+    --card: var(--color-bg-primary);
+    --ink: var(--color-text);
+    --muted: var(--color-text-secondary);
+    --line: var(--color-border-default);
+    --accent: var(--color-primary);
+    --accent-ink: var(--color-on-primary);
+    --space-2: var(--weline-space-2);
+    --space-3: var(--weline-space-3);
+    --space-4: var(--weline-space-4);
+    --space-5: var(--weline-space-5);
+    --space-6: var(--weline-space-6);
+    --space-8: var(--weline-space-8);
+    --radius: var(--weline-radius-lg);
+    --radius-sm: var(--weline-radius-md);
+    --shadow: var(--weline-shadow-sm);
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     background: var(--paper);
     color: var(--ink);
-    font: 15px/1.6 var(--weline-font-sans, "Noto Sans SC", -apple-system, "PingFang SC", sans-serif);
+    font: var(--token-size-15px)/1.6 var(--weline-font-sans);
   }
   a { color: inherit; }
   .app-dl__bar {
@@ -118,14 +129,14 @@ try {
     background: var(--card);
   }
   .app-dl__brand { font-weight: 600; letter-spacing: .04em; text-decoration: none; }
-  .app-dl__back { color: var(--muted); text-decoration: none; font-size: 14px; }
+  .app-dl__back { color: var(--muted); text-decoration: none; font-size: var(--weline-font-size-sm); }
   .app-dl__back:hover, .app-dl__back:focus-visible { color: var(--ink); text-decoration: underline; }
   .app-dl__main {
-    max-width: var(--weline-layout-content-max-width, 72rem);
+    max-width: var(--weline-layout-content-max-width);
     margin: 0 auto;
     padding: var(--space-8) var(--space-5);
   }
-  .app-dl__title { font: 600 clamp(24px, 4vw, 34px)/1.2 var(--weline-font-display, "Noto Sans SC", -apple-system, "PingFang SC", sans-serif); margin: 0 0 var(--space-3); }
+  .app-dl__title { font: 600 clamp(var(--weline-font-size-2xl), 4vw, var(--token-size-34px))/1.2 var(--weline-font-display); margin: 0 0 var(--space-3); }
   .app-dl__sub { color: var(--muted); margin: 0 0 var(--space-6); max-width: 56ch; }
   .app-dl__hero {
     display: grid;
@@ -142,11 +153,11 @@ try {
     padding: var(--space-3);
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
-    background: #fff;
+    background: var(--card);
     line-height: 0;
   }
   .app-dl__qr img { display: block; width: 200px; height: 200px; }
-  .app-dl__hero-copy h2 { font: 600 17px/1.3 var(--weline-font-display, "Noto Sans SC", -apple-system, "PingFang SC", sans-serif); margin: 0 0 var(--space-2); }
+  .app-dl__hero-copy h2 { font: 600 var(--token-size-17px)/1.3 var(--weline-font-display); margin: 0 0 var(--space-2); }
   .app-dl__hero-copy p { color: var(--muted); margin: 0 0 var(--space-4); }
   .app-dl__cards {
     display: grid;
@@ -164,21 +175,21 @@ try {
     border-radius: var(--radius);
     background: var(--card);
   }
-  .app-dl__card h3 { font: 600 16px/1.3 var(--weline-font-display, "Noto Sans SC", -apple-system, "PingFang SC", sans-serif); margin: 0; }
-  .app-dl__meta { color: var(--muted); font-size: 13px; margin: 0; }
+  .app-dl__card h3 { font: 600 var(--weline-font-size-base)/1.3 var(--weline-font-display); margin: 0; }
+  .app-dl__meta { color: var(--muted); font-size: var(--token-size-13px); margin: 0; }
   .app-dl__card .app-dl__btn { margin-top: auto; }
   .app-dl__btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    padding: 11px 16px;
+    padding: var(--token-size-11px) var(--weline-space-4);
     border-radius: var(--radius-sm);
     border: 1px solid var(--line);
     background: var(--card);
     color: var(--ink);
     font-weight: 600;
-    font-size: 14px;
+    font-size: var(--weline-font-size-sm);
     text-decoration: none;
     cursor: pointer;
   }
@@ -186,7 +197,7 @@ try {
   .app-dl__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .app-dl__btn--primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
   .app-dl__btn--primary:hover, .app-dl__btn--primary:focus-visible { filter: brightness(.95); }
-  .app-dl__note { color: var(--muted); font-size: 13px; margin-top: var(--space-6); }
+  .app-dl__note { color: var(--muted); font-size: var(--token-size-13px); margin-top: var(--space-6); }
   @media (max-width: 720px) {
     .app-dl__hero { grid-template-columns: 1fr; justify-items: center; text-align: center; padding: var(--space-5); }
     .app-dl__qr img { width: 176px; height: 176px; }
@@ -202,7 +213,7 @@ try {
   <a class="app-dl__brand" href="<?= \htmlspecialchars($storeUrl, ENT_QUOTES, 'UTF-8') ?>"><?= \htmlspecialchars($t('首页', 'Home'), ENT_QUOTES, 'UTF-8') ?></a>
   <a class="app-dl__back" href="<?= \htmlspecialchars($storeUrl, ENT_QUOTES, 'UTF-8') ?>"><?= \htmlspecialchars($t('返回商店', 'Back to store'), ENT_QUOTES, 'UTF-8') ?></a>
 </header>
-<main class="app-dl__main">
+<main class="app-dl__main" data-weline-load="appDownloadPage">
   <h1 class="app-dl__title"><?= $t('下载 App', 'Download App') ?></h1>
   <p class="app-dl__sub"><?= $t('手机扫码打开本页；已构建的版本会直接出现在下方，安装后下次启动自动检查更新。', 'Scan with your phone to open this page. Released builds show below; installed clients check for updates on launch.') ?></p>
 
@@ -251,25 +262,6 @@ try {
 
   <p class="app-dl__note"><?= $t('本页只列已发布产物：每次构建发布后自动更新版本、体积与下载入口；客户端启动时通过版本接口自动检查更新。', 'This page lists released builds only: version, size and download links refresh on every release; clients check for updates through the version API on launch.') ?></p>
 </main>
-<script>
-(function () {
-  var deferred = null;
-  var btn = document.querySelector('[data-pwa-install]');
-  var hint = document.querySelector('[data-pwa-hint]');
-  window.addEventListener('beforeinstallprompt', function (e) {
-    e.preventDefault();
-    deferred = e;
-    if (btn) { btn.hidden = false; }
-    if (hint) { hint.hidden = true; }
-  });
-  if (btn) {
-    btn.addEventListener('click', function () {
-      if (!deferred) { return; }
-      deferred.prompt();
-      deferred.userChoice.then(function () { deferred = null; btn.hidden = true; });
-    });
-  }
-})();
-</script>
+
 </body>
 </html>

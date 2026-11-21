@@ -5,12 +5,12 @@
 .dashboard-widget-pixel-value-by-channel th,
 .dashboard-widget-pixel-value-by-channel td {
     padding: var(--spacing-2) 0;
-    border-bottom: var(--border-width-thin) solid var(--w-dashboard-border);
+    border-bottom: var(--border-width-thin) solid var(--w-dashboard-border, var(--weline-theme-border));
     vertical-align: middle;
     font-size: var(--spacing-3);
 }
 .dashboard-widget-pixel-value-by-channel thead th {
-    color: var(--w-dashboard-muted);
+    color: var(--w-dashboard-muted, var(--weline-theme-text-muted));
     font-weight: 600;
 }
 .dashboard-widget-pixel-value-by-channel tr:last-child th,
@@ -33,7 +33,7 @@
     flex-wrap: wrap;
 }
 .pixel-value-by-channel-meta {
-    color: var(--w-dashboard-muted);
+    color: var(--w-dashboard-muted, var(--weline-theme-text-muted));
     font-size: var(--spacing-3);
 }
 .pixel-value-by-channel-link {
@@ -58,6 +58,6 @@
     min-height: var(--token-size-110px);
     display: flex;
     align-items: center;
-    color: var(--w-dashboard-muted);
+    color: var(--w-dashboard-muted, var(--weline-theme-text-muted));
     font-size: var(--token-size-13px);
 }

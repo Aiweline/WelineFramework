@@ -8,6 +8,7 @@
 .weline-channel-empty-icon {
     font-size: 4rem;
     color: var(--weline-theme-text-muted);
+}
 /* from NotificationSubscription/index.phtml */
 .weline-subscription-tip {
     margin-bottom: var(--weline-space-5);
@@ -111,10 +112,10 @@
     .weline-subscription-channels {
         grid-template-columns: 1fr;
     }
-}
 }
 .weline-channel-table {
     background: var(--weline-theme-surface);
+}
 /* from NotificationSubscription/index.phtml */
 .weline-subscription-tip {
     margin-bottom: var(--weline-space-5);
@@ -218,11 +219,11 @@
     .weline-subscription-channels {
         grid-template-columns: 1fr;
     }
-}
 }
 .weline-channel-table th {
     background: var(--weline-theme-surface-muted);
     color: var(--weline-theme-text);
+}
 /* from NotificationSubscription/index.phtml */
 .weline-subscription-tip {
     margin-bottom: var(--weline-space-5);
@@ -326,12 +327,12 @@
     .weline-subscription-channels {
         grid-template-columns: 1fr;
     }
-}
 }
 /* from NotificationChannel/form.phtml */
 .weline-channel-help-list {
     padding-left: 1.25rem;
     margin-bottom: 0;
+}
 /* from NotificationSubscription/index.phtml */
 .weline-subscription-tip {
     margin-bottom: var(--weline-space-5);
@@ -435,11 +436,11 @@
     .weline-subscription-channels {
         grid-template-columns: 1fr;
     }
-}
 }
 .weline-channel-help-list li {
     margin-bottom: 0.5rem;
     color: var(--weline-theme-text-muted);
+}
 /* from NotificationSubscription/index.phtml */
 .weline-subscription-tip {
     margin-bottom: var(--weline-space-5);
@@ -543,11 +544,11 @@
     .weline-subscription-channels {
         grid-template-columns: 1fr;
     }
-}
 }
 /* from UserContact/index.phtml */
 .weline-user-contact-card {
     margin-bottom: 1.5rem;
+}
 /* from NotificationSubscription/index.phtml */
 .weline-subscription-tip {
     margin-bottom: var(--weline-space-5);
@@ -651,11 +652,11 @@
     .weline-subscription-channels {
         grid-template-columns: 1fr;
     }
-}
 }
 .weline-user-contact-card-header {
     background: var(--weline-theme-surface-muted);
     border-bottom: 1px solid var(--weline-theme-border);
+}
 /* from NotificationSubscription/index.phtml */
 .weline-subscription-tip {
     margin-bottom: var(--weline-space-5);
@@ -759,12 +760,12 @@
     .weline-subscription-channels {
         grid-template-columns: 1fr;
     }
-}
 }
 .weline-user-contact-empty {
     text-align: center;
     padding: 2rem;
     color: var(--weline-theme-text-muted);
+}
 /* from NotificationSubscription/index.phtml */
 .weline-subscription-tip {
     margin-bottom: var(--weline-space-5);
@@ -868,11 +869,11 @@
     .weline-subscription-channels {
         grid-template-columns: 1fr;
     }
-}
 }
 .weline-user-contact-empty-icon {
     font-size: 3rem;
     margin-bottom: 0.5rem;
+}
 /* from NotificationSubscription/index.phtml */
 .weline-subscription-tip {
     margin-bottom: var(--weline-space-5);
@@ -976,11 +977,11 @@
     .weline-subscription-channels {
         grid-template-columns: 1fr;
     }
-}
 }
 .weline-user-contact-item {
     background: var(--weline-theme-surface);
     border-color: var(--weline-theme-border);
+}
 /* from NotificationSubscription/index.phtml */
 .weline-subscription-tip {
     margin-bottom: var(--weline-space-5);
@@ -1084,11 +1085,11 @@
     .weline-subscription-channels {
         grid-template-columns: 1fr;
     }
-}
 }
 .weline-user-contact-value {
     font-weight: 500;
     color: var(--weline-theme-text);
+}
 /* from NotificationSubscription/index.phtml */
 .weline-subscription-tip {
     margin-bottom: var(--weline-space-5);
@@ -1192,10 +1193,10 @@
     .weline-subscription-channels {
         grid-template-columns: 1fr;
     }
-}
 }
 .weline-user-contact-name {
     color: var(--weline-theme-text-muted);
+}
 /* from NotificationSubscription/index.phtml */
 .weline-subscription-tip {
     margin-bottom: var(--weline-space-5);
@@ -1299,11 +1300,11 @@
     .weline-subscription-channels {
         grid-template-columns: 1fr;
     }
-}
 }
 .weline-user-contact-actions {
     display: flex;
     gap: 0.25rem;
+}
 /* from NotificationSubscription/index.phtml */
 .weline-subscription-tip {
     margin-bottom: var(--weline-space-5);
@@ -1407,6 +1408,5 @@
     .weline-subscription-channels {
         grid-template-columns: 1fr;
     }
-}
 }
 }

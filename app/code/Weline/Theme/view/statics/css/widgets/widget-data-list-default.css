@@ -5,10 +5,10 @@
    ============================================ */
 
 .backend-data-list {
-    background: var(--backend-color-card-bg);
-    border: var(--border-width-thin) solid var(--backend-color-border-default);
-    border-radius: var(--backend-border-radius-md);
-    box-shadow: var(--backend-card-shadow);
+    background: var(--backend-color-card-bg, var(--backend-theme-surface));
+    border: var(--border-width-thin) solid var(--backend-color-border-default, var(--backend-theme-border));
+    border-radius: var(--backend-border-radius-md, var(--weline-space-2));
+    box-shadow: var(--backend-card-shadow, var(--weline-theme-shadow-sm));
     overflow: hidden;
 }
 
@@ -17,34 +17,34 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--backend-spacing-md) var(--backend-spacing-lg);
-    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light);
+    padding: var(--backend-spacing-md, var(--weline-space-4)) var(--backend-spacing-lg, var(--weline-space-6));
+    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light, var(--weline-theme-surface-muted));
     flex-wrap: wrap;
-    gap: var(--backend-spacing-sm);
+    gap: var(--backend-spacing-sm, var(--weline-space-2));
 }
 
 .backend-data-list-title {
     display: flex;
     align-items: center;
-    gap: var(--backend-spacing-sm);
+    gap: var(--backend-spacing-sm, var(--weline-space-2));
 }
 
 .backend-data-list-title h4 {
     margin: 0;
     font-size: var(--token-size-1-1rem);
     font-weight: 600;
-    color: var(--backend-color-text-primary);
+    color: var(--backend-color-text-primary, var(--weline-theme-text));
 }
 
 .backend-data-list-count {
     font-size: var(--font-size-sm);
-    color: var(--backend-color-text-secondary);
+    color: var(--backend-color-text-secondary, var(--backend-theme-text-muted));
 }
 
 .backend-data-list-actions {
     display: flex;
     align-items: center;
-    gap: var(--backend-spacing-md);
+    gap: var(--backend-spacing-md, var(--weline-space-4));
 }
 
 /* 搜索框 */
@@ -54,24 +54,24 @@
 
 .backend-data-list-search-input {
     width: var(--size-panel-220);
-    padding: var(--backend-spacing-xs) var(--backend-spacing-sm);
+    padding: var(--backend-spacing-xs, var(--weline-space-1)) var(--backend-spacing-sm, var(--weline-space-2));
     padding-left: var(--spacing-9);
-    border: var(--border-width-thin) solid var(--backend-color-border-default);
-    border-radius: var(--backend-border-radius);
-    background: var(--backend-color-input-bg);
-    color: var(--backend-color-text-primary);
+    border: var(--border-width-thin) solid var(--backend-color-border-default, var(--backend-theme-border));
+    border-radius: var(--backend-border-radius, var(--weline-space-2));
+    background: var(--backend-color-input-bg, var(--backend-theme-surface-raised));
+    color: var(--backend-color-text-primary, var(--weline-theme-text));
     font-size: var(--font-size-sm);
     transition: all 0.2s ease;
 }
 
 .backend-data-list-search-input:focus {
     outline: none;
-    border-color: var(--backend-color-primary);
-    box-shadow: var(--backend-focus-ring);
+    border-color: var(--backend-color-primary, var(--backend-theme-primary));
+    box-shadow: var(--backend-focus-ring, var(--weline-theme-focus-ring));
 }
 
 .backend-data-list-search-input::placeholder {
-    color: var(--backend-color-text-tertiary);
+    color: var(--backend-color-text-tertiary, var(--weline-theme-text-muted));
 }
 
 .backend-data-list-search-icon {
@@ -79,7 +79,7 @@
     left: var(--weline-space-3);
     top: 50%;
     transform: translateY(-50%);
-    color: var(--backend-color-text-tertiary);
+    color: var(--backend-color-text-tertiary, var(--weline-theme-text-muted));
     pointer-events: none;
 }
 
@@ -87,30 +87,30 @@
 .backend-data-list-batch-bar {
     display: flex;
     align-items: center;
-    gap: var(--backend-spacing-md);
-    padding: var(--backend-spacing-sm) var(--backend-spacing-lg);
-    background: var(--backend-color-primary-bg-subtle);
-    border-bottom: var(--border-width-thin) solid var(--backend-color-primary);
+    gap: var(--backend-spacing-md, var(--weline-space-4));
+    padding: var(--backend-spacing-sm, var(--weline-space-2)) var(--backend-spacing-lg, var(--weline-space-6));
+    background: var(--backend-color-primary-bg-subtle, var(--weline-theme-primary-surface));
+    border-bottom: var(--border-width-thin) solid var(--backend-color-primary, var(--backend-theme-primary));
 }
 
 .backend-data-list-batch-info {
     font-size: var(--font-size-sm);
-    color: var(--backend-color-primary);
+    color: var(--backend-color-primary, var(--backend-theme-primary));
     font-weight: 500;
 }
 
 .backend-data-list-batch-cancel {
     margin-left: auto;
-    padding: var(--backend-spacing-xs) var(--backend-spacing-sm);
+    padding: var(--backend-spacing-xs, var(--weline-space-1)) var(--backend-spacing-sm, var(--weline-space-2));
     border: none;
     background: transparent;
-    color: var(--backend-color-text-secondary);
+    color: var(--backend-color-text-secondary, var(--backend-theme-text-muted));
     cursor: pointer;
     font-size: var(--font-size-sm);
 }
 
 .backend-data-list-batch-cancel:hover {
-    color: var(--backend-color-text-primary);
+    color: var(--backend-color-text-primary, var(--weline-theme-text));
 }
 
 /* 表格 */
@@ -124,35 +124,35 @@
 }
 
 .backend-data-list-table th {
-    padding: var(--backend-spacing-sm) var(--backend-spacing-md);
+    padding: var(--backend-spacing-sm, var(--weline-space-2)) var(--backend-spacing-md, var(--weline-space-4));
     text-align: left;
     font-weight: 600;
     font-size: var(--font-size-sm);
-    color: var(--backend-color-text-primary);
-    background: var(--backend-color-bg-secondary);
-    border-bottom: var(--border-width-medium) solid var(--backend-color-border-default);
+    color: var(--backend-color-text-primary, var(--weline-theme-text));
+    background: var(--backend-color-bg-secondary, var(--weline-theme-surface-muted));
+    border-bottom: var(--border-width-medium) solid var(--backend-color-border-default, var(--backend-theme-border));
     white-space: nowrap;
 }
 
 .backend-data-list-table td {
-    padding: var(--backend-spacing-sm) var(--backend-spacing-md);
-    color: var(--backend-color-text-primary);
-    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light);
+    padding: var(--backend-spacing-sm, var(--weline-space-2)) var(--backend-spacing-md, var(--weline-space-4));
+    color: var(--backend-color-text-primary, var(--weline-theme-text));
+    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light, var(--weline-theme-surface-muted));
     font-size: var(--font-size-sm);
 }
 
 /* 表格变体 */
 .backend-data-list-table--striped tbody tr:nth-child(even) {
-    background: var(--backend-color-bg-tertiary);
+    background: var(--backend-color-bg-tertiary, var(--weline-theme-surface-muted));
 }
 
 .backend-data-list-table--hover tbody tr:hover {
-    background: var(--backend-color-table-bg-hover);
+    background: var(--backend-color-table-bg-hover, var(--weline-theme-surface-muted));
 }
 
 .backend-data-list-table--bordered td,
 .backend-data-list-table--bordered th {
-    border: var(--border-width-thin) solid var(--backend-color-border-light);
+    border: var(--border-width-thin) solid var(--backend-color-border-light, var(--weline-theme-surface-muted));
 }
 
 /* 复选框列 */
@@ -163,7 +163,7 @@
 
 /* 排序图标 */
 .backend-data-list-sort-icon {
-    margin-left: var(--backend-spacing-xs);
+    margin-left: var(--backend-spacing-xs, var(--weline-space-1));
     cursor: pointer;
     opacity: 0.5;
     transition: opacity 0.2s;
@@ -176,14 +176,14 @@
 /* 空状态 */
 .backend-data-list-empty {
     text-align: center;
-    padding: var(--backend-spacing-xl) var(--backend-spacing-md);
-    color: var(--backend-color-text-tertiary);
+    padding: var(--backend-spacing-xl, var(--weline-space-8)) var(--backend-spacing-md, var(--weline-space-4));
+    color: var(--backend-color-text-tertiary, var(--weline-theme-text-muted));
 }
 
 .backend-data-list-empty i {
     font-size: var(--spacing-2xl);
     opacity: 0.4;
-    margin-bottom: var(--backend-spacing-md);
+    margin-bottom: var(--backend-spacing-md, var(--weline-space-4));
     display: block;
 }
 
@@ -196,29 +196,29 @@
 .backend-data-list-footer {
     display: flex;
     justify-content: center;
-    padding: var(--backend-spacing-md) var(--backend-spacing-lg);
-    border-top: var(--border-width-thin) solid var(--backend-color-border-light);
+    padding: var(--backend-spacing-md, var(--weline-space-4)) var(--backend-spacing-lg, var(--weline-space-6));
+    border-top: var(--border-width-thin) solid var(--backend-color-border-light, var(--weline-theme-surface-muted));
 }
 
 .backend-data-list-pagination {
     display: flex;
     align-items: center;
-    gap: var(--backend-spacing-sm);
+    gap: var(--backend-spacing-sm, var(--weline-space-2));
 }
 
 .backend-data-list-page-btn {
-    padding: var(--backend-spacing-xs) var(--backend-spacing-sm);
-    border: var(--border-width-thin) solid var(--backend-color-border-default);
-    border-radius: var(--backend-border-radius);
-    background: var(--backend-color-card-bg);
-    color: var(--backend-color-text-primary);
+    padding: var(--backend-spacing-xs, var(--weline-space-1)) var(--backend-spacing-sm, var(--weline-space-2));
+    border: var(--border-width-thin) solid var(--backend-color-border-default, var(--backend-theme-border));
+    border-radius: var(--backend-border-radius, var(--weline-space-2));
+    background: var(--backend-color-card-bg, var(--backend-theme-surface));
+    color: var(--backend-color-text-primary, var(--weline-theme-text));
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .backend-data-list-page-btn:hover:not(:disabled) {
-    border-color: var(--backend-color-primary);
-    color: var(--backend-color-primary);
+    border-color: var(--backend-color-primary, var(--backend-theme-primary));
+    color: var(--backend-color-primary, var(--backend-theme-primary));
 }
 
 .backend-data-list-page-btn:disabled {
@@ -228,7 +228,7 @@
 
 .backend-data-list-page-info {
     font-size: var(--font-size-sm);
-    color: var(--backend-color-text-secondary);
+    color: var(--backend-color-text-secondary, var(--backend-theme-text-muted));
 }
 
 /* 响应式 */

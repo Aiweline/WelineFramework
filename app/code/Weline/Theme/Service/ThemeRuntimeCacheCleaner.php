@@ -243,6 +243,13 @@ final class ThemeRuntimeCacheCleaner
                 FullPageCacheCoordinator::clearProcessCache();
             }
         });
+        // 店面 404 特殊 FPC：烘焙整页 chrome + 世代声明，发布/换代必须重建
+        // （站点×语言键控、无主题维度，整树清理、下次 404 单飞重建）。
+        $this->runStep($result, 'storefront_not_found_fpc', static function (): void {
+            if (\class_exists(\Weline\Framework\Http\Fpc\StorefrontNotFoundFpcStore::class)) {
+                \Weline\Framework\Http\Fpc\StorefrontNotFoundFpcStore::purge();
+            }
+        });
         $this->runStep($result, 'fpc_router_cache_pools', function (): void {
             $cacheManager = ObjectManager::getInstance(CacheManager::class);
             foreach (['fpc', 'router'] as $pool) {
@@ -469,6 +476,15 @@ final class ThemeRuntimeCacheCleaner
         $this->runStep($result, 'fpc_process_cache', static function (): void {
             if (\class_exists(FullPageCacheCoordinator::class)) {
                 FullPageCacheCoordinator::clearProcessCache();
+            }
+        });
+
+        // 店面 404 特殊 FPC（generated/error-pages/not-found/{site}/{lang}.html）：
+        // 烘焙的是整页主题 chrome + 世代声明，发布/换代后必须重建。文件按站点×语言
+        // 键控、不含主题维度，只能整树清——叶量少，下次 404 时单飞重建。
+        $this->runStep($result, 'storefront_not_found_fpc', static function (): void {
+            if (\class_exists(\Weline\Framework\Http\Fpc\StorefrontNotFoundFpcStore::class)) {
+                \Weline\Framework\Http\Fpc\StorefrontNotFoundFpcStore::purge();
             }
         });
 

@@ -13,5 +13,13 @@ Object.assign(window.WelineModulesConfig.modules, {
         globalVar: "WelineBlogCategoryFilter",
         load: "eager",
         description: "博客分类侧栏两级树展开"
+    },
+    blogCategoryDrawer: {
+        paths: [
+            "Weline_Blog::js/blog-category-drawer.js?v=20261121-blog-category-drawer-1"
+        ],
+        globalVar: null,
+        load: "eager",
+        description: "博客分类移动端抽屉（侧栏开关/遮罩/焦点陷阱）"
     }
 });

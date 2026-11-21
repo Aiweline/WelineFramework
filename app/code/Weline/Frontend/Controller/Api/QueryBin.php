@@ -799,7 +799,16 @@ class QueryBin extends FrontendRestController
         if ($serverId === '') {
             return;
         }
-        if (\strcasecmp($serverId, \trim($clientThemePublishedVersionId)) === 0) {
+        $clientId = \trim($clientThemePublishedVersionId);
+        // Generationless documents (long-lived not-found FPC leaves strip volatile
+        // stamps; pre-stamp legacy pages never had one) skip enforcement — the same
+        // off switch the ScopeBootstrap compare, generation anchor and session
+        // assertSession already honor. A 409 here can never converge: reloading the
+        // same URL re-serves the same unstamped document.
+        if ($clientId === '') {
+            return;
+        }
+        if (\strcasecmp($serverId, $clientId) === 0) {
             return;
         }
 
@@ -808,9 +817,7 @@ class QueryBin extends FrontendRestController
         // published generation, plus (warmup-transition tolerance) the most recent
         // ACCEPTABLE_GENERATION_DEPTH sealed generations of the same theme chain ×
         // owner quad — pages not yet re-warmed after publish must keep serving.
-        $clientId = \trim($clientThemePublishedVersionId);
-        if ($clientId !== ''
-            && \class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
+        if (\class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
             try {
                 /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
                 $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(

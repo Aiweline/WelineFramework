@@ -298,6 +298,28 @@
     padding-inline: var(--weline-space-1);
 }
 
+/* 顶部通知条企业联系入口：邮箱长地址窄屏截断，保「联系我们」入口 */
+.weline-header .header-site-notice-links .header-contact-mail {
+    max-width: 15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: inherit;
+    text-decoration: none;
+}
+
+.weline-header .header-site-notice-links .header-contact-link {
+    color: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+    .weline-header .header-site-notice-links .header-contact-mail {
+        display: none;
+    }
+}
+
 /* 通知条右侧：渠道范围 + 收藏（继承 notice 字色，避免主栏 inverse 漂白） */
 .weline-header .header-site-notice-links .header-scope-switcher,
 .weline-header .header-top-bar-rights-slot .header-scope-switcher,
@@ -793,30 +815,30 @@
     border-radius: var(--weline-theme-radius-md);
     transition: box-shadow 0.2s ease;
     background: transparent;
-    --weline-chrome-body-text: var(--weline-theme-color-text);
+    --weline-chrome-body-text: var(--weline-theme-color-text, var(--_paper-text));
     --weline-chrome-body-text-secondary: var(--color-text-gray);
     --weline-chrome-body-text-muted: var(--color-text-gray-mid);
     --amz-drawer-text: var(--weline-chrome-body-text);
     --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
     --_paper-text: var(--amz-drawer-text, #0f1111);
     --_paper-muted: var(--amz-drawer-muted, #565959);
-    --_inverse-text: var(--_paper-text);
-    --_inverse-muted: var(--_paper-muted);
-    --color-text: var(--_paper-text);
-    --color-text-primary: var(--_paper-text);
-    --color-text-secondary: var(--_paper-muted);
-    --color-text-muted: var(--_paper-muted);
-    --color-text-placeholder: var(--_paper-muted);
-    --weline-chrome-text-primary: var(--_paper-text);
-    --weline-chrome-text-secondary: var(--_paper-muted);
-    --weline-chrome-text-muted: var(--_paper-muted);
-    --weline-theme-text: var(--_paper-text);
-    --weline-theme-text-secondary: var(--_paper-muted);
-    --weline-theme-text-muted: var(--_paper-muted);
-    --weline-theme-color-text: var(--_paper-text);
-    --weline-theme-color-text-muted: var(--_paper-muted);
-    --w-surface-fg: var(--_paper-text);
-    --w-surface-fg-muted: var(--_paper-muted);
+    --_inverse-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    --_inverse-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --color-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    --color-text-primary: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    --color-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --color-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --color-text-placeholder: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --weline-chrome-text-primary: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    --weline-chrome-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --weline-chrome-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --weline-theme-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    --weline-theme-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --weline-theme-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --weline-theme-color-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    --weline-theme-color-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --w-surface-fg: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    --w-surface-fg-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
     color: var(--_paper-text, #0f1111);
 }
 
@@ -959,20 +981,20 @@
  */
 .w-menu.search-type-menu.search-category-menu,
 .search-type-menu.search-category-menu {
-    --weline-chrome-body-text: var(--weline-theme-color-text);
+    --weline-chrome-body-text: var(--weline-theme-color-text, var(--_paper-text));
     --weline-chrome-body-text-secondary: var(--color-text-gray);
     --amz-drawer-text: var(--weline-chrome-body-text);
     --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
     --_paper-text: var(--amz-drawer-text, #0f1111);
     --_paper-muted: var(--amz-drawer-muted, #565959);
-    color: var(--_paper-text);
+    color: var(--_paper-text, var(--amz-drawer-text, #0f1111));
 }
 
 /* Category tree flies right; opaque paper surface (not transparent inline stack). */
 .w-menu.search-type-menu.search-category-menu .search-type-submenu,
 .search-type-menu.search-category-menu .search-type-submenu {
     background: var(--color-bg-primary);
-    color: var(--_paper-text);
+    color: var(--_paper-text, var(--amz-drawer-text, #0f1111));
     box-shadow: var(--weline-theme-shadow-lg);
 }
 
@@ -1530,8 +1552,8 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 .weline-header .header-actions svg.w-icon,
 .weline-header .header-user-area svg.w-icon,
 .weline-header .header-location svg.w-icon {
-    inline-size: var(--weline-chrome-action-icon-size);
-    block-size: var(--weline-chrome-action-icon-size);
+    inline-size: var(--weline-chrome-action-icon-size, var(--spacing-7));
+    block-size: var(--weline-chrome-action-icon-size, var(--spacing-7));
     flex-shrink: 0;
     color: inherit;
     stroke: currentColor;
@@ -1556,14 +1578,14 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 }
 
 .weline-header .w-language-switcher__flag {
-    inline-size: var(--weline-chrome-action-icon-size);
-    min-height: var(--weline-chrome-action-icon-size);
+    inline-size: var(--weline-chrome-action-icon-size, var(--spacing-7));
+    min-height: var(--weline-chrome-action-icon-size, var(--spacing-7));
 }
 
 .weline-header .w-language-switcher__flag svg,
 .weline-header .w-language-switcher__flag img.w-flag-icon {
-    inline-size: var(--weline-chrome-action-icon-size);
-    max-block-size: var(--weline-chrome-action-icon-size);
+    inline-size: var(--weline-chrome-action-icon-size, var(--spacing-7));
+    max-block-size: var(--weline-chrome-action-icon-size, var(--spacing-7));
     stroke: none;
 }
 
@@ -1628,8 +1650,8 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    inline-size: var(--weline-chrome-action-icon-size);
-    block-size: var(--weline-chrome-action-icon-size);
+    inline-size: var(--weline-chrome-action-icon-size, var(--spacing-7));
+    block-size: var(--weline-chrome-action-icon-size, var(--spacing-7));
     flex-shrink: 0;
 }
 

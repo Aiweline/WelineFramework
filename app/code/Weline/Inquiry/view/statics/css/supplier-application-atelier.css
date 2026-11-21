@@ -3,7 +3,7 @@
  * Left narrative + right InquiryRenderer form; tokens align with Chang'an ink/gold.
  */
 .w-inquiry-suppliers--atelier {
-    --ink: var(--weline-theme-color-text);
+    --ink: var(--weline-theme-color-text, var(--_paper-text));
     --ink-soft: var(--color-text);
     --gold: var(--color-warning);
     --gold-dim: var(--color-warning-bg-subtle);
@@ -28,7 +28,7 @@
     align-items: stretch;
     gap: 0;
     border: var(--border-width-thin) solid var(--line);
-    background: var(--paper-card);
+    background: var(--paper-card, var(--color-bg-primary));
     overflow: hidden;
 }
 
@@ -51,7 +51,7 @@
     content: "";
     position: absolute;
     inset: 1rem;
-    border: var(--border-width-thin) solid var(--gold-dim);
+    border: var(--border-width-thin) solid var(--gold-dim, var(--color-warning-bg-subtle));
     pointer-events: none;
 }
 
@@ -60,7 +60,7 @@
     font-size: var(--weline-font-size-xs);
     letter-spacing: var(--spacing-0_5);
     text-transform: uppercase;
-    color: var(--gold);
+    color: var(--gold, var(--color-warning));
 }
 
 .w-inquiry-suppliers--atelier .w-inquiry-suppliers__story-title {
@@ -100,7 +100,7 @@
 
 .w-inquiry-suppliers--atelier .w-inquiry-suppliers__toc a:hover,
 .w-inquiry-suppliers--atelier .w-inquiry-suppliers__toc a:focus-visible {
-    color: var(--gold);
+    color: var(--gold, var(--color-warning));
     outline: none;
 }
 
@@ -116,7 +116,7 @@
 .w-inquiry-suppliers--atelier .w-inquiry-suppliers__section h2 {
     margin: 0 0 var(--spacing-0_55);
     padding-left: var(--spacing-0_55);
-    border-left: var(--border-width-thick) solid var(--gold);
+    border-left: var(--border-width-thick) solid var(--gold, var(--color-warning));
     font-size: var(--font-size-sm);
     font-weight: 650;
     color: var(--color-text);
@@ -164,13 +164,13 @@
     border: var(--border-width-thin) solid var(--color-warning);
     font-size: var(--font-size-xs);
     font-weight: 700;
-    color: var(--gold);
+    color: var(--gold, var(--color-warning));
 }
 
 .w-inquiry-suppliers--atelier .w-inquiry-suppliers__card {
     box-sizing: border-box;
     padding: clamp(var(--weline-space-5), 2.5vw, var(--weline-space-8));
-    background: var(--paper-card);
+    background: var(--paper-card, var(--color-bg-primary));
 }
 
 .w-inquiry-suppliers--atelier .weline-inquiry--supplier.weline-inquiry--inline .weline-inquiry__modal {
@@ -263,7 +263,7 @@
 .w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field textarea:focus,
 .w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field select:focus,
 .w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field--country .w-address__control:focus-within {
-    border-color: var(--gold);
+    border-color: var(--gold, var(--color-warning));
     outline: none;
     box-shadow: var(--weline-shadow-md);
 }
@@ -284,8 +284,8 @@
     margin-top: var(--spacing-1_5);
     border: var(--border-width-thin) solid var(--ink);
     border-radius: 0;
-    background: var(--cta);
-    color: var(--cta-text);
+    background: var(--cta, var(--color-bg-dark));
+    color: var(--cta-text, var(--color-text-inverse));
     font: inherit;
     font-size: var(--font-size-sm);
     font-weight: 650;
@@ -298,8 +298,8 @@
 .w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__submit:hover:not(:disabled),
 .w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__form > button[type="submit"]:focus-visible,
 .w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__submit:focus-visible {
-    background: var(--gold);
-    border-color: var(--gold);
+    background: var(--gold, var(--color-warning));
+    border-color: var(--gold, var(--color-warning));
     color: var(--ink);
     outline: none;
 }

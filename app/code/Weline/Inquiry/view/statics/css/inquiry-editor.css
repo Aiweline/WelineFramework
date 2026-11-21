@@ -1,10 +1,10 @@
 /* Inquiry backend form editor — schema workshop within Weline Backend tokens */
 .w-inquiry-editor {
-  --iq-rail: color-mix(in srgb, var(--weline-color-border) 88%, transparent);
-  --iq-ink: var(--weline-color-text);
-  --iq-muted: var(--weline-color-text-muted);
-  --iq-accent: var(--weline-color-primary);
-  --iq-country: color-mix(in srgb, var(--iq-accent) 55%, var(--color-success));
+  --iq-rail: color-mix(in srgb, var(--backend-color-border-default) 88%, transparent);
+  --iq-ink: var(--backend-color-text);
+  --iq-muted: var(--backend-color-text-muted);
+  --iq-accent: var(--backend-color-primary);
+  --iq-country: color-mix(in srgb, var(--iq-accent, var(--backend-color-primary)) 55%, var(--backend-color-success));
   display: grid;
   gap: var(--weline-space-4);
   min-width: 0;
@@ -17,9 +17,9 @@
   z-index: 2;
   padding-block: var(--weline-space-2);
   margin-block-end: 0;
-  background: color-mix(in srgb, var(--backend-theme-canvas, var(--weline-color-surface)) 88%, transparent);
+  background: color-mix(in srgb, var(--backend-color-bg-canvas) 88%, transparent);
   backdrop-filter: blur(8px);
-  border-bottom: var(--border-width-thin) solid var(--iq-rail);
+  border-bottom: var(--border-width-thin) solid var(--iq-rail, color-mix(in srgb, var(--backend-color-border-default) 88%, transparent));
   flex-wrap: wrap;
   gap: var(--weline-space-2);
 }
@@ -31,7 +31,7 @@
 .w-inquiry-editor__lede {
   margin: 0;
   font-size: var(--weline-font-size-sm);
-  letter-spacing: var(--letter-spacing-wide);
+  letter-spacing: var(--backend-letter-spacing-wide);
 }
 
 .w-inquiry-editor__count {
@@ -44,9 +44,9 @@
   border-radius: var(--radius-full);
   font-size: var(--weline-font-size-xs);
   font-variant-numeric: tabular-nums;
-  color: var(--iq-ink);
-  background: color-mix(in srgb, var(--iq-accent) 12%, transparent);
-  border: var(--border-width-thin) solid color-mix(in srgb, var(--iq-accent) 22%, transparent);
+  color: var(--iq-ink, var(--backend-color-text));
+  background: color-mix(in srgb, var(--iq-accent, var(--backend-color-primary)) 12%, transparent);
+  border: var(--border-width-thin) solid color-mix(in srgb, var(--iq-accent, var(--backend-color-primary)) 22%, transparent);
 }
 
 .w-inquiry-editor__rail-head {
@@ -64,20 +64,20 @@
 }
 
 .w-inquiry-editor__field {
-  border: var(--border-width-thin) solid var(--iq-rail);
+  border: var(--border-width-thin) solid var(--iq-rail, color-mix(in srgb, var(--backend-color-border-default) 88%, transparent));
   border-radius: var(--weline-radius-md);
-  background: var(--weline-color-surface);
+  background: var(--backend-color-bg-surface);
   padding: var(--weline-space-3);
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .w-inquiry-editor__field:focus-within {
-  border-color: color-mix(in srgb, var(--iq-accent) 45%, var(--iq-rail));
-  box-shadow: var(--focus-ring);
+  border-color: color-mix(in srgb, var(--iq-accent, var(--backend-color-primary)) 45%, var(--iq-rail, color-mix(in srgb, var(--backend-color-border-default) 88%, transparent)));
+  box-shadow: var(--backend-focus-ring);
 }
 
 .w-inquiry-editor__field.is-country {
-  border-left: var(--border-width-thick) solid var(--iq-country);
+  border-left: var(--backend-border-width-thick) solid var(--iq-country, color-mix(in srgb, var(--iq-accent) 55%, var(--backend-color-success)));
 }
 
 /* Mobile-first: 两行紧凑轨 —— 键名+删除 / 类型+必填；避免删除键单独掉行、类型被挤成一字 */
@@ -125,7 +125,7 @@
 .w-inquiry-editor__ord {
   font-variant-numeric: tabular-nums;
   font-size: var(--weline-font-size-xs);
-  color: var(--iq-muted);
+  color: var(--iq-muted, var(--backend-color-text-muted));
   text-align: center;
 }
 
@@ -134,7 +134,7 @@
   align-items: center;
   gap: var(--spacing-1_5);
   font-size: var(--font-size-13);
-  color: var(--iq-ink);
+  color: var(--iq-ink, var(--backend-color-text));
   white-space: nowrap;
 }
 
@@ -144,7 +144,7 @@
   gap: var(--weline-space-3);
   margin-top: var(--weline-space-3);
   padding-top: var(--weline-space-3);
-  border-top: var(--border-width-thin) dashed var(--iq-rail);
+  border-top: var(--border-width-thin) dashed var(--iq-rail, color-mix(in srgb, var(--backend-color-border-default) 88%, transparent));
 }
 
 @media (min-width: 640px) {
@@ -166,9 +166,9 @@
 
 .w-inquiry-editor__guide {
   padding: var(--weline-space-3) var(--weline-space-4);
-  border: var(--border-width-thin) solid color-mix(in srgb, var(--iq-accent) 22%, var(--iq-rail));
+  border: var(--border-width-thin) solid color-mix(in srgb, var(--iq-accent, var(--backend-color-primary)) 22%, var(--iq-rail, color-mix(in srgb, var(--backend-color-border-default) 88%, transparent)));
   border-radius: var(--weline-radius-md);
-  background: color-mix(in srgb, var(--iq-accent) 6%, var(--weline-color-surface));
+  background: color-mix(in srgb, var(--iq-accent, var(--backend-color-primary)) 6%, var(--backend-color-bg-surface));
 }
 
 .w-inquiry-editor__steps {
@@ -176,7 +176,7 @@
   padding-left: var(--spacing-4_5);
   display: grid;
   gap: var(--spacing-1_5);
-  color: var(--iq-ink);
+  color: var(--iq-ink, var(--backend-color-text));
   font-size: var(--weline-font-size-sm);
   line-height: 1.45;
 }
@@ -194,33 +194,33 @@
 
 .w-inquiry-editor__locale-tab {
   appearance: none;
-  border: var(--border-width-thin) solid var(--iq-rail);
-  background: var(--weline-color-surface);
-  color: var(--iq-ink);
+  border: var(--border-width-thin) solid var(--iq-rail, color-mix(in srgb, var(--backend-color-border-default) 88%, transparent));
+  background: var(--backend-color-bg-surface);
+  color: var(--iq-ink, var(--backend-color-text));
   border-radius: var(--radius-full);
-  padding: var(--spacing-xs) var(--weline-space-3);
+  padding: var(--backend-spacing-xs) var(--weline-space-3);
   font-size: var(--font-size-13);
   cursor: pointer;
 }
 
 .w-inquiry-editor__locale-tab.is-active {
-  border-color: color-mix(in srgb, var(--iq-accent) 55%, var(--iq-rail));
-  background: color-mix(in srgb, var(--iq-accent) 12%, transparent);
-  color: var(--iq-accent);
+  border-color: color-mix(in srgb, var(--iq-accent, var(--backend-color-primary)) 55%, var(--iq-rail, color-mix(in srgb, var(--backend-color-border-default) 88%, transparent)));
+  background: color-mix(in srgb, var(--iq-accent, var(--backend-color-primary)) 12%, transparent);
+  color: var(--iq-accent, var(--backend-color-primary));
   font-weight: 600;
 }
 
 .w-inquiry-editor__subhead {
   font-size: var(--font-size-sm);
   font-weight: 600;
-  color: var(--iq-ink);
+  color: var(--iq-ink, var(--backend-color-text));
 }
 
 .w-inquiry-editor__i18n-field {
-  border: var(--border-width-thin) solid var(--iq-rail);
+  border: var(--border-width-thin) solid var(--iq-rail, color-mix(in srgb, var(--backend-color-border-default) 88%, transparent));
   border-radius: var(--weline-radius-md);
   padding: var(--weline-space-3);
-  background: color-mix(in srgb, var(--weline-color-surface) 96%, var(--iq-muted));
+  background: color-mix(in srgb, var(--backend-color-bg-surface) 96%, var(--iq-muted, var(--backend-color-text-muted)));
 }
 
 .w-inquiry-editor__i18n-key {
@@ -239,13 +239,13 @@
 }
 
 .w-inquiry-editor__advanced {
-  border-top: var(--border-width-thin) dashed var(--iq-rail);
+  border-top: var(--border-width-thin) dashed var(--iq-rail, color-mix(in srgb, var(--backend-color-border-default) 88%, transparent));
   padding-top: var(--weline-space-3);
 }
 
 .w-inquiry-editor__advanced > summary {
   cursor: pointer;
-  color: var(--iq-muted);
+  color: var(--iq-muted, var(--backend-color-text-muted));
   font-size: var(--weline-font-size-sm);
 }
 
@@ -259,7 +259,7 @@
   display: block;
   margin-top: var(--weline-space-1);
   font-size: var(--weline-font-size-xs);
-  color: var(--iq-muted);
+  color: var(--iq-muted, var(--backend-color-text-muted));
 }
 
 .w-inquiry-editor__message {
@@ -268,8 +268,8 @@
   font-size: var(--weline-font-size-sm);
 }
 
-.w-inquiry-editor__message[data-tone="success"] { color: var(--weline-color-success); }
-.w-inquiry-editor__message[data-tone="danger"] { color: var(--weline-color-danger); }.w-inquiry-editor .visually-hidden.visually-hidden{
+.w-inquiry-editor__message[data-tone="success"] { color: var(--weline-theme-success); }
+.w-inquiry-editor__message[data-tone="danger"] { color: var(--weline-theme-danger); }.w-inquiry-editor .visually-hidden.visually-hidden{
   position: absolute;
   width: 1px;
   height: 1px;

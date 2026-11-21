@@ -16,7 +16,7 @@
     --amz-card-cta-text: var(--color-on-primary);
     --amz-card-shadow: 0 var(--border-width-thin) var(--border-width-medium) var(--color-literal-rgba-15-17-17-0-06), 0 var(--spacing-2) var(--spacing-6) var(--color-literal-rgba-15-17-17-0-04);
     --amz-card-shadow-hover: 0 var(--spacing-3) var(--spacing-8) var(--color-literal-rgba-15-17-17-0-12);
-    color: var(--amz-card-text);
+    color: var(--amz-card-text, var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary))));
 }
 
 .weline-amz-card-widget .product-card {
@@ -24,18 +24,18 @@
     min-width: 0;
     flex-direction: column;
     overflow: hidden;
-    border: var(--border-width-thin) solid var(--amz-card-border);
+    border: var(--border-width-thin) solid var(--amz-card-border, var(--weline-theme-border-color-subtle));
     border-radius: var(--weline-theme-radius-xl);
-    background: var(--amz-card-bg);
-    color: var(--amz-card-text);
-    box-shadow: var(--amz-card-shadow);
+    background: var(--amz-card-bg, var(--weline-chrome-bg-primary));
+    color: var(--amz-card-text, var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary))));
+    box-shadow: var(--amz-card-shadow, 0 var(--border-width-thin) var(--border-width-medium) var(--color-literal-rgba-15-17-17-0-06), 0 var(--spacing-2) var(--spacing-6) var(--color-literal-rgba-15-17-17-0-04));
     transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .weline-amz-card-widget .product-card:hover {
     transform: translateY(-4px);
-    border-color: color-mix(in srgb, var(--weline-theme-primary) 28%, var(--amz-card-border));
-    box-shadow: var(--amz-card-shadow-hover);
+    border-color: color-mix(in srgb, var(--weline-theme-primary) 28%, var(--amz-card-border, var(--weline-theme-border-color-subtle)));
+    box-shadow: var(--amz-card-shadow-hover, 0 var(--spacing-3) var(--spacing-8) var(--color-literal-rgba-15-17-17-0-12));
 }
 
 .weline-amz-card-widget .product-image-wrapper {
@@ -148,7 +148,7 @@
     border: 0 !important;
     border-radius: var(--weline-theme-radius-full);
     background: var(--color-literal-rgba-255-255-255-0-92);
-    color: var(--amz-card-text);
+    color: var(--amz-card-text, var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary))));
     line-height: 1;
     cursor: pointer;
     box-shadow: var(--weline-shadow-sm);
@@ -178,7 +178,7 @@
     gap: var(--weline-space-2);
     padding: var(--weline-space-4);
     box-sizing: border-box;
-    background: var(--amz-card-bg);
+    background: var(--amz-card-bg, var(--weline-chrome-bg-primary));
 }
 
 .weline-amz-card-widget .product-name {
@@ -203,7 +203,7 @@
 }
 
 .weline-amz-card-widget .product-name a {
-    color: var(--amz-card-link);
+    color: var(--amz-card-link, var(--color-text-primary));
     text-decoration: none;
 }
 
@@ -223,7 +223,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--weline-space-1);
-    color: var(--amz-card-text-muted);
+    color: var(--amz-card-text-muted, var(--weline-theme-body-text-muted));
     font-size: var(--font-size-xs);
 }
 
@@ -231,7 +231,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--weline-space-1);
-    color: var(--amz-card-text-muted);
+    color: var(--amz-card-text-muted, var(--weline-theme-body-text-muted));
     font-size: var(--font-size-xs);
 }
 
@@ -250,7 +250,7 @@
 }
 
 .weline-amz-card-widget .review-count {
-    color: var(--amz-card-review);
+    color: var(--amz-card-review, var(--color-link));
 }
 
 .weline-amz-card-widget .product-price {
@@ -262,14 +262,14 @@
 }
 
 .weline-amz-card-widget .price-current {
-    color: var(--amz-card-price);
+    color: var(--amz-card-price, var(--color-error));
     font-size: var(--font-size-lg);
     font-weight: 800;
     letter-spacing: calc(-1 * var(--token-size-0-02em));
 }
 
 .weline-amz-card-widget .price-original {
-    color: var(--amz-card-text-muted);
+    color: var(--amz-card-text-muted, var(--weline-theme-body-text-muted));
     font-size: var(--font-size-xs);
     text-decoration: line-through;
 }
@@ -301,10 +301,10 @@
     width: 100%;
     min-height: var(--weline-space-10);
     margin-top: var(--weline-space-1);
-    border: var(--border-width-thin) solid var(--amz-card-cta-border);
+    border: var(--border-width-thin) solid var(--amz-card-cta-border, var(--color-primary-border));
     border-radius: var(--weline-radius-lg);
-    background: var(--amz-card-cta-bg);
-    color: var(--amz-card-cta-text);
+    background: var(--amz-card-cta-bg, var(--color-primary));
+    color: var(--amz-card-cta-text, var(--color-on-primary));
     cursor: pointer;
     font-size: var(--font-size-sm);
     font-weight: 700;
@@ -314,9 +314,9 @@
 
 .weline-amz-card-widget .btn-add-to-cart:hover,
 .weline-amz-card-widget .product-add-to-cart-form .btn-add-to-cart:hover {
-    background: var(--amz-card-cta-bg-hover);
+    background: var(--amz-card-cta-bg-hover, var(--color-primary-hover));
     border-color: var(--color-primary-border);
-    color: var(--amz-card-cta-text);
+    color: var(--amz-card-cta-text, var(--color-on-primary));
     box-shadow: inset 0 var(--border-width-thin) 0 var(--color-literal-rgba-255-255-255-0-28), 0 var(--border-width-thin) var(--border-width-thick) var(--color-literal-rgba-15-17-17-0-12);
 }
 
@@ -332,10 +332,10 @@
     width: 100%;
     min-height: var(--weline-space-10);
     margin-top: var(--weline-space-1);
-    border: var(--border-width-thin) solid var(--amz-card-border);
+    border: var(--border-width-thin) solid var(--amz-card-border, var(--weline-theme-border-color-subtle));
     border-radius: var(--weline-radius-lg);
     background: var(--color-bg-secondary);
-    color: var(--amz-card-text-muted);
+    color: var(--amz-card-text-muted, var(--weline-theme-body-text-muted));
     cursor: not-allowed;
     font-size: var(--font-size-sm);
     font-weight: 600;

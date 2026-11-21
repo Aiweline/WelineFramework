@@ -12,7 +12,7 @@
     --weline-cache-success-soft: rgba(34, 197, 94, 0.12);
     --weline-cache-warning-soft: rgba(245, 158, 11, 0.16);
     --weline-cache-danger-soft: rgba(239, 68, 68, 0.14);
-    color: var(--weline-cache-text);
+    color: var(--weline-cache-text, var(--backend-color-text-primary, #0f172a));
 }
 
 .weline-cache-admin code {
@@ -30,14 +30,14 @@
 .weline-cache-panel {
     position: relative;
     overflow: hidden;
-    border: 1px solid var(--weline-cache-panel-border);
+    border: 1px solid var(--weline-cache-panel-border, rgba(148, 163, 184, 0.22));
     border-radius: 1.35rem;
-    background: var(--weline-cache-panel-bg);
+    background: var(--weline-cache-panel-bg, var(--backend-color-card-bg, #ffffff));
     box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
 }
 
 .weline-cache-hero {
-    background: var(--weline-cache-bg), var(--weline-cache-panel-bg);
+    background: var(--weline-cache-bg, linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(14, 165, 233, 0.06) 45%, rgba(245, 158, 11, 0.08))), var(--weline-cache-panel-bg, var(--backend-color-card-bg, #ffffff));
 }
 
 .weline-cache-hero__layout {
@@ -54,7 +54,7 @@
     padding: 0.5rem 0.9rem;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.72);
-    color: var(--weline-cache-primary);
+    color: var(--weline-cache-primary, #0f766e);
     font-size: 0.82rem;
     font-weight: 700;
     letter-spacing: 0.04em;
@@ -79,7 +79,7 @@
 .weline-cache-panel__header p,
 .weline-cache-empty p {
     margin: 0.45rem 0 0;
-    color: var(--weline-cache-muted);
+    color: var(--weline-cache-muted, var(--backend-color-text-secondary, #64748b));
     line-height: 1.65;
 }
 
@@ -125,7 +125,7 @@
 .weline-cache-stat-block span,
 .weline-cache-muted,
 .weline-cache-summary-line {
-    color: var(--weline-cache-muted);
+    color: var(--weline-cache-muted, var(--backend-color-text-secondary, #64748b));
     font-size: 0.9rem;
 }
 
@@ -135,7 +135,7 @@
 .weline-cache-stat-block strong {
     display: block;
     margin-top: 0.4rem;
-    color: var(--weline-cache-text);
+    color: var(--weline-cache-text, var(--backend-color-text-primary, #0f172a));
     font-size: 1.2rem;
     line-height: 1.2;
 }
@@ -214,9 +214,9 @@
     gap: 0.9rem;
     align-items: center;
     padding: 1rem 1.05rem;
-    border: 1px solid var(--weline-cache-panel-border);
+    border: 1px solid var(--weline-cache-panel-border, rgba(148, 163, 184, 0.22));
     border-radius: 1.15rem;
-    background: var(--weline-cache-panel-bg);
+    background: var(--weline-cache-panel-bg, var(--backend-color-card-bg, #ffffff));
     box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
 }
 
@@ -276,7 +276,7 @@
 .weline-cache-field label {
     font-size: 0.9rem;
     font-weight: 600;
-    color: var(--weline-cache-text);
+    color: var(--weline-cache-text, var(--backend-color-text-primary, #0f172a));
 }
 
 .weline-cache-input,
@@ -285,8 +285,8 @@
     padding: 0.75rem 0.9rem;
     border: 1px solid rgba(148, 163, 184, 0.32);
     border-radius: 0.95rem;
-    background: var(--weline-cache-soft);
-    color: var(--weline-cache-text);
+    background: var(--weline-cache-soft, rgba(241, 245, 249, 0.92));
+    color: var(--weline-cache-text, var(--backend-color-text-primary, #0f172a));
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
@@ -317,8 +317,8 @@
     padding: 0.72rem 1rem;
     border: 1px solid transparent;
     border-radius: 0.95rem;
-    background: var(--weline-cache-soft);
-    color: var(--weline-cache-text);
+    background: var(--weline-cache-soft, rgba(241, 245, 249, 0.92));
+    color: var(--weline-cache-text, var(--backend-color-text-primary, #0f172a));
     font-weight: 600;
     line-height: 1;
     text-decoration: none;
@@ -350,19 +350,19 @@
 }
 
 .weline-cache-btn--success {
-    background: var(--weline-cache-success-soft);
-    color: var(--weline-cache-success);
+    background: var(--weline-cache-success-soft, rgba(34, 197, 94, 0.12));
+    color: var(--weline-cache-success, #15803d);
 }
 
 .weline-cache-btn--warning {
-    background: var(--weline-cache-warning-soft);
-    color: var(--weline-cache-warning);
+    background: var(--weline-cache-warning-soft, rgba(245, 158, 11, 0.16));
+    color: var(--weline-cache-warning, #b45309);
 }
 
 .weline-cache-btn--danger,
 .weline-cache-mini-btn--danger {
-    background: var(--weline-cache-danger-soft);
-    color: var(--weline-cache-danger);
+    background: var(--weline-cache-danger-soft, rgba(239, 68, 68, 0.14));
+    color: var(--weline-cache-danger, #b91c1c);
 }
 
 .weline-cache-mini-btn {
@@ -431,7 +431,7 @@
     padding: 0.35rem 0.65rem;
     border-radius: 999px;
     background: rgba(15, 118, 110, 0.08);
-    color: var(--weline-cache-primary);
+    color: var(--weline-cache-primary, #0f766e);
     font-size: 0.78rem;
     font-weight: 700;
 }
@@ -443,7 +443,7 @@
 
 .weline-cache-pool__identity {
     margin-top: 0.2rem;
-    color: var(--weline-cache-muted);
+    color: var(--weline-cache-muted, var(--backend-color-text-secondary, #64748b));
     word-break: break-all;
 }
 
@@ -476,13 +476,13 @@
 }
 
 .weline-cache-pill--status-on {
-    background: var(--weline-cache-success-soft);
-    color: var(--weline-cache-success);
+    background: var(--weline-cache-success-soft, rgba(34, 197, 94, 0.12));
+    color: var(--weline-cache-success, #15803d);
 }
 
 .weline-cache-pill--status-off {
-    background: var(--weline-cache-danger-soft);
-    color: var(--weline-cache-danger);
+    background: var(--weline-cache-danger-soft, rgba(239, 68, 68, 0.14));
+    color: var(--weline-cache-danger, #b91c1c);
 }
 
 .weline-cache-pill--type,
@@ -492,8 +492,8 @@
 }
 
 .weline-cache-pill--permanent {
-    background: var(--weline-cache-warning-soft);
-    color: var(--weline-cache-warning);
+    background: var(--weline-cache-warning-soft, rgba(245, 158, 11, 0.16));
+    color: var(--weline-cache-warning, #b45309);
 }
 
 .weline-cache-pool__description {
@@ -544,7 +544,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.55rem;
-    color: var(--weline-cache-text);
+    color: var(--weline-cache-text, var(--backend-color-text-primary, #0f172a));
     font-weight: 600;
 }
 
@@ -552,12 +552,12 @@
 .weline-cache-switch {
     width: 1.1rem;
     height: 1.1rem;
-    accent-color: var(--weline-cache-primary);
+    accent-color: var(--weline-cache-primary, #0f766e);
     cursor: pointer;
 }
 
 .weline-cache-switch-label.is-off {
-    color: var(--weline-cache-muted);
+    color: var(--weline-cache-muted, var(--backend-color-text-secondary, #64748b));
 }
 
 .weline-cache-empty {

@@ -34,7 +34,7 @@
 .wc-theme_widget_footer_social .social-link { --brand-color: var(--weline-theme-text-muted); }
 
 .wc-theme_widget_footer_social[data-style="colored"] .social-link {
-    background: var(--brand-color);
+    background: var(--brand-color, var(--weline-theme-text-muted));
     color: var(--color-bg-primary);
 }
 
@@ -49,7 +49,7 @@
 }
 
 .wc-theme_widget_footer_social[data-style="mono"] .social-link:hover {
-    background: var(--brand-color);
+    background: var(--brand-color, var(--weline-theme-text-muted));
     color: var(--color-bg-primary);
 }
 
@@ -60,8 +60,8 @@
 }
 
 .wc-theme_widget_footer_social[data-style="outline"] .social-link:hover {
-    border-color: var(--brand-color);
-    background: var(--brand-color);
+    border-color: var(--brand-color, var(--weline-theme-text-muted));
+    background: var(--brand-color, var(--weline-theme-text-muted));
     color: var(--color-bg-primary);
 }
 

@@ -19,11 +19,11 @@
   height: 100%;
   flex-direction: column;
   overflow: hidden;
-  border: var(--border-width-thin) solid var(--wpc-border);
+  border: var(--border-width-thin) solid var(--wpc-border, var(--weline-theme-border-subtle));
   border-radius: var(--weline-radius-xl);
-  background: var(--wpc-surface);
-  color: var(--wpc-ink);
-  box-shadow: var(--wpc-shadow);
+  background: var(--wpc-surface, var(--weline-chrome-bg-primary));
+  color: var(--wpc-ink, var(--weline-theme-text));
+  box-shadow: var(--wpc-shadow, var(--weline-shadow-md));
   box-sizing: border-box;
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
 }
@@ -43,8 +43,8 @@
 
 .weline-product-card:hover {
   transform: translateY(-3px);
-  border-color: color-mix(in srgb, var(--weline-theme-primary) 24%, var(--wpc-border));
-  box-shadow: var(--wpc-shadow-hover);
+  border-color: color-mix(in srgb, var(--weline-theme-primary) 24%, var(--wpc-border, var(--weline-theme-border-subtle)));
+  box-shadow: var(--wpc-shadow-hover, var(--weline-shadow-lg));
 }
 
 .weline-product-card.density-shelf,
@@ -55,7 +55,7 @@
 .weline-product-card .wpc-media {
   /* Geometry lock: Theme .w-frame[data-ratio] (foundation). Keep surface + flex only. */
   flex: 0 0 auto;
-  background: var(--weline-theme-surface-muted, var(--color-bg-secondary));
+  background: var(--weline-theme-surface-muted);
 }
 
 .weline-product-card .wpc-media-link {
@@ -99,7 +99,7 @@
   padding-inline: var(--weline-space-3);
   border-radius: var(--weline-radius-round);
   font-size: var(--weline-font-size-xs);
-  font-weight: var(--weline-font-weight-semibold, 600);
+  font-weight: var(--weline-font-weight-semibold);
   line-height: 1.25;
   letter-spacing: 0;
   white-space: nowrap;
@@ -143,8 +143,8 @@
   margin: 0;
   border: 0;
   border-radius: var(--weline-radius-round);
-  background: color-mix(in srgb, var(--wpc-surface) 92%, transparent);
-  color: var(--wpc-ink);
+  background: color-mix(in srgb, var(--wpc-surface, var(--weline-chrome-bg-primary)) 92%, transparent);
+  color: var(--wpc-ink, var(--weline-theme-text));
   line-height: 1;
   cursor: pointer;
   box-shadow: var(--weline-shadow-lg);
@@ -153,15 +153,15 @@
 
 .weline-product-card .product-actions .action-btn:hover,
 .weline-product-card .product-actions .action-btn:focus-visible {
-  background: var(--wpc-surface);
-  color: var(--wpc-link-hover);
+  background: var(--wpc-surface, var(--weline-chrome-bg-primary));
+  color: var(--wpc-link-hover, var(--color-link-hover));
   box-shadow: var(--weline-shadow-md);
   transform: translateY(-1px);
   outline: none;
 }
 
 .weline-product-card .product-actions .action-btn.is-active {
-  color: var(--color-primary, var(--wpc-link-hover));
+  color: var(--color-primary);
 }
 
 .weline-product-card .wpc-body {
@@ -201,7 +201,7 @@
 .weline-product-card .wpc-title a:link,
 .weline-product-card .wpc-title a:visited,
 .weline-product-card .wpc-title a:any-link {
-  color: var(--wpc-link);
+  color: var(--wpc-link, var(--color-link));
   text-decoration: none;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -212,13 +212,13 @@
 
 .weline-product-card .wpc-title a:hover,
 .weline-product-card .wpc-title a:focus-visible {
-  color: var(--wpc-link-hover);
+  color: var(--wpc-link-hover, var(--color-link-hover));
   text-decoration: underline;
 }
 
 .weline-product-card .wpc-sku {
   margin: 0;
-  color: var(--wpc-muted);
+  color: var(--wpc-muted, var(--weline-theme-text-muted));
   font-size: var(--weline-font-size-xs);
 }
 
@@ -228,7 +228,7 @@
   gap: var(--spacing-1_5);
   /* 固定占位，避免偶发空态仍把价签顶上去 */
   min-height: 1em;
-  color: var(--wpc-link);
+  color: var(--wpc-link, var(--color-link));
   font-size: var(--weline-font-size-xs);
 }
 
@@ -238,7 +238,7 @@
   width: 5.2em;
   height: 1em;
   background:
-    linear-gradient(90deg, var(--wpc-star) calc(var(--rating) / 5 * 100%), var(--color-bg-tertiary) 0);
+    linear-gradient(90deg, var(--wpc-star, var(--color-warning)) calc(var(--rating, 0) / 5 * 100%), var(--color-bg-tertiary) 0);
   -webkit-mask: url() center / 100% 100% no-repeat;
   mask: url() center / 100% 100% no-repeat;
 }
@@ -259,7 +259,7 @@
 }
 
 .weline-product-card .wpc-price-now {
-  color: var(--wpc-price);
+  color: var(--wpc-price, var(--color-danger));
   font-size: var(--font-size-base);
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -270,19 +270,19 @@
 /* shelf/compact：仍强调成交价色，仅放宽字号；禁止回落墨色导致「弱价格」 */
 .weline-product-card.density-shelf .wpc-price-now,
 .weline-product-card.density-compact .wpc-price-now {
-  color: var(--wpc-price);
+  color: var(--wpc-price, var(--color-danger));
   font-size: var(--font-size-lg);
   font-weight: 700;
 }
 
 .weline-product-card .wpc-price-was {
-  color: var(--wpc-muted);
+  color: var(--wpc-muted, var(--weline-theme-text-muted));
   font-size: var(--font-size-13);
   text-decoration: line-through;
 }
 
 .weline-product-card .wpc-price-quote {
-  color: var(--wpc-link);
+  color: var(--wpc-link, var(--color-link));
   font-size: var(--weline-font-size-xs);
   text-decoration: none;
 }
@@ -297,10 +297,10 @@
   padding-block: var(--weline-space-1);
   padding-inline: var(--weline-space-2);
   border-radius: var(--weline-radius-round);
-  background: color-mix(in srgb, var(--wpc-link) 12%, transparent);
-  color: var(--wpc-link);
+  background: color-mix(in srgb, var(--wpc-link, var(--color-link)) 12%, transparent);
+  color: var(--wpc-link, var(--color-link));
   font-size: var(--weline-font-size-xs);
-  font-weight: var(--weline-font-weight-semibold, 600);
+  font-weight: var(--weline-font-weight-semibold);
   line-height: 1.25;
   letter-spacing: 0;
   text-decoration: none;
@@ -413,7 +413,7 @@
 .weline-product-card .wpc-cta .btn-quote:focus-visible,
 .weline-product-card .wpc-cta a[data-quote-only="1"]:focus-visible,
 .weline-product-card .wpc-detail-link:focus-visible {
-  outline: var(--border-width-medium) solid var(--weline-theme-focus-outline, var(--color-primary));
+  outline: var(--border-width-medium) solid var(--weline-theme-focus-outline);
   outline-offset: var(--weline-space-1);
 }
 

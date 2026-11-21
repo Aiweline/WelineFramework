@@ -207,7 +207,7 @@ if ($oauthCfError === 'invalid_scope') {
 <style data-no-extract="true">
 /* Mail enterprise layout only — tokens: --weline-theme-* / --weline-space-* / --weline-radius-* / --weline-font-* */
 .mail-enterprise {
-    font-family: var(--weline-font-family);
+    font-family: var(--weline-font-sans);
 }
 .mail-enterprise__layout {
     display: grid;
@@ -767,7 +767,7 @@ if ($oauthCfError === 'invalid_scope') {
     gap: var(--weline-space-1);
     padding: var(--weline-space-1);
     border: 1px solid var(--weline-theme-border);
-    border-radius: var(--weline-radius-pill, 999px);
+    border-radius: var(--weline-radius-round);
     background: var(--weline-theme-surface-muted);
 }
 .mail-enterprise__folder {
@@ -775,9 +775,9 @@ if ($oauthCfError === 'invalid_scope') {
     align-items: center;
     justify-content: center;
     gap: var(--weline-space-1);
-    min-height: var(--weline-control-height-sm, 2rem);
+    min-height: var(--weline-component-control-height-sm, 2rem);
     padding-inline: var(--weline-space-3);
-    border-radius: var(--weline-radius-pill, 999px);
+    border-radius: var(--weline-radius-round);
     color: var(--weline-theme-text-muted);
     font-size: var(--weline-font-size-sm);
     font-weight: 650;
@@ -790,7 +790,7 @@ if ($oauthCfError === 'invalid_scope') {
 .mail-enterprise__folder[aria-current="page"] {
     background: var(--weline-theme-surface);
     color: var(--weline-theme-primary);
-    box-shadow: var(--weline-shadow-xs, 0 1px 2px color-mix(in srgb, var(--weline-theme-text) 8%, transparent));
+    box-shadow: var(--weline-shadow-sm, var(--shadow-sm, var(--weline-theme-shadow-sm)));
 }
 .mail-enterprise__folder.has-unread {
     font-weight: 750;
@@ -804,7 +804,7 @@ if ($oauthCfError === 'invalid_scope') {
     min-inline-size: 1.25rem;
     min-block-size: 1.25rem;
     padding-inline: var(--weline-space-1);
-    border-radius: var(--weline-radius-pill, 999px);
+    border-radius: var(--weline-radius-round);
     background: var(--weline-theme-primary);
     color: var(--weline-theme-on-primary, #fff);
     font-size: 0.6875rem;

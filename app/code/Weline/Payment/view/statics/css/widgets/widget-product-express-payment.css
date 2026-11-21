@@ -5,8 +5,8 @@
     --express-text: var(--color-text-primary);
     --express-btn-min: var(--token-size-148px);
     --express-btn-max: var(--size-panel-200);
-    margin-block: var(--express-gap) 0;
-    padding: var(--express-gap) 0 0;
+    margin-block: var(--express-gap, var(--weline-space-3, var(--space-3))) 0;
+    padding: var(--express-gap, var(--weline-space-3, var(--space-3))) 0 0;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -14,7 +14,7 @@
 }
 .w-payment-express--pdp .w-payment-express__methods--always {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(var(--express-btn-min), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(var(--express-btn-min, var(--token-size-148px)), 1fr));
     gap: var(--weline-space-2, var(--space-2));
     justify-content: center;
     max-inline-size: 100%;
@@ -61,7 +61,7 @@
 }
 .w-payment-express--collapsible .w-payment-express__panel {
     display: grid;
-    gap: var(--express-gap);
+    gap: var(--express-gap, var(--weline-space-3, var(--space-3)));
     padding: var(--weline-space-2, var(--space-2)) 0 0;
     border-top: 0;
 }
@@ -82,13 +82,13 @@
     border-radius: var(--radius-2, var(--weline-radius-sm));
     cursor: pointer;
     background: var(--color-surface-muted, var(--color-bg-secondary));
-    color: var(--express-text);
+    color: var(--express-text, var(--color-text-primary));
 }
 .w-payment-express--pdp .w-payment-express__paypal {
-    background: var(--express-paypal-bg);
+    background: var(--express-paypal-bg, var(--color-brand-paypal));
 }
 .w-payment-express--pdp .w-payment-express__paypal:hover:not(:disabled) {
-    background: var(--express-paypal-bg-hover);
+    background: var(--express-paypal-bg-hover, var(--color-literal-f2bb36));
 }
 .w-payment-express--pdp .w-payment-express__btn:disabled {
     opacity: 0.55;

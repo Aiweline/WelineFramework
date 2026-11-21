@@ -344,7 +344,7 @@ body.acq-modal-open { overflow: hidden; }
 }
 .acq-drawer[hidden] { display: none; }
 .acq-drawer__backdrop {
-    background: var(--weline-theme-overlay, rgba(0, 0, 0, .42));
+    background: var(--weline-theme-overlay);
     backdrop-filter: blur(1px);
 }
 .acq-drawer__panel {
@@ -477,7 +477,7 @@ body.acq-modal-open { overflow: hidden; }
     display: block;
     overflow-wrap: anywhere;
     color: var(--weline-theme-text);
-    font-family: var(--weline-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-family: var(--weline-font-mono);
     font-size: var(--weline-font-size-xs);
     line-height: 1.5;
 }
@@ -521,7 +521,7 @@ body.acq-modal-open { overflow: hidden; }
     border-radius: var(--weline-radius-sm);
     background: var(--weline-theme-surface-muted);
     color: var(--weline-theme-text);
-    font-family: var(--weline-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-family: var(--weline-font-mono);
     font-size: var(--weline-font-size-xs);
     overflow-wrap: anywhere;
 }
@@ -592,7 +592,7 @@ body.acq-modal-open { overflow: hidden; }
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--weline-theme-text-muted);
-    font-family: var(--weline-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-family: var(--weline-font-mono);
     font-size: var(--weline-font-size-xs);
 }
 .acq-site-option__check {

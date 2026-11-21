@@ -419,10 +419,10 @@ $contextFullTitle = trim(
 
 .cms-page-settings-bar {
     padding: 16px 18px;
-    border: 1px solid var(--cms-edit-border);
+    border: 1px solid var(--cms-edit-border, var(--backend-color-border-default, #d7deeb));
     border-radius: var(--weline-radius-md, 8px);
-    background: var(--cms-edit-surface);
-    color: var(--cms-edit-text);
+    background: var(--cms-edit-surface, var(--backend-color-card-bg, #ffffff));
+    color: var(--cms-edit-text, var(--backend-color-text-primary, #172033));
 }
 
 /* 原型 verdict D：主任务优先 — 顶栏上下文 + 主编辑区（阅读宽） */
@@ -438,9 +438,9 @@ $contextFullTitle = trim(
     align-items: end;
     gap: 10px 14px;
     padding: 10px 12px;
-    border: 1px solid var(--cms-edit-border);
+    border: 1px solid var(--cms-edit-border, var(--backend-color-border-default, #d7deeb));
     border-radius: 6px;
-    background: var(--cms-edit-surface-soft);
+    background: var(--cms-edit-surface-soft, var(--backend-color-bg-subtle, #f8fafc));
 }
 
 .cms-context-chip {
@@ -450,16 +450,16 @@ $contextFullTitle = trim(
     min-height: 40px;
     max-width: min(420px, 100%);
     padding: 0 12px;
-    border: 1px solid var(--cms-edit-border);
+    border: 1px solid var(--cms-edit-border, var(--backend-color-border-default, #d7deeb));
     border-radius: 6px;
-    background: var(--cms-edit-surface);
-    color: var(--cms-edit-text);
+    background: var(--cms-edit-surface, var(--backend-color-card-bg, #ffffff));
+    color: var(--cms-edit-text, var(--backend-color-text-primary, #172033));
     overflow: hidden;
 }
 
 .cms-context-chip__k {
     flex: 0 0 auto;
-    color: var(--cms-edit-muted);
+    color: var(--cms-edit-muted, var(--backend-color-text-secondary, #64748b));
     font-size: 12px;
     font-weight: 700;
 }
@@ -473,7 +473,7 @@ $contextFullTitle = trim(
 }
 
 .cms-context-chip__sep {
-    color: var(--cms-edit-muted);
+    color: var(--cms-edit-muted, var(--backend-color-text-secondary, #64748b));
 }
 
 .cms-context-control {
@@ -516,7 +516,7 @@ $contextFullTitle = trim(
     align-items: center;
     padding: 0 10px;
     border-radius: 6px;
-    color: var(--cms-edit-muted);
+    color: var(--cms-edit-muted, var(--backend-color-text-secondary, #64748b));
     font-size: 12px;
     font-weight: 700;
     user-select: none;
@@ -527,8 +527,8 @@ $contextFullTitle = trim(
 }
 
 .cms-context-more > summary:hover {
-    color: var(--cms-edit-text);
-    background: color-mix(in srgb, var(--cms-edit-surface) 70%, transparent);
+    color: var(--cms-edit-text, var(--backend-color-text-primary, #172033));
+    background: color-mix(in srgb, var(--cms-edit-surface, var(--backend-color-card-bg, #ffffff)) 70%, transparent);
 }
 
 .cms-context-more__body {
@@ -606,7 +606,7 @@ $contextFullTitle = trim(
 .cms-translation-status {
     min-height: 18px;
     margin-top: 6px;
-    color: var(--cms-edit-muted);
+    color: var(--cms-edit-muted, var(--backend-color-text-secondary, #64748b));
     font-size: 12px;
     line-height: 1.4;
 }
@@ -616,7 +616,7 @@ $contextFullTitle = trim(
     align-items: center;
     gap: 7px;
     margin-top: 7px;
-    color: var(--cms-edit-muted);
+    color: var(--cms-edit-muted, var(--backend-color-text-secondary, #64748b));
     font-size: 12px;
     cursor: pointer;
 }
@@ -642,7 +642,7 @@ $contextFullTitle = trim(
     gap: 10px;
     margin-top: 2px;
     padding: 12px 0 0;
-    border-top: 1px solid color-mix(in srgb, var(--cms-edit-border) 85%, transparent);
+    border-top: 1px solid color-mix(in srgb, var(--cms-edit-border, var(--backend-color-border-default, #d7deeb)) 85%, transparent);
 }
 
 .cms-action-button {
@@ -658,7 +658,7 @@ $contextFullTitle = trim(
 
 .cms-page-settings-bar .w-field__label {
     margin-bottom: 6px;
-    color: var(--cms-edit-muted);
+    color: var(--cms-edit-muted, var(--backend-color-text-secondary, #64748b));
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0;
@@ -667,18 +667,18 @@ $contextFullTitle = trim(
 .cms-page-settings-bar .w-input,
 .cms-page-settings-bar .w-select {
     min-height: 40px;
-    border-color: var(--cms-edit-border-strong);
+    border-color: var(--cms-edit-border-strong, var(--backend-color-border-strong, #c9d3e2));
     border-radius: 6px;
-    background-color: var(--cms-edit-field);
-    color: var(--cms-edit-text);
+    background-color: var(--cms-edit-field, var(--backend-color-input-bg, #ffffff));
+    color: var(--cms-edit-text, var(--backend-color-text-primary, #172033));
     box-shadow: none;
     padding: 7px 12px;
 }
 
 .cms-page-settings-bar .w-input:focus,
 .cms-page-settings-bar .w-select:focus {
-    border-color: var(--cms-edit-accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cms-edit-accent) 18%, transparent);
+    border-color: var(--cms-edit-accent, var(--color-primary, #3b82f6));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cms-edit-accent, var(--color-primary, #3b82f6)) 18%, transparent);
     outline: none;
 }
 
@@ -688,63 +688,63 @@ $contextFullTitle = trim(
 
 .cms-page-settings-bar .w-search-select-trigger {
     min-height: 40px;
-    border-color: var(--cms-edit-border-strong);
+    border-color: var(--cms-edit-border-strong, var(--backend-color-border-strong, #c9d3e2));
     border-radius: 6px;
-    background: var(--cms-edit-field);
-    color: var(--cms-edit-text);
+    background: var(--cms-edit-field, var(--backend-color-input-bg, #ffffff));
+    color: var(--cms-edit-text, var(--backend-color-text-primary, #172033));
     padding: 0 36px 0 12px;
 }
 
 .cms-page-settings-bar .w-search-select-trigger:hover,
 .cms-page-settings-bar .w-search-select-trigger:focus-within {
-    border-color: var(--cms-edit-accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cms-edit-accent) 18%, transparent);
+    border-color: var(--cms-edit-accent, var(--color-primary, #3b82f6));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cms-edit-accent, var(--color-primary, #3b82f6)) 18%, transparent);
 }
 
 .cms-page-settings-bar .w-search-select-input {
     min-width: 0;
-    color: var(--cms-edit-text);
+    color: var(--cms-edit-text, var(--backend-color-text-primary, #172033));
 }
 
 .cms-page-settings-bar .w-search-select-input::placeholder {
-    color: var(--cms-edit-muted);
+    color: var(--cms-edit-muted, var(--backend-color-text-secondary, #64748b));
 }
 
 .cms-page-settings-bar .w-search-select-display {
     left: 12px;
     right: 36px;
-    color: var(--cms-edit-text);
+    color: var(--cms-edit-text, var(--backend-color-text-primary, #172033));
 }
 
 .cms-page-settings-bar .w-search-select-arrow,
 .cms-page-settings-bar .w-search-select-clear {
-    color: var(--cms-edit-muted);
+    color: var(--cms-edit-muted, var(--backend-color-text-secondary, #64748b));
 }
 
 .cms-page-settings-bar .w-search-select-dropdown {
     margin-top: 6px;
-    border-color: var(--cms-edit-border-strong);
+    border-color: var(--cms-edit-border-strong, var(--backend-color-border-strong, #c9d3e2));
     border-radius: 6px;
-    background: var(--cms-edit-surface);
+    background: var(--cms-edit-surface, var(--backend-color-card-bg, #ffffff));
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
 }
 
 .cms-page-settings-bar .w-search-select-item,
 .cms-page-settings-bar .w-search-select-empty,
 .cms-page-settings-bar .w-search-select-loading {
-    color: var(--cms-edit-text);
+    color: var(--cms-edit-text, var(--backend-color-text-primary, #172033));
 }
 
 .cms-page-settings-bar .w-search-select-item:hover {
-    background: var(--cms-edit-surface-soft);
+    background: var(--cms-edit-surface-soft, var(--backend-color-bg-subtle, #f8fafc));
 }
 
 .cms-page-settings-bar .w-search-select-item.selected {
-    background: color-mix(in srgb, var(--cms-edit-accent) 16%, var(--cms-edit-surface));
+    background: color-mix(in srgb, var(--cms-edit-accent, var(--color-primary, #3b82f6)) 16%, var(--cms-edit-surface, var(--backend-color-card-bg, #ffffff)));
 }
 
 .cms-page-settings-bar .w-search-select-item.active {
-    background: var(--cms-edit-accent);
+    background: var(--cms-edit-accent, var(--color-primary, #3b82f6));
     color: #fff;
 }
 
@@ -753,15 +753,15 @@ $contextFullTitle = trim(
 }
 
 .cms-theme-editor-workspace {
-    color: var(--cms-edit-text);
+    color: var(--cms-edit-text, var(--backend-color-text-primary, #172033));
 }
 
 .cms-theme-editor-workspace {
     min-height: calc(100vh - 188px);
     overflow: hidden;
-    border: 1px solid var(--cms-edit-border);
+    border: 1px solid var(--cms-edit-border, var(--backend-color-border-default, #d7deeb));
     border-radius: 8px;
-    background: var(--cms-edit-surface);
+    background: var(--cms-edit-surface, var(--backend-color-card-bg, #ffffff));
 }
 
 .cms-theme-editor-workspace.is-empty {

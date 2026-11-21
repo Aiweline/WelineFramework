@@ -1,9 +1,9 @@
 /* 结账地址分段 + Weline 结账卡：沿用 checkout Weline 色板变量，部件内提供回退 */
 .w-shipping-checkout-address {
-  --sca-text: var(--checkout-text);
-  --sca-muted: var(--checkout-text-secondary);
-  --sca-link: var(--checkout-link);
-  --sca-border: var(--checkout-border);
+  --sca-text: var(--checkout-text, var(--color-text-primary));
+  --sca-muted: var(--checkout-text-secondary, var(--color-text-secondary));
+  --sca-link: var(--checkout-link, var(--color-link));
+  --sca-border: var(--checkout-border, var(--color-border-default));
   --sca-border-strong: var(--color-literal-888c8c);
   --sca-bg: var(--color-bg-primary);
   --sca-bg-soft: var(--color-bg-secondary);
@@ -11,7 +11,7 @@
   --sca-radius: var(--spacing-2);
   display: grid;
   gap: var(--weline-space-5);
-  color: var(--sca-text);
+  color: var(--sca-text, var(--checkout-text));
 }
 
 .w-shipping-checkout-address__section {
@@ -24,7 +24,7 @@
   font-size: var(--font-size-lg);
   font-weight: 700;
   line-height: 1.3;
-  color: var(--sca-text);
+  color: var(--sca-text, var(--checkout-text));
 }.w-shipping-checkout-address__saved[hidden]{
   display: none;
 }
@@ -39,7 +39,7 @@
 .w-shipping-checkout-address__saved-label {
   margin: 0;
   font-size: var(--spacing-3_5);
-  color: var(--sca-muted);
+  color: var(--sca-muted, var(--checkout-text-secondary));
 }
 
 .w-shipping-checkout-address__cards {
@@ -55,15 +55,15 @@
   margin: 0;
   min-height: var(--token-size-3-5rem);
   padding: var(--spacing-3_5) var(--weline-space-4);
-  border: var(--border-width-thin) solid var(--sca-border);
-  border-radius: var(--sca-radius);
-  background: var(--sca-bg);
+  border: var(--border-width-thin) solid var(--sca-border, var(--checkout-border));
+  border-radius: var(--sca-radius, var(--spacing-2));
+  background: var(--sca-bg, var(--color-bg-primary));
   cursor: pointer;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .w-shipping-checkout-address__card:hover {
-  border-color: var(--sca-border-strong);
+  border-color: var(--sca-border-strong, var(--color-literal-888c8c));
 }
 
 .w-shipping-checkout-address__card.is-selected {
@@ -74,15 +74,15 @@
 
 /* 禁运：红框优先于选中橙框（主题 danger token） */
 .w-shipping-checkout-address__card.is-embargoed {
-  border-color: var(--color-danger, var(--color-error));
+  border-color: var(--color-danger);
   box-shadow: var(--focus-ring);
-  background: var(--color-danger-bg-subtle, var(--color-error-light));
+  background: var(--color-danger-bg-subtle);
 }
 
 .w-shipping-checkout-address__card.is-embargoed.is-selected {
-  border-color: var(--color-danger, var(--color-error));
+  border-color: var(--color-danger);
   box-shadow: var(--focus-ring);
-  background: var(--color-danger-bg-subtle, var(--color-error-light));
+  background: var(--color-danger-bg-subtle);
 }
 
 .w-shipping-checkout-address__radio {
@@ -91,7 +91,7 @@
 }
 
 .w-shipping-checkout-address__card.is-embargoed .w-shipping-checkout-address__radio {
-  accent-color: var(--color-danger, var(--color-error));
+  accent-color: var(--color-danger);
 }
 
 .w-shipping-checkout-address__card-body {
@@ -108,7 +108,7 @@
 .w-shipping-checkout-address__card-meta,
 .w-shipping-checkout-address__card-line {
   font-size: var(--spacing-3_5);
-  color: var(--sca-muted);
+  color: var(--sca-muted, var(--checkout-text-secondary));
   line-height: 1.4;
   word-break: break-word;
 }
@@ -117,7 +117,7 @@
   font-size: var(--font-size-13);
   font-weight: 700;
   line-height: 1.35;
-  color: var(--color-danger-text-emphasis, var(--color-danger, var(--color-error)));
+  color: var(--color-danger-text-emphasis);
 }.w-shipping-checkout-address__card-embargo[hidden]{
   display: none;
 }
@@ -127,7 +127,7 @@
   appearance: none;
   border: 0;
   background: transparent;
-  color: var(--sca-link);
+  color: var(--sca-link, var(--checkout-link));
   font: inherit;
   font-size: var(--spacing-3_5);
   padding: 0;
@@ -151,9 +151,9 @@
   display: grid;
   gap: var(--weline-space-4);
   padding: var(--weline-space-5);
-  border: var(--border-width-thin) solid var(--sca-border);
-  border-radius: var(--sca-radius);
-  background: var(--sca-bg-soft);
+  border: var(--border-width-thin) solid var(--sca-border, var(--checkout-border));
+  border-radius: var(--sca-radius, var(--spacing-2));
+  background: var(--sca-bg-soft, var(--color-bg-secondary));
 }.w-shipping-checkout-address__editor[hidden]{
   display: none;
 }
@@ -198,25 +198,25 @@
 
 .w-shipping-checkout-address__field:has(:is(.w-input, .w-textarea):placeholder-shown):not(:focus-within) > .w-field__label {
   font-weight: 500;
-  color: var(--sca-muted);
+  color: var(--sca-muted, var(--checkout-text-secondary));
   background-color: transparent;
   padding-inline: 0;
 }
 
 .w-shipping-checkout-address__field .w-input {
-  border: var(--border-width-thin) solid var(--sca-border-strong);
+  border: var(--border-width-thin) solid var(--sca-border-strong, var(--color-literal-888c8c));
   border-radius: var(--spacing-1);
   min-height: var(--weline-space-8);
   padding: var(--spacing-0_4) var(--token-size-0-6rem);
   background: var(--color-bg-primary);
-  color: var(--sca-text);
+  color: var(--sca-text, var(--checkout-text));
   /* No top inset shadow: it paints through floating notch labels as a strike line. */
   box-shadow: none;
 }
 
 .w-shipping-checkout-address__field .w-input:focus {
   outline: 0;
-  border-color: var(--sca-focus);
+  border-color: var(--sca-focus, var(--color-info));
   box-shadow: var(--focus-ring);
 }
 
@@ -244,7 +244,7 @@
   min-width: 0;
   font-size: var(--weline-font-size-sm);
   line-height: 1.4;
-  color: var(--sca-muted);
+  color: var(--sca-muted, var(--checkout-text-secondary));
 }
 
 .w-shipping-checkout-address__message.is-error {
@@ -290,10 +290,10 @@
   min-height: var(--weline-control-height);
   margin: 0;
   padding-inline: var(--weline-space-4);
-  border: var(--border-width-thin) solid var(--checkout-cta-border, var(--weline-theme-primary, var(--color-primary)));
+  border: var(--border-width-thin) solid var(--checkout-cta-border, var(--weline-theme-primary));
   border-radius: var(--weline-radius-md);
   background: var(--weline-theme-surface);
-  color: var(--checkout-cta-bg, var(--weline-theme-primary, var(--color-primary)));
+  color: var(--checkout-cta-bg, var(--weline-theme-primary));
   font: inherit;
   font-size: var(--weline-font-size-md);
   font-weight: 700;
@@ -306,11 +306,11 @@
 .w-shipping-checkout-address .w-shipping-checkout-address__primary-btn:hover {
   background: color-mix(
     in srgb,
-    var(--checkout-cta-bg, var(--weline-theme-primary, var(--color-primary))) 12%,
+    var(--checkout-cta-bg, var(--weline-theme-primary)) 12%,
     var(--weline-theme-surface)
   );
-  border-color: var(--checkout-cta-border, var(--weline-theme-primary, var(--color-primary)));
-  color: var(--checkout-cta-bg, var(--weline-theme-primary, var(--color-primary)));
+  border-color: var(--checkout-cta-border, var(--weline-theme-primary));
+  color: var(--checkout-cta-bg, var(--weline-theme-primary));
 }
 
 .w-shipping-checkout-address .w-shipping-checkout-address__secondary-btn.w-button,
@@ -333,7 +333,7 @@
 
 .w-shipping-checkout-address .w-shipping-checkout-address__secondary-btn.w-button:hover,
 .w-shipping-checkout-address .w-shipping-checkout-address__secondary-btn:hover {
-  background: var(--weline-theme-surface-hover, var(--sca-bg-soft));
+  background: var(--weline-theme-surface-hover);
 }
 
 /* Beat theme / checkout button resets for save loading. */

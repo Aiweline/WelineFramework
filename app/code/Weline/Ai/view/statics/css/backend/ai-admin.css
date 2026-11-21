@@ -5,12 +5,12 @@
 
 .weline-adapter-detail-container .card {
     box-shadow: 0 1px 3px var(--backend-shadow-sm);
-    border: 1px solid var(--backend-color-border);
+    border: 1px solid var(--backend-color-border-default);
 }
 
 .weline-adapter-detail-container .card-header {
     background-color: var(--backend-color-card-bg);
-    border-bottom: 1px solid var(--backend-color-border);
+    border-bottom: 1px solid var(--backend-color-border-default);
 }
 
 .weline-adapter-detail-container pre {
@@ -18,7 +18,7 @@
     max-height: 300px;
     overflow-y: auto;
     font-size: 12px;
-    background: var(--backend-color-bg);
+    background: var(--backend-color-bg-primary);
 }
 
 .weline-adapter-detail-container .table th {
@@ -207,7 +207,7 @@ html, body {
 
 .model-copy-container .card {
     box-shadow: 0 1px 3px var(--backend-shadow-sm);
-    border: 1px solid var(--backend-color-border);
+    border: 1px solid var(--backend-color-border-default);
 }
 
 .model-copy-container .table th {
@@ -228,7 +228,7 @@ html, body {
 /* from backend/Model/detail.phtml */
 
 .weline-ai-model-detail-container .card {
-    box-shadow: 0 1px 3px var(--backend-color-shadow, var(--backend-shadow-sm));
+    box-shadow: 0 1px 3px var(--backend-shadow-sm);
     border: 1px solid var(--backend-color-border, var(--weline-theme-text-muted));
 }
 
@@ -259,12 +259,12 @@ html, body {
 
 .model-edit-container .card {
     box-shadow: 0 1px 3px var(--backend-shadow-sm);
-    border: 1px solid var(--backend-color-border);
+    border: 1px solid var(--backend-color-border-default);
 }
 
 .model-edit-container .card-header {
     background-color: var(--backend-color-card-header-bg);
-    border-bottom: 1px solid var(--backend-color-border);
+    border-bottom: 1px solid var(--backend-color-border-default);
 }
 
 .model-edit-container .card-header h5 {

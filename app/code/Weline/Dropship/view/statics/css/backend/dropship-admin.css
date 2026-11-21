@@ -54,7 +54,7 @@
         background: var(--weline-theme-surface);
         color: var(--weline-theme-text);
         border: 1px solid var(--weline-theme-border);
-        border-radius: var(--weline-theme-radius-lg);
+        border-radius: var(--weline-theme-radius-lg, var(--radius-lg, var(--border-radius-lg, var(--weshop-border-radius-lg, 8px))));
         padding: var(--weline-space-3);
     }
 
@@ -62,7 +62,7 @@
         display: block;
         color: inherit;
         text-decoration: none;
-        border-radius: var(--weline-theme-radius-md);
+        border-radius: var(--weline-theme-radius-md, var(--radius-md, var(--weshop-border-radius-md, 4px)));
         padding: var(--weline-space-3);
         margin-block-end: var(--weline-space-1);
         border-inline-start: 3px solid transparent;
@@ -94,7 +94,7 @@
 
     [data-dropship-admin="warehouses"] .ds-wh-stat {
         border: 1px dashed var(--weline-theme-border);
-        border-radius: var(--weline-theme-radius-md);
+        border-radius: var(--weline-theme-radius-md, var(--radius-md, var(--weshop-border-radius-md, 4px)));
         padding: var(--weline-space-3);
     }
 

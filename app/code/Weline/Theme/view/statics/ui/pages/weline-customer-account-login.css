@@ -15,7 +15,7 @@
         max-width: none;
         margin: 0;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(18rem, var(--account-login-float-max));
+        grid-template-columns: minmax(0, 1fr) minmax(18rem, var(--account-login-float-max, 40rem));
         align-items: start;
         column-gap: clamp(1rem, 3vw, 2.5rem);
         row-gap: 0;
@@ -51,7 +51,7 @@
                 color-mix(in srgb, var(--account-login-accent, var(--color-primary)) 22%, transparent) 0%,
                 transparent 70%
             ),
-            var(--account-login-ink-art);
+            var(--account-login-ink-art, url('/Weline/Theme/view/theme/frontend/assets/images/ink/ox-cloth-caravan.webp?v=20260921-ox1'));
         background-size: cover, cover, cover;
         background-position: center, center, 62% center;
         background-blend-mode: normal, normal, luminosity;
@@ -146,7 +146,7 @@
         z-index: 2;
         grid-column: 2;
         width: 100%;
-        max-width: var(--account-login-float-max);
+        max-width: var(--account-login-float-max, 40rem);
         justify-self: end;
         pointer-events: none;
     }
@@ -161,7 +161,7 @@
     .account-login-widget .w-auth-login--classic {
         width: 100%;
         margin: 0;
-        border-radius: var(--account-login-radius);
+        border-radius: var(--account-login-radius, var(--weline-layout-radius-lg, 12px));
         box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
         overflow: visible;
     }
@@ -237,7 +237,7 @@
         .account-login-widget__dock {
             grid-column: 1;
             justify-self: center;
-            width: min(100%, var(--account-login-float-max));
+            width: min(100%, var(--account-login-float-max, 40rem));
             margin-block-start: -1.75rem;
         }
     }
@@ -258,15 +258,15 @@
         --account-login-secondary-border: #adb1b8;
         --account-login-focus: #e77600;
         --account-login-error: #b12704;
-        --weline-theme-field-label-bg: var(--account-login-surface);
+        --weline-theme-field-label-bg: var(--account-login-surface, #ffffff);
         width: min(22rem, calc(100% - 2rem));
         margin-inline: auto;
         padding: 0;
         overflow: visible;
-        border: 1px solid var(--account-login-border);
+        border: 1px solid var(--account-login-border, #d5d9d9);
         border-radius: var(--weline-theme-radius-lg);
-        background: var(--account-login-surface);
-        color: var(--account-login-text);
+        background: var(--account-login-surface, #ffffff);
+        color: var(--account-login-text, #0f1111);
         box-shadow: none;
         animation: w-auth-login-enter 240ms ease-out;
     }
@@ -295,7 +295,7 @@
         gap: 0.5rem;
         margin: 0;
         padding: 0.75rem 0.35rem;
-        color: var(--account-login-text-muted);
+        color: var(--account-login-text-muted, #565959);
         font-size: 0.75rem;
         line-height: 1.2;
         white-space: nowrap;
@@ -307,7 +307,7 @@
         flex: 1 1 auto;
         width: 1px;
         min-height: 1.25rem;
-        background: var(--account-login-border);
+        background: var(--account-login-border, #d5d9d9);
     }
 
     .w-auth-login--classic .w-auth-login__split-rule-text--long {
@@ -344,13 +344,13 @@
         font-size: 1.5rem;
         font-weight: 400;
         line-height: 1.2;
-        color: var(--account-login-text);
+        color: var(--account-login-text, #0f1111);
     }
 
     .w-auth-login--classic .w-auth-login__subtitle {
         margin: 0;
         font-size: 0.8125rem;
-        color: var(--account-login-text-muted);
+        color: var(--account-login-text-muted, #565959);
     }
 
     .w-auth-login--classic .w-auth-login__messages,
@@ -375,7 +375,7 @@
         align-items: center;
         gap: 0.375rem;
         font-weight: 700;
-        color: var(--account-login-text);
+        color: var(--account-login-text, #0f1111);
     }
 
     .w-auth-login--classic .w-field__label .w-icon,
@@ -395,16 +395,16 @@
         width: 100%;
         max-width: 100%;
         min-height: 2rem;
-        border: 1px solid var(--account-login-border-input);
+        border: 1px solid var(--account-login-border-input, #888c8c);
         border-radius: 3px;
-        background-color: var(--account-login-surface);
+        background-color: var(--account-login-surface, #ffffff);
         box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08) inset;
-        color: var(--account-login-text);
+        color: var(--account-login-text, #0f1111);
     }
 
     .w-auth-login--classic .w-input:focus,
     .w-auth-login--classic .w-select:focus {
-        border-color: var(--account-login-focus);
+        border-color: var(--account-login-focus, #e77600);
         outline: none;
         box-shadow: 0 0 0 3px rgba(228, 121, 17, 0.35), 0 1px 2px rgba(15, 17, 17, 0.08) inset;
     }
@@ -434,13 +434,13 @@
         border-radius: 3px;
         background: transparent;
         box-shadow: none;
-        color: var(--account-login-link);
+        color: var(--account-login-link, var(--color-link));
     }
 
     .w-auth-login--classic .w-auth-login__password > .w-button:hover,
     .w-auth-login--classic .w-auth-login__password > .w-button:focus-visible {
         background: rgba(15, 17, 17, 0.04);
-        color: var(--account-login-link-hover);
+        color: var(--account-login-link-hover, var(--color-link-hover));
         outline: none;
         box-shadow: none;
     }
@@ -533,7 +533,7 @@
         display: inline-flex;
         align-items: center;
         min-height: var(--weline-control-height, 2.5rem);
-        color: var(--account-login-link);
+        color: var(--account-login-link, var(--color-link));
         font-size: 0.8125rem;
         font-weight: 650;
         line-height: 1.2;
@@ -543,19 +543,19 @@
 
     .w-auth-login--classic .w-auth-login__forgot-link:hover,
     .w-auth-login--classic .w-auth-login__forgot-link:focus-visible {
-        color: var(--account-login-link-hover);
+        color: var(--account-login-link-hover, var(--color-link-hover));
         text-decoration: underline;
         outline: none;
     }
 
     .w-auth-login--classic .w-auth-login__forgot .w-button {
-        color: var(--account-login-link);
+        color: var(--account-login-link, var(--color-link));
         text-decoration: none;
     }
 
     .w-auth-login--classic .w-auth-login__forgot .w-button:hover,
     .w-auth-login--classic .w-auth-login__forgot .w-button:focus-visible {
-        color: var(--account-login-link-hover);
+        color: var(--account-login-link-hover, var(--color-link-hover));
         text-decoration: underline;
     }
 
@@ -626,9 +626,9 @@
         width: 100%;
         max-width: 100%;
         padding: 0.5rem 0.65rem;
-        border: 1px solid var(--account-login-border);
+        border: 1px solid var(--account-login-border, #d5d9d9);
         border-radius: var(--weline-theme-radius-md);
-        background: var(--account-login-surface-muted);
+        background: var(--account-login-surface-muted, #f0f2f2);
     }
 
     .w-auth-login--classic .w-auth-login__terms-label {
@@ -636,7 +636,7 @@
         align-items: flex-start;
         gap: 0.5rem;
         margin: 0;
-        color: var(--account-login-text);
+        color: var(--account-login-text, #0f1111);
         font-size: 0.8125rem;
         font-weight: 500;
         line-height: 1.45;
@@ -652,13 +652,13 @@
     }
 
     .w-auth-login--classic .w-auth-login__terms-link {
-        color: var(--account-login-link);
+        color: var(--account-login-link, var(--color-link));
         text-decoration: none;
         font-weight: 650;
     }
 
     .w-auth-login--classic .w-auth-login__terms-link:hover {
-        color: var(--account-login-link-hover);
+        color: var(--account-login-link-hover, var(--color-link-hover));
         text-decoration: underline;
     }
 
@@ -683,17 +683,17 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border: 1px solid var(--account-login-cta-border);
+        border: 1px solid var(--account-login-cta-border, #fcd200);
         border-radius: 20px;
-        background: var(--account-login-cta-bg);
-        color: var(--account-login-text);
+        background: var(--account-login-cta-bg, var(--color-primary));
+        color: var(--account-login-text, #0f1111);
         font-weight: 650;
         box-shadow: none;
     }
 
     .w-auth-login--classic .w-auth-login__submit:hover:not(:disabled),
     .w-auth-login--classic .w-auth-login__submit:focus-visible {
-        background: var(--account-login-cta-bg-hover);
+        background: var(--account-login-cta-bg-hover, linear-gradient(180deg, #f7ca00 0%, #f0b800 100%));
         outline: none;
     }
 
@@ -732,7 +732,7 @@
 
     .w-auth-login--classic .w-auth-login__social-title {
         margin: 0;
-        color: var(--account-login-text-muted);
+        color: var(--account-login-text-muted, #565959);
         font-size: 0.8125rem;
         text-align: center;
     }
@@ -749,7 +749,7 @@
         grid-template-columns: 1fr auto 1fr;
         gap: 0.65rem;
         margin: 0.15rem 0 0.1rem;
-        color: var(--account-login-text-muted);
+        color: var(--account-login-text-muted, #565959);
         font-size: 0.75rem;
         text-align: center;
     }
@@ -758,7 +758,7 @@
     .w-auth-login--classic .w-auth-login__social-divider::after {
         content: "";
         height: 1px;
-        background: var(--account-login-border);
+        background: var(--account-login-border, #d5d9d9);
     }
 
     .w-auth-login--classic .w-auth-login__social .auth-form__provider {
@@ -781,10 +781,10 @@
         justify-content: center;
         gap: 0;
         padding: 0;
-        border: 1px solid var(--account-login-secondary-border);
+        border: 1px solid var(--account-login-secondary-border, #adb1b8);
         border-radius: 999px;
         background: #fff;
-        color: var(--account-login-text);
+        color: var(--account-login-text, #0f1111);
         font-weight: 650;
         text-decoration: none;
         box-shadow: none;
@@ -877,7 +877,7 @@
         grid-template-columns: 1fr auto 1fr;
         gap: 0.75rem;
         margin: 0;
-        color: var(--account-login-text-muted);
+        color: var(--account-login-text-muted, #565959);
         font-size: 0.75rem;
         text-align: center;
     }
@@ -886,7 +886,7 @@
     .w-auth-login--classic .w-auth-login__divider::after {
         content: "";
         height: 1px;
-        background: var(--account-login-border);
+        background: var(--account-login-border, #d5d9d9);
     }
 
     .w-auth-login--classic .w-button.w-auth-login__register {
@@ -895,10 +895,10 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border: 1px solid var(--account-login-secondary-border);
+        border: 1px solid var(--account-login-secondary-border, #adb1b8);
         border-radius: 20px;
-        background: var(--account-login-secondary-bg);
-        color: var(--account-login-text);
+        background: var(--account-login-secondary-bg, linear-gradient(180deg, #f7f8f8 0%, #e3e6e6 100%));
+        color: var(--account-login-text, #0f1111);
         font-weight: 650;
         text-decoration: none;
         box-shadow: none;
@@ -908,7 +908,7 @@
     .w-auth-login--classic .w-button.w-auth-login__register:hover,
     .w-auth-login--classic .w-button.w-auth-login__register:focus-visible {
         background: linear-gradient(180deg, #e7e9e9 0%, #d9dcdc 100%);
-        color: var(--account-login-text);
+        color: var(--account-login-text, #0f1111);
         box-shadow: none;
         transform: none;
         outline: none;
@@ -916,7 +916,7 @@
 
     .w-auth-login--classic .w-alert[data-tone="danger"],
     .w-auth-login--classic [data-w-login-feedback]:not([hidden]) {
-        color: var(--account-login-error);
+        color: var(--account-login-error, #b12704);
     }
 
     .w-auth-login--classic.w-auth-login--shake {

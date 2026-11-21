@@ -4,7 +4,7 @@
         --ed-border: color-mix(in srgb, currentColor 18%, transparent);
         --ed-muted: color-mix(in srgb, currentColor 66%, transparent);
         --ed-danger: var(--weline-theme-danger);
-        --ed-danger-soft: color-mix(in srgb, var(--ed-danger) 10%, transparent);
+        --ed-danger-soft: color-mix(in srgb, var(--ed-danger, var(--weline-theme-danger)) 10%, transparent);
     }
     .event-delivery-shell .ed-summary {
         display: grid;
@@ -13,13 +13,13 @@
         margin-bottom: var(--weline-space-4);
     }
     .event-delivery-shell .ed-metric {
-        border: 1px solid var(--ed-border);
+        border: 1px solid var(--ed-border, color-mix(in srgb, currentColor 18%, transparent));
         border-radius: var(--weline-radius-md);
         padding: var(--weline-space-4);
         background: var(--weline-theme-surface);
     }
     .event-delivery-shell .ed-metric-label {
-        color: var(--ed-muted);
+        color: var(--ed-muted, color-mix(in srgb, currentColor 66%, transparent));
         font-size: var(--weline-font-size-xs);
         font-weight: 700;
         letter-spacing: .06em;
@@ -44,7 +44,7 @@
         margin: var(--weline-space-4) 0;
         padding: var(--weline-space-3) var(--weline-space-4);
     }
-    .event-delivery-shell .ed-status[data-kind="error"] { color: var(--ed-danger); background: var(--ed-danger-soft); }
+    .event-delivery-shell .ed-status[data-kind="error"] { color: var(--ed-danger, var(--weline-theme-danger)); background: var(--ed-danger-soft, color-mix(in srgb, var(--ed-danger) 10%, transparent)); }
     .event-delivery-shell .ed-status[data-kind="success"] { color: var(--weline-theme-success); background: color-mix(in srgb, var(--weline-theme-success) 10%, transparent); }
     .event-delivery-shell .ed-status[data-kind="loading"] { color: var(--weline-theme-primary); background: color-mix(in srgb, var(--weline-theme-primary) 9%, transparent); }
     .event-delivery-shell .ed-status[hidden],
@@ -65,12 +65,12 @@
         font-weight: 700;
         padding: var(--weline-space-1) var(--weline-space-2);
     }
-    .event-delivery-shell .ed-badge[data-status="dead"] { color: var(--ed-danger); }
+    .event-delivery-shell .ed-badge[data-status="dead"] { color: var(--ed-danger, var(--weline-theme-danger)); }
     .event-delivery-shell .ed-badge[data-status="succeeded"] { color: var(--weline-theme-success); }
     .event-delivery-shell .ed-badge[data-status="running"],
     .event-delivery-shell .ed-badge[data-status="queued"] { color: var(--weline-theme-primary); }
     .event-delivery-shell .ed-empty {
-        color: var(--ed-muted);
+        color: var(--ed-muted, color-mix(in srgb, currentColor 66%, transparent));
         padding: var(--weline-space-12) var(--weline-space-4);
         text-align: center;
     }

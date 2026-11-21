@@ -152,7 +152,7 @@ html[data-theme-mode="dark"] .w-local-translation-drawer > .w-drawer__footer {
 
 .w-local-translation__progress-track {
     block-size: 0.35rem;
-    border-radius: var(--weline-radius-full);
+    border-radius: var(--weline-radius-round);
     background: color-mix(in srgb, var(--weline-theme-border) 65%, transparent);
     overflow: hidden;
 }
@@ -299,7 +299,7 @@ html[data-theme-mode="dark"] .w-local-translation-drawer > .w-drawer__footer {
 .w-local-translation__row-badge {
     inline-size: 0.5rem;
     block-size: 0.5rem;
-    border-radius: var(--weline-radius-full);
+    border-radius: var(--weline-radius-round);
     background: color-mix(in srgb, var(--weline-theme-text-muted) 35%, transparent);
     flex-shrink: 0;
 }

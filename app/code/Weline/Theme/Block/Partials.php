@@ -62,6 +62,14 @@ class Partials extends Block
     private const CHROME_POLICY_CACHE_MAX = 512;
     private const PARTIAL_OUTPUT_STALE_TTL = 86400;
     private const PARTIAL_OUTPUT_REFRESH_LOCK_TTL = 10;
+
+    /**
+     * RequestContext flag: head compose degraded this request (compose threw or
+     * the design trio fell back to module files while an override exists on
+     * disk). The degraded head still serves the current request via the
+     * non-shared fallback render, but must never enter L1/L2 chrome bags.
+     */
+    private const STOREFRONT_HEAD_DEGRADED_FLAG = 'weline.theme.head.compose_degraded';
     /** @var array<string, array{fresh_until: float, stale_until: float, html: string}> */
     private static array $partialOutputCache = [];
     private static int $partialOutputCacheBytes = 0;
@@ -549,7 +557,7 @@ class Partials extends Block
                 ]);
             } else {
                 if ($cached['status'] === 'stale') {
-                    $this->queuePartialOutputRefresh($cacheKey, $fileName, $dictionary, $policy['ttl']);
+                    $this->queuePartialOutputRefresh($cacheKey, $fileName, $dictionary, $policy['ttl'], $type, $area);
                 }
 
                 return $this->finalizeStorefrontChromeHtml($type, (string)$cached['html']);
@@ -621,12 +629,19 @@ class Partials extends Block
         }
 
         $html = $this->renderStorefrontChromeShellForSharedBag($fileName, $dictionary, $area, $type);
-        if ($this->isEmptyPartialHtml($html)) {
-            $this->logPartialCacheDiagnostic('skip_empty_partial_output_store', [
-                'file' => $fileName,
-                'type' => $type,
-                'cache_key' => $cacheKey,
-            ]);
+        $degradedHead = \strtolower((string)$type) === 'head'
+            && RequestContext::get(self::STOREFRONT_HEAD_DEGRADED_FLAG, false) === true;
+        if ($this->isEmptyPartialHtml($html) || $degradedHead) {
+            // Degraded head still serves this request, but must not enter any
+            // cache layer: one failed render must not poison later requests.
+            $this->logPartialCacheDiagnostic(
+                $degradedHead ? 'skip_degraded_head_output_store' : 'skip_empty_partial_output_store',
+                [
+                    'file' => $fileName,
+                    'type' => $type,
+                    'cache_key' => $cacheKey,
+                ],
+            );
 
             return $this->finalizeStorefrontChromeHtml($type, $html);
         }
@@ -1354,14 +1369,39 @@ class Partials extends Block
         string $area,
         int $freshTtlSeconds,
     ): string {
-        $prefixPath = $this->resolveForcedPartialsOption($area, 'head', 'assets-prefix');
-        $pagePath = $this->resolveForcedPartialsOption($area, 'head', 'page');
-        $suffixPath = $this->resolveForcedPartialsOption($area, 'head', 'assets-suffix');
-        if ($prefixPath === null || $pagePath === null || $suffixPath === null) {
-            return $this->renderCompiledPartial($fileName, $dictionary);
-        }
-
+        // Fail-closed: flag starts set and is cleared only on a confirmed-healthy
+        // composed head. Any throw anywhere below (trio resolution, the degraded
+        // check itself, prefix/suffix/page render) propagates with the flag set,
+        // so the caller-side fallback render refuses to persist the degraded head.
+        RequestContext::set(self::STOREFRONT_HEAD_DEGRADED_FLAG, true);
         try {
+            $prefixPath = $this->resolveForcedPartialsOption($area, 'head', 'assets-prefix');
+            $pagePath = $this->resolveForcedPartialsOption($area, 'head', 'page');
+            $suffixPath = $this->resolveForcedPartialsOption($area, 'head', 'assets-suffix');
+            if ($prefixPath === null || $pagePath === null || $suffixPath === null) {
+                // Legacy module-head path (no trio anywhere): unchanged cache policy.
+                RequestContext::set(self::STOREFRONT_HEAD_DEGRADED_FLAG, false);
+                return $this->renderCompiledPartial($fileName, $dictionary);
+            }
+
+            // Design theme with a head override file on disk that did NOT resolve to
+            // that file means the context ran degraded (half-installed app context,
+            // worker drain window, etc.). The module-fallback head would lose the
+            // design skin for the whole fresh+stale TTL; serve the fallback for this
+            // request only, never as a cached bag.
+            if ($this->storefrontHeadTrioDegraded($area, [
+                'assets-prefix' => $prefixPath,
+                'page' => $pagePath,
+                'assets-suffix' => $suffixPath,
+            ])) {
+                $this->logPartialCacheDiagnostic('storefront_head_trio_degraded', [
+                    'prefix' => (string)$prefixPath,
+                    'page' => (string)$pagePath,
+                    'suffix' => (string)$suffixPath,
+                ]);
+                throw new \RuntimeException('storefront head trio degraded');
+            }
+
             /** @var \Weline\Framework\Cache\Service\StorefrontScopeHotCache $hotCache */
             $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
             $assetsPolicy = StorefrontThemeCacheCoordinator::storefrontHeadAssetsPolicy(
@@ -1399,17 +1439,93 @@ class Partials extends Block
             $pageHtml = $this->renderCompiledPartial($pagePath, $dictionary);
             $composed = $prefixHtml . $pageHtml . $suffixHtml;
             if (!$this->isEmptyPartialHtml($composed)) {
+                RequestContext::set(self::STOREFRONT_HEAD_DEGRADED_FLAG, false);
                 return $this->ensureStorefrontHeadCssReadyGate($composed);
             }
+            throw new \RuntimeException('storefront head compose produced empty output');
         } catch (\Throwable $e) {
+            // Degraded output must never reach the shared chrome bag: it is
+            // served through the non-shared fallback render instead.
+            RequestContext::set(self::STOREFRONT_HEAD_DEGRADED_FLAG, true);
             $this->logPartialCacheDiagnostic('storefront_head_compose_fallback', [
                 'error' => $e->getMessage(),
             ]);
+            throw $e;
         }
 
+        // Unreachable: every resolved-trio path returns composed or throws.
+        // Kept as a last-resort head so the signature never voids.
         return $this->ensureStorefrontHeadCssReadyGate(
             $this->renderCompiledPartial($fileName, $dictionary),
         );
+    }
+
+    /**
+     * True when the resolved head trio silently fell back to module files while
+     * the active design theme ships an override on disk. A design theme can only
+     * produce this state in a degraded context (theme/layout resolution ran
+     * before the app context finished installing); the composed output would
+     * lack the theme's head skin and must not be cached.
+     *
+     * A module theme has no design layer at all → module trio is correct →
+     * never degraded. Design themes that ship no override file inherit the
+     * module file legitimately → not degraded either.
+     *
+     * @param array{assets-prefix:?string,page:?string,assets-suffix:?string} $resolved
+     */
+    private function storefrontHeadTrioDegraded(string $area, array $resolved): bool
+    {
+        /** @var ThemeContextService $ctx */
+        $ctx = ObjectManager::getInstance(ThemeContextService::class);
+        $normalizedArea = $ctx->normalizeArea($area);
+        $theme = $this->resolvePartialsTheme($normalizedArea);
+        $themeRoot = null;
+        if ($theme && $theme->getId()) {
+            $themeRoot = \realpath(\rtrim((string)$theme->getPath(), '/\\'));
+        }
+        $designRoot = \rtrim(\str_replace('\\', '/', (string)\Weline\Framework\App\Env::path_THEME_DESIGN_DIR), '/');
+        $resolvedIsDesign = $themeRoot !== null
+            && $themeRoot !== false
+            && $designRoot !== ''
+            && \str_starts_with(\rtrim(\str_replace('\\', '/', $themeRoot), '/') . '/', $designRoot . '/');
+
+        // The request's pinned application context is the authoritative "which
+        // theme this site serves" signal — independent of theme-object
+        // resolution, which is what degrades in the poison window. themeId=0
+        // means module default (no assigned theme); a positive id that did not
+        // survive into $theme means resolution collapsed to module/none.
+        $expectedId = 0;
+        try {
+            $application = \Weline\Framework\Runtime\ThemeApplicationContext::current($normalizedArea);
+            $expectedId = $application !== null ? \max(0, (int)$application->themeId) : 0;
+        } catch (\Throwable) {
+            $expectedId = 0;
+        }
+        if ($expectedId >= 1
+            && (int)($theme?->getId() ?? 0) !== $expectedId
+            && !$resolvedIsDesign
+        ) {
+            return true;
+        }
+
+        if (!$resolvedIsDesign) {
+            return false;
+        }
+        $themeRoot = \rtrim(\str_replace('\\', '/', $themeRoot), '/');
+        foreach ($resolved as $option => $resolvedPath) {
+            $candidate = $themeRoot . '/' . $normalizedArea . '/partials/head/' . $option . '.phtml';
+            if (!\is_file($candidate)) {
+                continue;
+            }
+            $resolvedReal = \is_string($resolvedPath) && \is_file($resolvedPath)
+                ? \realpath($resolvedPath)
+                : false;
+            if ($resolvedReal === false || $resolvedReal !== \realpath($candidate)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -2496,7 +2612,7 @@ class Partials extends Block
     /**
      * @param array<string, mixed> $dictionary
      */
-    private function queuePartialOutputRefresh(string $cacheKey, string $fileName, array $dictionary, ?int $ttl = null): void
+    private function queuePartialOutputRefresh(string $cacheKey, string $fileName, array $dictionary, ?int $ttl = null, string $type = '', string $area = 'frontend'): void
     {
         if (PostResponseTaskQueue::isDraining()) {
             return;
@@ -2509,9 +2625,24 @@ class Partials extends Block
         // SCOPE: same family as StorefrontScopeHotCache SWR; dictionary closed over.
         PostResponseTaskQueue::enqueue(
             'theme-partial-output:' . $cacheKey,
-            function () use ($cacheKey, $fileName, $dictionary, $ttl): void {
+            function () use ($cacheKey, $fileName, $dictionary, $ttl, $type, $area): void {
                 // Store lang-shell HTML only; currency islands hydrate on serve.
-                $html = $this->renderStorefrontChromeShellForSharedBag($fileName, $dictionary);
+                // Head must recompose, not re-render the monolithic shell: the shell
+                // lacks the design skin, and a degraded compose throws instead of
+                // returning a poisoned payload for L1.
+                try {
+                    $html = \strtolower($type) === 'head'
+                        ? $this->renderStorefrontHeadComposedOrMonolithic($fileName, $dictionary, $area, $ttl)
+                        : $this->renderStorefrontChromeShellForSharedBag($fileName, $dictionary, $area, $type);
+                } catch (\Throwable $e) {
+                    $this->logPartialCacheDiagnostic('skip_degraded_partial_output_refresh', [
+                        'cache_key' => $cacheKey,
+                        'file' => $fileName,
+                        'type' => $type,
+                        'error' => $e->getMessage(),
+                    ]);
+                    return;
+                }
                 if (!\is_string($html) || $this->isEmptyPartialHtml($html)) {
                     $this->logPartialCacheDiagnostic('skip_empty_partial_output_refresh', [
                         'cache_key' => $cacheKey,

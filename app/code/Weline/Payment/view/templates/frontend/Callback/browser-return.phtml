@@ -25,14 +25,14 @@ $pageTitle = $title !== '' ? $title : (string) __('支付浏览器回跳入口')
             --pr-line: var(--color-border-soft);
             --pr-ok: var(--color-success);
             --pr-ok-bg: var(--color-success-bg-soft);
-            --pr-btn: var(--color-bg-amazon);
+            --pr-btn: var(--color-primary);
         }
         * { box-sizing: border-box; }
         html, body {
             margin: 0;
             min-height: 100%;
-            background: var(--pr-bg);
-            color: var(--pr-ink);
+            background: var(--pr-bg, var(--color-bg-muted));
+            color: var(--pr-ink, var(--color-text-slate));
             font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
         }
         .weline-payment-return {
@@ -43,8 +43,8 @@ $pageTitle = $title !== '' ? $title : (string) __('支付浏览器回跳入口')
             padding: var(--spacing-7) var(--spacing-4) var(--spacing-9);
         }
         .weline-payment-return__panel {
-            background: var(--pr-card);
-            border: var(--border-width-thin) solid var(--pr-line);
+            background: var(--pr-card, var(--color-bg-primary));
+            border: var(--border-width-thin) solid var(--pr-line, var(--color-border-soft));
             border-radius: var(--radius-2xl);
             box-shadow: var(--weline-shadow-md);
             display: grid;
@@ -57,9 +57,9 @@ $pageTitle = $title !== '' ? $title : (string) __('支付浏览器回跳入口')
         }
         .weline-payment-return__badge {
             align-items: center;
-            background: var(--pr-ok-bg);
+            background: var(--pr-ok-bg, var(--color-success-bg-soft));
             border-radius: var(--radius-full);
-            color: var(--pr-ok);
+            color: var(--pr-ok, var(--color-success));
             display: inline-flex;
             height: 56px;
             justify-content: center;
@@ -70,14 +70,14 @@ $pageTitle = $title !== '' ? $title : (string) __('支付浏览器回跳入口')
             width: 28px;
         }
         .weline-payment-return__title {
-            color: var(--pr-ink);
+            color: var(--pr-ink, var(--color-text-slate));
             font-size: var(--weline-font-size-2xl);
             font-weight: 700;
             line-height: 1.35;
             margin: 0;
         }
         .weline-payment-return__lead {
-            color: var(--pr-muted);
+            color: var(--pr-muted, var(--color-text-muted));
             font-size: var(--font-size-base);
             line-height: 1.65;
             margin: 0;
@@ -91,7 +91,7 @@ $pageTitle = $title !== '' ? $title : (string) __('支付浏览器回跳入口')
         .weline-payment-return__meta code {
             background: var(--color-bg-muted);
             border-radius: var(--border-radius-md);
-            color: var(--pr-ink);
+            color: var(--pr-ink, var(--color-text-slate));
             font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
             font-size: var(--font-size-sm);
             padding: var(--spacing-0_5) var(--spacing-0_45);
@@ -100,7 +100,7 @@ $pageTitle = $title !== '' ? $title : (string) __('支付浏览器回跳入口')
             margin-top: var(--spacing-2_5);
         }
         .weline-payment-return__btn {
-            background: var(--pr-btn);
+            background: var(--pr-btn, var(--color-primary));
             border-radius: var(--sidebar-radius);
             color: var(--color-text-light);
             display: inline-block;

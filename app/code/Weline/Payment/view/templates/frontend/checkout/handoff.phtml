@@ -60,8 +60,8 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
     </section>
 </main>
 <style>
-.payment-handoff {
-    --amz-text: var(--weline-theme-color-text);
+:root {
+    --amz-text: var(--weline-theme-color-text, var(--color-text));
     --amz-muted: var(--color-text-gray);
     --amz-border: var(--color-border-muted);
     --amz-panel-bg: var(--color-bg-primary);
@@ -69,6 +69,8 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
     --amz-pending: var(--color-warning);
     --amz-pending-soft: var(--color-primary-bg-subtle);
     --amz-success: var(--color-success);
+}
+.payment-handoff {
     box-sizing: border-box;
     width: min(100%, var(--weline-layout-content-max-width));
     max-width: 720px;

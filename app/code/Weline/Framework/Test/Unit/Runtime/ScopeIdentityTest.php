@@ -807,6 +807,45 @@ final class ScopeIdentityTest extends TestCase
         $envelope->toV1StorageArray();
     }
 
+    public function testCompileTimeWebsitePinRestoresLanguageCurrencyAndIdentity(): void
+    {
+        $server = $_SERVER;
+        Context::enter(new Context());
+
+        try {
+            RequestContext::installScopeIdentity(ScopeIdentity::website(103, 'shop_b'));
+            RequestContext::setWelineUserLang('en_US');
+            RequestContext::setWelineUserCurrency('EUR');
+            $previousIdentity = RequestContext::scopeIdentity();
+
+            RequestContext::runWithCompileTimeWebsitePin(
+                ScopeIdentity::website(0, 'default'),
+                'https://default.test',
+                function (): void {
+                    self::assertSame(0, RequestContext::scopeIdentity()?->websiteId);
+                    RequestContext::setWelineUserLang('bg_BG');
+                    RequestContext::setWelineUserCurrency('BGN');
+                    self::assertSame('bg_BG', RequestContext::getWelineUserLang());
+                    self::assertSame('BGN', RequestContext::getWelineUserCurrency());
+                },
+            );
+
+            self::assertSame('en_US', RequestContext::getWelineUserLang());
+            self::assertSame('EUR', RequestContext::getWelineUserCurrency());
+            self::assertSame('en_US', RequestContext::get('env.user.lang'));
+            self::assertSame('EUR', RequestContext::get('env.user.currency'));
+            self::assertSame('en_US', $_SERVER['WELINE_USER_LANG'] ?? null);
+            self::assertSame('EUR', $_SERVER['WELINE_USER_CURRENCY'] ?? null);
+            self::assertSame(
+                $previousIdentity?->canonicalKey(),
+                RequestContext::scopeIdentity()?->canonicalKey(),
+            );
+        } finally {
+            $_SERVER = $server;
+            Context::leave();
+        }
+    }
+
     private static function installFrozenScope(
         int $websiteId,
         string $websiteCode,

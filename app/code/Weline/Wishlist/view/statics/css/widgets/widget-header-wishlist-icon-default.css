@@ -17,8 +17,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    inline-size: var(--weline-chrome-action-icon-size);
-    block-size: var(--weline-chrome-action-icon-size);
+    inline-size: var(--weline-chrome-action-icon-size, var(--spacing-7));
+    block-size: var(--weline-chrome-action-icon-size, var(--spacing-7));
     flex-shrink: 0;
 }
 .wc-theme_widget_wishlist_icon .header-wishlist-icon {

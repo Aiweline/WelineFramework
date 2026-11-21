@@ -4,7 +4,7 @@
     justify-content: space-between;
     gap: var(--token-size-10px);
     border-radius: var(--size-scrollbar);
-    background: var(--w-dashboard-surface-soft);
+    background: var(--w-dashboard-surface-soft, var(--weline-theme-surface-muted));
     padding: var(--spacing-3);
 }
 .pixel-realtime-total strong {
@@ -13,7 +13,7 @@
     line-height: 1;
 }
 .pixel-realtime-total span {
-    color: var(--w-dashboard-muted);
+    color: var(--w-dashboard-muted, var(--weline-theme-text-muted));
     font-size: var(--spacing-3);
 }
 .pixel-realtime-bars {
@@ -41,7 +41,7 @@
 }
 .pixel-realtime-bars span,
 .pixel-recent-list span {
-    color: var(--w-dashboard-muted);
+    color: var(--w-dashboard-muted, var(--weline-theme-text-muted));
     font-size: var(--token-size-11px);
     line-height: 1;
 }
@@ -61,7 +61,7 @@
 }
 .pixel-recent-list strong {
     min-width: 0;
-    color: var(--w-dashboard-heading);
+    color: var(--w-dashboard-heading, var(--weline-theme-text));
     font-size: var(--spacing-3);
     overflow: hidden;
     text-overflow: ellipsis;

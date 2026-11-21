@@ -25,7 +25,7 @@
 .statistics-header h2,
 .statistics-section .w-card__title {
     margin: 0;
-    font-size: var(--weline-font-size-base);
+    font-size: var(--weline-font-size-base, var(--font-size-base));
     font-weight: 650;
     color: var(--weline-theme-text, var(--color-text));
 }

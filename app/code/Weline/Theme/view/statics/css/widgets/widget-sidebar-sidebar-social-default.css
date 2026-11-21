@@ -32,7 +32,7 @@
 }
 
 .wc-theme_widget_sidebar_social[data-style="colored"] .social-link {
-    background: var(--brand-color);
+    background: var(--brand-color, var(--weline-theme-text-muted));
     color: var(--weline-theme-on-primary);
 }
 
@@ -56,7 +56,7 @@
 }
 
 .wc-theme_widget_sidebar_social[data-style="mono"] .social-link:hover {
-    background: var(--brand-color);
+    background: var(--brand-color, var(--weline-theme-text-muted));
     color: var(--weline-theme-on-primary);
 }
 
@@ -67,8 +67,8 @@
 }
 
 .wc-theme_widget_sidebar_social[data-style="outline"] .social-link:hover {
-    border-color: var(--brand-color);
-    color: var(--brand-color);
+    border-color: var(--brand-color, var(--weline-theme-text-muted));
+    color: var(--brand-color, var(--weline-theme-text-muted));
 }
 
 .wc-theme_widget_sidebar_social .wechat-qr {

@@ -55,16 +55,16 @@
     font-family: inherit;
     /* Paper ink nail (WO-UI-CONTRAST): inverse header remaps chrome text → cream.
      * Pin foundation literals so All / placeholder stay readable on white chip. */
-    --weline-chrome-body-text: var(--weline-theme-color-text);
+    --weline-chrome-body-text: var(--weline-theme-color-text, var(--_paper-text));
     --weline-chrome-body-text-secondary: var(--color-text-gray);
     --amz-drawer-text: var(--weline-chrome-body-text);
     --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
     --_paper-text: var(--amz-drawer-text, #0f1111);
     --_paper-muted: var(--amz-drawer-muted, #565959);
-    --weline-chrome-text-primary: var(--_paper-text);
-    --weline-chrome-text-secondary: var(--_paper-muted);
-    --weline-chrome-text-muted: var(--_paper-muted);
-    --color-text-placeholder: var(--_paper-muted);
+    --weline-chrome-text-primary: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+    --weline-chrome-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --weline-chrome-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+    --color-text-placeholder: var(--_paper-muted, var(--amz-drawer-muted, #565959));
     color: var(--_paper-text, #0f1111);
 }
 
@@ -174,20 +174,20 @@
  */
 .w-menu.search-type-menu.search-category-menu,
 .search-type-menu.search-category-menu {
-    --weline-chrome-body-text: var(--weline-theme-color-text);
+    --weline-chrome-body-text: var(--weline-theme-color-text, var(--_paper-text));
     --weline-chrome-body-text-secondary: var(--color-text-gray);
     --amz-drawer-text: var(--weline-chrome-body-text);
     --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
     --_paper-text: var(--amz-drawer-text, #0f1111);
     --_paper-muted: var(--amz-drawer-muted, #565959);
-    color: var(--_paper-text);
+    color: var(--_paper-text, var(--amz-drawer-text, #0f1111));
 }
 
 /* Category tree still flies right (absolute); opaque paper surface, not inline stack. */
 .w-menu.search-type-menu.search-category-menu .search-type-submenu,
 .search-type-menu.search-category-menu .search-type-submenu {
     background: var(--color-bg-primary);
-    color: var(--_paper-text);
+    color: var(--_paper-text, var(--amz-drawer-text, #0f1111));
     box-shadow: var(--weline-theme-shadow-lg);
 }
 

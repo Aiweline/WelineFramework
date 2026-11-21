@@ -151,12 +151,12 @@ $milestones = [
             /* Local inverse token rebind — beats global h1/a paper ink on dark heroes. */
             --_inverse-text: var(--color-text-on-dark, #f8fafc);
             --_inverse-muted: var(--color-text-on-dark-muted, #cbd5e1);
-            --weline-theme-text: var(--_inverse-text);
-            --weline-theme-text-secondary: var(--_inverse-muted);
-            --color-text-primary: var(--_inverse-text);
-            --color-text-secondary: var(--_inverse-muted);
+            --weline-theme-text: var(--_inverse-text, var(--_paper-text));
+            --weline-theme-text-secondary: var(--_inverse-muted, var(--_paper-muted));
+            --color-text-primary: var(--_inverse-text, var(--_paper-text));
+            --color-text-secondary: var(--_inverse-muted, var(--_paper-muted));
             --color-link: var(--color-text-on-dark-muted, #cbd5e1);
-            color: var(--_inverse-text);
+            color: var(--_inverse-text, var(--_paper-text));
         }
 
         .doc-about__hero-inner {
@@ -417,10 +417,10 @@ $milestones = [
             background: var(--color-bg-dark, #1f2937);
             --_inverse-text: var(--color-text-on-dark, #f8fafc);
             --_inverse-muted: var(--color-text-on-dark-muted, #cbd5e1);
-            --weline-theme-text: var(--_inverse-text);
-            --color-text-primary: var(--_inverse-text);
-            --color-text-secondary: var(--_inverse-muted);
-            color: var(--_inverse-text);
+            --weline-theme-text: var(--_inverse-text, var(--_paper-text));
+            --color-text-primary: var(--_inverse-text, var(--_paper-text));
+            --color-text-secondary: var(--_inverse-muted, var(--_paper-muted));
+            color: var(--_inverse-text, var(--_paper-text));
             padding: clamp(1.75rem, 3.5vw, 2.5rem) 0;
         }
 

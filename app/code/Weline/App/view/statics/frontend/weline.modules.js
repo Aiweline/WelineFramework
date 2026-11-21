@@ -15,5 +15,13 @@ Object.assign(window.WelineModulesConfig.modules, {
         globalVar: null,
         load: "defer",
         description: "下载 App 悬浮部件的异步模块（占位注入后接管二维码与版本水合）"
+    },
+    appDownloadPage: {
+        paths: [
+            "Weline_App::js/app-download-page.js?v=20261121-app-download-page-1"
+        ],
+        globalVar: null,
+        load: "eager",
+        description: "App 下载落地页：PWA beforeinstallprompt 捕获与安装按钮"
     }
 });

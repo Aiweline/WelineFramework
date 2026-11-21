@@ -1395,6 +1395,56 @@ final class FullPageCacheCoordinatorTest extends TestCase
         }
     }
 
+    public function testCacheBuildCanonicalizePreservesRouterInjectedQueryParams(): void
+    {
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        $canonicalize = new \ReflectionMethod(
+            FullPageCacheCoordinator::class,
+            'canonicalizeCurrentRequestForCacheBuild',
+        );
+        $canonicalize->setAccessible(true);
+        $allowlistMemo = (new \ReflectionClass(FullPageCacheCoordinator::class))
+            ->getConstant('MEMO_QUERY_ALLOWLIST');
+
+        try {
+            // A blog detail miss for /blog/{slug}?utm_source=x: the module router
+            // injected slug during process_uri_before. Canonicalize must keep it —
+            // dropping it turned every query-bearing blog request into a 404.
+            $this->setCurrentFpcUri(
+                'https://example.test/blog/post-slug?utm_source=x',
+                '/blog/post-slug?utm_source=x',
+            );
+            FullPageCacheCoordinator::clearRequestMemos();
+            RequestContext::set($allowlistMemo, ['sig' => '/blog/post-slug', 'map' => []]);
+            WelineEnv::replaceGet(['utm_source' => 'x', 'slug' => 'post-slug']);
+            $canonicalize->invoke($coordinator);
+            self::assertSame(
+                ['slug' => 'post-slug'],
+                Context::current()?->get('input.query'),
+            );
+            self::assertSame(
+                '/blog/post-slug',
+                Context::current()?->get('input.server.REQUEST_URI'),
+            );
+
+            // A router-injected value wins over a colliding visitor key.
+            $this->setCurrentFpcUri(
+                'https://example.test/blog/post-slug?slug=visitor&utm_source=x',
+                '/blog/post-slug?slug=visitor&utm_source=x',
+            );
+            FullPageCacheCoordinator::clearRequestMemos();
+            RequestContext::set($allowlistMemo, ['sig' => '/blog/post-slug', 'map' => []]);
+            WelineEnv::replaceGet(['slug' => 'post-slug', 'utm_source' => 'x']);
+            $canonicalize->invoke($coordinator);
+            self::assertSame(
+                ['slug' => 'post-slug'],
+                Context::current()?->get('input.query'),
+            );
+        } finally {
+            FullPageCacheCoordinator::clearRequestMemos();
+        }
+    }
+
     private function coordinator(CachePoolInterface $pool): FullPageCacheCoordinator
     {
         $authority = new class implements NamespaceGenerationInterface {

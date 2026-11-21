@@ -1355,7 +1355,7 @@
         padding: var(--weline-space-4) var(--weline-space-5);
         border-top: 1px solid var(--weline-theme-border);
         background: var(--weline-theme-surface-raised);
-        box-shadow: 0 -6px 18px color-mix(in srgb, var(--weline-theme-shadow) 10%, transparent);
+        box-shadow: 0 -6px 18px color-mix(in srgb, var(--weline-theme-text) 10%, transparent);
     }
     .w-drawer.w-drawer--dock .w-local-translation-drawer .w-drawer__body {
         overflow: auto;
@@ -1586,27 +1586,27 @@
          */
         --_paper-text: var(--amz-drawer-text, #0f1111);
         --_paper-muted: var(--amz-drawer-muted, #565959);
-        --_inverse-text: var(--_paper-text);
-        --_inverse-muted: var(--_paper-muted);
-        --weline-theme-text: var(--_paper-text);
-        --weline-theme-text-secondary: var(--_paper-muted);
-        --weline-theme-text-muted: var(--_paper-muted);
-        --weline-theme-text-subtle: var(--_paper-muted);
-        --weline-theme-body-text: var(--_paper-text);
-        --weline-theme-body-text-secondary: var(--_paper-muted);
-        --weline-theme-body-text-muted: var(--_paper-muted);
-        --weline-theme-body-text-heading: var(--_paper-text);
-        --weline-theme-color-text: var(--_paper-text);
-        --weline-theme-color-text-muted: var(--_paper-muted);
-        --color-text: var(--_paper-text);
-        --color-text-primary: var(--_paper-text);
-        --color-text-secondary: var(--_paper-muted);
-        --color-text-muted: var(--_paper-muted);
-        --color-text-placeholder: var(--_paper-muted);
-        --w-surface-fg: var(--_paper-text);
-        --w-surface-fg-muted: var(--_paper-muted);
-        --w-surface-fg-subtle: var(--_paper-muted);
-        color: var(--_paper-text);
+        --_inverse-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --_inverse-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-text-subtle: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-body-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-body-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-body-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-body-text-heading: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-color-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-color-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --color-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --color-text-primary: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --color-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --color-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --color-text-placeholder: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --w-surface-fg: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --w-surface-fg-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --w-surface-fg-subtle: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        color: var(--_paper-text, var(--amz-drawer-text, #0f1111));
         color-scheme: light;
     }
     /*
@@ -1621,27 +1621,27 @@
     dialog.w-dialog[data-i18n-unsupported-lang] {
         --_paper-text: var(--amz-drawer-text, #0f1111);
         --_paper-muted: var(--amz-drawer-muted, #565959);
-        --_inverse-text: var(--_paper-text);
-        --_inverse-muted: var(--_paper-muted);
-        --weline-theme-text: var(--_paper-text);
-        --weline-theme-text-secondary: var(--_paper-muted);
-        --weline-theme-text-muted: var(--_paper-muted);
-        --weline-theme-text-subtle: var(--_paper-muted);
-        --weline-theme-body-text: var(--_paper-text);
-        --weline-theme-body-text-secondary: var(--_paper-muted);
-        --weline-theme-body-text-muted: var(--_paper-muted);
-        --weline-theme-body-text-heading: var(--_paper-text);
-        --weline-theme-color-text: var(--_paper-text);
-        --weline-theme-color-text-muted: var(--_paper-muted);
-        --color-text: var(--_paper-text);
-        --color-text-primary: var(--_paper-text);
-        --color-text-secondary: var(--_paper-muted);
-        --color-text-muted: var(--_paper-muted);
-        --color-text-placeholder: var(--_paper-muted);
-        --w-surface-fg: var(--_paper-text);
-        --w-surface-fg-muted: var(--_paper-muted);
-        --w-surface-fg-subtle: var(--_paper-muted);
-        color: var(--_paper-text);
+        --_inverse-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --_inverse-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-text-subtle: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-body-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-body-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-body-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-body-text-heading: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-color-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-color-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --color-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --color-text-primary: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --color-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --color-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --color-text-placeholder: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --w-surface-fg: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --w-surface-fg-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --w-surface-fg-subtle: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        color: var(--_paper-text, var(--amz-drawer-text, #0f1111));
         color-scheme: light;
     }
     .w-language-switcher__search-wrap {
@@ -2680,14 +2680,14 @@
     .w-switch > input {
         --w-switch-width: 3.1875rem;   /* 51px */
         --w-switch-height: 1.9375rem;  /* 31px */
-        --w-switch-knob: calc(var(--w-switch-height) - 0.25rem);
+        --w-switch-knob: calc(var(--w-switch-height, 1.9375rem) - 0.25rem);
         position: relative;
         appearance: none;
         margin: 0;
         cursor: inherit;
-        flex: 0 0 var(--w-switch-width);
-        inline-size: var(--w-switch-width);
-        block-size: var(--w-switch-height);
+        flex: 0 0 var(--w-switch-width, 3.1875rem);
+        inline-size: var(--w-switch-width, 3.1875rem);
+        block-size: var(--w-switch-height, 1.9375rem);
         border: 0;
         border-radius: var(--weline-radius-round);
         background: var(--weline-theme-surface-muted);
@@ -2699,8 +2699,8 @@
         position: absolute;
         inset-block-start: 0.125rem;
         inset-inline-start: 0.125rem;
-        inline-size: var(--w-switch-knob);
-        block-size: var(--w-switch-knob);
+        inline-size: var(--w-switch-knob, calc(var(--w-switch-height) - 0.25rem));
+        block-size: var(--w-switch-knob, calc(var(--w-switch-height) - 0.25rem));
         margin: 0;
         border-radius: 50%;
         background: var(--weline-theme-surface-raised);
@@ -2712,7 +2712,7 @@
         box-shadow: none;
     }
     .w-switch > input:checked::before {
-        translate: calc(var(--w-switch-width) - var(--w-switch-knob) - 0.25rem) 0;
+        translate: calc(var(--w-switch-width, 3.1875rem) - var(--w-switch-knob, calc(var(--w-switch-height) - 0.25rem)) - 0.25rem) 0;
     }
     .w-switch > input:focus-visible { outline: 0; box-shadow: var(--weline-theme-focus-ring); }
     .w-switch > input:disabled { opacity: 0.5; cursor: not-allowed; }

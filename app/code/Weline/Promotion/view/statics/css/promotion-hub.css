@@ -11,27 +11,27 @@
     --promo-link: var(--color-link);
     --promo-price: var(--color-primary);
     --promo-cinnabar: var(--color-primary);
-    --promo-cta-bg: var(--promo-cinnabar);
+    --promo-cta-bg: var(--promo-cinnabar, var(--color-primary));
     --promo-cta-bg-hover: var(--color-primary);
-    --promo-cta-border: var(--promo-cinnabar);
-    --promo-nav-underline: var(--promo-cinnabar);
+    --promo-cta-border: var(--promo-cinnabar, var(--color-primary));
+    --promo-nav-underline: var(--promo-cinnabar, var(--color-primary));
     --promo-rail-pad-inline: clamp(1.5rem, 4vw, 2.75rem);
     --promo-hero-gradient-angle: 90deg;
     --promo-hero-focus-x: 72%;
-    --amz-card-bg: var(--promo-surface);
-    --amz-card-border: var(--promo-border);
-    --amz-card-text: var(--promo-text);
-    --amz-card-text-muted: var(--promo-muted);
-    --amz-card-link: var(--promo-link);
-    --amz-card-price: var(--promo-price);
-    --amz-card-cta-bg: var(--promo-cta-bg);
-    --amz-card-cta-bg-hover: var(--promo-cta-bg-hover);
-    --amz-card-cta-border: var(--promo-cta-border);
+    --amz-card-bg: var(--promo-surface, var(--color-bg-primary));
+    --amz-card-border: var(--promo-border, var(--color-border-default));
+    --amz-card-text: var(--promo-text, var(--color-text));
+    --amz-card-text-muted: var(--promo-muted, var(--color-text-gray-mid));
+    --amz-card-link: var(--promo-link, var(--color-link));
+    --amz-card-price: var(--promo-price, var(--color-primary));
+    --amz-card-cta-bg: var(--promo-cta-bg, var(--promo-cinnabar));
+    --amz-card-cta-bg-hover: var(--promo-cta-bg-hover, var(--color-primary));
+    --amz-card-cta-border: var(--promo-cta-border, var(--promo-cinnabar));
     --amz-card-cta-text: var(--color-text-inverse);
     --amz-card-shadow: 0 1px 2px rgba(56, 45, 36, 0.05), 0 8px 24px rgba(56, 45, 36, 0.05);
     --amz-card-shadow-hover: 0 14px 34px rgba(56, 45, 36, 0.13);
     box-sizing: border-box;
-    color: var(--promo-text);
+    color: var(--promo-text, var(--color-text));
     display: grid;
     gap: 0;
     margin: 0;
@@ -63,14 +63,14 @@
     margin: 0 0 var(--weline-space-4);
     /* Keep first tab off the white rail edge and aligned with hero copy. */
     padding-block: var(--spacing-2_5);
-    padding-inline: var(--promo-rail-pad-inline);
-    border-bottom: var(--border-width-thin) solid var(--promo-border);
-    background: var(--promo-surface);
+    padding-inline: var(--promo-rail-pad-inline, var(--weline-space-6));
+    border-bottom: var(--border-width-thin) solid var(--promo-border, var(--color-border-default));
+    background: var(--promo-surface, var(--color-bg-primary));
 }
 
 .w-promotion-page__tab {
     position: relative;
-    color: var(--promo-text);
+    color: var(--promo-text, var(--color-text));
     font-size: var(--weline-font-size-sm);
     font-weight: 600;
     line-height: 1.4;
@@ -79,12 +79,12 @@
 }
 
 .w-promotion-page__tab:hover {
-    color: var(--promo-cinnabar);
+    color: var(--promo-cinnabar, var(--color-primary));
     text-decoration: underline;
 }
 
 .w-promotion-page__tab--active {
-    color: var(--promo-text);
+    color: var(--promo-text, var(--color-text));
     font-weight: 700;
 }
 
@@ -95,7 +95,7 @@
     right: 0;
     bottom: -0.65rem;
     height: 2px;
-    background: var(--promo-nav-underline);
+    background: var(--promo-nav-underline, var(--promo-cinnabar));
 }
 
 .w-promotion-page__hero {
@@ -105,17 +105,17 @@
     min-height: clamp(14rem, 28vw, 20rem);
     margin: 0 0 var(--spacing-7);
     overflow: hidden;
-    border: var(--border-width-thin) solid var(--promo-border);
+    border: var(--border-width-thin) solid var(--promo-border, var(--color-border-default));
     border-radius: var(--weline-radius-lg);
     background:
-        linear-gradient(var(--promo-hero-gradient-angle), var(--color-bg-secondary) 0%, var(--color-bg-secondary) 46%, var(--color-bg-secondary) 76%, var(--color-bg-secondary) 100%),
-        url("/pub/media/catalog/hanfu/r2/homepage/taoyuan-qingmeng.webp") var(--promo-hero-focus-x) 38% / cover no-repeat;
-    color: var(--promo-text);
+        linear-gradient(var(--promo-hero-gradient-angle, 90deg), var(--color-bg-secondary) 0%, var(--color-bg-secondary) 46%, var(--color-bg-secondary) 76%, var(--color-bg-secondary) 100%),
+        url("/pub/media/catalog/hanfu/r2/homepage/taoyuan-qingmeng.webp") var(--promo-hero-focus-x, 72%) 38% / cover no-repeat;
+    color: var(--promo-text, var(--color-text));
 }
 
 /* Keep the copy readable over the warm paper wash while the real Hanfu image remains visible. */
 .w-promotion-page__hero :is(h1, h2, h3, h4, h5, h6, p) {
-    color: var(--promo-text);
+    color: var(--promo-text, var(--color-text));
 }
 
 .w-promotion-page__hero-inner {
@@ -124,12 +124,12 @@
     display: grid;
     gap: var(--weline-space-3);
     max-width: min(36rem, 100%);
-    padding: var(--promo-rail-pad-inline);
+    padding: var(--promo-rail-pad-inline, var(--weline-space-6));
 }
 
 .w-promotion-page__brand {
     margin: 0;
-    color: var(--promo-text);
+    color: var(--promo-text, var(--color-text));
     font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
     font-size: clamp(var(--font-size-3xl), 3.2vw, 2.75rem);
     font-weight: 650;
@@ -141,7 +141,7 @@
 .w-promotion-page__lede {
     margin: 0;
     max-width: 34rem;
-    color: var(--promo-muted);
+    color: var(--promo-muted, var(--color-text-gray-mid));
     font-size: var(--font-size-base);
     font-weight: 500;
     line-height: 1.65;
@@ -156,9 +156,9 @@
     min-height: var(--control-height-md);
     margin-top: var(--spacing-1_5);
     padding: var(--spacing-0_55) var(--spacing-4_5);
-    border: var(--border-width-thin) solid var(--promo-cta-border);
+    border: var(--border-width-thin) solid var(--promo-cta-border, var(--promo-cinnabar));
     border-radius: var(--weline-radius-lg);
-    background: var(--promo-cta-bg);
+    background: var(--promo-cta-bg, var(--promo-cinnabar));
     color: #fffdf8;
     font-size: var(--weline-font-size-sm);
     font-weight: 700;
@@ -168,7 +168,7 @@
 }
 
 .w-promotion-page__cta:hover {
-    background: var(--promo-cta-bg-hover);
+    background: var(--promo-cta-bg-hover, var(--color-primary));
     color: #fffdf8;
     text-decoration: none;
     transform: translateY(-1px);
@@ -176,7 +176,7 @@
 
 .w-promotion-page__meta {
     margin: 0;
-    color: var(--promo-muted);
+    color: var(--promo-muted, var(--color-text-gray-mid));
     font-size: var(--font-size-13);
     font-weight: 600;
     text-shadow: none;
@@ -205,7 +205,7 @@
 
 .w-promotion-page__section-note {
     margin: 0;
-    color: var(--promo-muted);
+    color: var(--promo-muted, var(--color-text-gray-mid));
     font-size: var(--font-size-13);
 }
 
@@ -219,9 +219,9 @@
     display: grid;
     gap: var(--spacing-1_5);
     padding: var(--weline-space-4) var(--spacing-4_5);
-    border: var(--border-width-thin) solid var(--promo-border);
+    border: var(--border-width-thin) solid var(--promo-border, var(--color-border-default));
     border-radius: var(--weline-radius-lg);
-    background: var(--promo-surface);
+    background: var(--promo-surface, var(--color-bg-primary));
 }
 
 .w-promotion-page__entry-title {
@@ -233,7 +233,7 @@
 
 .w-promotion-page__entry-text {
     margin: 0;
-    color: var(--promo-muted);
+    color: var(--promo-muted, var(--color-text-gray-mid));
     font-size: var(--weline-font-size-sm);
     line-height: 1.55;
 }
@@ -241,14 +241,14 @@
 .w-promotion-page__entry-link {
     width: fit-content;
     margin-top: var(--weline-space-1);
-    color: var(--promo-link);
+    color: var(--promo-link, var(--color-link));
     font-size: var(--weline-font-size-sm);
     font-weight: 600;
     text-decoration: none;
 }
 
 .w-promotion-page__entry-link:hover {
-    color: var(--promo-cinnabar);
+    color: var(--promo-cinnabar, var(--color-primary));
     text-decoration: underline;
 }
 
@@ -269,9 +269,9 @@
 
 .w-promotion-page__empty {
     padding: var(--weline-space-8) var(--weline-space-5);
-    border: var(--border-width-thin) dashed var(--promo-border);
+    border: var(--border-width-thin) dashed var(--promo-border, var(--color-border-default));
     border-radius: var(--weline-radius-lg);
-    background: var(--promo-surface);
+    background: var(--promo-surface, var(--color-bg-primary));
     text-align: center;
 }
 
@@ -283,7 +283,7 @@
 
 .w-promotion-page__empty-text {
     margin: 0 0 var(--weline-space-4);
-    color: var(--promo-muted);
+    color: var(--promo-muted, var(--color-text-gray-mid));
     font-size: var(--weline-font-size-sm);
     line-height: 1.6;
 }

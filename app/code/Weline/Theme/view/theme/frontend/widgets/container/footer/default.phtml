@@ -100,6 +100,20 @@ if (!in_array($floatSocialSide, ['left', 'right'], true)) {
 $showLegal = $toBool($this->getData('show_legal'), true);
 $socialItems = FooterDefaultLinksHelper::normalizeSocialItems($this->getData('social_items'));
 $legalLinks = FooterDefaultLinksHelper::normalizeLegalLinks($this->getData('legal_links'));
+
+// 企业联系邮箱：与 contact 布局同源 SiteContactInfo；占位 example.com 不展示。
+$footerContactEmail = '';
+try {
+    $footerContactInfo = ObjectManager::getInstance(\Weline\Theme\Helper\SiteContactInfo::class);
+    if ($footerContactInfo instanceof \Weline\Theme\Helper\SiteContactInfo) {
+        $footerContactCandidate = trim((string)($footerContactInfo->resolve()['contact_email'] ?? ''));
+        if ($footerContactCandidate !== '' && !preg_match('/@example\.com$/i', $footerContactCandidate)) {
+            $footerContactEmail = $footerContactCandidate;
+        }
+    }
+} catch (\Throwable) {
+    $footerContactEmail = '';
+}
 $themeFallbackSiteLogoText = '';
 /** @var SiteBrand $siteBrand */
 $siteBrand = ObjectManager::getInstance(SiteBrand::class);
@@ -268,6 +282,13 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
     <?php endif; ?>
 
     <div class="footer-bottom-band">
+        <div class="footer-contact-strip" data-testid="footer-contact-strip">
+            <span class="footer-contact-strip__label"><lang>联系我们</lang></span>
+            <?php if ($footerContactEmail !== ''): ?>
+                <a class="footer-contact-strip__mail" href="mailto:<?= $esc($footerContactEmail) ?>"><?= $esc($footerContactEmail) ?></a>
+            <?php endif; ?>
+            <a class="footer-contact-strip__inquiry footer-inquiry-trigger" href="@url{'contact'}"><lang>在线留言</lang></a>
+        </div>
         <w:hook>Weline_Theme::frontend::partials::footer::social-media-before<else/></w:hook>
         <?php if ($showSocial && $socialItems !== []): ?>
             <w:slot id="footer-social"
@@ -347,6 +368,8 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
             </button>
         </nav>
     <?php endif; ?>
+
+    <w:inquiry code="contact" mode="modal" trigger-selector=".footer-inquiry-trigger" id="footer-contact-inquiry" />
 
     <w:hook>Weline_Theme::frontend::partials::footer::after</w:hook>
 </footer>

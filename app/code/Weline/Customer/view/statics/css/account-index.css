@@ -1,7 +1,7 @@
 .account-index { --ai-border-radius: var(--border-radius-xl); --ai-transition: var(--transition-base, 0.2s ease); --ai-gutter: var(--spacing-lg);
-} .account-index__header { display: flex; align-items: center; gap: var(--weline-space-6); flex-wrap: wrap; padding: var(--ai-gutter); background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%); color: var(--weline-theme-on-primary, var(--color-on-primary)); border-radius: var(--ai-border-radius); margin-bottom: var(--ai-gutter);
+} .account-index__header { display: flex; align-items: center; gap: var(--weline-space-6); flex-wrap: wrap; padding: var(--ai-gutter, var(--spacing-lg)); background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%); color: var(--weline-theme-on-primary, var(--color-on-primary)); border-radius: var(--ai-border-radius, var(--border-radius-xl)); margin-bottom: var(--ai-gutter, var(--spacing-lg));
 } .account-index__header-actions { margin-inline-start: auto; flex-shrink: 0;
-} .account-index__logout { display: inline-flex; align-items: center; gap: var(--spacing-1_5); padding: var(--weline-space-2) var(--weline-space-4); border-radius: var(--border-radius-lg); background: color-mix(in srgb, var(--weline-theme-on-primary, var(--color-on-primary)) 18%, transparent); border: var(--border-width-thin) solid color-mix(in srgb, var(--weline-theme-on-primary, var(--color-on-primary)) 35%, transparent); color: var(--weline-theme-on-primary, var(--color-on-primary)); font-size: var(--font-size-sm); font-weight: 600; text-decoration: none; transition: var(--ai-transition);
+} .account-index__logout { display: inline-flex; align-items: center; gap: var(--spacing-1_5); padding: var(--weline-space-2) var(--weline-space-4); border-radius: var(--border-radius-lg); background: color-mix(in srgb, var(--weline-theme-on-primary, var(--color-on-primary)) 18%, transparent); border: var(--border-width-thin) solid color-mix(in srgb, var(--weline-theme-on-primary, var(--color-on-primary)) 35%, transparent); color: var(--weline-theme-on-primary, var(--color-on-primary)); font-size: var(--font-size-sm); font-weight: 600; text-decoration: none; transition: var(--ai-transition, var(--transition-base, 0.2s ease));
 } .account-index__logout:hover { background: color-mix(in srgb, var(--weline-theme-on-primary, var(--color-on-primary)) 28%, transparent); color: var(--weline-theme-on-primary, var(--color-on-primary));
 } .account-index__logout i { font-size: var(--weline-font-size-lg);
 } @media (max-width: 480px) { .account-index__header-actions { width: 100%; margin-inline-start: 0; } .account-index__logout { justify-content: center; width: 100%; }
@@ -14,11 +14,11 @@
 } .account-index__email { display: flex; align-items: center; gap: var(--weline-space-2); margin: var(--weline-space-2) 0 0; font-size: var(--font-size-sm); color: var(--weline-theme-on-primary, var(--color-on-primary)); opacity: 0.9; max-width: 100%; overflow-wrap: anywhere; word-break: break-word;
 } .account-index__email i { font-size: var(--weline-font-size-base);
 } .account-index__welcome { margin: var(--weline-space-2) 0 0; font-size: var(--weline-font-size-sm); color: var(--weline-theme-on-primary, var(--color-on-primary)); opacity: 0.86;
-} .account-index__section { margin-bottom: var(--ai-gutter);
-} .account-card { background: var(--color-bg-primary); border: var(--border-width-thin) solid var(--color-border-light); border-radius: var(--ai-border-radius); overflow: hidden; box-shadow: var(--weline-shadow-md);
-} .account-card__header { padding: var(--weline-space-5) var(--ai-gutter); background: var(--color-bg-secondary); border-bottom: var(--border-width-thin) solid var(--color-border-light);
+} .account-index__section { margin-bottom: var(--ai-gutter, var(--spacing-lg));
+} .account-card { background: var(--color-bg-primary); border: var(--border-width-thin) solid var(--color-border-light); border-radius: var(--ai-border-radius, var(--border-radius-xl)); overflow: hidden; box-shadow: var(--weline-shadow-md);
+} .account-card__header { padding: var(--weline-space-5) var(--ai-gutter, var(--spacing-lg)); background: var(--color-bg-secondary); border-bottom: var(--border-width-thin) solid var(--color-border-light);
 } .account-card__title { font-size: var(--weline-font-size-lg); font-weight: 700; color: var(--color-text-primary); margin: 0;
-} .account-card__body { padding: var(--ai-gutter);
+} .account-card__body { padding: var(--ai-gutter, var(--spacing-lg));
 }.account-index [hidden], .account-index .d-none.d-none, .account-card__alert.account-card__alert:empty{ display: none;
 } .account-card__alert { padding: var(--weline-space-4); border-radius: var(--border-radius-lg); margin-bottom: var(--weline-space-6); font-size: var(--weline-font-size-sm);
 } .account-card__alert--success { background: var(--color-secondary-bg-subtle); color: var(--color-success-strong); border: var(--border-width-thin) solid var(--color-success);
@@ -30,7 +30,7 @@
 } .account-form__group--medium { width: min(100%, 31rem);
 } .account-form__group--wide { width: min(100%, 46rem);
 } .account-form__label { font-size: var(--weline-font-size-sm); font-weight: 600; color: var(--color-text-primary);
-} .account-form__input { width: 100%; min-height: var(--control-height-xl); padding: var(--weline-space-3) var(--weline-space-4); font-size: var(--font-size-sm); color: var(--color-text-primary); background: linear-gradient(180deg, var(--color-bg-slate) 0%, var(--color-bg-panel) 100%); border: var(--border-width-thin) solid var(--color-border-default); border-radius: var(--border-radius-xl); transition: var(--ai-transition); box-shadow: var(--weline-shadow-md);
+} .account-form__input { width: 100%; min-height: var(--control-height-xl); padding: var(--weline-space-3) var(--weline-space-4); font-size: var(--font-size-sm); color: var(--color-text-primary); background: linear-gradient(180deg, var(--color-bg-slate) 0%, var(--color-bg-panel) 100%); border: var(--border-width-thin) solid var(--color-border-default); border-radius: var(--border-radius-xl); transition: var(--ai-transition, var(--transition-base, 0.2s ease)); box-shadow: var(--weline-shadow-md);
 } .account-form__input:hover { border-color: var(--color-border-default);
 } .account-form__input:focus { outline: none; border-color: var(--color-primary); background: var(--color-bg-primary); box-shadow: var(--weline-shadow-md);
 } .account-form__input:disabled { background: linear-gradient(180deg, var(--color-bg-primary) 0%, var(--color-bg-primary) 100%); color: var(--color-overlay-medium); cursor: not-allowed;
@@ -43,7 +43,7 @@
 } .account-form__input-group .account-form__input { flex: 1;
 } .account-form__hint { font-size: var(--font-size-13); color: var(--color-text-secondary); line-height: 1.5;
 } .account-form__actions { margin-top: var(--weline-space-1); padding-top: var(--weline-space-1);
-} .account-form__btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--weline-space-2); min-height: var(--control-height-xl); padding: var(--weline-space-3) var(--spacing-5_5); font-size: var(--font-size-sm); font-weight: 600; border-radius: var(--border-radius-lg); transition: var(--ai-transition); cursor: pointer; border: var(--border-width-medium) solid transparent;
+} .account-form__btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--weline-space-2); min-height: var(--control-height-xl); padding: var(--weline-space-3) var(--spacing-5_5); font-size: var(--font-size-sm); font-weight: 600; border-radius: var(--border-radius-lg); transition: var(--ai-transition, var(--transition-base, 0.2s ease)); cursor: pointer; border: var(--border-width-medium) solid transparent;
 } .account-form__btn--primary { background: var(--color-primary); color: var(--color-text-dark); border-color: var(--color-primary);
 } .account-form__btn--primary:hover { background: var(--color-primary-dark); border-color: var(--color-primary-dark); transform: translateY(-2px);
 } .account-form__btn--outline { background: var(--color-on-dark-92); color: var(--color-text-primary); border-color: var(--color-border-default); white-space: nowrap;

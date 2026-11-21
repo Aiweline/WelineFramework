@@ -177,7 +177,7 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
 </section>
 
 <style>
-    .product-storefront { width:100%; min-width:0; margin:0; padding:0 0 var(--spacing-2xl); color:var(--weline-theme-color-text); }
+    .product-storefront { width:100%; min-width:0; margin:0; padding:0 0 var(--spacing-2xl); color:var(--weline-theme-color-text, var(--_paper-text)); }
     .product-storefront__header { margin:0 0 var(--spacing-2); }
     .product-storefront__header h1 { margin:0; font-size:var(--font-size-2_5xl); font-weight:700; line-height:1.25; }
     .product-storefront__lede { margin:var(--spacing-1_5) 0 0; color:var(--color-text-gray); font-size:var(--font-size-13); line-height:1.4; }
@@ -191,7 +191,7 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
         padding:var(--spacing-2) 0 var(--spacing-2_5);
         border-bottom:var(--border-width-thin) solid var(--color-border-muted);
     }
-    .product-storefront__count { margin:0; font-size:var(--font-size-sm); color:var(--weline-theme-color-text); }
+    .product-storefront__count { margin:0; font-size:var(--font-size-sm); color:var(--weline-theme-color-text, var(--_paper-text)); }
     .product-storefront__count-hint { margin-left:var(--spacing-1_5); color:var(--color-text-gray); }
     .product-storefront__sort {
         display:inline-flex;
@@ -239,7 +239,7 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
         border:var(--border-width-thin) solid var(--color-border-faint);
         border-radius:var(--radius-lg);
         background:var(--color-bg-primary);
-        color:var(--weline-theme-color-text);
+        color:var(--weline-theme-color-text, var(--_paper-text));
         font:inherit;
         font-size:var(--font-size-13);
         font-weight:600;

@@ -92,7 +92,7 @@ $contactFaqs = is_array($faqs ?? null) && $faqs !== [] ? $faqs : (array)($seo['f
 </section>
 
 <!-- 01 你会得到什么 -->
-<section class="section surface" style="padding:clamp(40px,5vw,64px) 0" weline-code="amayum-contact-index-02">
+<section class="section surface section--compact" weline-code="amayum-contact-index-02">
     <div class="w-container">
         <div class="section-head reveal">
             <div><p class="eyebrow"><span class="idx">01</span> 你会得到什么</p><h2 id="get-title">四样东西，<br>没有推销。</h2></div>
@@ -198,7 +198,7 @@ $contactFaqs = is_array($faqs ?? null) && $faqs !== [] ? $faqs : (array)($seo['f
                         <p class="err" id="<?= A::e($errId('consent')) ?>"><?= A::e($errOf('consent') !== '' ? $errOf('consent') : '请先勾选同意，再发送需求。') ?></p>
                     </div>
 
-                    <p class="form-status<?= $statusKind !== '' ? ' ' . $statusKind : '' ?>" id="formStatus" role="<?= $statusKind === 'err' ? 'alert' : 'status' ?>" aria-live="polite"<?= $statusKind === '' ? ' style="display:none"' : '' ?>>
+                    <p class="form-status<?= $statusKind !== '' ? ' ' . $statusKind : '' ?>" id="formStatus" role="<?= $statusKind === 'err' ? 'alert' : 'status' ?>" aria-live="polite">
                         <?= A::e($statusMessage) ?>
                         <?php if ($statusKind === 'err'): ?>
                             <a href="<?= A::e($mailto) ?>">用邮件发送这份内容</a>
@@ -211,14 +211,14 @@ $contactFaqs = is_array($faqs ?? null) && $faqs !== [] ? $faqs : (array)($seo['f
                         </button>
                         <span class="mono form-meta"><?= A::e($responseSla) ?></span>
                     </div>
-                    <noscript><p class="form-status err" style="display:block">脚本未启用时表单仍可提交；如提交失败，请直接发邮件到 <a href="<?= A::e($plainMailto) ?>"><?= A::e($contactEmail) ?></a>。</p></noscript>
+                    <noscript><p class="form-status err">脚本未启用时表单仍可提交；如提交失败，请直接发邮件到 <a href="<?= A::e($plainMailto) ?>"><?= A::e($contactEmail) ?></a>。</p></noscript>
                 </form>
             </div>
 
             <aside class="contact-aside reveal" style="--i:1" aria-label="适合谁与说明">
                 <div class="block">
                     <span class="k">适合谁</span>
-                    <ul style="margin:8px 0 0;padding-left:18px;font-size:13px;line-height:1.8;color:var(--muted)">
+                    <ul>
                         <li>准备从 SaaS 迁移</li>
                         <li>要做多品牌/多市场</li>
                         <li>现有 PHP 团队</li>
@@ -227,7 +227,7 @@ $contactFaqs = is_array($faqs ?? null) && $faqs !== [] ? $faqs : (array)($seo['f
                 </div>
                 <div class="block">
                     <span class="k">不适合谁</span>
-                    <ul style="margin:8px 0 0;padding-left:18px;font-size:13px;line-height:1.8;color:var(--muted)">
+                    <ul>
                         <li>要零运维</li>
                         <li>两周上线</li>
                         <li>20+ 支付网关开箱即用</li>
@@ -263,7 +263,7 @@ $contactFaqs = is_array($faqs ?? null) && $faqs !== [] ? $faqs : (array)($seo['f
 
 <!-- FAQ -->
 <section class="section tint" id="faq" aria-labelledby="faq-title" weline-code="amayum-contact-index-05">
-    <div class="w-container" style="max-width:880px">
+    <div class="w-container w-container--narrow">
         <div class="section-head reveal">
             <div><p class="eyebrow"><span class="idx">FAQ</span> 常见问题</p><h2 id="faq-title">先回答<br>最常被问的。</h2></div>
         </div>

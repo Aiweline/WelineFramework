@@ -373,8 +373,8 @@ body .header-cart .mini-cart-drawer h2.mini-cart-drawer__title,
 .header-cart .mini-cart-drawer__spinner {
     width: var(--weline-space-8);
     height: var(--weline-space-8);
-    border: var(--border-width-medium) solid var(--amz-drawer-border);
-    border-top-color: var(--amz-drawer-text);
+    border: var(--border-width-medium) solid var(--amz-drawer-border, var(--color-border-default));
+    border-top-color: var(--amz-drawer-text, var(--weline-chrome-body-text));
     border-radius: 50%;
     animation: mini-cart-drawer-spin 0.8s linear infinite;
 }
@@ -442,7 +442,7 @@ body .header-cart .mini-cart-drawer h2.mini-cart-drawer__title,
 }
 
 .header-cart .mini-cart-drawer__line-title:hover {
-    color: var(--amz-drawer-link);
+    color: var(--amz-drawer-link, var(--color-literal-2162a1));
     text-decoration: underline;
 }
 
@@ -639,7 +639,7 @@ body .header-cart .mini-cart-drawer h2.mini-cart-drawer__title,
     padding: 0;
     border: none;
     background: none;
-    color: var(--amz-drawer-link);
+    color: var(--amz-drawer-link, var(--color-literal-2162a1));
     font-size: var(--weline-font-size-xs);
     text-decoration: underline;
     cursor: pointer;
@@ -659,7 +659,7 @@ body .header-cart .mini-cart-drawer h2.mini-cart-drawer__title,
     max-width: var(--token-size-11rem);
     font-size: var(--weline-font-size-sm);
     font-weight: 700;
-    color: var(--amz-drawer-price);
+    color: var(--amz-drawer-price, var(--color-primary));
     text-align: right;
     white-space: normal;
     line-height: 1.25;
@@ -674,7 +674,7 @@ body .header-cart .mini-cart-drawer h2.mini-cart-drawer__title,
 }
 
 .header-cart .mini-cart-drawer__line-price-now {
-    color: var(--amz-drawer-price);
+    color: var(--amz-drawer-price, var(--color-primary));
     font-weight: 700;
     white-space: nowrap;
 }
@@ -689,7 +689,7 @@ body .header-cart .mini-cart-drawer h2.mini-cart-drawer__title,
 
 .header-cart .mini-cart-drawer__line-price-campaign {
     display: block;
-    color: var(--amz-drawer-price);
+    color: var(--amz-drawer-price, var(--color-primary));
     font-size: var(--weline-font-size-xs);
     font-weight: 600;
     text-decoration: none;
@@ -1253,7 +1253,7 @@ body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab.is-
 .header-cart .mini-cart-drawer__subtotal--payable strong {
     font-size: var(--weline-font-size-lg);
     font-weight: 700;
-    color: var(--amz-drawer-price);
+    color: var(--amz-drawer-price, var(--color-primary));
 }
 
 .header-cart .mini-cart-drawer__note {
@@ -1285,7 +1285,7 @@ body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab.is-
 
 .header-cart .mini-cart-drawer a.mini-cart-drawer__btn--primary,
 .header-cart .mini-cart-drawer__btn--primary {
-    border: var(--border-width-thin) solid var(--amz-drawer-cta-border);
+    border: var(--border-width-thin) solid var(--amz-drawer-cta-border, var(--color-primary-dark));
     background: var(--amz-drawer-cta-bg, var(--color-primary));
     /* Prefer on-primary; dark Amazon-yellow fallback only when CTA is not brand primary. */
     color: var(--amz-drawer-cta-text, var(--color-on-primary));
@@ -1310,16 +1310,16 @@ body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab.is-
     width: var(--weline-space-5);
     height: var(--weline-space-5);
     margin-top: calc(-1 * var(--token-size-0-625rem));
-    border: var(--border-width-medium) solid var(--amz-drawer-border);
-    border-top-color: var(--amz-drawer-text);
+    border: var(--border-width-medium) solid var(--amz-drawer-border, var(--color-border-default));
+    border-top-color: var(--amz-drawer-text, var(--weline-chrome-body-text));
     border-radius: 50%;
     animation: mini-cart-drawer-spin 0.8s linear infinite;
 }
 
 .header-cart .mini-cart-drawer__btn--secondary {
-    border: var(--border-width-thin) solid var(--amz-drawer-secondary-border);
+    border: var(--border-width-thin) solid var(--amz-drawer-secondary-border, var(--color-border-emphasis));
     background: var(--amz-drawer-secondary-bg, linear-gradient(180deg, var(--color-bg-secondary) 0%, var(--color-literal-e3e6e6) 100%));
-    color: var(--amz-drawer-secondary-text);
+    color: var(--amz-drawer-secondary-text, var(--weline-chrome-body-text));
     box-shadow: var(--weline-shadow-sm);
 }
 

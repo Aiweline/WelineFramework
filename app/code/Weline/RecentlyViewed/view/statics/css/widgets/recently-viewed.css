@@ -13,9 +13,9 @@
   margin: var(--weline-space-6) 0 0;
   padding: var(--token-size-1-1rem) 0 var(--token-size-0-35rem);
   box-sizing: border-box;
-  border-top: var(--border-width-thin) solid var(--wrv-hairline);
+  border-top: var(--border-width-thin) solid var(--wrv-hairline, var(--color-bg-tertiary));
   background: transparent;
-  color: var(--wrv-ink);
+  color: var(--wrv-ink, var(--weline-theme-text));
 }
 
 .weline-recently-viewed .wrv-header {
@@ -30,7 +30,7 @@
   font-weight: 700;
   line-height: 1.25;
   letter-spacing: calc(-1 * var(--token-size-0-01em));
-  color: var(--wrv-ink);
+  color: var(--wrv-ink, var(--weline-theme-text));
 }
 
 .weline-recently-viewed .wrv-title :is(i, svg) {
@@ -39,7 +39,7 @@
 
 .weline-recently-viewed .wrv-subtitle {
   margin: var(--token-size-0-15rem) 0 0;
-  color: var(--wrv-muted);
+  color: var(--wrv-muted, var(--weline-theme-text-muted));
   font-size: var(--spacing-3_5);
   line-height: 1.35;
   font-weight: 400;
@@ -48,10 +48,10 @@
 .weline-recently-viewed .wrv-empty {
   margin: var(--token-size-0-35rem) 0 0;
   padding: var(--token-size-1-35rem) var(--weline-space-4);
-  border: var(--border-width-thin) dashed var(--wrv-border);
+  border: var(--border-width-thin) dashed var(--wrv-border, var(--weline-theme-border));
   border-radius: var(--spacing-2);
   background: var(--color-bg-secondary);
-  color: var(--wrv-muted);
+  color: var(--wrv-muted, var(--weline-theme-text-muted));
   font-size: var(--spacing-3_5);
   text-align: center;
 }
@@ -154,13 +154,13 @@
   overflow: hidden;
   font-size: var(--spacing-3_5);
   line-height: 1.35;
-  color: var(--wrv-ink);
+  color: var(--wrv-ink, var(--weline-theme-text));
 }
 
 .weline-recently-viewed .wrv-hydrate-price {
   font-size: var(--token-size-0-9375rem);
   font-weight: 700;
-  color: var(--wrv-ink);
+  color: var(--wrv-ink, var(--weline-theme-text));
 }
 
 .weline-recently-viewed .wrv-nav {
@@ -171,13 +171,13 @@
   width: var(--token-size-2-35rem);
   height: var(--token-size-2-35rem);
   border-radius: var(--token-size-999px);
-  border: var(--border-width-thin) solid var(--wrv-border);
+  border: var(--border-width-thin) solid var(--wrv-border, var(--weline-theme-border));
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-size: var(--token-size-1-45rem);
   line-height: 1;
   cursor: pointer;
-  box-shadow: var(--wrv-nav-shadow);
+  box-shadow: var(--wrv-nav-shadow, 0 var(--border-width-medium) var(--token-size-5px) 0 var(--color-literal-rgba-213-217-217-0-5));
   display: inline-flex;
   align-items: center;
   justify-content: center;

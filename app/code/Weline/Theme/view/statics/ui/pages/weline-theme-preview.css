@@ -19,27 +19,27 @@
 body.editor-mode {
     /* The iframe receives the storefront contract; most chrome still aliases it. */
     --editor-mode-surface: var(--weline-theme-surface);
-    --editor-mode-surface-subtle: var(--weline-theme-surface-subtle);
+    --editor-mode-surface-subtle: var(--weline-theme-surface-subtle, var(--color-bg-secondary, var(--weshop-background, #f8f9fa)));
     --editor-mode-surface-muted: var(--weline-theme-surface-muted);
     --editor-mode-text: var(--weline-theme-text);
-    --editor-mode-text-secondary: var(--weline-theme-text-secondary);
-    --editor-mode-border: var(--weline-theme-border-color);
+    --editor-mode-text-secondary: var(--weline-theme-text-secondary, var(--_paper-muted));
+    --editor-mode-border: var(--weline-theme-border-color, var(--color-border-default, var(--color-border-light, var(--weshop-border, #e5e7eb))));
     --editor-mode-primary: var(--weline-theme-primary);
     --editor-mode-primary-hover: var(--weline-theme-primary-hover);
-    --editor-mode-primary-subtle: var(--weline-theme-primary-subtle);
+    --editor-mode-primary-subtle: var(--weline-theme-primary-subtle, var(--color-primary-bg-subtle, var(--weshop-primary-bg-soft, #ecfdf5)));
     --editor-mode-on-primary: var(--weline-theme-on-primary);
     --editor-mode-success: var(--weline-theme-success);
     --editor-mode-warning: var(--weline-theme-warning);
     --editor-mode-danger: var(--weline-theme-danger);
     --editor-mode-shadow: var(--weline-theme-shadow-lg);
-    --editor-mode-selection: var(--editor-mode-primary);
-    --editor-mode-selection-hover: var(--editor-mode-primary-hover);
-    --editor-mode-selection-active: var(--editor-mode-success);
-    --editor-mode-selection-invalid: var(--editor-mode-danger);
-    --editor-mode-selection-subtle: var(--editor-mode-primary-subtle);
+    --editor-mode-selection: var(--editor-mode-primary, var(--weline-theme-primary));
+    --editor-mode-selection-hover: var(--editor-mode-primary-hover, var(--weline-theme-primary-hover));
+    --editor-mode-selection-active: var(--editor-mode-success, var(--weline-theme-success));
+    --editor-mode-selection-invalid: var(--editor-mode-danger, var(--weline-theme-danger));
+    --editor-mode-selection-subtle: var(--editor-mode-primary-subtle, var(--weline-theme-primary-subtle));
     --editor-mode-selection-active-subtle: var(
         --weline-theme-success-subtle,
-        color-mix(in srgb, var(--editor-mode-selection-active) 18%, transparent)
+        color-mix(in srgb, var(--editor-mode-selection-active, var(--editor-mode-success)) 18%, transparent)
     );
     --editor-mode-selection-gradient: linear-gradient(135deg, #34d399 0%, #fbbf24 100%);
     --editor-mode-selection-fg: #0f172a;
@@ -91,11 +91,11 @@ body.editor-mode [data-editor-interactive] {
     gap: 10px;
     max-width: min(520px, calc(100vw - 32px));
     padding: 10px 12px;
-    color: var(--editor-mode-text);
-    background: var(--editor-mode-surface);
-    border: 1px solid var(--editor-mode-border);
+    color: var(--editor-mode-text, var(--weline-theme-text));
+    background: var(--editor-mode-surface, var(--weline-theme-surface));
+    border: 1px solid var(--editor-mode-border, var(--weline-theme-border-color));
     border-radius: 12px;
-    box-shadow: var(--editor-mode-shadow);
+    box-shadow: var(--editor-mode-shadow, var(--weline-theme-shadow-lg));
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     pointer-events: auto;
@@ -109,8 +109,8 @@ body.editor-mode [data-editor-interactive] {
     justify-content: center;
     width: 34px;
     height: 34px;
-    color: var(--editor-mode-primary);
-    background: var(--editor-mode-primary-subtle);
+    color: var(--editor-mode-primary, var(--weline-theme-primary));
+    background: var(--editor-mode-primary-subtle, var(--weline-theme-primary-subtle));
     border-radius: 9px;
 }
 
@@ -121,14 +121,14 @@ body.editor-mode [data-editor-interactive] {
 }
 
 .theme-preview-mode-notice__copy strong {
-    color: var(--editor-mode-text);
+    color: var(--editor-mode-text, var(--weline-theme-text));
     font-size: 13px;
     font-weight: 700;
     line-height: 1.3;
 }
 
 .theme-preview-mode-notice__copy small {
-    color: var(--editor-mode-text-secondary);
+    color: var(--editor-mode-text-secondary, var(--weline-theme-text-secondary));
     font-size: 11px;
     line-height: 1.35;
 }
@@ -141,8 +141,8 @@ body.editor-mode [data-editor-interactive] {
     gap: 5px;
     min-height: 34px;
     padding: 0 11px;
-    color: var(--editor-mode-on-primary) !important;
-    background: var(--editor-mode-primary);
+    color: var(--editor-mode-on-primary, var(--weline-theme-on-primary)) !important;
+    background: var(--editor-mode-primary, var(--weline-theme-primary));
     border-radius: 9px;
     font-size: 12px;
     font-weight: 700;
@@ -151,13 +151,13 @@ body.editor-mode [data-editor-interactive] {
 }
 
 .theme-preview-mode-notice__exit:hover {
-    color: var(--editor-mode-on-primary) !important;
-    background: var(--editor-mode-primary-hover);
-    box-shadow: var(--editor-mode-shadow);
+    color: var(--editor-mode-on-primary, var(--weline-theme-on-primary)) !important;
+    background: var(--editor-mode-primary-hover, var(--weline-theme-primary-hover));
+    box-shadow: var(--editor-mode-shadow, var(--weline-theme-shadow-lg));
 }
 
 .theme-preview-mode-notice__exit:focus-visible {
-    outline: 3px solid var(--editor-mode-primary);
+    outline: 3px solid var(--editor-mode-primary, var(--weline-theme-primary));
     outline-offset: 2px;
 }
 
@@ -200,7 +200,7 @@ body.editor-mode [data-wslot] {
 /* Selection/drag affordances are semantic editor tokens, independent of page chrome. */
 /* 选择 hover：仅 data-w-slot-hover-target 高亮，避免 CSS :hover 落在子槽而工具条挂在外层 */
 body.editor-mode [data-wslot][data-w-slot-hover-target="true"] {
-    outline-color: var(--editor-mode-selection);
+    outline-color: var(--editor-mode-selection, var(--editor-mode-primary));
     overflow: visible;
     z-index: 100;
 }
@@ -217,28 +217,28 @@ body.editor-mode .weline-header-slot[data-wslot="header"][data-w-slot-hover-targ
 body.editor-mode .weline-footer-slot[data-wslot="footer"][data-w-slot-hover-target="true"],
 body.editor-mode .weline-header-slot[data-wslot="header"].slot-active,
 body.editor-mode .weline-footer-slot[data-wslot="footer"].slot-active {
-    box-shadow: inset 0 0 0 3px var(--editor-mode-selection);
+    box-shadow: inset 0 0 0 3px var(--editor-mode-selection, var(--editor-mode-primary));
 }
 
 body.editor-mode .weline-header-slot[data-wslot="header"].slot-active,
 body.editor-mode .weline-footer-slot[data-wslot="footer"].slot-active {
-    box-shadow: inset 0 0 0 3px var(--editor-mode-selection-active);
+    box-shadow: inset 0 0 0 3px var(--editor-mode-selection-active, var(--editor-mode-success));
 }
 
 /* 拖拽状态 */
 body.editor-mode [data-wslot].drag-over {
-    outline-color: var(--editor-mode-selection-active);
+    outline-color: var(--editor-mode-selection-active, var(--editor-mode-success));
     outline-style: solid;
 }
 
 body.editor-mode [data-wslot].drag-invalid {
-    outline-color: var(--editor-mode-selection-invalid);
+    outline-color: var(--editor-mode-selection-invalid, var(--editor-mode-danger));
     outline-style: solid;
 }
 
 /* 选中状态 */
 body.editor-mode [data-wslot].slot-active {
-    outline-color: var(--editor-mode-selection-active);
+    outline-color: var(--editor-mode-selection-active, var(--editor-mode-success));
     outline-style: solid;
 }
 
@@ -483,17 +483,17 @@ body.editor-mode [data-wslot]:not([data-w-slot-hover-target="true"]):not(.slot-h
     flex-direction: column;
     gap: 2px;
     padding-bottom: 8px;
-    border-bottom: 1px solid var(--editor-mode-border);
+    border-bottom: 1px solid var(--editor-mode-border, var(--weline-theme-border-color));
 }
 
 .slot-select-tree-header strong {
     font-size: 13px;
-    color: var(--editor-mode-text);
+    color: var(--editor-mode-text, var(--weline-theme-text));
 }
 
 .slot-select-tree-header span {
     font-size: 11px;
-    color: var(--editor-mode-text-secondary);
+    color: var(--editor-mode-text-secondary, var(--weline-theme-text-secondary));
 }
 
 .slot-select-tree-list {
@@ -516,20 +516,23 @@ body.editor-mode [data-wslot]:not([data-w-slot-hover-target="true"]):not(.slot-h
     border: 1px solid transparent;
     border-radius: 6px;
     background: transparent;
-    color: var(--editor-mode-text);
+    color: var(--editor-mode-text, var(--weline-theme-text));
     text-align: left;
     cursor: pointer;
     pointer-events: auto !important;
 }
 
 .slot-select-tree-item:hover {
-    background: var(--editor-mode-selection-subtle);
-    border-color: color-mix(in srgb, var(--editor-mode-selection) 28%, transparent);
+    background: var(--editor-mode-selection-subtle, var(--editor-mode-primary-subtle));
+    border-color: color-mix(in srgb, var(--editor-mode-selection, var(--editor-mode-primary)) 28%, transparent);
 }
 
 .slot-select-tree-item.is-active {
-    background: var(--editor-mode-selection-active-subtle);
-    border-color: color-mix(in srgb, var(--editor-mode-selection-active) 40%, transparent);
+    background: var(--editor-mode-selection-active-subtle, var(
+        --weline-theme-success-subtle,
+        color-mix(in srgb, var(--editor-mode-selection-active) 18%, transparent)
+    ));
+    border-color: color-mix(in srgb, var(--editor-mode-selection-active, var(--editor-mode-success)) 40%, transparent);
 }
 
 .slot-select-tree-name {
@@ -546,8 +549,8 @@ body.editor-mode [data-wslot]:not([data-w-slot-hover-target="true"]):not(.slot-h
     flex: 0 0 auto;
     font-size: 10px;
     font-family: monospace;
-    color: var(--editor-mode-text-secondary);
-    background: var(--editor-mode-surface-subtle);
+    color: var(--editor-mode-text-secondary, var(--weline-theme-text-secondary));
+    background: var(--editor-mode-surface-subtle, var(--weline-theme-surface-subtle));
     padding: 1px 5px;
     border-radius: 3px;
 }
@@ -555,7 +558,7 @@ body.editor-mode [data-wslot]:not([data-w-slot-hover-target="true"]):not(.slot-h
 .slot-select-tree-meta {
     flex: 0 0 auto;
     font-size: 10px;
-    color: var(--editor-mode-text-secondary);
+    color: var(--editor-mode-text-secondary, var(--weline-theme-text-secondary));
     white-space: nowrap;
 }
 
@@ -571,18 +574,18 @@ body.editor-mode [data-wslot]:not([data-w-slot-hover-target="true"]):not(.slot-h
     gap: 6px;
     margin-bottom: 8px;
     padding-bottom: 8px;
-    border-bottom: 1px solid var(--editor-mode-border);
+    border-bottom: 1px solid var(--editor-mode-border, var(--weline-theme-border-color));
 }
 
 .sic-header strong {
     font-size: 13px;
-    color: var(--editor-mode-text);
+    color: var(--editor-mode-text, var(--weline-theme-text));
 }
 
 .sic-header code {
     font-size: 10px;
-    background: var(--editor-mode-surface-subtle);
-    color: var(--editor-mode-text-secondary);
+    background: var(--editor-mode-surface-subtle, var(--weline-theme-surface-subtle));
+    color: var(--editor-mode-text-secondary, var(--weline-theme-text-secondary));
     padding: 1px 5px;
     border-radius: 3px;
     font-family: monospace;
@@ -602,13 +605,13 @@ body.editor-mode [data-wslot]:not([data-w-slot-hover-target="true"]):not(.slot-h
 
 .sic-label {
     flex-shrink: 0;
-    color: var(--editor-mode-text-secondary);
+    color: var(--editor-mode-text-secondary, var(--weline-theme-text-secondary));
     font-size: 11px;
     min-width: 32px;
 }
 
 .sic-value {
-    color: var(--editor-mode-text-secondary);
+    color: var(--editor-mode-text-secondary, var(--weline-theme-text-secondary));
     font-size: 11px;
 }
 
@@ -625,18 +628,18 @@ body.editor-mode [data-wslot]:not([data-w-slot-hover-target="true"]):not(.slot-h
 }
 
 .sic-badge-exclusive {
-    background: var(--weline-theme-warning-subtle);
-    color: var(--editor-mode-warning);
+    background: var(--weline-theme-warning-subtle, var(--color-warning-bg-subtle, var(--weshop-warning-bg-soft, #fffbeb)));
+    color: var(--editor-mode-warning, var(--weline-theme-warning));
 }
 
 .sic-badge-multiple {
-    background: var(--weline-theme-success-subtle);
-    color: var(--editor-mode-success);
+    background: var(--weline-theme-success-subtle, var(--color-success-bg-subtle, var(--weshop-success-bg-soft, #f0fdf4)));
+    color: var(--editor-mode-success, var(--weline-theme-success));
 }
 
 .sic-badge-single {
-    background: var(--editor-mode-primary-subtle);
-    color: var(--editor-mode-primary);
+    background: var(--editor-mode-primary-subtle, var(--weline-theme-primary-subtle));
+    color: var(--editor-mode-primary, var(--weline-theme-primary));
 }
 
 /* 标签列表 */
@@ -649,16 +652,16 @@ body.editor-mode [data-wslot]:not([data-w-slot-hover-target="true"]):not(.slot-h
 .sic-tag {
     display: inline-block;
     padding: 1px 6px;
-    background: var(--editor-mode-surface-subtle);
-    color: var(--editor-mode-text-secondary);
+    background: var(--editor-mode-surface-subtle, var(--weline-theme-surface-subtle));
+    color: var(--editor-mode-text-secondary, var(--weline-theme-text-secondary));
     border-radius: 3px;
     font-size: 10px;
     font-family: monospace;
 }
 
 .sic-tag-all {
-    background: var(--editor-mode-primary-subtle);
-    color: var(--editor-mode-primary);
+    background: var(--editor-mode-primary-subtle, var(--weline-theme-primary-subtle));
+    color: var(--editor-mode-primary, var(--weline-theme-primary));
 }
 
 /* ========================================
@@ -669,8 +672,8 @@ body.editor-mode [data-wslot]:not([data-w-slot-hover-target="true"]):not(.slot-h
 }
 
 @keyframes slot-pulse {
-    0%, 100% { outline-color: var(--editor-mode-selection); }
-    50% { outline-color: var(--editor-mode-selection-active); outline-width: 4px; }
+    0%, 100% { outline-color: var(--editor-mode-selection, var(--editor-mode-primary)); }
+    50% { outline-color: var(--editor-mode-selection-active, var(--editor-mode-success)); outline-width: 4px; }
 }
 
 /* ========================================
@@ -693,7 +696,7 @@ body.editor-mode [data-wslot]::before {
     pointer-events: none;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    box-shadow: var(--editor-mode-selection-shadow);
+    box-shadow: var(--editor-mode-selection-shadow, 0 6px 18px rgba(15, 23, 42, 0.28));
 }
 
 body.editor-mode [data-w-slot-hover-target="true"]::before {
@@ -715,10 +718,10 @@ body.editor-mode [data-wslot].drag-over::before {
     justify-content: center;
     min-height: 120px;
     padding: 30px 20px;
-    background: var(--editor-mode-surface-subtle);
-    border: 2px dashed var(--editor-mode-border);
+    background: var(--editor-mode-surface-subtle, var(--weline-theme-surface-subtle));
+    border: 2px dashed var(--editor-mode-border, var(--weline-theme-border-color));
     border-radius: 12px;
-    color: var(--editor-mode-text-secondary);
+    color: var(--editor-mode-text-secondary, var(--weline-theme-text-secondary));
     text-align: center;
     gap: 8px;
 }
@@ -739,7 +742,7 @@ body.editor-mode [data-wslot].drag-over::before {
 .slot-placeholder .placeholder-hint,
 .slot-placeholder > small {
     font-size: 12px;
-    color: var(--editor-mode-text-secondary);
+    color: var(--editor-mode-text-secondary, var(--weline-theme-text-secondary));
     opacity: 0.8;
 }
 
@@ -758,9 +761,9 @@ body.editor-mode .slot-placeholder {
 }
 
 body.editor-mode .slot-placeholder:hover {
-    border-color: var(--editor-mode-selection);
-    background: var(--editor-mode-selection-subtle);
-    color: var(--editor-mode-selection);
+    border-color: var(--editor-mode-selection, var(--editor-mode-primary));
+    background: var(--editor-mode-selection-subtle, var(--editor-mode-primary-subtle));
+    color: var(--editor-mode-selection, var(--editor-mode-primary));
 }
 
 /* 根内容 slot 在正式页面可以由内容自然撑开；编辑态必须保留可见、可命中的画布。 */
@@ -771,7 +774,7 @@ body.editor-mode [data-wslot].w-theme-preview-canvas-slot {
 body.editor-mode [data-wslot].w-theme-preview-canvas-slot.w-theme-preview-drop-target {
     background-color: color-mix(
         in srgb,
-        var(--editor-mode-selection-active) 8%,
+        var(--editor-mode-selection-active, var(--editor-mode-success)) 8%,
         transparent
     );
 }
@@ -782,9 +785,12 @@ body.editor-mode [data-wslot].w-theme-preview-canvas-slot.w-theme-preview-drop-t
 
 /* 接纳容器：绿色实线 + 浅色内环，颜色之外还有位置标签。 */
 body.editor-mode [data-wslot].w-theme-preview-drop-target {
-    outline: 3px solid var(--editor-mode-selection-active);
+    outline: 3px solid var(--editor-mode-selection-active, var(--editor-mode-success));
     outline-offset: -3px;
-    box-shadow: inset 0 0 0 4px var(--editor-mode-selection-active-subtle);
+    box-shadow: inset 0 0 0 4px var(--editor-mode-selection-active-subtle, var(
+        --weline-theme-success-subtle,
+        color-mix(in srgb, var(--editor-mode-selection-active) 18%, transparent)
+    ));
 }
 
 body.editor-mode [data-wslot][data-w-drop-position="inside"].w-theme-preview-drop-target {
@@ -804,10 +810,13 @@ body.editor-mode [data-wslot][data-w-drop-position="inside"].w-theme-preview-dro
     inset-inline: 0;
     block-size: 4px;
     border-radius: 999px;
-    background: var(--editor-mode-selection-active);
+    background: var(--editor-mode-selection-active, var(--editor-mode-success));
     box-shadow:
-        0 0 0 1px var(--editor-mode-surface),
-        0 0 0 4px var(--editor-mode-selection-active-subtle);
+        0 0 0 1px var(--editor-mode-surface, var(--weline-theme-surface)),
+        0 0 0 4px var(--editor-mode-selection-active-subtle, var(
+        --weline-theme-success-subtle,
+        color-mix(in srgb, var(--editor-mode-selection-active) 18%, transparent)
+    ));
     pointer-events: none;
 }
 
@@ -829,11 +838,11 @@ body.editor-mode [data-wslot][data-w-drop-position="inside"].w-theme-preview-dro
     left: var(--w-theme-preview-drop-feedback-left, 50%);
     max-inline-size: min(24rem, calc(100vw - 1rem), calc(100% - 1rem));
     padding: 0.35rem 0.65rem;
-    border: 1px solid var(--editor-mode-selection-active);
+    border: 1px solid var(--editor-mode-selection-active, var(--editor-mode-success));
     border-radius: 999px;
-    background: var(--editor-mode-surface);
-    color: var(--editor-mode-selection-active);
-    box-shadow: var(--editor-mode-shadow);
+    background: var(--editor-mode-surface, var(--weline-theme-surface));
+    color: var(--editor-mode-selection-active, var(--editor-mode-success));
+    box-shadow: var(--editor-mode-shadow, var(--weline-theme-shadow-lg));
     font-size: 12px;
     font-weight: 700;
     line-height: 1.35;
@@ -844,8 +853,8 @@ body.editor-mode [data-wslot][data-w-drop-position="inside"].w-theme-preview-dro
 }
 
 body.editor-mode [data-wslot][data-w-drop-position="invalid"] .w-theme-preview-drop-feedback {
-    border-color: var(--editor-mode-selection-invalid);
-    color: var(--editor-mode-selection-invalid);
+    border-color: var(--editor-mode-selection-invalid, var(--editor-mode-danger));
+    color: var(--editor-mode-selection-invalid, var(--editor-mode-danger));
 }
 
 body.editor-mode .widget-locate-flash {
@@ -854,10 +863,10 @@ body.editor-mode .widget-locate-flash {
 
 @keyframes w-theme-widget-locate-pulse {
     from {
-        box-shadow: 0 0 0 0 color-mix(in srgb, var(--editor-mode-selection-active) 45%, transparent);
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--editor-mode-selection-active, var(--editor-mode-success)) 45%, transparent);
     }
     to {
-        box-shadow: 0 0 0 var(--weline-space-2) color-mix(in srgb, var(--editor-mode-selection-active) 28%, transparent);
+        box-shadow: 0 0 0 var(--weline-space-2) color-mix(in srgb, var(--editor-mode-selection-active, var(--editor-mode-success)) 28%, transparent);
     }
 }
 
@@ -1013,6 +1022,7 @@ html.w-widget-health-locate-open {
     font-size: var(--weline-font-size-sm, 0.875rem);
     background: color-mix(in srgb, var(--weline-theme-danger, #b42318) 8%, var(--weline-theme-surface, #fff));
     border-radius: var(--weline-radius-sm, 6px);
+}
 }
 
 /* Weline UI source: ui/css/pages/theme-preview.css */

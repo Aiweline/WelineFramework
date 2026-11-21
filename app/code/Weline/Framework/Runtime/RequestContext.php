@@ -974,6 +974,8 @@ class RequestContext
         $previousArea = self::getWelineArea();
         $previousStoreId = self::getWelineStoreId();
         $previousChannelId = self::getWelineChannelId();
+        $previousUserLang = self::getWelineUserLang();
+        $previousUserCurrency = self::getWelineUserCurrency();
 
         $context->set(self::SCOPE_IDENTITY_PATH, null);
         $context->set(self::SCOPE_STORE_ID_PATH, null);
@@ -1004,6 +1006,10 @@ class RequestContext
             }
             self::setWelineWebsiteUrl($previousWebsiteUrl);
             self::setWelineArea($previousArea);
+            // Compile pins may switch locale/currency per unit; the projections
+            // must not leak back into the surrounding request (bg chrome bug).
+            self::setWelineUserLang($previousUserLang);
+            self::setWelineUserCurrency($previousUserCurrency);
         }
     }
 

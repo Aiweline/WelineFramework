@@ -9,7 +9,7 @@
   margin-inline: auto;
   padding: 0;
   border: none;
-  color: var(--wpr-ink);
+  color: var(--wpr-ink, var(--color-text-primary));
 }
 
 .weline-product-recommended .wpr-header {
@@ -31,7 +31,7 @@
 
 .weline-product-recommended .wpr-subtitle {
   margin: var(--spacing-0_2) 0 0;
-  color: var(--wpr-muted);
+  color: var(--wpr-muted, var(--color-text-gray));
   font-size: var(--spacing-0_9);
 }
 
@@ -53,8 +53,8 @@
 
 .weline-product-recommended[data-layout="carousel"] .wpr-viewport {
   border-radius: var(--token-size-10px);
-  background: linear-gradient(180deg, var(--wpr-stage) 0%, var(--color-bg-primary) 42%);
-  border: var(--border-width-thin) solid var(--wpr-border);
+  background: linear-gradient(180deg, var(--wpr-stage, var(--color-bg-secondary)) 0%, var(--color-bg-primary) 42%);
+  border: var(--border-width-thin) solid var(--wpr-border, var(--color-literal-d5d9d9));
 }
 
 .weline-product-recommended[data-layout="grid"] .wpr-viewport {
@@ -118,7 +118,7 @@
   width: var(--token-size-2-1rem);
   height: var(--token-size-2-1rem);
   border-radius: var(--token-size-999px);
-  border: var(--border-width-thin) solid var(--wpr-border);
+  border: var(--border-width-thin) solid var(--wpr-border, var(--color-literal-d5d9d9));
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-size: var(--token-size-1-35rem);

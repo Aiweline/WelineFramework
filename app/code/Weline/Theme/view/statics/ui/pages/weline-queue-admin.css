@@ -96,7 +96,7 @@
 
     .w-queue-admin__stat-value {
         font-size: var(--weline-font-size-xl);
-        font-weight: var(--weline-font-weight-semibold);
+        font-weight: var(--weline-font-weight-semibold, var(--font-weight-semibold));
         line-height: 1;
     }
 
@@ -188,7 +188,7 @@
     .w-queue-table__name {
         max-width: 28rem;
         overflow: hidden;
-        font-weight: var(--weline-font-weight-semibold);
+        font-weight: var(--weline-font-weight-semibold, var(--font-weight-semibold));
         text-overflow: ellipsis;
         white-space: nowrap;
     }
@@ -390,7 +390,7 @@
         gap: var(--weline-space-2);
         color: var(--weline-theme-text-muted);
         font-size: var(--weline-font-size-sm);
-        font-weight: var(--weline-font-weight-semibold);
+        font-weight: var(--weline-font-weight-semibold, var(--font-weight-semibold));
     }
 
     .w-queue-detail__value {

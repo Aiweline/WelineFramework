@@ -36,21 +36,21 @@ $boundPayload = [
         body {
             font-family: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", sans-serif;
             background:
-                radial-gradient(circle at top left, color-mix(in srgb, var(--cs-verify-primary) 12%, transparent), transparent 42%),
-                var(--cs-verify-bg);
+                radial-gradient(circle at top left, color-mix(in srgb, var(--cs-verify-primary, var(--color-primary)) 12%, transparent), transparent 42%),
+                var(--cs-verify-bg, var(--color-bg-canvas));
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: var(--cs-verify-space);
-            color: var(--cs-verify-text);
+            padding: var(--cs-verify-space, var(--weline-space-4));
+            color: var(--cs-verify-text, var(--color-text));
         }
 
         .verify-container {
-            background: var(--cs-verify-card);
-            border: var(--border-width-thin) solid var(--cs-verify-border);
-            border-radius: var(--cs-verify-radius);
-            padding: calc(var(--cs-verify-space) * 2.5);
+            background: var(--cs-verify-card, var(--color-bg-primary));
+            border: var(--border-width-thin) solid var(--cs-verify-border, var(--color-border-default));
+            border-radius: var(--cs-verify-radius, var(--hanfu-round));
+            padding: calc(var(--cs-verify-space, var(--weline-space-4)) * 2.5);
             max-width: 28rem;
             width: 100%;
             text-align: center;
@@ -69,8 +69,8 @@ $boundPayload = [
             color: var(--color-text-light);
         }
 
-        .verify-icon.success { background: var(--cs-verify-ok); }
-        .verify-icon.error { background: var(--cs-verify-bad); }
+        .verify-icon.success { background: var(--cs-verify-ok, var(--color-success)); }
+        .verify-icon.error { background: var(--cs-verify-bad, var(--color-danger)); }
 
         .verify-title {
             font-size: var(--font-size-2_5xl);
@@ -80,14 +80,14 @@ $boundPayload = [
 
         .verify-message {
             font-size: var(--font-size-base);
-            color: var(--cs-verify-muted);
+            color: var(--cs-verify-muted, var(--color-text-secondary));
             line-height: 1.6;
             margin-bottom: var(--spacing-4_5);
         }
 
         .verify-email {
-            background: color-mix(in srgb, var(--cs-verify-bg) 88%, var(--cs-verify-primary));
-            border: var(--border-width-thin) solid var(--cs-verify-border);
+            background: color-mix(in srgb, var(--cs-verify-bg, var(--color-bg-canvas)) 88%, var(--cs-verify-primary, var(--color-primary)));
+            border: var(--border-width-thin) solid var(--cs-verify-border, var(--color-border-default));
             padding: var(--weline-space-3) var(--weline-space-4);
             border-radius: var(--weline-radius-md);
             font-size: var(--font-size-sm);
@@ -96,7 +96,7 @@ $boundPayload = [
             word-break: break-all;
         }
 
-        .verify-email strong { color: var(--cs-verify-primary); }
+        .verify-email strong { color: var(--cs-verify-primary, var(--color-primary)); }
 
         .verify-actions {
             display: flex;
@@ -118,25 +118,25 @@ $boundPayload = [
         }
 
         .btn-primary {
-            background: var(--cs-verify-primary);
+            background: var(--cs-verify-primary, var(--color-primary));
             color: var(--color-text-light);
         }
 
         .btn-secondary {
             background: transparent;
-            color: var(--cs-verify-text);
-            border-color: var(--cs-verify-border);
+            color: var(--cs-verify-text, var(--color-text));
+            border-color: var(--cs-verify-border, var(--color-border-default));
         }
 
         .help-text {
             margin-top: var(--weline-space-5);
             font-size: var(--font-size-sm);
-            color: var(--cs-verify-muted);
+            color: var(--cs-verify-muted, var(--color-text-secondary));
             line-height: 1.5;
         }
 
         .help-text a {
-            color: var(--cs-verify-primary);
+            color: var(--cs-verify-primary, var(--color-primary));
         }[hidden]{ display: none; }
     </style>
 

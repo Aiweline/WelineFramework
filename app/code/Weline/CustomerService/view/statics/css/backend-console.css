@@ -22,7 +22,7 @@
     /* 后台顶栏 + 页头/统计占用；聊天网格锁在剩余视口内（原型 A） */
     --cs-console-chrome: 8rem;
     --cs-layout-offset: 16rem;
-    color: var(--cs-text);
+    color: var(--cs-text, var(--weline-theme-text, var(--color-text)));
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -60,10 +60,10 @@
     gap: var(--weline-space-4);
     flex: 1 1 auto;
     min-height: 20rem;
-    height: calc(100vh - var(--cs-layout-offset));
-    height: calc(100dvh - var(--cs-layout-offset));
-    max-height: calc(100vh - var(--cs-layout-offset));
-    max-height: calc(100dvh - var(--cs-layout-offset));
+    height: calc(100vh - var(--cs-layout-offset, 16rem));
+    height: calc(100dvh - var(--cs-layout-offset, 16rem));
+    max-height: calc(100vh - var(--cs-layout-offset, 16rem));
+    max-height: calc(100dvh - var(--cs-layout-offset, 16rem));
     overflow: hidden;
 }
 
@@ -73,10 +73,10 @@
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
-    background: var(--cs-surface);
-    border: var(--border-width-thin) solid var(--cs-border);
-    border-radius: var(--cs-radius);
-    box-shadow: var(--cs-shadow);
+    background: var(--cs-surface, var(--weline-theme-surface, var(--color-surface)));
+    border: var(--border-width-thin) solid var(--cs-border, var(--weline-theme-border, var(--color-border)));
+    border-radius: var(--cs-radius, var(--weline-radius-lg));
+    box-shadow: var(--cs-shadow, var(--weline-theme-shadow-sm, var(--weline-shadow-sm, none)));
 }
 
 .cs-console__sidebar > .w-card__header,
@@ -86,8 +86,8 @@
     align-items: center;
     gap: var(--weline-space-3);
     padding: var(--weline-space-3) var(--weline-space-4);
-    border-bottom: var(--border-width-thin) solid var(--cs-border);
-    background: var(--cs-muted);
+    border-bottom: var(--border-width-thin) solid var(--cs-border, var(--weline-theme-border, var(--color-border)));
+    background: var(--cs-muted, var(--weline-theme-surface-muted, var(--color-surface-muted)));
 }
 
 .sidebar-header h2,
@@ -118,8 +118,8 @@
     flex: 0 0 auto;
     min-height: 0;
     overflow: hidden;
-    border-color: var(--cs-border);
-    background: var(--cs-surface);
+    border-color: var(--cs-border, var(--weline-theme-border, var(--color-border)));
+    background: var(--cs-surface, var(--weline-theme-surface, var(--color-surface)));
 }
 
 .cs-console .cs-session-group.w-disclosure[data-state="open"] {
@@ -140,13 +140,13 @@
 }
 
 .cs-session-group__trigger {
-    min-height: var(--weline-control-height-md);
+    min-height: var(--weline-component-control-height-md, var(--weline-theme-control-height-md));
     padding: var(--weline-space-2) var(--weline-space-3);
-    background: color-mix(in srgb, var(--cs-muted) 70%, var(--cs-surface));
-    color: var(--cs-text);
+    background: color-mix(in srgb, var(--cs-muted, var(--weline-theme-surface-muted, var(--color-surface-muted))) 70%, var(--cs-surface, var(--weline-theme-surface, var(--color-surface))));
+    color: var(--cs-text, var(--weline-theme-text, var(--color-text)));
     font-size: var(--font-size-13);
     font-weight: 650;
-    letter-spacing: var(--letter-spacing-wide);
+    letter-spacing: var(--letter-spacing-wide, 0.025em);
 }
 
 .cs-session-group__label {
@@ -167,7 +167,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    color: var(--cs-text);
+    color: var(--cs-text, var(--weline-theme-text, var(--color-text)));
 }
 
 .cs-console .cs-session-group__panel[hidden] {
@@ -213,10 +213,10 @@
     padding: var(--weline-space-2) var(--weline-space-4);
     font-size: var(--weline-font-size-xs);
     font-weight: 650;
-    letter-spacing: var(--letter-spacing-wide);
-    color: var(--cs-text-muted);
-    background: color-mix(in srgb, var(--cs-muted) 70%, var(--cs-surface));
-    border-bottom: var(--border-width-thin) solid var(--cs-border);
+    letter-spacing: var(--letter-spacing-wide, 0.025em);
+    color: var(--cs-text-muted, var(--weline-theme-text-muted, var(--color-text-muted)));
+    background: color-mix(in srgb, var(--cs-muted, var(--weline-theme-surface-muted, var(--color-surface-muted))) 70%, var(--cs-surface, var(--weline-theme-surface, var(--color-surface))));
+    border-bottom: var(--border-width-thin) solid var(--cs-border, var(--weline-theme-border, var(--color-border)));
 }
 
 .session-list {
@@ -228,46 +228,46 @@
 
 .session-item {
     padding: var(--weline-space-3) var(--weline-space-4);
-    border-bottom: var(--border-width-thin) solid var(--cs-border);
+    border-bottom: var(--border-width-thin) solid var(--cs-border, var(--weline-theme-border, var(--color-border)));
     cursor: pointer;
     transition: background-color var(--weline-motion-fast, 0.15s) ease;
     position: relative;
-    background: var(--cs-surface);
+    background: var(--cs-surface, var(--weline-theme-surface, var(--color-surface)));
 }
 
 .session-item:hover {
-    background: color-mix(in srgb, var(--cs-primary) 5%, var(--cs-surface));
+    background: color-mix(in srgb, var(--cs-primary, var(--weline-theme-primary, var(--color-primary))) 5%, var(--cs-surface, var(--weline-theme-surface, var(--color-surface))));
 }
 
 .session-item.active {
-    background: color-mix(in srgb, var(--cs-primary) 10%, var(--cs-surface));
-    box-shadow: var(--weline-shadow-md);
+    background: color-mix(in srgb, var(--cs-primary, var(--weline-theme-primary, var(--color-primary))) 10%, var(--cs-surface, var(--weline-theme-surface, var(--color-surface))));
+    box-shadow: var(--weline-shadow-md, var(--shadow-md, var(--weline-theme-shadow-md)));
 }
 
 .session-item.unread {
-    background: color-mix(in srgb, var(--cs-warning) 8%, var(--cs-surface));
+    background: color-mix(in srgb, var(--cs-warning, var(--weline-theme-warning, var(--color-warning))) 8%, var(--cs-surface, var(--weline-theme-surface, var(--color-surface))));
 }
 
 .session-item.cs-session-alert {
     animation: cs-session-alert-pulse 1.2s ease-in-out 2;
-    box-shadow: var(--focus-ring);
+    box-shadow: var(--focus-ring, 0 0 0 var(--focus-ring-width) var(--focus-ring-color));
 }
 
 @keyframes cs-session-alert-pulse {
     0%, 100% {
-        background: color-mix(in srgb, var(--cs-warning) 8%, var(--cs-surface));
+        background: color-mix(in srgb, var(--cs-warning, var(--weline-theme-warning, var(--color-warning))) 8%, var(--cs-surface, var(--weline-theme-surface, var(--color-surface))));
     }
     50% {
-        background: color-mix(in srgb, var(--cs-warning) 22%, var(--cs-surface));
+        background: color-mix(in srgb, var(--cs-warning, var(--weline-theme-warning, var(--color-warning))) 22%, var(--cs-surface, var(--weline-theme-surface, var(--color-surface))));
     }
 }
 
 .session-item.waiting {
-    background: color-mix(in srgb, var(--cs-warning) 10%, var(--cs-surface));
+    background: color-mix(in srgb, var(--cs-warning, var(--weline-theme-warning, var(--color-warning))) 10%, var(--cs-surface, var(--weline-theme-surface, var(--color-surface))));
 }
 
 .session-item.transferred {
-    background: color-mix(in srgb, var(--cs-primary) 6%, var(--cs-surface));
+    background: color-mix(in srgb, var(--cs-primary, var(--weline-theme-primary, var(--color-primary))) 6%, var(--cs-surface, var(--weline-theme-surface, var(--color-surface))));
 }
 
 .session-header {
@@ -280,7 +280,7 @@
 
 .session-id {
     font-weight: 650;
-    color: var(--cs-text);
+    color: var(--cs-text, var(--weline-theme-text, var(--color-text)));
     font-size: var(--weline-font-size-sm);
     min-width: 0;
     overflow: hidden;
@@ -303,16 +303,16 @@
     margin: 0 0 var(--weline-space-1);
     font-size: var(--weline-font-size-xs);
     line-height: 1.35;
-    color: color-mix(in srgb, var(--cs-primary) 72%, var(--cs-text));
+    color: color-mix(in srgb, var(--cs-primary, var(--weline-theme-primary, var(--color-primary))) 72%, var(--cs-text, var(--weline-theme-text, var(--color-text))));
     font-weight: 560;
 }
 
 .unread-badge {
-    background: var(--cs-danger);
+    background: var(--cs-danger, var(--weline-theme-danger, var(--color-danger)));
     color: var(--weline-theme-on-danger);
-    border-radius: var(--weline-radius-pill);
+    border-radius: var(--weline-radius-round);
     padding: var(--spacing-0_5) var(--spacing-0_45);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-xs, 0.75rem);
     font-weight: 650;
     min-width: 1.15rem;
     text-align: center;
@@ -324,10 +324,10 @@
     align-items: center;
     padding: var(--spacing-0_5) var(--weline-space-2);
     border-radius: var(--weline-radius-sm);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-xs, 0.75rem);
     font-weight: 650;
-    background: color-mix(in srgb, var(--cs-warning) 18%, var(--cs-surface));
-    color: var(--cs-warning);
+    background: color-mix(in srgb, var(--cs-warning, var(--weline-theme-warning, var(--color-warning))) 18%, var(--cs-surface, var(--weline-theme-surface, var(--color-surface))));
+    color: var(--cs-warning, var(--weline-theme-warning, var(--color-warning)));
 }
 
 .session-preview {
@@ -339,7 +339,7 @@
 
 .last-message {
     margin: 0;
-    color: var(--cs-text-muted);
+    color: var(--cs-text-muted, var(--weline-theme-text-muted, var(--color-text-muted)));
     font-size: var(--font-size-13);
     flex: 1;
     overflow: hidden;
@@ -348,8 +348,8 @@
 }
 
 .last-time {
-    font-size: var(--font-size-xs);
-    color: var(--cs-text-subtle);
+    font-size: var(--font-size-xs, 0.75rem);
+    color: var(--cs-text-subtle, var(--weline-theme-text-subtle, var(--color-text-subtle, var(--cs-text-muted))));
     flex-shrink: 0;
 }
 
@@ -361,7 +361,7 @@
 .cs-console .w-empty {
     padding: var(--weline-space-8) var(--weline-space-5);
     text-align: center;
-    color: var(--cs-text-muted);
+    color: var(--cs-text-muted, var(--weline-theme-text-muted, var(--color-text-muted)));
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -379,10 +379,10 @@
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
-    background: var(--cs-surface);
-    border: var(--border-width-thin) solid var(--cs-border);
-    border-radius: var(--cs-radius);
-    box-shadow: var(--cs-shadow);
+    background: var(--cs-surface, var(--weline-theme-surface, var(--color-surface)));
+    border: var(--border-width-thin) solid var(--cs-border, var(--weline-theme-border, var(--color-border)));
+    border-radius: var(--cs-radius, var(--weline-radius-lg));
+    box-shadow: var(--cs-shadow, var(--weline-theme-shadow-sm, var(--weline-shadow-sm, none)));
 }
 
 .chat-container {
@@ -401,7 +401,7 @@
     align-items: center;
     gap: var(--weline-space-3);
     padding: var(--weline-space-8);
-    color: var(--cs-text-muted);
+    color: var(--cs-text-muted, var(--weline-theme-text-muted, var(--color-text-muted)));
     text-align: center;
 }
 
@@ -410,9 +410,9 @@
     place-items: center;
     width: 4rem;
     height: 4rem;
-    border-radius: var(--cs-radius);
-    background: color-mix(in srgb, var(--cs-primary) 8%, var(--cs-muted));
-    color: var(--cs-primary);
+    border-radius: var(--cs-radius, var(--weline-radius-lg));
+    background: color-mix(in srgb, var(--cs-primary, var(--weline-theme-primary, var(--color-primary))) 8%, var(--cs-muted, var(--weline-theme-surface-muted, var(--color-surface-muted))));
+    color: var(--cs-primary, var(--weline-theme-primary, var(--color-primary)));
     opacity: 1;
 }
 
@@ -424,17 +424,17 @@
 .chat-header {
     flex-shrink: 0;
     padding: var(--weline-space-3) var(--weline-space-5);
-    border-bottom: var(--border-width-thin) solid var(--cs-border);
+    border-bottom: var(--border-width-thin) solid var(--cs-border, var(--weline-theme-border, var(--color-border)));
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: var(--weline-space-3);
-    background: var(--cs-muted);
+    background: var(--cs-muted, var(--weline-theme-surface-muted, var(--color-surface-muted)));
 }
 
 .chat-header-info h3 {
     margin: 0;
-    font-size: var(--weline-font-size-base);
+    font-size: var(--weline-font-size-base, var(--font-size-base));
     font-weight: 650;
 }
 
@@ -451,7 +451,7 @@
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     padding: var(--weline-space-5);
-    background: var(--cs-canvas);
+    background: var(--cs-canvas, var(--weline-theme-canvas, var(--color-bg, var(--cs-muted))));
 }
 
 .cs-chat-history-hint,
@@ -482,15 +482,15 @@
 }
 
 .message-item.customer .message-bubble {
-    background: var(--cs-muted);
-    color: var(--cs-text);
-    border: var(--border-width-thin) solid var(--cs-border);
+    background: var(--cs-muted, var(--weline-theme-surface-muted, var(--color-surface-muted)));
+    color: var(--cs-text, var(--weline-theme-text, var(--color-text)));
+    border: var(--border-width-thin) solid var(--cs-border, var(--weline-theme-border, var(--color-border)));
     border-bottom-left-radius: var(--weline-radius-sm);
 }
 
 .message-item.agent .message-bubble {
-    background: var(--cs-primary);
-    color: var(--cs-on-primary);
+    background: var(--cs-primary, var(--weline-theme-primary, var(--color-primary)));
+    color: var(--cs-on-primary, var(--weline-theme-on-primary, var(--color-on-primary)));
     border-bottom-right-radius: var(--weline-radius-sm);
 }
 
@@ -501,8 +501,8 @@
 }
 
 .message-time {
-    font-size: var(--font-size-xs);
-    color: var(--cs-text-subtle);
+    font-size: var(--font-size-xs, 0.75rem);
+    color: var(--cs-text-subtle, var(--weline-theme-text-subtle, var(--color-text-subtle, var(--cs-text-muted))));
     margin-top: var(--weline-space-1);
     padding: 0 var(--weline-space-1);
 }
@@ -512,8 +512,8 @@
 .chat-input-area {
     flex-shrink: 0;
     padding: var(--weline-space-4) var(--weline-space-5);
-    border-top: var(--border-width-thin) solid var(--cs-border);
-    background: var(--cs-surface);
+    border-top: var(--border-width-thin) solid var(--cs-border, var(--weline-theme-border, var(--color-border)));
+    background: var(--cs-surface, var(--weline-theme-surface, var(--color-surface)));
 }
 
 .cs-composer-toolbar {
@@ -526,7 +526,7 @@
 .cs-composer-panel {
     margin-bottom: var(--weline-space-2);
     padding: var(--weline-space-3);
-    border: var(--border-width-thin) solid var(--cs-border);
+    border: var(--border-width-thin) solid var(--cs-border, var(--weline-theme-border, var(--color-border)));
     border-radius: var(--weline-radius-md);
     background: var(--cs-surface-muted, var(--cs-muted));
     max-height: 12rem;
@@ -573,9 +573,9 @@
 
 .cs-phrase-tab {
     flex: 0 0 auto;
-    border: var(--border-width-thin) solid var(--cs-border);
-    border-radius: var(--weline-radius-full);
-    background: var(--cs-surface);
+    border: var(--border-width-thin) solid var(--cs-border, var(--weline-theme-border, var(--color-border)));
+    border-radius: var(--weline-radius-round);
+    background: var(--cs-surface, var(--weline-theme-surface, var(--color-surface)));
     color: var(--cs-text, inherit);
     padding: var(--spacing-0_2) var(--spacing-0_7);
     font-size: var(--weline-font-size-xs);
@@ -587,7 +587,7 @@
 .cs-phrase-tab[aria-selected="true"] {
     border-color: var(--color-primary, var(--weline-theme-color-primary, var(--weline-theme-primary)));
     color: var(--color-primary, var(--weline-theme-color-primary, var(--weline-theme-primary)));
-    background: color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 12%, var(--cs-surface));
+    background: color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 12%, var(--cs-surface, var(--weline-theme-surface, var(--color-surface))));
 }
 
 .cs-phrase-tab-add {
@@ -618,15 +618,15 @@
 
 .cs-phrase-item[data-phrase-hit="1"] .cs-phrase-use {
     border-color: var(--color-primary, var(--weline-theme-color-primary, var(--weline-theme-primary)));
-    box-shadow: var(--focus-ring);
+    box-shadow: var(--focus-ring, 0 0 0 var(--focus-ring-width) var(--focus-ring-color));
 }
 
 .cs-phrase-use {
     flex: 1;
     text-align: left;
-    border: var(--border-width-thin) solid var(--cs-border);
+    border: var(--border-width-thin) solid var(--cs-border, var(--weline-theme-border, var(--color-border)));
     border-radius: var(--weline-radius-md);
-    background: var(--cs-surface);
+    background: var(--cs-surface, var(--weline-theme-surface, var(--color-surface)));
     padding: var(--weline-space-2) var(--weline-space-3);
     cursor: pointer;
 }
@@ -639,7 +639,7 @@
 .cs-phrase-use span {
     display: block;
     margin-top: var(--spacing-0_5);
-    color: var(--cs-text-muted);
+    color: var(--cs-text-muted, var(--weline-theme-text-muted, var(--color-text-muted)));
     font-size: var(--weline-font-size-xs);
 }
 
@@ -647,9 +647,9 @@
     display: inline-block;
     margin-top: var(--weline-space-1);
     font-style: normal;
-    font-size: var(--font-size-xs);
-    color: var(--cs-text-muted);
-    border: var(--border-width-thin) solid var(--cs-border);
+    font-size: var(--font-size-xs, 0.75rem);
+    color: var(--cs-text-muted, var(--weline-theme-text-muted, var(--color-text-muted)));
+    border: var(--border-width-thin) solid var(--cs-border, var(--weline-theme-border, var(--color-border)));
     border-radius: var(--weline-radius-sm);
     padding: 0 var(--spacing-1_5);
 }
@@ -704,26 +704,26 @@
     padding: var(--weline-space-2) var(--weline-space-4);
     font-size: var(--weline-font-size-sm);
     resize: none;
-    min-height: var(--control-height-md);
+    min-height: var(--control-height-md, 40px);
     max-height: 7.5rem;
     height: auto;
     font-family: inherit;
-    background: var(--cs-surface);
-    color: var(--cs-text);
+    background: var(--cs-surface, var(--weline-theme-surface, var(--color-surface)));
+    color: var(--cs-text, var(--weline-theme-text, var(--color-text)));
     color-scheme: inherit;
     box-shadow: none;
 }
 
 .chat-input::placeholder,
 .chat-input-area .w-textarea::placeholder {
-    color: var(--cs-text-subtle);
+    color: var(--cs-text-subtle, var(--weline-theme-text-subtle, var(--color-text-subtle, var(--cs-text-muted))));
 }
 
 .chat-input:focus,
 .chat-input-area .w-textarea:focus {
     outline: 0;
     border-color: var(--weline-theme-focus, var(--cs-primary));
-    box-shadow: var(--weline-shadow-lg);
+    box-shadow: var(--weline-shadow-lg, var(--shadow-lg, var(--weline-theme-shadow-lg)));
 }
 
 .btn-send,
@@ -746,7 +746,7 @@
 .console-sidebar::-webkit-scrollbar-thumb,
 .chat-messages::-webkit-scrollbar-thumb,
 .session-list::-webkit-scrollbar-thumb {
-    background: color-mix(in srgb, var(--cs-text) 25%, transparent);
+    background: color-mix(in srgb, var(--cs-text, var(--weline-theme-text, var(--color-text))) 25%, transparent);
     border-radius: var(--radius-full);
 }
 

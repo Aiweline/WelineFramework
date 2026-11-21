@@ -37,11 +37,11 @@ if ($redirectUri !== '') {
 }
 ?>
 <style>
-.multipass-auth{--mp-primary: var(--color-primary);--mp-primary-strong: var(--color-primary);--mp-warning: var(--color-warning);--mp-panel: var(--color-bg-primary);--mp-muted:var(--color-text-muted);--mp-border: var(--color-border-slate);--mp-text:var(--color-text);width:min(100%,760px);margin:0 auto;color:var(--mp-text)}
-.multipass-auth__card{background:var(--mp-panel);border:var(--border-width-thin) solid var(--mp-border);border-radius:var(--radius-lg);box-shadow: var(--weline-shadow-md);overflow:hidden}
-.multipass-auth__header{padding:var(--spacing-7) var(--spacing-7) var(--spacing-6);background:linear-gradient(135deg,var(--color-bg-panel) 0%,var(--color-bg-slate) 68%,var(--color-success-bg-soft) 100%);border-bottom:var(--border-width-thin) solid var(--mp-border)}
-.multipass-auth__eyebrow{margin:0 0 var(--spacing-2);color:var(--mp-primary-strong);font-size:var(--font-size-13);font-weight:800}
-.multipass-auth__title{margin:0;color:var(--mp-text);font-size:var(--font-size-3xl);line-height:1.25;letter-spacing:0}
+.multipass-auth{--mp-primary: var(--color-primary);--mp-primary-strong: var(--color-primary);--mp-warning: var(--color-warning);--mp-panel: var(--color-bg-primary);--mp-muted:var(--color-text-muted);--mp-border: var(--color-border-slate);--mp-text:var(--color-text);width:min(100%,760px);margin:0 auto;color:var(--mp-text, var(--color-text))}
+.multipass-auth__card{background:var(--mp-panel, var(--color-bg-primary));border:var(--border-width-thin) solid var(--mp-border, var(--color-border-default));border-radius:var(--radius-lg);box-shadow: var(--weline-shadow-md);overflow:hidden}
+.multipass-auth__header{padding:var(--spacing-7) var(--spacing-7) var(--spacing-6);background:linear-gradient(135deg,var(--color-bg-panel) 0%,var(--color-bg-slate) 68%,var(--color-success-bg-soft) 100%);border-bottom:var(--border-width-thin) solid var(--mp-border, var(--color-border-default))}
+.multipass-auth__eyebrow{margin:0 0 var(--spacing-2);color:var(--mp-primary-strong, var(--color-primary-hover));font-size:var(--font-size-13);font-weight:800}
+.multipass-auth__title{margin:0;color:var(--mp-text, var(--color-text));font-size:var(--font-size-3xl);line-height:1.25;letter-spacing:0}
 .multipass-auth__subtitle{margin:var(--spacing-2_5) 0 0;max-width:620px;color:var(--color-product-label-demo-text);font-size:var(--font-size-sm);line-height:1.7}
 .multipass-auth__body{padding:var(--spacing-7) var(--spacing-7) var(--spacing-7)}
 .multipass-auth__notice{margin-bottom:var(--spacing-4_5);padding:var(--spacing-3_5) var(--spacing-4);border:var(--border-width-thin) solid var(--color-warning);border-radius:var(--radius-lg);background:var(--color-bg-canvas);color:var(--color-text-muted);font-size:var(--font-size-sm);line-height:1.6}
@@ -51,24 +51,24 @@ if ($redirectUri !== '') {
 .multipass-auth__section:last-of-type{border-bottom:0}
 .multipass-auth__label{margin:0 0 var(--spacing-2_5);color:var(--color-secondary-text-emphasis);font-size:var(--font-size-13);font-weight:800}
 .multipass-auth__identity{display:flex;align-items:center;gap:var(--spacing-3_5)}
-.multipass-auth__mark,.multipass-auth__avatar,.multipass-auth__avatar-fallback{width:50px;height:50px;border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;flex:0 0 auto;background:var(--mp-primary);color:var(--color-text-light);font-weight:900}
+.multipass-auth__mark,.multipass-auth__avatar,.multipass-auth__avatar-fallback{width:50px;height:50px;border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;flex:0 0 auto;background:var(--mp-primary, var(--color-primary));color:var(--color-text-light);font-weight:900}
 .multipass-auth__avatar,.multipass-auth__avatar-fallback{border-radius:50%}
 .multipass-auth__avatar{object-fit:cover}
-.multipass-auth__name{margin:0;color:var(--mp-text);font-size:var(--font-size-base);font-weight:800}
-.multipass-auth__meta{margin:var(--spacing-1) 0 0;color:var(--mp-muted);font-size:var(--font-size-13);line-height:1.5;word-break:break-word}
+.multipass-auth__name{margin:0;color:var(--mp-text, var(--color-text));font-size:var(--font-size-base);font-weight:800}
+.multipass-auth__meta{margin:var(--spacing-1) 0 0;color:var(--mp-muted, var(--color-text-secondary));font-size:var(--font-size-13);line-height:1.5;word-break:break-word}
 .multipass-auth__scope-list{display:grid;gap:var(--spacing-2_5)}
 .multipass-auth__scope{display:grid;grid-template-columns:1fr auto;gap:var(--spacing-3);align-items:start;padding:var(--spacing-3_5) 0;border-bottom:var(--border-width-thin) solid var(--color-border-slate)}
 .multipass-auth__scope:last-child{border-bottom:0}
-.multipass-auth__scope-title{margin:0 0 var(--spacing-1);color:var(--mp-text);font-size:var(--font-size-sm);font-weight:800}
-.multipass-auth__scope-desc{margin:0;color:var(--mp-muted);font-size:var(--font-size-13);line-height:1.55}
+.multipass-auth__scope-title{margin:0 0 var(--spacing-1);color:var(--mp-text, var(--color-text));font-size:var(--font-size-sm);font-weight:800}
+.multipass-auth__scope-desc{margin:0;color:var(--mp-muted, var(--color-text-secondary));font-size:var(--font-size-13);line-height:1.55}
 .multipass-auth__risk{min-width:56px;padding:var(--spacing-1) var(--spacing-0_55);border-radius:var(--radius-full);background:var(--color-success-bg-soft);color:var(--color-text-secondary);font-size:var(--font-size-xs);font-weight:800;text-align:center}
-.multipass-auth__risk[data-risk=medium],.multipass-auth__risk[data-risk=high]{background:var(--color-bg-canvas);color:var(--mp-warning)}
+.multipass-auth__risk[data-risk=medium],.multipass-auth__risk[data-risk=high]{background:var(--color-bg-canvas);color:var(--mp-warning, var(--color-warning-text-emphasis))}
 .multipass-auth__actions{display:flex;justify-content:flex-end;gap:var(--spacing-3);margin-top:var(--spacing-6)}
 .multipass-auth__button,.multipass-auth__link{min-height:var(--control-height-lg);padding:0 var(--spacing-4_5);border-radius:var(--radius-lg);display:inline-flex;align-items:center;justify-content:center;font-weight:800;text-decoration:none;cursor:pointer}
-.multipass-auth__button{border:var(--border-width-thin) solid var(--mp-primary);background:var(--mp-primary);color:var(--color-text-light)}
-.multipass-auth__button:hover{background:var(--mp-primary-strong)}
+.multipass-auth__button{border:var(--border-width-thin) solid var(--mp-primary, var(--color-primary));background:var(--mp-primary, var(--color-primary));color:var(--color-text-light)}
+.multipass-auth__button:hover{background:var(--mp-primary-strong, var(--color-primary-hover))}
 .multipass-auth__link{border:var(--border-width-thin) solid var(--color-border-muted);background:var(--color-bg-primary);color:var(--color-secondary-text-emphasis)}
-.multipass-auth__footnote{margin:var(--spacing-4) 0 0;color:var(--mp-muted);font-size:var(--font-size-xs);line-height:1.6}
+.multipass-auth__footnote{margin:var(--spacing-4) 0 0;color:var(--mp-muted, var(--color-text-secondary));font-size:var(--font-size-xs);line-height:1.6}
 @media (max-width:640px){.multipass-auth__header,.multipass-auth__body{padding-left:var(--spacing-5);padding-right:var(--spacing-5)}.multipass-auth__title{font-size:var(--font-size-2xl)}.multipass-auth__actions{flex-direction:column-reverse}.multipass-auth__button,.multipass-auth__link{width:100%}}
 </style>
 

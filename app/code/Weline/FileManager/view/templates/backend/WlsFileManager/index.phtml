@@ -212,8 +212,8 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         min-height: 100vh;
         display: grid;
         grid-template-columns: 248px minmax(0, 1fr);
-        background: var(--wfm-bg);
-        color: var(--wfm-text);
+        background: var(--wfm-bg, #edf5f8);
+        color: var(--wfm-text, #162231);
         font-size: 14px;
     }
     .wls-file-manager-shell.is-embedded {
@@ -332,21 +332,21 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     }
     .wfm-eyebrow {
         margin: 0 0 6px;
-        color: var(--wfm-primary);
+        color: var(--wfm-primary, #0277a8);
         font-size: 12px;
         font-weight: 800;
         text-transform: uppercase;
     }
     .wfm-title {
         margin: 0;
-        color: var(--wfm-text) !important;
+        color: var(--wfm-text, #162231) !important;
         font-size: 30px;
         line-height: 1.2;
         font-weight: 850;
     }
     .wfm-subtitle {
         margin: 8px 0 0;
-        color: var(--wfm-muted) !important;
+        color: var(--wfm-muted, #5d6b7a) !important;
         max-width: 760px;
         line-height: 1.6;
     }
@@ -357,22 +357,22 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         gap: 10px;
     }
     .wfm-action {
-        color: var(--wfm-primary-strong);
-        background: var(--wfm-panel);
-        border-color: var(--wfm-border);
-        box-shadow: var(--wfm-shadow);
+        color: var(--wfm-primary-strong, #065d82);
+        background: var(--wfm-panel, #ffffff);
+        border-color: var(--wfm-border, #d8e2ea);
+        box-shadow: var(--wfm-shadow, 0 12px 28px rgba(22, 34, 49, .08));
     }
     .wfm-action.primary {
         color: #fff;
-        background: var(--wfm-primary);
-        border-color: var(--wfm-primary);
+        background: var(--wfm-primary, #0277a8);
+        border-color: var(--wfm-primary, #0277a8);
     }
     .wfm-section {
         margin-top: 18px;
     }
     .wfm-section-title {
         margin: 0 0 12px;
-        color: var(--wfm-text) !important;
+        color: var(--wfm-text, #162231) !important;
         font-size: 16px;
         font-weight: 800;
     }
@@ -383,10 +383,10 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     }
     .wfm-context-item,
     .wfm-card {
-        background: var(--wfm-panel);
-        border: 1px solid var(--wfm-border);
+        background: var(--wfm-panel, #ffffff);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        box-shadow: var(--wfm-shadow);
+        box-shadow: var(--wfm-shadow, 0 12px 28px rgba(22, 34, 49, .08));
     }
     .wfm-context-item {
         padding: 14px 16px;
@@ -394,13 +394,13 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     }
     .wfm-context-label,
     .wfm-card-label {
-        color: var(--wfm-muted) !important;
+        color: var(--wfm-muted, #5d6b7a) !important;
         font-size: 12px;
         font-weight: 700;
     }
     .wfm-context-value {
         margin-top: 5px;
-        color: var(--wfm-text) !important;
+        color: var(--wfm-text, #162231) !important;
         font-weight: 800;
         overflow-wrap: anywhere;
     }
@@ -421,7 +421,7 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     }
     .wfm-card-title {
         margin: 4px 0 0;
-        color: var(--wfm-text) !important;
+        color: var(--wfm-text, #162231) !important;
         font-size: 18px;
         line-height: 1.35;
         font-weight: 850;
@@ -433,30 +433,30 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         font-weight: 800;
         white-space: nowrap;
         background: rgba(183, 121, 31, .14);
-        color: var(--wfm-amber);
+        color: var(--wfm-amber, #b7791f);
     }
     .wfm-status.ok {
         background: rgba(15, 140, 98, .14);
-        color: var(--wfm-green);
+        color: var(--wfm-green, #0f8c62);
     }
     .wfm-status.danger {
         background: rgba(180, 35, 24, .12);
-        color: var(--wfm-red);
+        color: var(--wfm-red, #b42318);
     }
     .wfm-path {
         margin-top: 12px;
         padding: 10px 12px;
         border-radius: 8px;
-        background: var(--wfm-panel-soft);
-        border: 1px solid var(--wfm-border);
-        color: var(--wfm-text);
+        background: var(--wfm-panel-soft, #f7fafc);
+        border: 1px solid var(--wfm-border, #d8e2ea);
+        color: var(--wfm-text, #162231);
         font-family: Consolas, "SFMono-Regular", "Liberation Mono", monospace;
         font-size: 13px;
         overflow-wrap: anywhere;
     }
     .wfm-description {
         margin: 12px 0 0;
-        color: var(--wfm-muted) !important;
+        color: var(--wfm-muted, #5d6b7a) !important;
         line-height: 1.6;
     }
     .wfm-capabilities {
@@ -465,10 +465,10 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         gap: 14px;
     }
     .wfm-browser {
-        background: var(--wfm-panel);
-        border: 1px solid var(--wfm-border);
+        background: var(--wfm-panel, #ffffff);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        box-shadow: var(--wfm-shadow);
+        box-shadow: var(--wfm-shadow, 0 12px 28px rgba(22, 34, 49, .08));
         overflow: hidden;
     }
     .wfm-browser-head,
@@ -476,7 +476,7 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     .wfm-browser-alert,
     .wfm-browser-note {
         padding: 16px 18px;
-        border-bottom: 1px solid var(--wfm-border);
+        border-bottom: 1px solid var(--wfm-border, #d8e2ea);
     }
     .wfm-browser-head {
         display: flex;
@@ -486,7 +486,7 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     }
     .wfm-browser-head h3 {
         margin: 0;
-        color: var(--wfm-text) !important;
+        color: var(--wfm-text, #162231) !important;
         font-size: 18px;
         font-weight: 850;
     }
@@ -499,20 +499,20 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     .wfm-root-tabs a,
     .wfm-entry-link,
     .wfm-up-link {
-        color: var(--wfm-primary-strong);
+        color: var(--wfm-primary-strong, #065d82);
         text-decoration: none;
         font-weight: 800;
     }
     .wfm-root-tabs a {
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 999px;
         padding: 6px 10px;
-        background: var(--wfm-panel-soft);
+        background: var(--wfm-panel-soft, #f7fafc);
     }
     .wfm-root-tabs a.is-active {
         color: #fff;
-        background: var(--wfm-primary);
-        border-color: var(--wfm-primary);
+        background: var(--wfm-primary, #0277a8);
+        border-color: var(--wfm-primary, #0277a8);
     }
     .wfm-browser-current {
         display: flex;
@@ -525,18 +525,18 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         display: inline-block;
         max-width: 100%;
         overflow-wrap: anywhere;
-        color: var(--wfm-text);
-        background: var(--wfm-panel-soft);
-        border: 1px solid var(--wfm-border);
+        color: var(--wfm-text, #162231);
+        background: var(--wfm-panel-soft, #f7fafc);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
         padding: 8px 10px;
     }
     .wfm-browser-alert {
-        color: var(--wfm-amber);
+        color: var(--wfm-amber, #b7791f);
         background: rgba(183, 121, 31, .12);
     }
     .wfm-browser-alert.success {
-        color: var(--wfm-green);
+        color: var(--wfm-green, #0f8c62);
         background: rgba(15, 140, 98, .12);
     }
     .wfm-browser-table-wrap {
@@ -550,19 +550,19 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     .wfm-browser-table th,
     .wfm-browser-table td {
         padding: 12px 14px;
-        border-bottom: 1px solid var(--wfm-border);
+        border-bottom: 1px solid var(--wfm-border, #d8e2ea);
         text-align: left;
         vertical-align: top;
     }
     .wfm-browser-table th {
-        color: var(--wfm-muted) !important;
+        color: var(--wfm-muted, #5d6b7a) !important;
         font-size: 12px;
         font-weight: 800;
         text-transform: uppercase;
-        background: var(--wfm-panel-soft);
+        background: var(--wfm-panel-soft, #f7fafc);
     }
     .wfm-browser-table td {
-        color: var(--wfm-text) !important;
+        color: var(--wfm-text, #162231) !important;
     }
     .wfm-entry-name {
         display: flex;
@@ -572,7 +572,7 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         overflow-wrap: anywhere;
     }
     .wfm-entry-muted {
-        color: var(--wfm-muted) !important;
+        color: var(--wfm-muted, #5d6b7a) !important;
     }
     .wfm-entry-actions {
         display: flex;
@@ -581,10 +581,10 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         align-items: center;
     }
     .wfm-entry-action {
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        background: var(--wfm-panel-soft);
-        color: var(--wfm-primary-strong);
+        background: var(--wfm-panel-soft, #f7fafc);
+        color: var(--wfm-primary-strong, #065d82);
         display: inline-flex;
         align-items: center;
         gap: 6px;
@@ -597,9 +597,9 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     }
     .wfm-preview-panel {
         margin: 16px 18px 0;
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        background: var(--wfm-panel-soft);
+        background: var(--wfm-panel-soft, #f7fafc);
         overflow: hidden;
     }
     .wfm-preview-head {
@@ -608,17 +608,17 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         justify-content: space-between;
         gap: 10px;
         padding: 14px 16px;
-        border-bottom: 1px solid var(--wfm-border);
+        border-bottom: 1px solid var(--wfm-border, #d8e2ea);
     }
     .wfm-preview-title {
         margin: 0;
-        color: var(--wfm-text) !important;
+        color: var(--wfm-text, #162231) !important;
         font-size: 15px;
         font-weight: 850;
         overflow-wrap: anywhere;
     }
     .wfm-preview-meta {
-        color: var(--wfm-muted) !important;
+        color: var(--wfm-muted, #5d6b7a) !important;
         display: flex;
         flex-wrap: wrap;
         gap: 8px 14px;
@@ -635,17 +635,17 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        border: 1px solid var(--wfm-primary);
+        border: 1px solid var(--wfm-primary, #0277a8);
         border-radius: 999px;
         padding: 6px 10px;
         color: #fff !important;
-        background: var(--wfm-primary);
+        background: var(--wfm-primary, #0277a8);
         font-size: 12px;
         font-weight: 850;
         text-decoration: none;
     }
     .wfm-preview-blocked {
-        color: var(--wfm-muted);
+        color: var(--wfm-muted, #5d6b7a);
         font-size: 12px;
         font-weight: 700;
     }
@@ -664,17 +664,17 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     }
     .wfm-preview-note {
         padding: 12px 16px;
-        border-top: 1px solid var(--wfm-border);
-        color: var(--wfm-amber);
+        border-top: 1px solid var(--wfm-border, #d8e2ea);
+        color: var(--wfm-amber, #b7791f);
         background: rgba(183, 121, 31, .12);
     }
     .wfm-card > .wfm-preview-note {
         margin: 12px 0 0;
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
     }
     .wfm-browser-note {
-        color: var(--wfm-muted);
+        color: var(--wfm-muted, #5d6b7a);
     }
     .wfm-write-grid {
         display: grid;
@@ -701,9 +701,9 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         gap: 10px;
     }
     .wfm-policy-root {
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        background: var(--wfm-panel-soft);
+        background: var(--wfm-panel-soft, #f7fafc);
         padding: 12px;
     }
     .wfm-policy-root .wfm-check {
@@ -711,21 +711,21 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     }
     .wfm-policy-root-name {
         display: block;
-        color: var(--wfm-text);
+        color: var(--wfm-text, #162231);
         font-weight: 850;
     }
     .wfm-policy-root-path {
         display: block;
         margin-top: 5px;
-        color: var(--wfm-muted);
+        color: var(--wfm-muted, #5d6b7a);
         font-family: Consolas, "SFMono-Regular", "Liberation Mono", monospace;
         font-size: 12px;
         overflow-wrap: anywhere;
     }
     .wfm-source-policy {
-        border: 1px dashed var(--wfm-border);
+        border: 1px dashed var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        background: var(--wfm-panel);
+        background: var(--wfm-panel, #ffffff);
         display: grid;
         gap: 12px;
         padding: 14px;
@@ -746,7 +746,7 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     }
     .wfm-policy-reset-title {
         margin: 0;
-        color: var(--wfm-text) !important;
+        color: var(--wfm-text, #162231) !important;
         font-size: 15px;
         font-weight: 850;
     }
@@ -760,17 +760,17 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     }
     .wfm-field label,
     .wfm-check {
-        color: var(--wfm-text);
+        color: var(--wfm-text, #162231);
         font-weight: 800;
     }
     .wfm-field input,
     .wfm-field textarea {
         width: 100%;
         min-height: 40px;
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        background: var(--wfm-panel-soft);
-        color: var(--wfm-text);
+        background: var(--wfm-panel-soft, #f7fafc);
+        color: var(--wfm-text, #162231);
         padding: 9px 11px;
         font: inherit;
     }
@@ -781,9 +781,9 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         line-height: 1.5;
     }
     .wfm-editor-shell {
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        background: var(--wfm-panel);
+        background: var(--wfm-panel, #ffffff);
         overflow: hidden;
     }
     .wfm-editor-toolbar,
@@ -794,14 +794,14 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         justify-content: space-between;
         gap: 10px;
         padding: 10px;
-        background: var(--wfm-panel-soft);
+        background: var(--wfm-panel-soft, #f7fafc);
     }
     .wfm-editor-toolbar {
-        border-bottom: 1px solid var(--wfm-border);
+        border-bottom: 1px solid var(--wfm-border, #d8e2ea);
     }
     .wfm-editor-footer {
-        border-top: 1px solid var(--wfm-border);
-        color: var(--wfm-muted);
+        border-top: 1px solid var(--wfm-border, #d8e2ea);
+        color: var(--wfm-muted, #5d6b7a);
         font-size: 12px;
     }
     .wfm-editor-tools,
@@ -815,10 +815,10 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     }
     .wfm-editor-button,
     .wfm-editor-select {
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        background: var(--wfm-panel);
-        color: var(--wfm-text);
+        background: var(--wfm-panel, #ffffff);
+        color: var(--wfm-text, #162231);
         min-height: 34px;
         padding: 7px 10px;
         font: inherit;
@@ -833,14 +833,14 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     .wfm-editor-button:hover,
     .wfm-editor-button:focus-visible,
     .wfm-editor-select:focus-visible {
-        border-color: var(--wfm-primary);
+        border-color: var(--wfm-primary, #0277a8);
         box-shadow: 0 0 0 3px rgba(42, 166, 214, .14);
         outline: none;
     }
     .wfm-editor-button.is-active {
         background: rgba(38, 182, 230, .16);
         border-color: rgba(42, 166, 214, .42);
-        color: var(--wfm-primary-strong);
+        color: var(--wfm-primary-strong, #065d82);
     }
     .wfm-editor-button:disabled {
         cursor: not-allowed;
@@ -849,18 +849,18 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     .wfm-editor-select-label,
     .wfm-editor-dirty,
     .wfm-editor-metric {
-        color: var(--wfm-muted);
+        color: var(--wfm-muted, #5d6b7a);
         font-size: 12px;
         font-weight: 800;
         white-space: nowrap;
     }
     .wfm-editor-dirty.is-dirty {
-        color: var(--wfm-amber);
+        color: var(--wfm-amber, #b7791f);
     }
     .wfm-field textarea.wfm-editor-textarea {
         border: 0;
         border-radius: 0;
-        background: var(--wfm-panel);
+        background: var(--wfm-panel, #ffffff);
         min-height: 300px;
         padding: 14px;
         line-height: 1.65;
@@ -874,7 +874,7 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         border-color: rgba(180, 35, 24, .42);
     }
     .wfm-editor-shell.is-over-limit .wfm-editor-metric[data-wfm-editor-bytes-wrap] {
-        color: var(--wfm-red);
+        color: var(--wfm-red, #b42318);
     }
     .wfm-field input[type="file"] {
         display: flex;
@@ -886,7 +886,7 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         border: 1px solid rgba(73, 214, 255, 0.45);
         border-radius: 7px;
         background: rgba(38, 182, 230, 0.18);
-        color: var(--wfm-text);
+        color: var(--wfm-text, #162231);
         font: inherit;
         font-weight: 800;
         padding: 8px 12px;
@@ -898,7 +898,7 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         filter: brightness(1.08);
     }
     .wfm-help {
-        color: var(--wfm-muted);
+        color: var(--wfm-muted, #5d6b7a);
         font-size: 12px;
         line-height: 1.5;
     }
@@ -915,9 +915,9 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         justify-content: center;
         width: fit-content;
         min-width: 140px;
-        border: 1px solid var(--wfm-primary);
+        border: 1px solid var(--wfm-primary, #0277a8);
         border-radius: 8px;
-        background: var(--wfm-primary);
+        background: var(--wfm-primary, #0277a8);
         color: #fff;
         cursor: pointer;
         display: inline-flex;
@@ -928,13 +928,13 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         font-weight: 800;
     }
     .wfm-submit.secondary {
-        color: var(--wfm-primary-strong);
-        background: var(--wfm-panel-soft);
-        border-color: var(--wfm-border);
+        color: var(--wfm-primary-strong, #065d82);
+        background: var(--wfm-panel-soft, #f7fafc);
+        border-color: var(--wfm-border, #d8e2ea);
     }
     .wfm-submit.danger {
-        background: var(--wfm-red);
-        border-color: var(--wfm-red);
+        background: var(--wfm-red, #b42318);
+        border-color: var(--wfm-red, #b42318);
         color: #fff;
     }
     .wfm-submit:disabled {
@@ -961,17 +961,17 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         min-width: 0;
     }
     .wfm-inline-field label {
-        color: var(--wfm-muted);
+        color: var(--wfm-muted, #5d6b7a);
         font-size: 12px;
         font-weight: 800;
     }
     .wfm-inline-field input {
         width: 100%;
         min-height: 34px;
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        background: var(--wfm-panel);
-        color: var(--wfm-text);
+        background: var(--wfm-panel, #ffffff);
+        color: var(--wfm-text, #162231);
         font: inherit;
         font-size: 12px;
         padding: 7px 9px;
@@ -982,10 +982,10 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         justify-content: center;
         gap: 6px;
         min-height: 34px;
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        background: var(--wfm-panel);
-        color: var(--wfm-primary-strong);
+        background: var(--wfm-panel, #ffffff);
+        color: var(--wfm-primary-strong, #065d82);
         cursor: pointer;
         font: inherit;
         font-size: 12px;
@@ -994,17 +994,17 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     }
     .wfm-secondary-action:hover,
     .wfm-secondary-action:focus-visible {
-        border-color: var(--wfm-primary);
-        background: var(--wfm-panel-soft);
+        border-color: var(--wfm-primary, #0277a8);
+        background: var(--wfm-panel-soft, #f7fafc);
     }
     .wfm-secondary-action.danger {
         border-color: rgba(180, 35, 24, .38);
         background: rgba(180, 35, 24, .08);
-        color: var(--wfm-red);
+        color: var(--wfm-red, #b42318);
     }
     .wfm-secondary-action.danger:hover,
     .wfm-secondary-action.danger:focus-visible {
-        border-color: var(--wfm-red);
+        border-color: var(--wfm-red, #b42318);
         background: rgba(180, 35, 24, .14);
     }
     .wfm-log-summary {
@@ -1016,20 +1016,20 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     .wfm-log-stat {
         min-width: 0;
         padding: 12px;
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        background: var(--wfm-panel-soft);
+        background: var(--wfm-panel-soft, #f7fafc);
     }
     .wfm-log-stat span {
         display: block;
-        color: var(--wfm-muted);
+        color: var(--wfm-muted, #5d6b7a);
         font-size: 12px;
         font-weight: 800;
     }
     .wfm-log-stat strong {
         display: block;
         margin-top: 4px;
-        color: var(--wfm-text);
+        color: var(--wfm-text, #162231);
         font-size: 22px;
         line-height: 1.1;
     }
@@ -1041,9 +1041,9 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         gap: 12px;
         margin-bottom: 14px;
         padding: 14px;
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        background: var(--wfm-panel);
+        background: var(--wfm-panel, #ffffff);
     }
     .wfm-log-filter-grid {
         display: grid;
@@ -1054,10 +1054,10 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
     .wfm-log-filters input {
         width: 100%;
         min-height: 40px;
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        background: var(--wfm-panel-soft);
-        color: var(--wfm-text);
+        background: var(--wfm-panel-soft, #f7fafc);
+        color: var(--wfm-text, #162231);
         padding: 9px 11px;
         font: inherit;
     }
@@ -1068,7 +1068,7 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         align-items: center;
     }
     .wfm-log-reset {
-        color: var(--wfm-primary-strong);
+        color: var(--wfm-primary-strong, #065d82);
         font-weight: 800;
         text-decoration: none;
     }
@@ -1084,9 +1084,9 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         display: grid;
         gap: 5px;
         padding: 12px;
-        border: 1px solid var(--wfm-border);
+        border: 1px solid var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        background: var(--wfm-panel-soft);
+        background: var(--wfm-panel-soft, #f7fafc);
     }
     .wfm-log-item.is-denied {
         border-color: rgba(183, 121, 31, .45);
@@ -1108,19 +1108,19 @@ $buildDownloadParams = static function (array $params = []) use ($embeddedRouteP
         display: flex;
         flex-wrap: wrap;
         gap: 8px 12px;
-        color: var(--wfm-muted);
+        color: var(--wfm-muted, #5d6b7a);
         font-size: 12px;
     }
     .wfm-log-title {
-        color: var(--wfm-text);
+        color: var(--wfm-text, #162231);
         font-weight: 850;
         overflow-wrap: anywhere;
     }
     .wfm-empty {
-        background: var(--wfm-panel);
-        border: 1px dashed var(--wfm-border);
+        background: var(--wfm-panel, #ffffff);
+        border: 1px dashed var(--wfm-border, #d8e2ea);
         border-radius: 8px;
-        color: var(--wfm-muted);
+        color: var(--wfm-muted, #5d6b7a);
         padding: 18px;
     }
     @media (max-width: 1100px) {

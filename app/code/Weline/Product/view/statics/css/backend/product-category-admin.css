@@ -34,7 +34,7 @@
     .w-drop-indicator {
         block-size: 3px;
         margin-inline: var(--weline-space-5);
-        border-radius: var(--weline-radius-pill);
+        border-radius: var(--weline-radius-round);
         background: var(--weline-theme-primary);
     }
 

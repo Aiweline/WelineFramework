@@ -22,7 +22,7 @@
 .w-amz-cart-added,
 .w-amz-shopper-toast {
     /* inverse 下 raised 纸面：先钉再绑（theme_inverse_raised_paper_ink_pin） */
-    --weline-chrome-body-text: var(--weline-theme-color-text);
+    --weline-chrome-body-text: var(--weline-theme-color-text, var(--_paper-text));
     --weline-chrome-body-text-secondary: var(--color-text-gray);
     --_shopper-paper-text: var(--weline-chrome-body-text);
     --_shopper-paper-text-muted: var(--weline-chrome-body-text-secondary);
@@ -33,7 +33,7 @@
     border: var(--border-width-thin) solid var(--color-border-default);
     border-radius: var(--weline-theme-radius-lg);
     background: var(--color-bg-primary);
-    color: var(--_shopper-paper-text);
+    color: var(--_shopper-paper-text, var(--weline-chrome-body-text));
     box-shadow: var(--weline-shadow-md);
     opacity: 0;
     transform: translateY(-6px);
@@ -150,7 +150,7 @@
     border: 0;
     border-radius: var(--weline-theme-radius-md);
     background: transparent;
-    color: var(--_shopper-paper-text-muted);
+    color: var(--_shopper-paper-text-muted, var(--weline-chrome-body-text-secondary));
     font-size: var(--weline-font-size-xl);
     line-height: 1;
     cursor: pointer;
@@ -160,7 +160,7 @@
 .w-shopper-toast__close:hover,
 .w-amz-cart-added__close:hover,
 .w-amz-shopper-toast__close:hover {
-    color: var(--_shopper-paper-text);
+    color: var(--_shopper-paper-text, var(--weline-chrome-body-text));
     background: var(--color-surface-hover);
 }
 
@@ -177,12 +177,12 @@
 
 .w-shopper-cart-added__subtotal-label,
 .w-amz-cart-added__subtotal-label {
-    color: var(--_shopper-paper-text-muted);
+    color: var(--_shopper-paper-text-muted, var(--weline-chrome-body-text-secondary));
 }
 
 .w-shopper-cart-added__subtotal-amount,
 .w-amz-cart-added__subtotal-amount {
-    color: var(--_shopper-paper-text);
+    color: var(--_shopper-paper-text, var(--weline-chrome-body-text));
     font-size: var(--weline-font-size-base);
     font-weight: 700;
     letter-spacing: var(--letter-spacing-wide);
@@ -232,7 +232,7 @@
 .w-amz-cart-added__btn--cart {
     border: var(--border-width-thin) solid var(--color-border-default);
     background: var(--color-bg-primary);
-    color: var(--_shopper-paper-text);
+    color: var(--_shopper-paper-text, var(--weline-chrome-body-text));
     box-shadow: none;
 }
 
@@ -240,7 +240,7 @@
 .w-amz-cart-added__btn--cart:hover {
     background: var(--color-bg-secondary);
     border-color: var(--color-border-emphasis);
-    color: var(--_shopper-paper-text);
+    color: var(--_shopper-paper-text, var(--weline-chrome-body-text));
 }
 
 .w-shopper-compare-added .w-shopper-cart-added__subtotal-amount,

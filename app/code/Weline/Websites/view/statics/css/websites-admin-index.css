@@ -109,7 +109,7 @@
     }
 
     .w-website-admin__guide-toggle:focus-visible {
-        outline: var(--border-width-thick) solid var(--weline-theme-primary);
+        outline: var(--border-width-thick, 3px) solid var(--weline-theme-primary);
         outline-offset: 4px;
         border-radius: var(--weline-radius-sm);
     }
@@ -206,7 +206,7 @@
     }
 
     .w-websites-scope-admin .w-catalog-tree__add {
-        margin-inline-start: var(--weline-space-7);
+        margin-inline-start: var(--weline-space-7, 1.75rem);
         margin-block: var(--weline-space-1);
     }
 

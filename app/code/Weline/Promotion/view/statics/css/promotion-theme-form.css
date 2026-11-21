@@ -81,7 +81,7 @@
 }
 
 .promotion-theme-local-label__trigger .w-local-translation__trigger::after {
-    content: var(--promotion-local-label);
+    content: var(--promotion-local-label, );
     font-size: var(--weline-font-size-sm);
     font-weight: 500;
     line-height: 1.2;

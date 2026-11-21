@@ -31,29 +31,36 @@ final class StaticAssetHtmlRewriter
         if (\str_contains($html, self::PAIR_PLACEHOLDER) || \str_contains($html, self::DEPLOY_PLACEHOLDER)) {
             $html = self::resolvePlaceholders($html, $buildId);
         }
-        if ($buildId === '') {
-            return $html;
-        }
 
         $themeBuild = self::pinnedThemeBuild();
         $pair = self::currentPairSegment();
         $themePrefix = self::currentThemePrefix();
-        $rewrite = static function (array $match) use ($buildId, $themeBuild, $pair, $themePrefix): string {
-            $url = self::alignThemePair($match[2], $buildId);
+        // 部署 .build.json 缺失（dev/未跑过部署）时，主题对段仍可改写主题命名空间 URL——
+        // pair+themeBuild 来自主题更新指针，与部署号无关；两种号都没有才真正无事可做。
+        if ($buildId === '' && ($themeBuild === '' || $pair === '')) {
+            return $html;
+        }
+        $rewriteUrl = static function (string $url) use ($buildId, $themeBuild, $pair, $themePrefix): string {
+            $url = self::alignThemePair($url, $buildId);
             $target = $buildId;
             // 主题自有资源（`{code}/v{n}/…` 或裸主题命名空间）用主题更新指针上的静态段
             // （每次换代换目录，旧目录留到 GC）；模块/框架资源继续用部署构建号。
             if ($themeBuild !== '' && $pair !== '') {
                 $isPairShape = \preg_match('#^/static/[A-Za-z0-9_.-]+/v[0-9]+/#', $url) === 1;
-                $isThemeNamespace = ($themePrefix !== '' && \str_starts_with($url, '/static/' . $themePrefix . '/'))
-                    || \str_starts_with($url, '/static/Weline/Theme/');
+                // 只有设计区字面路径（`/static/{ns}/{frontend|backend}/`，pair 目录独占、
+                // flat 树从不覆盖）才重写到主题对段。模块覆盖路径（`{ns}/Weline/...`、
+                // `Weline/Theme/...`）flat 树有实体文件，主题对目录可能滞后——重写会
+                // 把可解析 URL 打 404。
+                $isThemeNamespace = $themePrefix !== ''
+                    && \preg_match('#^/static/' . \preg_quote($themePrefix, '#') . '/(?:frontend|backend)/#', $url) === 1;
                 if ($isPairShape || $isThemeNamespace) {
                     $target = $pair . '/' . $themeBuild;
                 }
             }
 
-            return $match[1] . StaticBuildId::versionedPath($url, $target) . $match[3];
+            return StaticBuildId::versionedPath($url, $target);
         };
+        $rewrite = static fn(array $match): string => $match[1] . $rewriteUrl($match[2]) . $match[3];
 
         $html = \preg_replace_callback(
             '#((?:src|href)\s*=\s*["\'])(/static/[^"\']*)(["\'])#i',
@@ -61,9 +68,26 @@ final class StaticAssetHtmlRewriter
             $html,
         ) ?? $html;
 
-        return \preg_replace_callback(
+        $html = \preg_replace_callback(
             '#(url\(\s*["\']?)(/static/[^"\')\s]+)(["\']?\s*\))#i',
             $rewrite,
+            $html,
+        ) ?? $html;
+
+        // srcset 是逗号分隔的「URL + 描述符」列表，逐条过同一个改写闭包。
+        return \preg_replace_callback(
+            '#(srcset\s*=\s*["\'])([^"\']*)(["\'])#i',
+            static function (array $match) use ($rewriteUrl): string {
+                $candidates = \preg_split('/\s*,\s*/', \trim($match[2])) ?: [];
+                foreach ($candidates as &$candidate) {
+                    if (\preg_match('#^(/static/\S+)(\s+.+)?$#', \trim($candidate), $urlMatch) === 1) {
+                        $candidate = $rewriteUrl($urlMatch[1]) . ($urlMatch[2] ?? '');
+                    }
+                }
+                unset($candidate);
+
+                return $match[1] . \implode(', ', $candidates) . $match[3];
+            },
             $html,
         ) ?? $html;
     }

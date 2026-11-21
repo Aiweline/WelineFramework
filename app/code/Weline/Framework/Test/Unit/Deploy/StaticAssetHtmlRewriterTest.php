@@ -44,7 +44,9 @@ final class StaticAssetHtmlRewriterTest extends TestCase
         $out = StaticAssetHtmlRewriter::rewrite($html, self::ID);
 
         self::assertStringContainsString('href="/static/' . self::ID . '/Weline/hanfu/frontend/assets/css/a.css?v=20260101"', $out);
-        self::assertStringContainsString('src="/static/' . self::ID . '/Weline/Frontend/js/b.js"', $out);
+        // 模块命名空间（Weline/Frontend/…）文件落在 flat 根、不在构建代次目录内，
+        // 加代次段即 404——versionedPath 只给设计主题命名空间隔离构建段。
+        self::assertStringContainsString('src="/static/Weline/Frontend/js/b.js"', $out);
         self::assertStringContainsString('src="/static/' . self::ID . '/Weline/hanfu/frontend/assets/images/x.png"', $out);
         self::assertStringContainsString('url(/static/' . self::ID . '/Weline/hanfu/frontend/assets/images/y.webp)', $out);
         // 内容寻址文件不加前缀

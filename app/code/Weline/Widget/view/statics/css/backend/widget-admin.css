@@ -10,7 +10,7 @@
     .widget-admin-toolbar .w-select { min-height: var(--weline-control-height-md, 2.375rem); }
     .widget-admin-summary .summary-value {
         font-size: var(--weline-font-size-xl);
-        font-weight: var(--weline-font-weight-bold);
+        font-weight: var(--weline-font-weight-bold, var(--font-weight-bold));
         line-height: 1.1;
         color: var(--weline-theme-text);
     }
@@ -58,7 +58,7 @@
     .widget-admin-identity__name {
         margin: 0;
         font-size: var(--weline-font-size-md);
-        font-weight: var(--weline-font-weight-semibold);
+        font-weight: var(--weline-font-weight-semibold, var(--font-weight-semibold));
         color: var(--weline-theme-text);
         overflow-wrap: anywhere;
     }
@@ -83,7 +83,7 @@
     .widget-admin-code__label {
         color: var(--weline-theme-text-muted);
         font-family: var(--weline-font-sans, inherit);
-        font-weight: var(--weline-font-weight-semibold);
+        font-weight: var(--weline-font-weight-semibold, var(--font-weight-semibold));
     }
     .widget-admin-desc {
         margin: 0;
@@ -100,7 +100,7 @@
     .widget-admin-side__label {
         color: var(--weline-theme-text-muted);
         font-size: var(--weline-font-size-xs);
-        font-weight: var(--weline-font-weight-semibold);
+        font-weight: var(--weline-font-weight-semibold, var(--font-weight-semibold));
     }
     .widget-admin-actions { display: flex; justify-content: flex-end; }
     .widget-admin-preview-stage {
@@ -121,7 +121,7 @@
     .widget-admin-preview-title {
         margin: 0 0 var(--weline-space-2);
         font-size: var(--weline-font-size-sm);
-        font-weight: var(--weline-font-weight-semibold);
+        font-weight: var(--weline-font-weight-semibold, var(--font-weight-semibold));
         color: var(--weline-theme-text);
     }
     @media (max-width: 56rem) {

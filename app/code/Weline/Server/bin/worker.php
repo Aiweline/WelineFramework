@@ -778,6 +778,64 @@ try {
             \fwrite(STDOUT, $tip . "\n");
         }
     }
+    // 编译产物自愈：Worker 启动是 GenerationRepairService 契约允许的控制面调用点
+    // （Web 请求永不编译）。不阻塞启动——后台派生 `php bin/w framework:compile --ensure`
+    // 子进程修复后立刻继续预检：产物原子发布（旧/新二选一，无半成品），
+    // 并发 Worker 的子进程经编译目录锁串行发布、后到者覆盖，允许冗余编译。
+    // Worker 的 WLS_* 环境变量（WLS_PROCESS_ROLE/WLS_INSTANCE 等）会让
+    // Runtime::detectMode() 把子进程误判为 WLS 模式、CLI 引导静默退出，
+    // 派生前必须按前缀剥离。编译链需要完整 CLI 引导环境（Common 助手、
+    // PROD、模块配置），Worker 进程 bootstrap 前不具备，故走子进程而非进程内调用。
+    // 修复不阻塞也不致命：容器预检仍是最终闸门——产物缺失时本 Worker 预检失败，
+    // 但自愈子进程已脱壳运行，下一轮 Worker 复验即过。
+    try {
+        $generationRoot = BP . 'generated';
+        $generationDirectory = $generationRoot . \DIRECTORY_SEPARATOR . 'framework';
+        $generationModulesRoot = BP . 'app' . \DIRECTORY_SEPARATOR . 'code' . \DIRECTORY_SEPARATOR . 'Weline';
+        $generationIsValid = static function () use ($generationModulesRoot, $generationDirectory, $generationRoot): bool {
+            return (new \Weline\Framework\Compilation\FrameworkCompileManifest())->isPublishedGenerationValid(
+                $generationModulesRoot,
+                $generationDirectory,
+                $generationRoot . \DIRECTORY_SEPARATOR . 'hooks.php',
+            );
+        };
+        if (!$generationIsValid()) {
+            $ensureEnvStrip = '';
+            foreach ((array)\getenv() as $ensureEnvName => $ensureEnvValue) {
+                if (\is_string($ensureEnvName)
+                    && \str_starts_with($ensureEnvName, 'WLS_')
+                    && \preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $ensureEnvName) === 1
+                ) {
+                    $ensureEnvStrip .= ' -u ' . $ensureEnvName;
+                }
+            }
+            $ensureAudit = BP . 'var' . \DIRECTORY_SEPARATOR . 'log' . \DIRECTORY_SEPARATOR
+                . 'wls' . \DIRECTORY_SEPARATOR . 'generation-ensure.log';
+            @\file_put_contents(
+                $ensureAudit,
+                \date(\DATE_ATOM) . ' pid=' . (\getmypid() ?: 0) . ' spawn=ensure'
+                . ' php=' . \PHP_BINARY . "\n",
+                \FILE_APPEND,
+            );
+            // 后台脱壳：`&` 让 exec 立即返回，子进程 reparent 后独立跑完编译；
+            // 结果由子进程自身追加到审计文件。
+            \exec(
+                '( env' . $ensureEnvStrip
+                . ' ' . \PHP_BINARY
+                . ' ' . \escapeshellarg(BP . 'bin' . \DIRECTORY_SEPARATOR . 'w')
+                . ' framework:compile --ensure'
+                . ' ; echo ensure_exit=$? ) >> ' . \escapeshellarg($ensureAudit) . ' 2>&1 &'
+            );
+            WlsLogger::info_('[WorkerBoot] framework generation stale; ensure subprocess spawned');
+        }
+    } catch (\Throwable $generationEnsureError) {
+        WlsLogger::warning_(
+            '[WorkerBoot] framework generation ensure skipped: '
+            . $generationEnsureError::class . ' ' . $generationEnsureError->getMessage()
+        );
+        WlsLogger::flush_(true);
+    }
+
     $runtime = new \Weline\Server\Runtime\WlsRuntime();
     $runtime->bootstrap();
     $fpcFastPath = new \Weline\Server\Service\WorkerFullPageCacheFastPath(

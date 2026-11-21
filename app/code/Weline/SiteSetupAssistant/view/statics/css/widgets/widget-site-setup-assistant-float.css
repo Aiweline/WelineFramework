@@ -25,7 +25,7 @@
     flex-direction: column;
     align-items: flex-end;
     gap: var(--weline-space-3);
-    color: var(--ssa-text);
+    color: var(--ssa-text, var(--weline-theme-text, var(--backend-color-text)));
     font-size: var(--spacing-3_5);
     pointer-events: none;
     contain: layout style;
@@ -81,9 +81,9 @@
     min-height: 2.5rem;
     padding: 0;
     padding-inline-start: 0.75rem;
-    background: var(--ssa-text);
-    color: var(--ssa-surface);
-    box-shadow: var(--ssa-shadow);
+    background: var(--ssa-text, var(--weline-theme-text, var(--backend-color-text)));
+    color: var(--ssa-surface, var(--weline-theme-surface, var(--backend-color-surface)));
+    box-shadow: var(--ssa-shadow, var(--weline-shadow-lg, 0 var(--spacing-3) var(--control-height-md) var(--color-literal-rgba-15-23-42-0-22)));
     cursor: pointer;
     font: inherit;
     font-weight: 600;
@@ -100,7 +100,7 @@
     padding-inline-end: 0.5rem;
 }
 #ssa-float-root .ssa-float__fab:focus-visible {
-    outline: var(--border-width-medium) solid var(--ssa-primary);
+    outline: var(--border-width-medium) solid var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
     outline-offset: var(--border-width-thick);
 }
 #ssa-float-root .ssa-float__badge {
@@ -115,8 +115,8 @@
     margin: 0;
     padding: 0 0.55rem;
     border-radius: 0;
-    background: var(--ssa-primary);
-    color: var(--ssa-surface);
+    background: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
+    color: var(--ssa-surface, var(--weline-theme-surface, var(--backend-color-surface)));
     font-size: 0.75rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
@@ -138,10 +138,10 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background-color: var(--ssa-surface);
-    border: 1px solid color-mix(in srgb, var(--ssa-border) 85%, transparent);
-    border-radius: var(--ssa-radius);
-    box-shadow: var(--ssa-shadow);
+    background-color: var(--ssa-surface, var(--weline-theme-surface, var(--backend-color-surface)));
+    border: 1px solid color-mix(in srgb, var(--ssa-border, var(--weline-theme-border, var(--backend-color-border))) 85%, transparent);
+    border-radius: var(--ssa-radius, var(--weline-radius-md));
+    box-shadow: var(--ssa-shadow, var(--weline-shadow-lg, 0 var(--spacing-3) var(--control-height-md) var(--color-literal-rgba-15-23-42-0-22)));
     /* Extra lift if box-shadow token path still collapses */
     filter: drop-shadow(0 14px 28px rgba(15, 23, 42, 0.2));
     padding: 0;
@@ -168,8 +168,8 @@
     gap: var(--weline-space-3);
     align-items: flex-start;
     padding: var(--weline-space-3) var(--weline-space-3) var(--weline-space-2);
-    background-color: var(--ssa-surface);
-    border-bottom: var(--border-width-thin) solid var(--ssa-border);
+    background-color: var(--ssa-surface, var(--weline-theme-surface, var(--backend-color-surface)));
+    border-bottom: var(--border-width-thin) solid var(--ssa-border, var(--weline-theme-border, var(--backend-color-border)));
     z-index: 1;
 }
 #ssa-float-root .ssa-float__body {
@@ -181,7 +181,7 @@
 }
 #ssa-float-root .ssa-float__kicker {
     margin: 0;
-    color: var(--ssa-primary);
+    color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
     font-size: var(--weline-space-3);
     font-weight: 600;
 }
@@ -192,7 +192,7 @@
 }
 #ssa-float-root .ssa-float__meta {
     margin: var(--spacing-0_2) 0 0;
-    color: var(--ssa-muted);
+    color: var(--ssa-muted, var(--weline-theme-text-muted, var(--backend-color-text-muted)));
     font-size: var(--weline-space-3);
 }
 #ssa-float-root .ssa-float__capsules {
@@ -208,9 +208,9 @@
     max-width: 100%;
     padding: var(--token-size-0-22rem) var(--spacing-0_55);
     border-radius: var(--token-size-999px);
-    border: var(--border-width-thin) solid var(--ssa-border);
-    background: var(--ssa-soft);
-    color: var(--ssa-text);
+    border: var(--border-width-thin) solid var(--ssa-border, var(--weline-theme-border, var(--backend-color-border)));
+    background: var(--ssa-soft, var(--weline-theme-surface-muted, var(--backend-color-surface-muted)));
+    color: var(--ssa-text, var(--weline-theme-text, var(--backend-color-text)));
     text-decoration: none;
     font-size: var(--spacing-0_7);
     font-weight: 600;
@@ -228,25 +228,25 @@
     min-width: var(--token-size-1-1rem);
     padding: 0 var(--token-size-0-28rem);
     border-radius: var(--token-size-999px);
-    background: var(--ssa-primary);
-    color: var(--ssa-surface);
+    background: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
+    color: var(--ssa-surface, var(--weline-theme-surface, var(--backend-color-surface)));
     text-align: center;
     font-size: var(--spacing-0_65);
     font-variant-numeric: tabular-nums;
 }
 #ssa-float-root .ssa-float__capsule:hover,
 #ssa-float-root .ssa-float__capsule.is-active {
-    border-color: var(--ssa-primary);
-    color: var(--ssa-primary);
+    border-color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
+    color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
 }
 #ssa-float-root .ssa-float__capsule.is-active {
-    background: color-mix(in srgb, var(--ssa-primary) 14%, transparent);
+    background: color-mix(in srgb, var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary))) 14%, transparent);
 }
 #ssa-float-root .ssa-float__icon-btn {
     flex: 0 0 auto;
-    border: var(--border-width-thin) solid var(--ssa-border);
-    background: var(--ssa-soft);
-    color: var(--ssa-text);
+    border: var(--border-width-thin) solid var(--ssa-border, var(--weline-theme-border, var(--backend-color-border)));
+    background: var(--ssa-soft, var(--weline-theme-surface-muted, var(--backend-color-surface-muted)));
+    color: var(--ssa-text, var(--weline-theme-text, var(--backend-color-text)));
     width: var(--control-height-md, var(--weline-space-10));
     height: var(--control-height-md, var(--weline-space-10));
     min-width: var(--weline-space-10);
@@ -259,20 +259,20 @@
 }
 #ssa-float-root .ssa-float__icon-btn:hover,
 #ssa-float-root .ssa-float__icon-btn:focus-visible {
-    border-color: var(--ssa-primary);
-    color: var(--ssa-primary);
+    border-color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
+    color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
 }
 #ssa-float-root .ssa-float__meter {
     margin: var(--weline-space-3) 0;
     height: var(--token-size-0-35rem);
     border-radius: var(--token-size-999px);
-    background: var(--ssa-soft);
+    background: var(--ssa-soft, var(--weline-theme-surface-muted, var(--backend-color-surface-muted)));
     overflow: hidden;
 }
 #ssa-float-root .ssa-float__meter > span {
     display: block;
     height: 100%;
-    background: var(--ssa-primary);
+    background: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
 }
 #ssa-float-root .ssa-float__group {
     margin-bottom: var(--weline-space-3);
@@ -285,20 +285,20 @@
     margin: 0 0 var(--spacing-0_45);
     font-size: var(--spacing-3_5);
     font-weight: 700;
-    color: var(--ssa-text);
+    color: var(--ssa-text, var(--weline-theme-text, var(--backend-color-text)));
 }
 #ssa-float-root .ssa-float__group-title em {
     font-style: normal;
     font-variant-numeric: tabular-nums;
-    color: var(--ssa-primary);
-    background: color-mix(in srgb, var(--ssa-primary) 12%, transparent);
+    color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
+    background: color-mix(in srgb, var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary))) 12%, transparent);
     border-radius: var(--token-size-999px);
     padding: 0 var(--spacing-0_45);
     font-size: var(--weline-space-3);
 }
 #ssa-float-root .ssa-float__group[data-ssa-group="performance"] .ssa-float-b__task {
-    border-color: color-mix(in srgb, var(--ssa-primary) 35%, var(--ssa-border));
-    background: color-mix(in srgb, var(--ssa-primary) 6%, var(--ssa-surface));
+    border-color: color-mix(in srgb, var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary))) 35%, var(--ssa-border, var(--weline-theme-border, var(--backend-color-border))));
+    background: color-mix(in srgb, var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary))) 6%, var(--ssa-surface, var(--weline-theme-surface, var(--backend-color-surface))));
 }
 #ssa-float-root .ssa-float__scenes {
     display: flex;
@@ -306,18 +306,18 @@
     margin-bottom: var(--weline-space-3);
 }
 #ssa-float-root .ssa-float__scenes button {
-    border: var(--border-width-thin) solid var(--ssa-border);
-    background: var(--ssa-surface);
-    color: var(--ssa-text);
+    border: var(--border-width-thin) solid var(--ssa-border, var(--weline-theme-border, var(--backend-color-border)));
+    background: var(--ssa-surface, var(--weline-theme-surface, var(--backend-color-surface)));
+    color: var(--ssa-text, var(--weline-theme-text, var(--backend-color-text)));
     border-radius: var(--token-size-999px);
     padding: var(--token-size-0-3rem) var(--weline-space-3);
     cursor: pointer;
     font: inherit;
 }
 #ssa-float-root .ssa-float__scenes button.is-active {
-    border-color: var(--ssa-primary);
-    color: var(--ssa-primary);
-    background: color-mix(in srgb, var(--ssa-primary) 12%, transparent);
+    border-color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
+    color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
+    background: color-mix(in srgb, var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary))) 12%, transparent);
 }
 #ssa-float-root .ssa-float-a {
     list-style: none;
@@ -330,11 +330,11 @@
     gap: var(--weline-space-3);
     align-items: flex-start;
     padding: var(--spacing-0_65) 0;
-    border-top: var(--border-width-thin) solid var(--ssa-border);
+    border-top: var(--border-width-thin) solid var(--ssa-border, var(--weline-theme-border, var(--backend-color-border)));
 }
 #ssa-float-root .ssa-float-a strong { display: block; margin-bottom: var(--spacing-0_2); }
-#ssa-float-root .ssa-float-a span { color: var(--ssa-muted); font-size: var(--weline-space-3); }
-#ssa-float-root .ssa-float-a a { color: var(--ssa-primary); white-space: nowrap; font-size: var(--spacing-0_8); }
+#ssa-float-root .ssa-float-a span { color: var(--ssa-muted, var(--weline-theme-text-muted, var(--backend-color-text-muted))); font-size: var(--weline-space-3); }
+#ssa-float-root .ssa-float-a a { color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary))); white-space: nowrap; font-size: var(--spacing-0_8); }
 #ssa-float-root .ssa-float-b {
     display: flex;
     flex-direction: column;
@@ -346,9 +346,9 @@
     gap: var(--spacing-0_55) var(--weline-space-2);
     align-items: start;
     padding: var(--spacing-0_65);
-    border: var(--border-width-thin) solid var(--ssa-border);
-    border-radius: var(--ssa-radius);
-    background-color: var(--ssa-surface);
+    border: var(--border-width-thin) solid var(--ssa-border, var(--weline-theme-border, var(--backend-color-border)));
+    border-radius: var(--ssa-radius, var(--weline-radius-md));
+    background-color: var(--ssa-surface, var(--weline-theme-surface, var(--backend-color-surface)));
 }
 #ssa-float-root .ssa-float-b__task > label {
     display: inline-flex;
@@ -357,13 +357,13 @@
 }
 /* Done=muted tokens only — never whole-row opacity (bleeds page text through). */
 #ssa-float-root .ssa-float-b__task[data-status="done"] {
-    background-color: var(--ssa-soft);
-    border-color: color-mix(in srgb, var(--ssa-border) 80%, transparent);
+    background-color: var(--ssa-soft, var(--weline-theme-surface-muted, var(--backend-color-surface-muted)));
+    border-color: color-mix(in srgb, var(--ssa-border, var(--weline-theme-border, var(--backend-color-border))) 80%, transparent);
 }
 #ssa-float-root .ssa-float-b__task[data-status="done"] .ssa-float-b__name,
 #ssa-float-root .ssa-float-b__task[data-status="done"] .ssa-float-b__tip,
 #ssa-float-root .ssa-float-b__task[data-status="done"] small {
-    color: var(--ssa-muted);
+    color: var(--ssa-muted, var(--weline-theme-text-muted, var(--backend-color-text-muted)));
 }
 #ssa-float-root .ssa-float-b__task[data-status="done"] .ssa-float-b__name {
     font-weight: 500;
@@ -382,21 +382,21 @@
     font-style: normal;
     font-size: var(--spacing-0_7);
     font-weight: 600;
-    color: var(--ssa-warn);
+    color: var(--ssa-warn, var(--weline-theme-warning, var(--backend-color-warning)));
 }
-#ssa-float-root .ssa-float-b__task[data-status="done"] .ssa-float-b__status { color: var(--ssa-ok); }
-#ssa-float-root .ssa-float-b__task[data-status="doing"] .ssa-float-b__status { color: var(--ssa-primary); }
+#ssa-float-root .ssa-float-b__task[data-status="done"] .ssa-float-b__status { color: var(--ssa-ok, var(--weline-theme-success, var(--backend-color-success))); }
+#ssa-float-root .ssa-float-b__task[data-status="doing"] .ssa-float-b__status { color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary))); }
 #ssa-float-root .ssa-float-b__tip,
-#ssa-float-root .ssa-float-b__task small { margin: 0; color: var(--ssa-muted); font-size: var(--weline-space-3); }
+#ssa-float-root .ssa-float-b__task small { margin: 0; color: var(--ssa-muted, var(--weline-theme-text-muted, var(--backend-color-text-muted))); font-size: var(--weline-space-3); }
 #ssa-float-root .ssa-float-c {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--spacing-0_45);
 }
 #ssa-float-root .ssa-float-c__col {
-    background: var(--ssa-soft);
-    border: var(--border-width-thin) solid var(--ssa-border);
-    border-radius: var(--ssa-radius);
+    background: var(--ssa-soft, var(--weline-theme-surface-muted, var(--backend-color-surface-muted)));
+    border: var(--border-width-thin) solid var(--ssa-border, var(--weline-theme-border, var(--backend-color-border)));
+    border-radius: var(--ssa-radius, var(--weline-radius-md));
     padding: var(--spacing-0_4);
     min-height: var(--token-size-8rem);
 }
@@ -407,14 +407,14 @@
     font-size: var(--weline-space-3);
 }
 #ssa-float-root .ssa-float-c__card {
-    background: var(--ssa-surface);
-    border: var(--border-width-thin) solid var(--ssa-border);
+    background: var(--ssa-surface, var(--weline-theme-surface, var(--backend-color-surface)));
+    border: var(--border-width-thin) solid var(--ssa-border, var(--weline-theme-border, var(--backend-color-border)));
     border-radius: var(--spacing-0_4);
     padding: var(--spacing-0_4);
     margin-bottom: var(--token-size-0-35rem);
 }
 #ssa-float-root .ssa-float-c__card strong { display: block; font-size: var(--weline-space-3); margin-bottom: var(--weline-space-1); }
-#ssa-float-root .ssa-float-c__card a { font-size: var(--spacing-0_7); color: var(--ssa-primary); }
+#ssa-float-root .ssa-float-c__card a { font-size: var(--spacing-0_7); color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary))); }
 #ssa-float-root .ssa-float__foot {
     flex: 0 0 auto;
     display: flex;
@@ -423,23 +423,23 @@
     gap: var(--weline-space-2);
     margin: 0;
     padding: var(--weline-space-2) var(--weline-space-3) var(--weline-space-3);
-    border-top: var(--border-width-thin) solid var(--ssa-border);
-    background-color: var(--ssa-surface);
-    color: var(--ssa-muted);
+    border-top: var(--border-width-thin) solid var(--ssa-border, var(--weline-theme-border, var(--backend-color-border)));
+    background-color: var(--ssa-surface, var(--weline-theme-surface, var(--backend-color-surface)));
+    color: var(--ssa-muted, var(--weline-theme-text-muted, var(--backend-color-text-muted)));
     font-size: var(--spacing-0_7);
 }
 #ssa-float-root .ssa-float__foot--prod {
     justify-content: space-between;
 }
 #ssa-float-root .ssa-float__foot--prod a {
-    color: var(--ssa-primary);
+    color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
     text-decoration: none;
     font-weight: 600;
 }
 #ssa-float-root .ssa-float__foot-close {
-    border: var(--border-width-thin) solid var(--ssa-border);
-    background: var(--ssa-soft);
-    color: var(--ssa-text);
+    border: var(--border-width-thin) solid var(--ssa-border, var(--weline-theme-border, var(--backend-color-border)));
+    background: var(--ssa-soft, var(--weline-theme-surface-muted, var(--backend-color-surface-muted)));
+    color: var(--ssa-text, var(--weline-theme-text, var(--backend-color-text)));
     border-radius: var(--token-size-999px);
     padding: var(--spacing-0_45) var(--weline-space-3);
     cursor: pointer;
@@ -448,12 +448,12 @@
 }
 #ssa-float-root .ssa-float__foot-close:hover,
 #ssa-float-root .ssa-float__foot-close:focus-visible {
-    border-color: var(--ssa-primary);
-    color: var(--ssa-primary);
+    border-color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
+    color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
 }
 #ssa-float-root.ssa-float.is-open .ssa-float__fab {
-    background: var(--ssa-primary);
-    color: var(--ssa-surface);
+    background: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
+    color: var(--ssa-surface, var(--weline-theme-surface, var(--backend-color-surface)));
 }
 #ssa-float-root .ssa-float__badge[hidden] {
     display: none !important;
@@ -465,13 +465,13 @@
 #ssa-float-root .ssa-float__variants a {
     color: inherit;
     text-decoration: none;
-    border: var(--border-width-thin) solid var(--ssa-border);
+    border: var(--border-width-thin) solid var(--ssa-border, var(--weline-theme-border, var(--backend-color-border)));
     border-radius: var(--token-size-999px);
     padding: var(--token-size-0-1rem) var(--spacing-0_45);
 }
 #ssa-float-root .ssa-float__variants a.is-active {
-    border-color: var(--ssa-primary);
-    color: var(--ssa-primary);
+    border-color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
+    color: var(--ssa-primary, var(--weline-theme-primary, var(--backend-color-primary)));
 }
 /* Literal 720px — var() in @media is unreliable across hosts. */
 @media (max-width: 720px) {

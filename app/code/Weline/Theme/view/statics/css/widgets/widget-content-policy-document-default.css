@@ -48,10 +48,10 @@ body.doc-policy-layout {
                 linear-gradient(135deg, var(--color-bg-dark-secondary) 0%, var(--color-bg-dark) 58%, var(--color-literal-37475a) 100%);
                         --_inverse-text: var(--color-text-on-dark);
             --_inverse-muted: var(--color-text-on-dark-muted);
-            --weline-theme-text: var(--_inverse-text);
-            --color-text-primary: var(--_inverse-text);
-            --color-text-secondary: var(--_inverse-muted);
-            color: var(--_inverse-text);
+            --weline-theme-text: var(--_inverse-text, var(--color-text-on-dark));
+            --color-text-primary: var(--_inverse-text, var(--color-text-on-dark));
+            --color-text-secondary: var(--_inverse-muted, var(--color-text-on-dark-muted));
+            color: var(--_inverse-text, var(--color-text-on-dark));
             box-sizing: border-box;
         }
         .doc-policy__eyebrow {

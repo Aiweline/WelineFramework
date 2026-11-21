@@ -11,8 +11,8 @@
   --wpf-media: var(--token-size-7-25rem);
   margin: var(--weline-space-5) 0 0;
   padding: var(--token-size-1-15rem) var(--spacing-0_85) var(--spacing-0_85);
-  border-top: var(--border-width-thin) solid var(--wpf-border);
-  color: var(--wpf-ink);
+  border-top: var(--border-width-thin) solid var(--wpf-border, var(--color-literal-d5d9d9));
+  color: var(--wpf-ink, var(--color-text-primary));
   font-family: "Weline Ember", Arial, sans-serif;
 }
 
@@ -31,7 +31,7 @@
 
 .weline-product-fbt .wpf-subtitle {
   margin: var(--spacing-0_2) 0 0;
-  color: var(--wpf-muted);
+  color: var(--wpf-muted, var(--color-text-gray));
   font-size: var(--token-size-0-86rem);
 }
 
@@ -41,9 +41,9 @@
   align-items: center;
   gap: var(--spacing-0_85) var(--weline-space-4);
   padding: var(--spacing-0_85) var(--weline-space-4);
-  border: var(--border-width-thin) solid var(--wpf-border);
+  border: var(--border-width-thin) solid var(--wpf-border, var(--color-literal-d5d9d9));
   border-radius: var(--spacing-2);
-  background: var(--wpf-surface);
+  background: var(--wpf-surface, var(--color-bg-primary));
 }
 
 .weline-product-fbt .wpf-products {
@@ -66,7 +66,7 @@
 .weline-product-fbt .wpf-plus {
   flex: 0 0 auto;
   width: var(--token-size-1-1rem);
-  height: var(--wpf-media);
+  height: var(--wpf-media, var(--token-size-7-25rem));
   display: grid;
   place-items: center;
   margin-top: var(--token-size-0-1rem);
@@ -169,8 +169,8 @@
 
 .weline-product-fbt .wpf-media {
   display: block;
-  width: var(--wpf-media);
-  height: var(--wpf-media);
+  width: var(--wpf-media, var(--token-size-7-25rem));
+  height: var(--wpf-media, var(--token-size-7-25rem));
   margin: 0 auto;
   border-radius: var(--spacing-1);
   overflow: hidden;
@@ -206,7 +206,7 @@
 }
 
 .weline-product-fbt .wpf-name a {
-  color: var(--wpf-link);
+  color: var(--wpf-link, var(--color-info));
   text-decoration: none;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -229,7 +229,7 @@
 .weline-product-fbt .wpf-price {
   font-size: var(--spacing-0_95);
   font-weight: 700;
-  color: var(--wpf-ink);
+  color: var(--wpf-ink, var(--color-text-primary));
 }
 
 .weline-product-fbt .wpf-badge {
@@ -261,14 +261,14 @@
 }
 
 .weline-product-fbt .wpf-total-label {
-  color: var(--wpf-muted);
+  color: var(--wpf-muted, var(--color-text-gray));
   font-size: var(--spacing-0_8);
 }
 
 .weline-product-fbt .wpf-total-value {
   font-size: var(--spacing-1_2);
   font-weight: 700;
-  color: var(--wpf-total);
+  color: var(--wpf-total, var(--color-danger));
 }
 
 .weline-product-fbt .wpf-cta {
@@ -279,8 +279,8 @@
   border: var(--border-width-thin) solid var(--color-literal-e85d04);
   border-radius: var(--spacing-5);
   background:
-    url()' stroke-width='1.5'/%3E%3Cpath d='M0 10 Q15 4 30 10 T60 10 T90 10 T120 10' fill='none' stroke='var(--color-literal-rgba-255-255-255-0-16)' stroke-width='1'/%3E%3C/svg%3E") center 78% / 100% var(--spacing-0_55) no-repeat,
-    linear-gradient(180deg, var(--color-literal-ffb347) 0%, var(--wpf-cta) 48%, var(--wpf-cta-hover) 100%);
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 20'%3E%3Cpath d='M0 10 Q15 4 30 10 T60 10 T90 10 T120 10' fill='none' stroke='rgba(255,255,255,0.16)' stroke-width='1.5'/%3E%3C/svg%3E") center 78% / 100% var(--spacing-0_55) no-repeat,
+    linear-gradient(180deg, var(--color-literal-ffb347) 0%, var(--wpf-cta, var(--color-literal-ff8c00)) 48%, var(--wpf-cta-hover, var(--color-literal-ff6b00)) 100%);
   color: var(--color-bg-primary);
   font-size: var(--token-size-0-84rem);
   font-weight: 700;
@@ -419,11 +419,11 @@
 .weline-product-fbt .wpf-status {
   min-height: var(--token-size-1-1em);
   font-size: var(--token-size-0-78rem);
-  color: var(--wpf-muted);
+  color: var(--wpf-muted, var(--color-text-gray));
 }
 
 .weline-product-fbt .wpf-status.is-warning {
-  color: var(--wpf-total);
+  color: var(--wpf-total, var(--color-danger));
 }
 
 .weline-product-fbt .wpf-status.is-success {

@@ -16,14 +16,14 @@
     .w-switch > input {
         --w-switch-width: 3.1875rem;   /* 51px */
         --w-switch-height: 1.9375rem;  /* 31px */
-        --w-switch-knob: calc(var(--w-switch-height) - 0.25rem);
+        --w-switch-knob: calc(var(--w-switch-height, 1.9375rem) - 0.25rem);
         position: relative;
         appearance: none;
         margin: 0;
         cursor: inherit;
-        flex: 0 0 var(--w-switch-width);
-        inline-size: var(--w-switch-width);
-        block-size: var(--w-switch-height);
+        flex: 0 0 var(--w-switch-width, 3.1875rem);
+        inline-size: var(--w-switch-width, 3.1875rem);
+        block-size: var(--w-switch-height, 1.9375rem);
         border: 0;
         border-radius: var(--weline-radius-round);
         background: var(--weline-theme-surface-muted);
@@ -35,8 +35,8 @@
         position: absolute;
         inset-block-start: 0.125rem;
         inset-inline-start: 0.125rem;
-        inline-size: var(--w-switch-knob);
-        block-size: var(--w-switch-knob);
+        inline-size: var(--w-switch-knob, calc(var(--w-switch-height) - 0.25rem));
+        block-size: var(--w-switch-knob, calc(var(--w-switch-height) - 0.25rem));
         margin: 0;
         border-radius: 50%;
         background: var(--weline-theme-surface-raised);
@@ -48,7 +48,7 @@
         box-shadow: none;
     }
     .w-switch > input:checked::before {
-        translate: calc(var(--w-switch-width) - var(--w-switch-knob) - 0.25rem) 0;
+        translate: calc(var(--w-switch-width, 3.1875rem) - var(--w-switch-knob, calc(var(--w-switch-height) - 0.25rem)) - 0.25rem) 0;
     }
     .w-switch > input:focus-visible { outline: 0; box-shadow: var(--weline-theme-focus-ring); }
     .w-switch > input:disabled { opacity: 0.5; cursor: not-allowed; }

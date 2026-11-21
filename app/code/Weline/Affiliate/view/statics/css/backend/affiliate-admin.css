@@ -18,11 +18,11 @@
         --ws-success: var(--weline-theme-success);
         --ws-warning: var(--weline-theme-warning);
         --ws-danger: var(--weline-theme-danger);
-        --ws-shadow: var(--weline-shadow-md);
+        --ws-shadow: var(--weline-shadow-md, var(--shadow-md, var(--weline-theme-shadow-md)));
         min-height: calc(100dvh - var(--weline-space-12));
         padding: var(--weline-space-6);
-        background: var(--ws-page);
-        color: var(--ws-text);
+        background: var(--ws-page, var(--weline-theme-surface-muted));
+        color: var(--ws-text, var(--weline-theme-text));
         font-family: var(--weline-font-sans);
         line-height: 1.5;
     }
@@ -39,12 +39,12 @@
         gap: var(--weline-space-4);
         margin-bottom: var(--weline-space-4);
         padding-bottom: var(--weline-space-4);
-        border-bottom: var(--weline-space-1) solid var(--ws-border);
+        border-bottom: var(--weline-space-1) solid var(--ws-border, var(--weline-theme-border));
     }
 
     .ws-affiliate-title {
         margin: 0 0 var(--weline-space-1);
-        color: var(--ws-text);
+        color: var(--ws-text, var(--weline-theme-text));
         font-size: var(--weline-space-1);
         font-weight: 720;
         letter-spacing: 0;
@@ -53,7 +53,7 @@
     .ws-affiliate-subtitle {
         margin: 0;
         max-width: var(--weline-space-1);
-        color: var(--ws-muted);
+        color: var(--ws-muted, var(--weline-theme-text-muted));
         font-size: var(--weline-space-3);
     }
 
@@ -72,10 +72,10 @@
         justify-content: center;
         min-height: var(--weline-space-1);
         padding: var(--weline-space-2) var(--weline-space-3);
-        border: var(--weline-space-1) solid var(--ws-border-strong);
+        border: var(--weline-space-1) solid var(--ws-border-strong, var(--weline-theme-border-strong));
         border-radius: var(--weline-radius-md);
         background: var(--weline-theme-surface);
-        color: var(--ws-text);
+        color: var(--ws-text, var(--weline-theme-text));
         cursor: pointer;
         font-size: var(--weline-space-3);
         font-weight: 650;
@@ -86,8 +86,8 @@
 
     .ws-btn:hover,
     .ws-copy-btn:hover {
-        border-color: var(--ws-primary);
-        color: var(--ws-primary-strong);
+        border-color: var(--ws-primary, var(--weline-theme-primary));
+        color: var(--ws-primary-strong, var(--weline-theme-primary-hover));
         text-decoration: none;
     }
 
@@ -95,21 +95,21 @@
     .ws-copy-btn:focus-visible,
     .ws-control:focus,
     .ws-select:focus {
-        outline: var(--weline-space-1) solid var(--weline-shadow-sm);
+        outline: var(--weline-space-1) solid var(--weline-shadow-sm, var(--shadow-sm, var(--weline-theme-shadow-sm)));
         outline-offset: 1px;
-        border-color: var(--ws-primary);
-        box-shadow: 0 0 0 var(--weline-space-1) var(--ws-primary);
+        border-color: var(--ws-primary, var(--weline-theme-primary));
+        box-shadow: 0 0 0 var(--weline-space-1) var(--ws-primary, var(--weline-theme-primary));
     }
 
     .ws-btn-primary {
-        border-color: var(--ws-primary);
-        background: var(--ws-primary);
+        border-color: var(--ws-primary, var(--weline-theme-primary));
+        background: var(--ws-primary, var(--weline-theme-primary));
         color: var(--weline-theme-surface);
     }
 
     .ws-btn-primary:hover {
-        border-color: var(--ws-primary-strong);
-        background: var(--ws-primary-strong);
+        border-color: var(--ws-primary-strong, var(--weline-theme-primary-hover));
+        background: var(--ws-primary-strong, var(--weline-theme-primary-hover));
         color: var(--weline-theme-surface);
     }
 
@@ -134,7 +134,7 @@
 
     .ws-status-pill.is-active {
         background: var(--weline-theme-success-surface);
-        color: var(--ws-success);
+        color: var(--ws-success, var(--weline-theme-success));
     }
 
     .ws-status-pill.is-muted {
@@ -152,16 +152,16 @@
     .ws-metric {
         min-width: 0;
         padding: var(--weline-space-4);
-        border: var(--weline-space-1) solid var(--ws-border);
+        border: var(--weline-space-1) solid var(--ws-border, var(--weline-theme-border));
         border-radius: var(--weline-radius-md);
-        background: var(--ws-panel);
-        box-shadow: 0 var(--weline-space-2) var(--weline-space-5) var(--weline-shadow-sm);
+        background: var(--ws-panel, var(--weline-theme-surface));
+        box-shadow: 0 var(--weline-space-2) var(--weline-space-5) var(--weline-shadow-sm, var(--shadow-sm, var(--weline-theme-shadow-sm)));
     }
 
     .ws-metric-label,
     .ws-label,
     .ws-meta-label {
-        color: var(--ws-muted);
+        color: var(--ws-muted, var(--weline-theme-text-muted));
         font-size: var(--weline-space-3);
         font-weight: 700;
         letter-spacing: 0.02em;
@@ -171,18 +171,18 @@
     .ws-metric-value {
         margin-top: var(--weline-space-1);
         overflow-wrap: anywhere;
-        color: var(--ws-text);
+        color: var(--ws-text, var(--weline-theme-text));
         font-size: var(--weline-space-6);
         font-weight: 760;
         letter-spacing: 0;
     }
 
     .ws-metric-value.is-success {
-        color: var(--ws-success);
+        color: var(--ws-success, var(--weline-theme-success));
     }
 
     .ws-metric-value.is-warning {
-        color: var(--ws-warning);
+        color: var(--ws-warning, var(--weline-theme-warning));
     }
 
     .ws-layout {
@@ -200,10 +200,10 @@
     .ws-panel {
         min-width: 0;
         padding: var(--weline-space-5);
-        border: var(--weline-space-1) solid var(--ws-border);
+        border: var(--weline-space-1) solid var(--ws-border, var(--weline-theme-border));
         border-radius: var(--weline-radius-md);
-        background: var(--ws-panel);
-        box-shadow: var(--ws-shadow);
+        background: var(--ws-panel, var(--weline-theme-surface));
+        box-shadow: var(--ws-shadow, var(--weline-shadow-md));
     }
 
     .ws-panel-header {
@@ -213,12 +213,12 @@
         gap: var(--weline-space-3);
         margin-bottom: var(--weline-space-4);
         padding-bottom: var(--weline-space-3);
-        border-bottom: var(--weline-space-1) solid var(--ws-border);
+        border-bottom: var(--weline-space-1) solid var(--ws-border, var(--weline-theme-border));
     }
 
     .ws-panel-title {
         margin: 0;
-        color: var(--ws-text);
+        color: var(--ws-text, var(--weline-theme-text));
         font-size: var(--weline-space-4);
         font-weight: 720;
         letter-spacing: 0;
@@ -227,7 +227,7 @@
     .ws-panel-note,
     .ws-help,
     .ws-copy-status {
-        color: var(--ws-muted);
+        color: var(--ws-muted, var(--weline-theme-text-muted));
         font-size: var(--weline-space-1);
     }
 
@@ -255,16 +255,16 @@
         width: 100%;
         min-height: var(--weline-space-1);
         padding: var(--weline-space-2) var(--weline-space-1);
-        border: var(--weline-space-1) solid var(--ws-border-strong);
+        border: var(--weline-space-1) solid var(--ws-border-strong, var(--weline-theme-border-strong));
         border-radius: var(--weline-radius-md);
         background: var(--weline-theme-surface);
-        color: var(--ws-text);
+        color: var(--ws-text, var(--weline-theme-text));
         font: inherit;
         font-size: var(--weline-space-3);
     }
 
     .ws-control[readonly] {
-        background: var(--ws-panel-soft);
+        background: var(--ws-panel-soft, var(--weline-theme-surface-muted));
         color: var(--weline-theme-text);
     }
 
@@ -283,7 +283,7 @@
     .ws-form-actions {
         margin-top: var(--weline-space-4);
         padding-top: var(--weline-space-4);
-        border-top: var(--weline-space-1) solid var(--ws-border);
+        border-top: var(--weline-space-1) solid var(--ws-border, var(--weline-theme-border));
     }
 
     .ws-meta-list {
@@ -301,7 +301,7 @@
 
     .ws-meta-value {
         overflow-wrap: anywhere;
-        color: var(--ws-text);
+        color: var(--ws-text, var(--weline-theme-text));
         font-size: var(--weline-space-3);
         font-weight: 620;
     }
@@ -315,9 +315,9 @@
     .ws-summary-item {
         min-width: 0;
         padding: var(--weline-space-3);
-        border: var(--weline-space-1) solid var(--ws-border);
+        border: var(--weline-space-1) solid var(--ws-border, var(--weline-theme-border));
         border-radius: var(--weline-radius-md);
-        background: var(--ws-panel-soft);
+        background: var(--ws-panel-soft, var(--weline-theme-surface-muted));
     }
 
     .ws-summary-value {
@@ -328,17 +328,17 @@
     }
 
     .ws-summary-value.is-success {
-        color: var(--ws-success);
+        color: var(--ws-success, var(--weline-theme-success));
     }
 
     .ws-summary-value.is-primary {
-        color: var(--ws-primary-strong);
+        color: var(--ws-primary-strong, var(--weline-theme-primary-hover));
     }
 
     .ws-progress {
         margin-top: var(--weline-space-4);
         padding-top: var(--weline-space-4);
-        border-top: var(--weline-space-1) solid var(--ws-border);
+        border-top: var(--weline-space-1) solid var(--ws-border, var(--weline-theme-border));
     }
 
     .ws-progress-track {
@@ -353,14 +353,14 @@
     .ws-progress-bar {
         height: 100%;
         border-radius: inherit;
-        background: linear-gradient(90deg, var(--ws-success), var(--ws-primary));
+        background: linear-gradient(90deg, var(--ws-success, var(--weline-theme-success)), var(--ws-primary, var(--weline-theme-primary)));
     }
 
     .ws-progress-copy {
         display: flex;
         justify-content: space-between;
         gap: var(--weline-space-2);
-        color: var(--ws-muted);
+        color: var(--ws-muted, var(--weline-theme-text-muted));
         font-size: var(--weline-space-1);
     }
 
@@ -370,11 +370,11 @@
     }
 
     .ws-copy-status[data-tone="success"] {
-        color: var(--ws-success);
+        color: var(--ws-success, var(--weline-theme-success));
     }
 
     .ws-copy-status[data-tone="error"] {
-        color: var(--ws-danger);
+        color: var(--ws-danger, var(--weline-theme-danger));
     }
 
     .ws-sr-only {

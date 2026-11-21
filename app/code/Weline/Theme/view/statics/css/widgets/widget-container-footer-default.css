@@ -8,37 +8,37 @@
     --footer-social-float-pad-inline: clamp(0.0625rem, 0.04rem + 0.2vw, 0.125rem);
     --footer-social-float-toggle-width: clamp(0.75rem, 0.45rem + 0.85vw, 1.25rem);
     --footer-social-float-rail: clamp(0.125rem, 0.08rem + 0.3vw, 0.25rem);
-    gap: var(--footer-social-float-gap);
-    padding: var(--footer-social-float-pad-block) var(--footer-social-float-pad-inline);
-    transition: transform var(--weline-theme-duration-normal, 0.28s)
-        var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
+    gap: var(--footer-social-float-gap, var(--weline-space-1));
+    padding: var(--footer-social-float-pad-block, var(--weline-space-1)) var(--footer-social-float-pad-inline, var(--weline-space-1));
+    transition: transform var(--weline-theme-duration-normal, var(--weline-motion-normal))
+        var(--weline-theme-easing-standard, var(--weline-motion-ease));
 }
 .weline-footer .footer-social-float__panel {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--footer-social-float-gap);
+    gap: var(--footer-social-float-gap, var(--weline-space-1));
 }
 /* 盖过 .footer-social-link 的 size-control-md；flex 项须 min-*-size:0 才能真正缩小 */
 .weline-footer .footer-social-float .footer-social-link.footer-social-float__link,
 .weline-footer .footer-social-float .footer-social-float__link {
     box-sizing: border-box;
-    width: var(--footer-social-float-hit);
-    height: var(--footer-social-float-hit);
+    width: var(--footer-social-float-hit, var(--weline-space-6));
+    height: var(--footer-social-float-hit, var(--weline-space-6));
     min-width: 0;
     min-height: 0;
-    max-width: var(--footer-social-float-hit);
-    max-height: var(--footer-social-float-hit);
+    max-width: var(--footer-social-float-hit, var(--weline-space-6));
+    max-height: var(--footer-social-float-hit, var(--weline-space-6));
 }
 .weline-footer .footer-social-float .footer-social-float__link .footer-social-icon,
 .weline-footer .footer-social-float .footer-social-link .footer-social-icon,
 .weline-footer .footer-social-float .footer-social-icon {
-    width: var(--footer-social-float-icon);
-    height: var(--footer-social-float-icon);
+    width: var(--footer-social-float-icon, var(--weline-space-3));
+    height: var(--footer-social-float-icon, var(--weline-space-3));
     min-width: 0;
     min-height: 0;
-    max-width: var(--footer-social-float-icon);
-    max-height: var(--footer-social-float-icon);
+    max-width: var(--footer-social-float-icon, var(--weline-space-3));
+    max-height: var(--footer-social-float-icon, var(--weline-space-3));
 }
 .weline-footer .footer-social-float__toggle {
     position: absolute;
@@ -46,20 +46,17 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--footer-social-float-toggle-width);
-    height: var(--footer-social-float-hit);
+    width: var(--footer-social-float-toggle-width, var(--weline-space-4));
+    height: var(--footer-social-float-hit, var(--weline-space-6));
     margin: 0;
     padding: 0;
-    color: var(--color-primary, var(--weline-chrome-primary));
-    background: var(
-        --color-primary-bg-subtle,
-        color-mix(in srgb, var(--color-primary, var(--weline-chrome-primary)) 12%, var(--color-bg-canvas, var(--weline-chrome-body-bg)))
-    );
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid)
+    color: var(--color-primary);
+    background: var(--color-primary-bg-subtle);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style)
         color-mix(
             in srgb,
-            var(--color-primary, var(--weline-chrome-primary)) 32%,
-            var(--color-border-default, var(--weline-chrome-border-default))
+            var(--color-primary) 32%,
+            var(--color-border-default)
         );
     cursor: pointer;
     appearance: none;
@@ -90,8 +87,8 @@
 .weline-footer .footer-social-float__toggle-icon {
     display: inline-flex;
     line-height: 0;
-    transition: transform var(--weline-theme-duration-normal, 0.28s)
-        var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
+    transition: transform var(--weline-theme-duration-normal, var(--weline-motion-normal))
+        var(--weline-theme-easing-standard, var(--weline-motion-ease));
 }
 .weline-footer .footer-social-float[data-side="right"] .footer-social-float__toggle-icon {
     transform: scaleX(-1);

@@ -531,16 +531,16 @@ progress {
   --bs-gutter-y: 0;
   display: flex;
   flex-wrap: wrap;
-  margin-top: calc(var(--bs-gutter-y) * -1);
-  margin-right: calc(var(--bs-gutter-x) / -2);
-  margin-left: calc(var(--bs-gutter-x) / -2); }
+  margin-top: calc(var(--bs-gutter-y, 0) * -1);
+  margin-right: calc(var(--bs-gutter-x, 1.5rem) / -2);
+  margin-left: calc(var(--bs-gutter-x, 1.5rem) / -2); }
   .row > * {
     flex-shrink: 0;
     width: 100%;
     max-width: 100%;
-    padding-right: calc(var(--bs-gutter-x) / 2);
-    padding-left: calc(var(--bs-gutter-x) / 2);
-    margin-top: var(--bs-gutter-y); }
+    padding-right: calc(var(--bs-gutter-x, 1.5rem) / 2);
+    padding-left: calc(var(--bs-gutter-x, 1.5rem) / 2);
+    margin-top: var(--bs-gutter-y, 0); }
 .col {
   flex: 1 0 0%; }
   .position-absolute .r-5{
@@ -1620,9 +1620,9 @@ progress {
   border-color: #e3e9ef; }
   .table > :not(caption) > * > * {
     padding: 0.5rem 0.5rem;
-    background-color: var(--bs-table-bg);
+    background-color: var(--bs-table-bg, transparent);
     border-bottom-width: 1px;
-    box-shadow: inset 0 0 0 9999px var(--bs-table-accent-bg); }
+    box-shadow: inset 0 0 0 9999px var(--bs-table-accent-bg, transparent); }
   .table > tbody {
     vertical-align: inherit; }
   .table > thead {
@@ -1645,16 +1645,16 @@ progress {
   border-bottom-width: 0; }
 
 .table-striped > tbody > tr:nth-of-type(odd) {
-  --bs-table-accent-bg: var(--bs-table-striped-bg);
-  color: var(--bs-table-striped-color); }
+  --bs-table-accent-bg: var(--bs-table-striped-bg, rgba(0, 0, 0, 0.05));
+  color: var(--bs-table-striped-color, #000); }
 
 .table-active {
-  --bs-table-accent-bg: var(--bs-table-active-bg);
-  color: var(--bs-table-active-color); }
+  --bs-table-accent-bg: var(--bs-table-active-bg, rgba(0, 0, 0, 0.1));
+  color: var(--bs-table-active-color, #000); }
 
 .table-hover > tbody > tr:hover {
-  --bs-table-accent-bg: var(--bs-table-hover-bg);
-  color: var(--bs-table-hover-color); }
+  --bs-table-accent-bg: var(--bs-table-hover-bg, #f6f9fc);
+  color: var(--bs-table-hover-color, #000); }
 
 .table-primary {
   --bs-table-bg: #dde0ff;
@@ -4941,7 +4941,7 @@ border-radius: 5px; }
   width: 100%; }
   .ratio::before {
     display: block;
-    padding-top: var(--bs-aspect-ratio);
+    padding-top: var(--bs-aspect-ratio, 100%);
     content: ""; }
   .ratio > * {
     position: absolute;

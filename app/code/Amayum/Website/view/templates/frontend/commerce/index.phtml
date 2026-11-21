@@ -181,19 +181,19 @@ $commerceFaqs = is_array($faqs ?? null) && $faqs !== [] ? $faqs : (array)($seo['
         <div class="split-grid">
             <div class="split-copy">
                 <div class="crumbs"><a href="<?= A::e(A::url($this, '/')) ?>">Amayum</a><span>/</span><span>框架能力</span></div>
-                <h1 style="margin-top:22px">一套能审计的<br><span class="accent">电商底座。</span></h1>
+                <h1 class="mt-22">一套能审计的<br><span class="accent">电商底座。</span></h1>
                 <p class="lead">每一项能力都标注了实现状态与适用边界，方便你快速判断它是否符合你的项目——不夸大，也不藏着。</p>
                 <div class="actions">
                     <a class="btn btn-primary" href="<?= A::e(A::url($this, '/case-studies')) ?>">看运行中的例子</a>
                     <a class="btn btn-ghost-dark" href="<?= A::e(A::url($this, '/diagnosis#diagnosis')) ?>">预约架构诊断</a>
                 </div>
-                <div class="hero-meta" style="margin-top:22px">
+                <div class="hero-meta mt-22">
                     <?php foreach ($statusLegend as $legend): ?>
                         <?php $key = (string)($legend['key'] ?? ''); ?>
                         <span class="<?= A::e($statusClass($key)) ?>"><?= A::e((string)($legend['label'] ?? $statusLabel($key))) ?></span>
                     <?php endforeach; ?>
                 </div>
-                <p class="mono" style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:14px;line-height:2">
+                <p class="mono mono-note mono-note--relax mt-14">
                     <?php foreach ($statusLegend as $legend): ?>
                         <?= A::e((string)($legend['key'] ?? '') . ' = ' . (string)($legend['description'] ?? '')) ?><br>
                     <?php endforeach; ?>
@@ -240,7 +240,7 @@ $proofParts = static function (string $label): array {
     return [$label, ''];
 };
 ?>
-<section class="section surface" style="padding:clamp(40px,5vw,64px) 0" aria-label="关键事实" weline-code="amayum-commerce-index-02">
+<section class="section surface section--compact" aria-label="关键事实" weline-code="amayum-commerce-index-02">
     <div class="w-container">
         <div class="facts">
             <?php foreach ($proofFacts as $fact): ?>
@@ -290,7 +290,7 @@ $proofParts = static function (string $label): array {
             <article class="card reveal" style="--i:1"><span class="k"><?= $badge('verified') ?></span><h3>数据库</h3><p>MySQL/MariaDB/PostgreSQL；SQLite 用于沙箱，不作为生产共享库。</p></article>
             <article class="card reveal" style="--i:2"><span class="k"><?= $badge('na') ?></span><h3>边界</h3><p>生产推荐部署到你自己的服务器（Nginx + FPM）；Dockerfile 用于本地开发，未适配 Vercel 等无服务器平台。</p></article>
         </div>
-        <div style="overflow-x:auto">
+        <div class="scroll-x">
             <table class="cap-matrix">
                 <caption>从安装到上线 — 安装器自带运行时，装到能访问站点为止</caption>
                 <thead><tr><th scope="col">路径</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
@@ -311,7 +311,7 @@ $proofParts = static function (string $label): array {
             <div><p class="eyebrow"><span class="idx">02</span> 交易内核</p><h2 id="kn-title">按模块列能力、<br>状态与边界。</h2></div>
             <p>没有列出的能力，不作为卖点；默认关闭的能力，不写成开箱即用。</p>
         </div>
-        <div style="overflow-x:auto">
+        <div class="scroll-x">
             <table class="cap-matrix">
                 <thead><tr><th scope="col">模块</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
@@ -321,7 +321,7 @@ $proofParts = static function (string $label): array {
                 </tbody>
             </table>
         </div>
-        <p style="margin-top:26px"><a class="text-link" href="<?= A::e(A::url($this, '/case-studies')) ?>">看运行中的例子
+        <p class="mt-26"><a class="text-link" href="<?= A::e(A::url($this, '/case-studies')) ?>">看运行中的例子
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a></p>
     </div>
@@ -338,7 +338,7 @@ $proofParts = static function (string $label): array {
             <article class="card reveal" style="--i:1"><span class="k"><?= $badge('verified') ?></span><h3>主题</h3><p>主题注册、父主题链、同键覆盖；设计主题不复制默认实现。布局/局部/组件/部件/插槽；主题资产、预览与发布。</p></article>
             <article class="card reveal" style="--i:2"><span class="k"><?= $badge('na') ?></span><h3>边界</h3><p>不是零继承；跨域 Store sitemap 不合并；<code>app/design</code> 主题代码站点私有，部署需单独管理。</p></article>
         </div>
-        <div style="overflow-x:auto">
+        <div class="scroll-x">
             <table class="cap-matrix">
                 <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
@@ -358,7 +358,7 @@ $proofParts = static function (string $label): array {
             <div><p class="eyebrow"><span class="idx">04</span> 域名与 HTTPS</p><h2 id="dm-title">从选域名到证书续签，<br>一条链管完。</h2></div>
             <p>建站第一步常卡在域名和证书：到处注册、手动续费、证书到期忘更。框架把这条链写进后台。</p>
         </div>
-        <div style="overflow-x:auto">
+        <div class="scroll-x">
             <table class="cap-matrix">
                 <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
@@ -378,7 +378,7 @@ $proofParts = static function (string $label): array {
             <div><p class="eyebrow"><span class="idx">05</span> 缓存与 CDN</p><h2 id="cdn-title">像静态页一样快，<br>但改完能生效。</h2></div>
             <p>页面快靠缓存，生效快靠清理。三层缓存 + 按 URL 清理，改商品不用等整站过期。</p>
         </div>
-        <div style="overflow-x:auto">
+        <div class="scroll-x">
             <table class="cap-matrix">
                 <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
@@ -416,7 +416,7 @@ $proofParts = static function (string $label): array {
             <article class="card reveal" style="--i:1"><span class="k"><?= $badge('verified') ?></span><h3>GEO 文件</h3><p><code>llms.txt</code>、<code>llms-full.txt</code>、<code>ai.txt</code>、<code>license.xml</code>、<code>trust.txt</code>、<code>geo-feed.json/xml</code>。内置 SEO inspector/self-check。</p></article>
             <article class="card reveal" style="--i:2"><span class="k"><?= $badge('na') ?></span><h3>边界</h3><p>不保证排名；配置依赖；Google Indexing API 不用于普通商品页；GEO push 未逐平台验证。</p></article>
         </div>
-        <div style="overflow-x:auto">
+        <div class="scroll-x">
             <table class="cap-matrix">
                 <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
@@ -426,7 +426,7 @@ $proofParts = static function (string $label): array {
                 </tbody>
             </table>
         </div>
-        <p style="margin-top:26px"><a class="text-link" href="<?= A::e(A::url($this, '/journal/independent-store-seo')) ?>">读技术 SEO 排查
+        <p class="mt-26"><a class="text-link" href="<?= A::e(A::url($this, '/journal/independent-store-seo')) ?>">读技术 SEO 排查
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a></p>
     </div>
@@ -439,7 +439,7 @@ $proofParts = static function (string $label): array {
             <div><p class="eyebrow"><span class="idx">08</span> 沟通与服务</p><h2 id="cm-title">客户找得到你，<br>你找得到客户。</h2></div>
             <p>跨境站最贵的流量是回头客；丢一封询盘邮件就是丢一单。邮局、消息渠道、客服与订阅在框架内各有归属，不用先买一套客服 SaaS 才能开工。</p>
         </div>
-        <div style="overflow-x:auto">
+        <div class="scroll-x">
             <table class="cap-matrix">
                 <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
@@ -459,7 +459,7 @@ $proofParts = static function (string $label): array {
             <div><p class="eyebrow"><span class="idx">09</span> AI 协作与自动化</p><h2 id="ai-title">为 AI 协作而生，<br>闸门写在代码里。</h2></div>
             <p>AI 进入项目先领代码地图与硬规则；运营类任务派工到队列，外发内容必经审批。自动化有边界：默认关闭的能力，需要人工开启。</p>
         </div>
-        <div style="overflow-x:auto">
+        <div class="scroll-x">
             <table class="cap-matrix">
                 <caption>AI 能力矩阵 — 模型管理与任务自动化均在框架内</caption>
                 <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
@@ -485,7 +485,7 @@ $proofParts = static function (string $label): array {
             <article class="card reveal" style="--i:1"><span class="k"><?= $badge('verified') ?></span><h3>响应头与封禁</h3><p>统一安全响应头默认策略；IP 封禁表、白名单、受保护路径、恶意特征/坏 UA 规则。</p></article>
             <article class="card reveal" style="--i:2"><span class="k"><?= $badge('na') ?></span><h3>边界</h3><p>不是 PCI/GDPR/SOC2/ISO；CSP 正确性取决于配置；Captcha 默认关闭；2FA 可选。</p></article>
         </div>
-        <div style="overflow-x:auto">
+        <div class="scroll-x">
             <table class="cap-matrix">
                 <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
@@ -495,11 +495,11 @@ $proofParts = static function (string $label): array {
                 </tbody>
             </table>
         </div>
-        <ul class="grid-2" style="list-style:none;margin:26px 0 0;padding:0;gap:0 48px">
+        <ul class="grid-2 unlist grid-2--rail mt-26">
             <li class="feature reveal"><span class="n">机制</span><div><b>Master 自愈。</b><p>子进程检测到 Master 连接异常断开时，Worker 按优先级竞选拉起 Master（Redirect 1s / Dispatcher 3s / Worker#1 6s）。</p></div></li>
             <li class="feature reveal" style="--i:1"><span class="n">机制</span><div><b>站点看门狗。</b><p>看门狗脚本探测站点 URL，不可达自动重启并写入 crontab。</p></div></li>
         </ul>
-        <p class="mono" style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:18px;line-height:1.8">Note — 自愈是机制存在，不是 SLA 承诺；HA 设计为设计稿状态。AI 部署计划（deploy:plan）只读，不触发发布编排。</p>
+        <p class="mono mono-note mono-note--airy mt-18">Note — 自愈是机制存在，不是 SLA 承诺；HA 设计为设计稿状态。AI 部署计划（deploy:plan）只读，不触发发布编排。</p>
     </div>
 </section>
 
@@ -510,7 +510,7 @@ $proofParts = static function (string $label): array {
             <div><p class="eyebrow"><span class="idx">11</span> 应用与多端</p><h2 id="ap-title">一个后台，<br>Web、PWA、App 都从这里出。</h2></div>
             <p>客户在手机上搜到你时，站点要像 App 一样能装；发 App 时签名与版本不该是每次都重新折腾的事。</p>
         </div>
-        <div style="overflow-x:auto">
+        <div class="scroll-x">
             <table class="cap-matrix">
                 <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
@@ -535,7 +535,7 @@ $proofParts = static function (string $label): array {
             <article class="card reveal" style="--i:1"><span class="k"><?= $badge('verified') ?></span><h3>WLS 运维面</h3><p><code>server:scale</code> 动态扩缩容、<code>server:doctor</code> 只读诊断、<code>server:maintenance</code>、多实例隔离；WLS 面板项目 reload/restart。</p></article>
             <article class="card reveal" style="--i:2"><span class="k"><?= $badge('na') ?></span><h3>边界</h3><p>不宣称无人值守全自动运维；WLS 外部门禁见边界节；控制中心 GUI 是本机/远程管理入口，不是托管服务。</p></article>
         </div>
-        <div style="overflow-x:auto">
+        <div class="scroll-x">
             <table class="cap-matrix">
                 <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
@@ -545,7 +545,7 @@ $proofParts = static function (string $label): array {
                 </tbody>
             </table>
         </div>
-        <p class="mono" style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:18px;line-height:1.8">Note — WLS 后台面板 + 一个 <code>bin/w</code> 覆盖安装、缓存、队列、定时、邮件、WLS、部署（240+ 条命令）；命令可用性取决于已安装模块。</p>
+        <p class="mono mono-note mono-note--airy mt-18">Note — WLS 后台面板 + 一个 <code>bin/w</code> 覆盖安装、缓存、队列、定时、邮件、WLS、部署（240+ 条命令）；命令可用性取决于已安装模块。</p>
     </div>
 </section>
 
@@ -556,7 +556,7 @@ $proofParts = static function (string $label): array {
             <div><p class="eyebrow"><span class="idx">13</span> 公开文案的边界</p><h2 id="bn-title">这些不是<br>我们的卖点。</h2></div>
             <p>下面这些说法没有证据，或者会把路线图写成现状。它们只作为“不宣称”的边界出现，不作为能力列表。</p>
         </div>
-        <ul class="grid-2" style="list-style:none;margin:0;padding:0;gap:0">
+        <ul class="grid-2 unlist grid-2--flush">
             <?php foreach ($boundaryItems as $index => $item): ?>
                 <li class="feature reveal" style="--i:<?= (int)($index % 2) ?>"><span class="n">—</span><div><p><?= $item ?></p></div></li>
             <?php endforeach; ?>
@@ -566,7 +566,7 @@ $proofParts = static function (string $label): array {
 
 <!-- FAQ -->
 <section class="section surface" id="faq" aria-labelledby="faq-title" weline-code="amayum-commerce-index-16">
-    <div class="w-container" style="max-width:880px">
+    <div class="w-container w-container--narrow">
         <div class="section-head reveal">
             <div><p class="eyebrow"><span class="idx">FAQ</span> 常见问题</p><h2 id="faq-title">六个高频问题。</h2></div>
         </div>

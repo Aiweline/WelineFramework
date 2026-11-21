@@ -6,11 +6,11 @@
 /* 运营页不展示统一配置技术 key（data-config-key 仍保留在 DOM） */
 .geo-push-schedule-embed .w-config-embed__key { display: none; }
 .geo-push-fail-band {
-    border: 1px solid color-mix(in srgb, var(--color-warning) 45%, transparent);
-    border-radius: var(--weline-theme-radius-md));
-    background: color-mix(in srgb, var(--color-warning) 8%, var(--weline-theme-surface));
-    padding: var(--weline-theme-space-4);
-    margin-bottom: var(--weline-theme-space-4);
+    border: 1px solid color-mix(in srgb, var(--color-warning, var(--backend-color-warning)) 45%, transparent);
+    border-radius: var(--weline-theme-radius-md, var(--radius-md));
+    background: color-mix(in srgb, var(--color-warning, var(--backend-color-warning)) 8%, var(--weline-theme-surface));
+    padding: var(--weline-space-4);
+    margin-bottom: var(--weline-space-4);
 }
 .geo-push-fail-band__error {
     max-inline-size: 28rem;

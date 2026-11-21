@@ -130,7 +130,7 @@ class Local implements \Weline\Framework\Taglib\TaglibInterface
                     return '';
                 }
                 $bulkFieldsAttr = htmlspecialchars(trim((string)($attributes['bulk-fields'] ?? '')), ENT_QUOTES);
-                $cssUrl = htmlspecialchars(self::resolveModuleStaticUrl('Weline_I18n::css/local-bulk-translation.css?v=20260827-bulk-auth1'), ENT_QUOTES);
+                $cssUrl = htmlspecialchars(self::resolveModuleStaticUrl('Weline_I18n::css/backend/local-bulk-translation.css?v=20260827-bulk-auth1'), ENT_QUOTES);
                 $jsUrl = htmlspecialchars(self::resolveModuleStaticUrl('Weline_I18n::js/local-bulk-translation.js?v=20260827-bulk-auth1'), ENT_QUOTES);
                 $buttonText = htmlspecialchars((string)__('一键 AI 翻译'), ENT_QUOTES);
                 $dialogTitle = htmlspecialchars((string)__('一键 AI 批量翻译'), ENT_QUOTES);

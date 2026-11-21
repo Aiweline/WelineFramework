@@ -305,13 +305,13 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     .search-layout__recommendations .btn-add-to-cart {
         background: var(--color-primary);
         border-color: var(--color-warning);
-        color: var(--weline-theme-color-text);
+        color: var(--weline-theme-color-text, var(--_paper-text));
     }
 
     .search-layout__recommendations .btn-add-to-cart:hover {
         background: linear-gradient(180deg, var(--color-warning) 0%, var(--color-warning) 100%);
         border-color: var(--color-warning);
-        color: var(--weline-theme-color-text);
+        color: var(--weline-theme-color-text, var(--_paper-text));
     }
 
     .storefront-search {
@@ -682,7 +682,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         border: var(--border-width-thin) solid var(--color-warning);
         border-radius: var(--weline-theme-radius-2xl);;
         background: var(--color-primary);
-        color: var(--weline-theme-color-text);
+        color: var(--weline-theme-color-text, var(--_paper-text));
         font: inherit;
         font-size: var(--font-size-xs);
         font-weight: 600;

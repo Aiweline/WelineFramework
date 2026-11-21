@@ -9,13 +9,13 @@
     }
 
     .w-catalog-admin__tree-card {
-        max-block-size: calc(100vh - var(--backend-theme-topbar-height) - (2 * var(--weline-space-5)));
+        max-block-size: calc(100vh - var(--backend-theme-topbar-height, 4rem) - (2 * var(--weline-space-5)));
         overflow: auto;
     }
 
     .w-catalog-admin__editor {
         position: sticky;
-        inset-block-start: calc(var(--backend-theme-topbar-height) + var(--weline-space-4));
+        inset-block-start: calc(var(--backend-theme-topbar-height, 4rem) + var(--weline-space-4));
     }
 
     .w-catalog-tree,

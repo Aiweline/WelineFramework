@@ -473,23 +473,7 @@ $mailHref = $contactEmail !== '' ? ('mailto:' . $contactEmail) : '#';
                             <section class="contact-layout__section" aria-labelledby="contact-form-title" weline-code="theme.contact.contact_form_title">
                                 <h2 id="contact-form-title"><?= WidgetI18n::label('发送消息') ?></h2>
                                 <p class="contact-layout__note"><?= WidgetI18n::label('请尽量提供完整背景，减少客服再次确认基础信息的等待时间。') ?></p>
-                                <w:form class="contact-layout__form contact-layout__form--spaced" action="@var($escape($contactUrl))" method="post">
-                                    <div class="contact-layout__field">
-                                        <label for="contact-name"><?= WidgetI18n::label('姓名') ?></label>
-                                        <input id="contact-name" name="name" type="text" autocomplete="name">
-                                    </div>
-                                    <div class="contact-layout__field">
-                                        <label for="contact-email"><?= WidgetI18n::label('邮箱') ?></label>
-                                        <input id="contact-email" name="email" type="email" autocomplete="email">
-                                    </div>
-                                    <div class="contact-layout__field">
-                                        <label for="contact-message"><?= WidgetI18n::label('消息内容') ?></label>
-                                        <textarea id="contact-message" name="message"></textarea>
-                                    </div>
-                                    <button class="contact-layout__button contact-layout__button--primary" type="submit">
-                                        <?= WidgetI18n::label('提交请求') ?>
-                                    </button>
-                                </w:form>
+                                <w:inquiry code="contact" mode="inline" id="contact-layout-inquiry-form" />
                             </section>
                         </w:hook>
                     </w:slot>

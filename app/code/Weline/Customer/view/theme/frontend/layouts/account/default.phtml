@@ -44,7 +44,7 @@ $this->assign('meta', $meta);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
-            background: var(--account-page-background);
+            background: var(--account-page-background, var(--color-bg-secondary));
             box-shadow: var(--weline-shadow-md);
         }
 
@@ -58,9 +58,9 @@ $this->assign('meta', $meta);
             min-width: 0;
             margin-inline: auto;
             padding-inline: var(--weline-layout-content-padding-inline);
-            padding-block: var(--account-page-top-gap) var(--account-page-bottom-gap);
+            padding-block: var(--account-page-top-gap, var(--weline-space-6)) var(--account-page-bottom-gap, var(--spacing-xl));
             /* 前台 head 不加载 theme.css；无 fallback 时大屏 gap 会塌成 0 */
-            gap: var(--weline-layout-spacing-xl, var(--spacing-xl));
+            gap: var(--weline-layout-spacing-xl, var(--spacing-xl, var(--token-size-2rem)));
         }
 
         /* 侧边栏样式 */
@@ -70,16 +70,16 @@ $this->assign('meta', $meta);
             background: var(--weline-layout-surface-primary);
             border-radius: var(--weline-layout-radius-lg);
             box-shadow: var(--shadow-sm);
-            padding: var(--weline-layout-spacing-lg, var(--spacing-lg));
+            padding: var(--weline-layout-spacing-lg);
             height: fit-content;
             position: sticky;
-            top: var(--weline-layout-spacing-lg, var(--spacing-lg));
+            top: var(--weline-layout-spacing-lg);
             transition: all 0.3s ease;
         }
 
         .account-sidebar.collapsed {
             width: var(--sidebar-collapsed-width);
-            padding: var(--weline-layout-spacing-md, var(--spacing-md));
+            padding: var(--weline-layout-spacing-md);
         }
 
         .account-sidebar.collapsed .account-sidebar__nav-text,
@@ -116,16 +116,16 @@ $this->assign('meta', $meta);
         @media (max-width: 767px) {
             .account-dashboard__body {
                 flex-direction: column;
-                padding-block: var(--weline-layout-spacing-md, var(--spacing-md));
+                padding-block: var(--weline-layout-spacing-md);
                 padding-inline: var(--weline-layout-content-padding-inline);
-                gap: var(--weline-layout-spacing-md, var(--spacing-md));
+                gap: var(--weline-layout-spacing-md);
             }
 
             .account-sidebar {
                 width: 100%;
                 position: static;
                 border-radius: var(--weline-layout-radius-md);
-                padding: var(--weline-layout-spacing-md, var(--spacing-md));
+                padding: var(--weline-layout-spacing-md);
             }
 
             .account-sidebar.collapsed {

@@ -234,9 +234,9 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
 }
 .affiliate-share-disclosure {
     margin: 0;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-border);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-border, var(--color-border-light, var(--weline-theme-border-color, #d5d9d9)));
     border-radius: var(--weline-theme-radius-md, 6px);
-    background: var(--affiliate-share-surface);
+    background: var(--affiliate-share-surface, var(--color-bg-primary, var(--weline-theme-surface, #fff)));
     overflow: hidden;
     max-width: 100%;
     min-width: 0;
@@ -250,7 +250,7 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     padding: .45rem .7rem;
     cursor: pointer;
     list-style: none;
-    color: var(--affiliate-share-text);
+    color: var(--affiliate-share-text, var(--color-text-primary, var(--weline-theme-text, #0f1111)));
 }
 .affiliate-share-summary::-webkit-details-marker { display: none; }
 .affiliate-share-summary::marker { content: ''; }
@@ -264,7 +264,7 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
 .affiliate-share-summary-hint {
     flex: 0 1 auto;
     min-width: 0;
-    color: var(--affiliate-share-muted);
+    color: var(--affiliate-share-muted, var(--color-text-secondary, var(--weline-theme-text-muted, #565959)));
     font-size: .75rem;
     line-height: 1.25;
     white-space: nowrap;
@@ -277,31 +277,31 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     min-height: 1rem;
     padding: .05rem .35rem;
     border-radius: var(--weline-theme-radius-md, 6px);
-    color: var(--affiliate-share-muted);
+    color: var(--affiliate-share-muted, var(--color-text-secondary, var(--weline-theme-text-muted, #565959)));
     font-size: .72rem;
     line-height: 1.3;
     text-align: right;
     overflow-wrap: anywhere;
 }
 .affiliate-share-status.is-loading {
-    background: var(--affiliate-share-surface-subtle);
-    color: var(--affiliate-share-muted);
+    background: var(--affiliate-share-surface-subtle, var(--color-bg-secondary, var(--weline-theme-surface-subtle, #f7fafa)));
+    color: var(--affiliate-share-muted, var(--color-text-secondary, var(--weline-theme-text-muted, #565959)));
 }
 .affiliate-share-status.is-success {
-    background: var(--affiliate-share-success-soft);
-    color: var(--affiliate-share-success);
+    background: var(--affiliate-share-success-soft, var(--color-success-bg-subtle, var(--weline-theme-success-subtle, #e7f4ea)));
+    color: var(--affiliate-share-success, var(--color-success, var(--weline-theme-success, #0f5132)));
 }
 .affiliate-share-status.is-error {
-    background: var(--affiliate-share-warning-soft);
-    color: var(--affiliate-share-warning);
+    background: var(--affiliate-share-warning-soft, var(--color-warning-bg-subtle, var(--weline-theme-warning-subtle, #fff4e5)));
+    color: var(--affiliate-share-warning, var(--color-warning, var(--weline-theme-warning, #7a3e00)));
 }
 .affiliate-share-chevron {
     flex: 0 0 auto;
     width: .55rem;
     height: .55rem;
     margin-left: .15rem;
-    border-right: 1.5px solid var(--affiliate-share-muted);
-    border-bottom: 1.5px solid var(--affiliate-share-muted);
+    border-right: 1.5px solid var(--affiliate-share-muted, var(--color-text-secondary, var(--weline-theme-text-muted, #565959)));
+    border-bottom: 1.5px solid var(--affiliate-share-muted, var(--color-text-secondary, var(--weline-theme-text-muted, #565959)));
     transform: rotate(45deg);
     transition: transform .15s ease;
 }
@@ -313,7 +313,7 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     display: grid;
     gap: .55rem;
     padding: 0 .7rem .7rem;
-    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-border);
+    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-border, var(--color-border-light, var(--weline-theme-border-color, #d5d9d9)));
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
@@ -341,14 +341,14 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
 }
 .affiliate-share-promo-title {
     margin: 0;
-    color: var(--affiliate-share-text);
+    color: var(--affiliate-share-text, var(--color-text-primary, var(--weline-theme-text, #0f1111)));
     font-size: .82rem;
     font-weight: 700;
     line-height: 1.35;
 }
 .affiliate-share-promo-body {
     margin: 0;
-    color: var(--affiliate-share-muted);
+    color: var(--affiliate-share-muted, var(--color-text-secondary, var(--weline-theme-text-muted, #565959)));
     font-size: .72rem;
     line-height: 1.4;
 }
@@ -381,10 +381,10 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     width: 100%;
     height: 2.2rem;
     padding: 0 .55rem;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-border);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-border, var(--color-border-light, var(--weline-theme-border-color, #d5d9d9)));
     border-radius: var(--weline-theme-radius-md, 6px);
-    background: var(--affiliate-share-surface);
-    color: var(--affiliate-share-text);
+    background: var(--affiliate-share-surface, var(--color-bg-primary, var(--weline-theme-surface, #fff)));
+    color: var(--affiliate-share-text, var(--color-text-primary, var(--weline-theme-text, #0f1111)));
     font-size: .72rem;
     line-height: 2.2rem;
     overflow: hidden;
@@ -403,10 +403,10 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     justify-content: center;
     min-height: 2.2rem;
     padding: 0 .55rem;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-primary);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-primary, var(--color-primary, var(--color-accent, var(--weline-theme-primary, #007185))));
     border-radius: var(--weline-theme-radius-md, 6px);
-    background: var(--affiliate-share-surface);
-    color: var(--affiliate-share-primary);
+    background: var(--affiliate-share-surface, var(--color-bg-primary, var(--weline-theme-surface, #fff)));
+    color: var(--affiliate-share-primary, var(--color-primary, var(--color-accent, var(--weline-theme-primary, #007185))));
     cursor: pointer;
     font-size: .8rem;
     font-weight: 700;
@@ -420,26 +420,26 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
 }
 .affiliate-share-copy:hover:not(:disabled),
 .affiliate-share-native:hover:not(:disabled) {
-    border-color: var(--affiliate-share-primary);
-    background: var(--affiliate-share-primary-soft);
-    color: var(--affiliate-share-primary-hover);
+    border-color: var(--affiliate-share-primary, var(--color-primary, var(--color-accent, var(--weline-theme-primary, #007185))));
+    background: var(--affiliate-share-primary-soft, var(--color-primary-bg-subtle, color-mix(in srgb, var(--affiliate-share-primary) 12%, #fff)));
+    color: var(--affiliate-share-primary-hover, var(--color-primary-hover, var(--color-accent-hover, var(--weline-theme-primary-hover, #005f6b))));
     text-decoration: none;
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--affiliate-share-text) 12%, transparent);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--affiliate-share-text, var(--color-text-primary, var(--weline-theme-text, #0f1111))) 12%, transparent);
 }
 .affiliate-share-copy {
-    border-color: var(--affiliate-share-primary);
-    background: var(--affiliate-share-primary);
-    color: var(--affiliate-share-on-primary);
+    border-color: var(--affiliate-share-primary, var(--color-primary, var(--color-accent, var(--weline-theme-primary, #007185))));
+    background: var(--affiliate-share-primary, var(--color-primary, var(--color-accent, var(--weline-theme-primary, #007185))));
+    color: var(--affiliate-share-on-primary, var(--color-primary-contrast, var(--weline-theme-on-primary, #fff)));
 }
 .affiliate-share-copy:hover:not(:disabled) {
-    background: var(--affiliate-share-primary-hover);
-    color: var(--affiliate-share-on-primary);
+    background: var(--affiliate-share-primary-hover, var(--color-primary-hover, var(--color-accent-hover, var(--weline-theme-primary-hover, #005f6b))));
+    color: var(--affiliate-share-on-primary, var(--color-primary-contrast, var(--weline-theme-on-primary, #fff)));
 }
 .affiliate-share-copy:disabled,
 .affiliate-share-native:disabled {
-    border-color: var(--affiliate-share-border);
-    background: var(--affiliate-share-surface-subtle);
-    color: var(--affiliate-share-muted);
+    border-color: var(--affiliate-share-border, var(--color-border-light, var(--weline-theme-border-color, #d5d9d9)));
+    background: var(--affiliate-share-surface-subtle, var(--color-bg-secondary, var(--weline-theme-surface-subtle, #f7fafa)));
+    color: var(--affiliate-share-muted, var(--color-text-secondary, var(--weline-theme-text-muted, #565959)));
     cursor: not-allowed;
 }
 .affiliate-share-platforms {
@@ -453,7 +453,7 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     min-width: 0;
     margin-top: .1rem;
     padding-top: .45rem;
-    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) color-mix(in srgb, var(--affiliate-share-border) 70%, transparent);
+    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) color-mix(in srgb, var(--affiliate-share-border, var(--color-border-light, var(--weline-theme-border-color, #d5d9d9))) 70%, transparent);
     box-sizing: border-box;
 }
 .affiliate-share-platform {
@@ -470,7 +470,7 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     border: 0;
     border-radius: var(--weline-theme-radius-sm, 4px);
     background: transparent;
-    color: var(--affiliate-share-text);
+    color: var(--affiliate-share-text, var(--color-text-primary, var(--weline-theme-text, #0f1111)));
     cursor: pointer;
     font-size: .8rem;
     font-weight: 700;
@@ -479,14 +479,14 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     transition: background-color .15s ease, color .15s ease;
 }
 .affiliate-share-platform:hover {
-    background: var(--affiliate-share-surface-subtle);
-    color: var(--affiliate-share-primary-hover);
+    background: var(--affiliate-share-surface-subtle, var(--color-bg-secondary, var(--weline-theme-surface-subtle, #f7fafa)));
+    color: var(--affiliate-share-primary-hover, var(--color-primary-hover, var(--color-accent-hover, var(--weline-theme-primary-hover, #005f6b))));
     text-decoration: none;
     box-shadow: none;
 }
 .affiliate-share-platform:disabled {
     background: transparent;
-    color: var(--affiliate-share-muted);
+    color: var(--affiliate-share-muted, var(--color-text-secondary, var(--weline-theme-text-muted, #565959)));
     cursor: not-allowed;
 }
 .affiliate-share-platform__logo {

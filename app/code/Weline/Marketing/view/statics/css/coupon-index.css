@@ -26,7 +26,7 @@
     border-radius: var(--weline-radius-lg);
     box-shadow: var(--weline-theme-shadow-sm);
     overflow: hidden;
-    transition: box-shadow var(--marketing-coupon-transition), border-color var(--marketing-coupon-transition);
+    transition: box-shadow var(--marketing-coupon-transition, 0.2s ease), border-color var(--marketing-coupon-transition, 0.2s ease);
 }
 
 .marketing-coupon-page .marketing-coupon-card:hover {
@@ -63,7 +63,7 @@
     font-size: var(--weline-font-size-sm);
     font-weight: 600;
     text-decoration: none;
-    transition: background var(--marketing-coupon-transition), transform var(--marketing-coupon-transition);
+    transition: background var(--marketing-coupon-transition, 0.2s ease), transform var(--marketing-coupon-transition, 0.2s ease);
 }
 
 .marketing-coupon-page .marketing-coupon-add-btn:hover {
@@ -172,7 +172,7 @@
     border: var(--border-width-thin) solid color-mix(in srgb, var(--weline-theme-primary) 22%, var(--backend-theme-border, var(--weline-theme-border)));
     border-radius: var(--weline-radius-md);
     text-decoration: none;
-    transition: background var(--marketing-coupon-transition), border-color var(--marketing-coupon-transition), color var(--marketing-coupon-transition);
+    transition: background var(--marketing-coupon-transition, 0.2s ease), border-color var(--marketing-coupon-transition, 0.2s ease), color var(--marketing-coupon-transition, 0.2s ease);
 }
 
 .marketing-coupon-page .marketing-coupon-action-btn:hover {

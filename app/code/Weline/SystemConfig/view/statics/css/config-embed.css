@@ -8,7 +8,7 @@
 .w-config-embed__list {
   display: flex;
   flex-direction: column;
-  gap: var(--w-config-embed-gap);
+  gap: var(--w-config-embed-gap, var(--weline-space-3, 0.75rem));
 }
 
 .w-config-embed.layout-horizontal .w-config-embed__list {

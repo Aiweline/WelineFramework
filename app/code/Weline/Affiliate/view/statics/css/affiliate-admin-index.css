@@ -141,7 +141,7 @@
 
 .affiliate-admin-page .affiliate-admin-empty-text {
     color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-base);
+    font-size: var(--weline-font-size-base, var(--font-size-base));
 }
 
 .affiliate-admin-page .affiliate-admin-actions {

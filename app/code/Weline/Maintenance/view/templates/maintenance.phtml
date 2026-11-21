@@ -71,8 +71,8 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
             display: flex;
             flex-direction: column;
             font-family: "Amazon Ember", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-            background: var(--amz-canvas);
-            color: var(--amz-ink);
+            background: var(--amz-canvas, #eaeded);
+            color: var(--amz-ink, #0f1111);
             overflow-x: hidden;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
@@ -93,7 +93,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
                 max(1rem, env(safe-area-inset-right))
                 0.65rem
                 max(1rem, env(safe-area-inset-left));
-            background: linear-gradient(180deg, var(--amz-header) 0%, var(--amz-header-accent) 100%);
+            background: linear-gradient(180deg, var(--amz-header, #131921) 0%, var(--amz-header-accent, #232f3e) 100%);
             color: #fff;
             box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
         }
@@ -148,7 +148,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
             width: 3.5rem;
             height: 0.45rem;
             margin-top: 0.1rem;
-            border: 2px solid var(--amz-orange);
+            border: 2px solid var(--amz-orange, #ff9900);
             border-top: 0;
             border-radius: 0 0 2rem 2rem;
         }
@@ -187,10 +187,10 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
             max-width: 960px;
             margin: 0 auto;
             padding: 1.75rem 1.5rem 2rem;
-            background: var(--amz-surface);
-            border: 1px solid var(--amz-border);
+            background: var(--amz-surface, var(--color-bg-primary,#fffefa));
+            border: 1px solid var(--amz-border, var(--color-border, #d5d9d9));
             border-radius: 8px;
-            box-shadow: var(--amz-shadow);
+            box-shadow: var(--amz-shadow, 0 1px 2px rgba(15, 17, 17, 0.12));
         }
 
         .maintenance-language-switcher {
@@ -214,7 +214,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
         .language-switcher:hover,
         .language-switcher:focus-within {
             background: rgba(255, 255, 255, 0.14);
-            border-color: var(--amz-orange);
+            border-color: var(--amz-orange, #ff9900);
         }
 
         .language-switcher__current {
@@ -255,7 +255,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
             top: calc(100% + 8px);
             right: 0;
             background: #fff;
-            border: 1px solid var(--amz-border);
+            border: 1px solid var(--amz-border, var(--color-border, #d5d9d9));
             border-radius: 4px;
             min-width: 190px;
             max-height: min(60vh, 24rem);
@@ -280,7 +280,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
             align-items: center;
             gap: 10px;
             padding: 10px 14px;
-            color: var(--amz-ink);
+            color: var(--amz-ink, #0f1111);
             text-decoration: none;
             transition: background 0.12s ease;
             border-bottom: 1px solid #f0f2f2;
@@ -296,7 +296,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
 
         .language-option.active {
             background: #fef8e7;
-            color: var(--amz-ink);
+            color: var(--amz-ink, #0f1111);
             font-weight: 700;
         }
 
@@ -308,7 +308,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
         .language-option__check {
             opacity: 0;
             font-size: 0.75rem;
-            color: var(--amz-link);
+            color: var(--amz-link, var(--color-link));
         }
 
         .language-option.active .language-option__check {
@@ -334,7 +334,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
         .icon {
             font-size: 2rem;
             line-height: 1;
-            color: var(--amz-orange);
+            color: var(--amz-orange, #ff9900);
             font-weight: 700;
         }
 
@@ -350,13 +350,13 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
             font-size: clamp(1.5rem, 3.5vw, 1.85rem);
             font-weight: 700;
             margin-bottom: 0.65rem;
-            color: var(--amz-ink);
+            color: var(--amz-ink, #0f1111);
             line-height: 1.25;
         }
 
         .subtitle {
             font-size: 1rem;
-            color: var(--amz-muted);
+            color: var(--amz-muted, var(--color-text-muted, #565959));
             margin-bottom: 1.25rem;
             line-height: 1.6;
         }
@@ -365,16 +365,16 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
             display: inline-block;
             margin: 0 0 1rem;
             padding: 0.2rem 0.55rem;
-            border: 1px solid var(--amz-border);
+            border: 1px solid var(--amz-border, var(--color-border, #d5d9d9));
             border-radius: 3px;
             background: #f7f8f8;
-            color: var(--amz-muted);
+            color: var(--amz-muted, var(--color-text-muted, #565959));
             font-size: 0.75rem;
         }
 
         .recovery-notice {
             font-size: 0.95rem;
-            color: var(--amz-muted);
+            color: var(--amz-muted, var(--color-text-muted, #565959));
             margin-bottom: 1.75rem;
             line-height: 1.6;
         }
@@ -386,7 +386,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
 
         .progress {
             height: 6px;
-            background: var(--amz-progress-track);
+            background: var(--amz-progress-track, #e3e6e6);
             border-radius: 999px;
             overflow: hidden;
         }
@@ -394,7 +394,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
         .progress-bar {
             height: 100%;
             width: 32%;
-            background: linear-gradient(90deg, #f7ca00 0%, var(--amz-orange) 55%, #ff9900 100%);
+            background: linear-gradient(90deg, #f7ca00 0%, var(--amz-orange, #ff9900) 55%, #ff9900 100%);
             border-radius: 999px;
             animation: progress 2s ease-in-out infinite;
         }
@@ -414,7 +414,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
 
         .card {
             background: #fff;
-            border: 1px solid var(--amz-border);
+            border: 1px solid var(--amz-border, var(--color-border, #d5d9d9));
             border-radius: 8px;
             padding: 1rem 1.05rem 1.1rem;
             box-shadow: none;
@@ -423,7 +423,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
 
         .card:hover {
             border-color: #bbb;
-            box-shadow: var(--amz-shadow);
+            box-shadow: var(--amz-shadow, 0 1px 2px rgba(15, 17, 17, 0.12));
         }
 
         .card-icon {
@@ -445,22 +445,22 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
             font-size: 0.95rem;
             font-weight: 700;
             margin-bottom: 0.4rem;
-            color: var(--amz-ink);
+            color: var(--amz-ink, #0f1111);
         }
 
         .card p {
             font-size: 0.875rem;
-            color: var(--amz-muted);
+            color: var(--amz-muted, var(--color-text-muted, #565959));
             line-height: 1.55;
         }
 
         .card a {
-            color: var(--amz-link);
+            color: var(--amz-link, var(--color-link));
             text-decoration: none;
         }
 
         .card a:hover {
-            color: var(--amz-link-hover);
+            color: var(--amz-link-hover, var(--color-primary-hover));
             text-decoration: underline;
         }
 
@@ -491,25 +491,25 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
         }
 
         .refresh-btn {
-            color: var(--amz-ink);
-            background: linear-gradient(180deg, #ffe566 0%, var(--amz-btn) 55%, #f0c14b 100%);
-            border: 1px solid var(--amz-btn-border);
+            color: var(--amz-ink, #0f1111);
+            background: linear-gradient(180deg, #ffe566 0%, var(--amz-btn, #ffd814) 55%, #f0c14b 100%);
+            border: 1px solid var(--amz-btn-border, #fcd200);
             box-shadow: 0 2px 0 rgba(213, 217, 217, 0.5);
         }
 
         .refresh-btn:hover {
-            background: linear-gradient(180deg, #ffec80 0%, var(--amz-btn-hover) 60%, #e7b400 100%);
+            background: linear-gradient(180deg, #ffec80 0%, var(--amz-btn-hover, #f7ca00) 60%, #e7b400 100%);
         }
 
         .back-btn {
-            color: var(--amz-ink);
-            background: linear-gradient(180deg, #fff 0%, var(--amz-secondary-hover) 100%);
-            border: 1px solid var(--amz-secondary-border);
+            color: var(--amz-ink, #0f1111);
+            background: linear-gradient(180deg, #fff 0%, var(--amz-secondary-hover, #f7fafa) 100%);
+            border: 1px solid var(--amz-secondary-border, var(--color-border-default));
             box-shadow: 0 1px 0 rgba(213, 217, 217, 0.55);
         }
 
         .back-btn:hover {
-            background: var(--amz-secondary-hover);
+            background: var(--amz-secondary-hover, #f7fafa);
             border-color: #b9bdbd;
         }
 
@@ -520,9 +520,9 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
                 max(1rem, env(safe-area-inset-right))
                 max(1.25rem, env(safe-area-inset-bottom))
                 max(1rem, env(safe-area-inset-left));
-            border-top: 1px solid var(--amz-border);
+            border-top: 1px solid var(--amz-border, var(--color-border, #d5d9d9));
             background: #fff;
-            color: var(--amz-muted);
+            color: var(--amz-muted, var(--color-text-muted, #565959));
             font-size: 0.75rem;
             text-align: center;
         }

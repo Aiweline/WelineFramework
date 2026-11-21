@@ -272,7 +272,7 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
 </section>
 
 <style>
-.amz-plp { width: 100%; min-width: 0; color: var(--weline-theme-color-text); }
+.amz-plp { width: 100%; min-width: 0; color: var(--weline-theme-color-text, var(--_paper-text)); }
 .amz-plp__banner {
     margin: 0 0 var(--spacing-3_5);
     border-radius: var(--radius-lg);
@@ -315,7 +315,7 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
 }
 .amz-plp__description {
     margin: 0;
-    color: var(--weline-theme-color-text);
+    color: var(--weline-theme-color-text, var(--_paper-text));
     font-size: var(--font-size-13);
     line-height: 1.55;
 }
@@ -333,7 +333,7 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
     border: var(--border-width-thin) solid var(--color-border-faint);
     border-radius: var(--radius-full);
     background: var(--color-bg-primary);
-    color: var(--weline-theme-color-text);
+    color: var(--weline-theme-color-text, var(--_paper-text));
     text-decoration: none;
     font-size: var(--font-size-13);
 }
@@ -434,7 +434,7 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
     border: var(--border-width-thin) solid var(--color-border-faint);
     border-radius: var(--radius-lg);
     background: var(--color-bg-primary);
-    color: var(--weline-theme-color-text);
+    color: var(--weline-theme-color-text, var(--_paper-text));
     font: inherit;
     font-size: var(--font-size-13);
     font-weight: 600;

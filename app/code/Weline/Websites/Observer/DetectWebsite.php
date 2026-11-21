@@ -1489,6 +1489,24 @@ class DetectWebsite implements
             return $requestPath;
         }
 
+        // Synthetic /~site/{code} mounts are not WebsiteDomain rows: without this
+        // branch every mounted path collapses to '/', sharing one cache identity
+        // with the bare-Host default site — whichever match lands first then gets
+        // served for every /~site request on this Host.
+        if ($this->isReservedProjectHost($hostNorm)) {
+            try {
+                $mount = ProjectHostSiteMount::parseMountFromPath($requestPath);
+            } catch (\InvalidArgumentException) {
+                // Under /~site but malformed: keep the raw path as identity so the
+                // request cannot reuse the default-site slot; the real matcher
+                // produces the authoritative 404.
+                return $requestPath;
+            }
+            if ($mount !== null) {
+                return $mount['mount'];
+            }
+        }
+
         $inherited = '/';
         $inheritedLength = 0;
         foreach ($this->getWebsiteDomainRows() as $domainRow) {

@@ -13,7 +13,7 @@
         flex: 0 0 auto;
         place-items: center;
         border-radius: var(--weline-radius-round);
-        background: conic-gradient(var(--w-gauge-color) var(--w-progress, 0%), var(--weline-theme-surface-muted) 0);
+        background: conic-gradient(var(--w-gauge-color, var(--weline-theme-primary)) var(--w-progress, 0%), var(--weline-theme-surface-muted) 0);
         color: var(--weline-theme-text);
         font-size: var(--weline-font-size-xs);
         font-weight: 700;

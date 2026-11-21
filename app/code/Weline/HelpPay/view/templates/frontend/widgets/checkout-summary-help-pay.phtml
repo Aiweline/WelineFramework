@@ -27,14 +27,13 @@ $i18nJson = \Weline\HelpPay\Service\ShareModalI18n::json();
      data-testid="checkout-summary-help-pay"
      data-widget-code="checkout-summary-help-pay"
      data-helppay-placement="checkout"
-     data-weline-load="helpPayShare"
+     data-weline-load="helpPayCtaCapture,helpPayShare"
      data-helppay-i18n="<?= $escape($i18nJson) ?>">
     <a href="#"
        role="button"
        class="w-helppay-cta__link"
        data-testid="help-pay-open"
-       data-helppay-open="1"
-       onclick="if(!(window.WelineModules&&window.WelineModules.helpPayShare)){(window.__helppayPendingOpen=window.__helppayPendingOpen||[]).push(this);return false;}">
+       data-helppay-open="1">
         <lang>找朋友代付</lang>
     </a>
 </div>

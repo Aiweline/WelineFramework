@@ -5,40 +5,40 @@
    ============================================ */
 
 .backend-data-form-container {
-    background: var(--backend-color-card-bg);
-    border: var(--border-width-thin) solid var(--backend-color-border-default);
-    border-radius: var(--backend-border-radius-md);
-    box-shadow: var(--backend-card-shadow);
+    background: var(--backend-color-card-bg, var(--backend-theme-surface));
+    border: var(--border-width-thin) solid var(--backend-color-border-default, var(--backend-theme-border));
+    border-radius: var(--backend-border-radius-md, var(--weline-space-2));
+    box-shadow: var(--backend-card-shadow, var(--weline-theme-shadow-sm));
     overflow: hidden;
 }
 
 /* 头部 */
 .backend-data-form-header {
-    padding: var(--backend-spacing-md) var(--backend-spacing-lg);
-    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light);
+    padding: var(--backend-spacing-md, var(--weline-space-4)) var(--backend-spacing-lg, var(--weline-space-6));
+    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light, var(--weline-theme-surface-muted));
 }
 
 .backend-data-form-title {
     margin: 0;
     font-size: var(--token-size-1-1rem);
     font-weight: 600;
-    color: var(--backend-color-text-primary);
+    color: var(--backend-color-text-primary, var(--weline-theme-text));
 }
 
 /* 表单主体 */
 .backend-data-form-body {
-    padding: var(--backend-spacing-lg);
+    padding: var(--backend-spacing-lg, var(--weline-space-6));
 }
 
 /* 表单组 */
 .backend-form-group {
-    margin-bottom: var(--backend-spacing-md);
+    margin-bottom: var(--backend-spacing-md, var(--weline-space-4));
 }
 
 .backend-form-group--horizontal {
     display: flex;
     align-items: flex-start;
-    gap: var(--backend-spacing-md);
+    gap: var(--backend-spacing-md, var(--weline-space-4));
 }
 
 .backend-form-group--horizontal .backend-form-label {
@@ -54,14 +54,14 @@
 /* 标签 */
 .backend-form-label {
     display: block;
-    margin-bottom: var(--backend-spacing-xs);
+    margin-bottom: var(--backend-spacing-xs, var(--weline-space-1));
     font-weight: 500;
     font-size: var(--font-size-sm);
-    color: var(--backend-color-text-primary);
+    color: var(--backend-color-text-primary, var(--weline-theme-text));
 }
 
 .backend-form-required {
-    color: var(--backend-color-danger);
+    color: var(--backend-color-danger, var(--weline-theme-danger));
     margin-left: var(--spacing-0_5);
 }
 
@@ -73,29 +73,29 @@
 /* 输入控件 */
 .backend-form-control {
     width: 100%;
-    padding: var(--backend-spacing-sm) var(--backend-spacing-md);
-    border: var(--border-width-thin) solid var(--backend-color-border-default);
-    border-radius: var(--backend-border-radius);
-    background: var(--backend-color-input-bg);
-    color: var(--backend-color-text-primary);
+    padding: var(--backend-spacing-sm, var(--weline-space-2)) var(--backend-spacing-md, var(--weline-space-4));
+    border: var(--border-width-thin) solid var(--backend-color-border-default, var(--backend-theme-border));
+    border-radius: var(--backend-border-radius, var(--weline-space-2));
+    background: var(--backend-color-input-bg, var(--backend-theme-surface-raised));
+    color: var(--backend-color-text-primary, var(--weline-theme-text));
     font-size: var(--font-size-sm);
     transition: all 0.2s ease;
 }
 
 .backend-form-control:focus {
     outline: none;
-    border-color: var(--backend-color-primary);
-    box-shadow: var(--backend-focus-ring);
+    border-color: var(--backend-color-primary, var(--backend-theme-primary));
+    box-shadow: var(--backend-focus-ring, var(--weline-theme-focus-ring));
 }
 
 .backend-form-control:disabled {
-    background: var(--backend-color-bg-secondary);
+    background: var(--backend-color-bg-secondary, var(--weline-theme-surface-muted));
     cursor: not-allowed;
     opacity: 0.7;
 }
 
 .backend-form-control::placeholder {
-    color: var(--backend-color-text-tertiary);
+    color: var(--backend-color-text-tertiary, var(--weline-theme-text-muted));
 }
 
 /* 文本域 */
@@ -118,37 +118,37 @@
 .backend-form-radio {
     display: flex;
     align-items: center;
-    gap: var(--backend-spacing-sm);
+    gap: var(--backend-spacing-sm, var(--weline-space-2));
     cursor: pointer;
     font-size: var(--font-size-sm);
-    color: var(--backend-color-text-primary);
+    color: var(--backend-color-text-primary, var(--weline-theme-text));
 }
 
 .backend-form-checkbox input,
 .backend-form-radio input {
     width: var(--font-size-lg);
     height: var(--font-size-lg);
-    accent-color: var(--backend-color-primary);
+    accent-color: var(--backend-color-primary, var(--backend-theme-primary));
 }
 
 .backend-form-radio-group {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--backend-spacing-md);
+    gap: var(--backend-spacing-md, var(--weline-space-4));
 }
 
 /* 提示文字 */
 .backend-form-hint {
-    margin-top: var(--backend-spacing-xs);
+    margin-top: var(--backend-spacing-xs, var(--weline-space-1));
     font-size: var(--font-size-13);
-    color: var(--backend-color-text-tertiary);
+    color: var(--backend-color-text-tertiary, var(--weline-theme-text-muted));
 }
 
 /* 错误信息 */
 .backend-form-error {
-    margin-top: var(--backend-spacing-xs);
+    margin-top: var(--backend-spacing-xs, var(--weline-space-1));
     font-size: var(--font-size-13);
-    color: var(--backend-color-danger);
+    color: var(--backend-color-danger, var(--weline-theme-danger));
     display: none;
 }
 
@@ -157,12 +157,12 @@
 }
 
 .backend-form-control.is-invalid {
-    border-color: var(--backend-color-danger);
+    border-color: var(--backend-color-danger, var(--weline-theme-danger));
 }
 
 /* 字段集 */
 .backend-form-fieldset {
-    margin: 0 0 var(--backend-spacing-lg);
+    margin: 0 0 var(--backend-spacing-lg, var(--weline-space-6));
     padding: 0;
     border: none;
 }
@@ -170,14 +170,14 @@
 .backend-form-legend {
     display: flex;
     align-items: center;
-    gap: var(--backend-spacing-sm);
+    gap: var(--backend-spacing-sm, var(--weline-space-2));
     width: 100%;
-    padding: var(--backend-spacing-sm) 0;
-    margin-bottom: var(--backend-spacing-md);
+    padding: var(--backend-spacing-sm, var(--weline-space-2)) 0;
+    margin-bottom: var(--backend-spacing-md, var(--weline-space-4));
     font-size: var(--font-size-base);
     font-weight: 600;
-    color: var(--backend-color-text-primary);
-    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light);
+    color: var(--backend-color-text-primary, var(--weline-theme-text));
+    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light, var(--weline-theme-surface-muted));
 }
 
 .backend-form-fieldset--collapsible .backend-form-legend {
@@ -185,7 +185,7 @@
 }
 
 .backend-form-fieldset--collapsible .backend-form-legend:hover {
-    color: var(--backend-color-primary);
+    color: var(--backend-color-primary, var(--backend-theme-primary));
 }
 
 .backend-form-fieldset-icon {
@@ -204,20 +204,20 @@
 /* 表单底部 */
 .backend-data-form-footer {
     display: flex;
-    gap: var(--backend-spacing-sm);
-    padding: var(--backend-spacing-md) var(--backend-spacing-lg);
-    border-top: var(--border-width-thin) solid var(--backend-color-border-light);
-    background: var(--backend-color-bg-secondary);
+    gap: var(--backend-spacing-sm, var(--weline-space-2));
+    padding: var(--backend-spacing-md, var(--weline-space-4)) var(--backend-spacing-lg, var(--weline-space-6));
+    border-top: var(--border-width-thin) solid var(--backend-color-border-light, var(--weline-theme-surface-muted));
+    background: var(--backend-color-bg-secondary, var(--weline-theme-surface-muted));
 }
 
 /* 按钮 */
 .backend-form-btn {
     display: inline-flex;
     align-items: center;
-    gap: var(--backend-spacing-xs);
-    padding: var(--backend-spacing-sm) var(--backend-spacing-lg);
+    gap: var(--backend-spacing-xs, var(--weline-space-1));
+    padding: var(--backend-spacing-sm, var(--weline-space-2)) var(--backend-spacing-lg, var(--weline-space-6));
     border: none;
-    border-radius: var(--backend-border-radius);
+    border-radius: var(--backend-border-radius, var(--weline-space-2));
     font-size: var(--font-size-sm);
     font-weight: 500;
     cursor: pointer;
@@ -226,23 +226,23 @@
 }
 
 .backend-form-btn--primary {
-    background: var(--backend-color-primary);
-    color: var(--backend-color-text-inverse);
+    background: var(--backend-color-primary, var(--backend-theme-primary));
+    color: var(--backend-color-text-inverse, var(--weline-theme-on-primary));
 }
 
 .backend-form-btn--primary:hover {
-    background: var(--backend-color-primary-hover);
+    background: var(--backend-color-primary-hover, var(--weline-theme-primary-hover));
 }
 
 .backend-form-btn--secondary {
-    background: var(--backend-color-card-bg);
-    color: var(--backend-color-text-secondary);
-    border: var(--border-width-thin) solid var(--backend-color-border-default);
+    background: var(--backend-color-card-bg, var(--backend-theme-surface));
+    color: var(--backend-color-text-secondary, var(--backend-theme-text-muted));
+    border: var(--border-width-thin) solid var(--backend-color-border-default, var(--backend-theme-border));
 }
 
 .backend-form-btn--secondary:hover {
-    background: var(--backend-color-bg-tertiary);
-    color: var(--backend-color-text-primary);
+    background: var(--backend-color-bg-tertiary, var(--weline-theme-surface-muted));
+    color: var(--backend-color-text-primary, var(--weline-theme-text));
 }
 
 /* 内联布局 */
@@ -250,7 +250,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: var(--backend-spacing-md);
+    gap: var(--backend-spacing-md, var(--weline-space-4));
 }
 
 .backend-data-form--inline .backend-form-group {

@@ -173,7 +173,7 @@
     .w-drop-indicator {
         block-size: 3px;
         margin-inline: var(--weline-space-5);
-        border-radius: var(--weline-radius-pill);
+        border-radius: var(--weline-radius-round);
         background: var(--weline-theme-primary);
     }
 
@@ -219,7 +219,7 @@
     }
 
     .w-catalog-local-label__trigger .w-local-translation__trigger::after {
-        content: var(--catalog-local-label);
+        content: var(--catalog-local-label, );
         font-size: var(--weline-font-size-sm);
         font-weight: 500;
         line-height: 1.2;
@@ -249,7 +249,7 @@
     .w-catalog-media__preview {
         inline-size: 5rem;
         block-size: 5rem;
-        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+        border: var(--weline-theme-border-width, var(--border-width, var(--weshop-border-width, 1px))) var(--weline-theme-border-style, var(--border-style, solid)) var(--weline-theme-border);
         border-radius: var(--weline-radius-md);
         overflow: hidden;
         background: var(--weline-theme-surface);
@@ -291,7 +291,7 @@
 
     .w-product-media-picker__header {
         padding: var(--weline-space-3) var(--weline-space-4);
-        border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+        border-bottom: var(--weline-theme-border-width, var(--border-width, var(--weshop-border-width, 1px))) var(--weline-theme-border-style, var(--border-style, solid)) var(--weline-theme-border);
     }
 
     .w-product-media-picker__frame {
@@ -333,7 +333,7 @@
     }
 
     .w-catalog-delete-products__chip {
-        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+        border: var(--weline-theme-border-width, var(--border-width, var(--weshop-border-width, 1px))) var(--weline-theme-border-style, var(--border-style, solid)) var(--weline-theme-border);
         background: transparent;
         border-radius: var(--weline-radius-md);
         padding: var(--weline-space-1) var(--weline-space-3);
@@ -344,7 +344,7 @@
 
     .w-catalog-delete-products__list {
         overflow: auto;
-        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+        border: var(--weline-theme-border-width, var(--border-width, var(--weshop-border-width, 1px))) var(--weline-theme-border-style, var(--border-style, solid)) var(--weline-theme-border);
         border-radius: var(--weline-radius-md);
         padding: var(--weline-space-2);
         display: flex;

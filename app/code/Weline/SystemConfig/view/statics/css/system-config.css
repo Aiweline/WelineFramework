@@ -237,7 +237,7 @@
     }
 
     .w-system-config__filters .w-field__control > .w-select {
-        min-height: var(--w-system-config-control-height);
+        min-height: var(--w-system-config-control-height, var(--weline-control-height));
     }
 
     .w-system-config__filters :where(
@@ -257,18 +257,18 @@
         .w-language-select__trigger
     ) {
         box-sizing: border-box;
-        min-height: var(--w-system-config-control-height);
-        height: var(--w-system-config-control-height);
+        min-height: var(--w-system-config-control-height, var(--weline-control-height));
+        height: var(--w-system-config-control-height, var(--weline-control-height));
         padding-block: 0;
         padding-inline: var(--weline-space-3);
     }
 
     .w-system-config__filters .w-search-bar__control {
-        min-block-size: var(--w-system-config-control-height);
+        min-block-size: var(--w-system-config-control-height, var(--weline-control-height));
     }
 
     .w-system-config__filters .w-search-bar__submit {
-        min-inline-size: var(--w-system-config-control-height);
+        min-inline-size: var(--w-system-config-control-height, var(--weline-control-height));
     }
 
     .w-system-config__filters .w-search-bar__clear {
@@ -276,7 +276,7 @@
         flex: 0 0 auto;
         align-items: center;
         justify-content: center;
-        min-inline-size: calc(var(--w-system-config-control-height) - var(--weline-space-2));
+        min-inline-size: calc(var(--w-system-config-control-height, var(--weline-control-height)) - var(--weline-space-2));
         margin: 0;
         padding: 0 var(--weline-space-2);
         border: 0;

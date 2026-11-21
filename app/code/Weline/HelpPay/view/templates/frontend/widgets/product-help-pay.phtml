@@ -42,7 +42,7 @@ $i18nJson = \Weline\HelpPay\Service\ShareModalI18n::json();
      data-testid="product-help-pay"
      data-helppay-placement="product"
      data-helppay-toc-only="1"
-     data-weline-load="helpPayShare"
+     data-weline-load="helpPayCtaCapture,helpPayShare"
      data-helppay-i18n="<?= $escape($i18nJson) ?>">
     <a href="#"
        role="button"
@@ -51,8 +51,7 @@ $i18nJson = \Weline\HelpPay\Service\ShareModalI18n::json();
        data-pixel-event="friend_help_pay"
        data-helppay-open="1"
        data-helppay-product-help-pay="1"
-       data-product-id="<?= (int) $productId ?>"
-       onclick="if(!(window.WelineModules&&window.WelineModules.helpPayShare)){(window.__helppayPendingOpen=window.__helppayPendingOpen||[]).push(this);return false;}">
+       data-product-id="<?= (int) $productId ?>">
         <lang>找朋友代付</lang>
     </a>
 </div>

@@ -16,7 +16,7 @@
 
     .vendor-summary-card {
         padding: var(--weline-space-4);
-        border: 1px solid var(--weline-color-border);
+        border: 1px solid var(--weline-theme-border-color, var(--color-border-default, var(--weline-theme-border)));
         border-radius: var(--weline-radius-sm);
     }
 }

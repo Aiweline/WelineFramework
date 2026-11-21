@@ -15,7 +15,7 @@
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    color: var(--otr-text);
+    color: var(--otr-text, var(--color-text-primary));
     font-size: var(--font-size-sm);
     line-height: 1.45;
 }
@@ -42,7 +42,7 @@
     height: 2.25rem;
     border-radius: var(--border-radius-lg);
     object-fit: cover;
-    background: var(--otr-panel);
+    background: var(--otr-panel, var(--color-bg-muted));
 }
 
 .order-tracking-result__provider {
@@ -54,7 +54,7 @@
     margin: 0;
     font-size: var(--weline-font-size-base);
     font-weight: 800;
-    color: var(--otr-text);
+    color: var(--otr-text, var(--color-text-primary));
     line-height: 1.35;
     overflow-wrap: break-word;
 }
@@ -62,7 +62,7 @@
 .order-tracking-result__provider-desc,
 .order-tracking-result__tips {
     margin: var(--spacing-xs) 0 0;
-    color: var(--otr-muted);
+    color: var(--otr-muted, var(--color-text-secondary));
     font-size: var(--font-size-13);
     line-height: 1.55;
     overflow-wrap: break-word;
@@ -77,7 +77,7 @@
     margin: 0 0 var(--spacing-0_65);
     font-size: clamp(var(--font-size-lg), 2.4vw, var(--font-size-2_5xl));
     font-weight: 800;
-    color: var(--otr-text);
+    color: var(--otr-text, var(--color-text-primary));
     letter-spacing: -0.015em;
     line-height: 1.3;
     overflow-wrap: break-word;
@@ -85,15 +85,15 @@
 
 .order-tracking-result__tracking-no {
     margin: 0 0 var(--weline-space-4);
-    color: var(--otr-muted);
+    color: var(--otr-muted, var(--color-text-secondary));
     font-size: var(--font-size-13);
 }
 
 .order-tracking-result__tracking-no code {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: var(--font-size-13);
-    color: var(--otr-text);
-    background: var(--otr-panel);
+    color: var(--otr-text, var(--color-text-primary));
+    background: var(--otr-panel, var(--color-bg-muted));
     padding: var(--spacing-0_5) var(--spacing-0_4);
     border-radius: var(--border-radius-md);
 }
@@ -108,9 +108,9 @@
     justify-content: space-between;
     gap: 0;
     width: 100%;
-    border: var(--border-width-thin) solid var(--otr-line);
+    border: var(--border-width-thin) solid var(--otr-line, var(--color-border-muted));
     border-radius: var(--sidebar-radius);
-    background: linear-gradient(180deg, var(--color-bg-primary) 0%, var(--otr-panel) 100%);
+    background: linear-gradient(180deg, var(--color-bg-primary) 0%, var(--otr-panel, var(--color-bg-muted)) 100%);
     overflow: visible;
 }
 
@@ -132,7 +132,7 @@
     left: 50%;
     width: 100%;
     height: 0.22rem;
-    background: var(--otr-line);
+    background: var(--otr-line, var(--color-border-muted));
     z-index: 0;
     transform: translateY(-50%);
 }
@@ -143,7 +143,7 @@
 
 .order-tracking-result__stage[data-state="done"] .order-tracking-result__rail,
 .order-tracking-result__stage[data-state="current"] .order-tracking-result__rail {
-    background: var(--otr-done);
+    background: var(--otr-done, var(--color-success));
 }
 
 .order-tracking-result__dot {
@@ -152,14 +152,14 @@
     width: 1.4rem;
     height: 1.4rem;
     border-radius: 50%;
-    border: var(--loader-border-width) solid var(--otr-line);
-    background: var(--otr-surface);
+    border: var(--loader-border-width) solid var(--otr-line, var(--color-border-muted));
+    background: var(--otr-surface, var(--color-bg-primary));
     box-shadow: var(--focus-ring);
 }
 
 .order-tracking-result__stage[data-state="done"] .order-tracking-result__dot {
-    border-color: var(--otr-done);
-    background: var(--otr-done);
+    border-color: var(--otr-done, var(--color-success));
+    background: var(--otr-done, var(--color-success));
 }
 
 .order-tracking-result__stage[data-state="done"] .order-tracking-result__dot::after {
@@ -175,8 +175,8 @@
 }
 
 .order-tracking-result__stage[data-state="current"] .order-tracking-result__dot {
-    border-color: var(--otr-primary);
-    background: var(--otr-primary);
+    border-color: var(--otr-primary, var(--color-primary));
+    background: var(--otr-primary, var(--color-primary));
     box-shadow: var(--focus-ring);
 }
 
@@ -193,7 +193,7 @@
     display: block;
     width: 100%;
     max-width: 100%;
-    color: var(--otr-muted);
+    color: var(--otr-muted, var(--color-text-secondary));
     font-size: var(--weline-font-size-xs);
     font-weight: 700;
     line-height: 1.3;
@@ -202,12 +202,12 @@
 }
 
 .order-tracking-result__stage[data-state="done"] .order-tracking-result__label {
-    color: var(--otr-text);
+    color: var(--otr-text, var(--color-text-primary));
 }
 
 .order-tracking-result__stage[data-state="current"] .order-tracking-result__label,
 .order-tracking-result__stage[data-state="current"] .order-tracking-result__current-tag {
-    color: var(--otr-primary);
+    color: var(--otr-primary, var(--color-primary));
     font-weight: 800;
 }
 
@@ -225,7 +225,7 @@
     padding: var(--weline-space-1) 0 0;
     display: grid;
     gap: 0;
-    border-top: var(--border-width-thin) solid var(--otr-line);
+    border-top: var(--border-width-thin) solid var(--otr-line, var(--color-border-muted));
 }
 
 .order-tracking-result__node {
@@ -247,7 +247,7 @@
     top: 1.55rem;
     bottom: -0.05rem;
     width: 0.14rem;
-    background: var(--otr-line);
+    background: var(--otr-line, var(--color-border-muted));
 }
 
 .order-tracking-result__node:last-child .order-tracking-result__node-rail {
@@ -262,12 +262,12 @@
     margin-top: var(--spacing-1_5);
     margin-left: var(--spacing-0_2);
     border-radius: 50%;
-    background: var(--otr-line);
+    background: var(--otr-line, var(--color-border-muted));
     box-shadow: var(--focus-ring);
 }
 
 .order-tracking-result__node[data-latest="1"] .order-tracking-result__node-dot {
-    background: var(--otr-primary);
+    background: var(--otr-primary, var(--color-primary));
 }
 
 .order-tracking-result__node-body {
@@ -276,7 +276,7 @@
 
 .order-tracking-result__node-text {
     margin: 0;
-    color: var(--otr-text);
+    color: var(--otr-text, var(--color-text-primary));
     font-size: var(--font-size-sm);
     font-weight: 700;
     line-height: 1.4;
@@ -284,13 +284,13 @@
 }
 
 .order-tracking-result__node[data-latest="1"] .order-tracking-result__node-text {
-    color: var(--otr-primary-dark);
+    color: var(--otr-primary-dark, var(--color-primary-dark));
 }
 
 .order-tracking-result__node-time {
     display: block;
     margin-top: var(--weline-space-1);
-    color: var(--otr-muted);
+    color: var(--otr-muted, var(--color-text-secondary));
     font-size: var(--weline-font-size-xs);
 }
 

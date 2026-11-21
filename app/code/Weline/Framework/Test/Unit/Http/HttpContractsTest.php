@@ -2214,7 +2214,10 @@ private function assert_StorefrontGenerationOutbound_testResponsePrepareForEmiss
 private function assert_StorefrontGenerationOutbound_testOutboundResolveVersionIdOnlyUsesStorefrontGenerationIdentity(): void
 {
     $src = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/Http/StorefrontGenerationOutbound.php');
-    self::assertStringContainsString('StorefrontGenerationIdentity::currentVersionId()', $src);
+    // Identity resolves only through the storefront-generation provider contract
+    // (StorefrontGenerationIdentityInterface::currentVersionId) — never deploy stamps.
+    self::assertStringContainsString('StorefrontGenerationIdentityInterface', $src);
+    self::assertStringContainsString('currentVersionId()', $src);
     self::assertStringNotContainsString('deploy_version', $src);
     self::assertStringNotContainsString('deployVersion', $src);
     // Single cookie write path — no alternate setCookie of this name in Framework Http.

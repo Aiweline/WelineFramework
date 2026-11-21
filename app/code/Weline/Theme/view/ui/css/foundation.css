@@ -1354,7 +1354,7 @@
         padding: var(--weline-space-4) var(--weline-space-5);
         border-top: 1px solid var(--weline-theme-border);
         background: var(--weline-theme-surface-raised);
-        box-shadow: 0 -6px 18px color-mix(in srgb, var(--weline-theme-shadow) 10%, transparent);
+        box-shadow: 0 -6px 18px color-mix(in srgb, var(--weline-theme-text) 10%, transparent);
     }
     .w-drawer.w-drawer--dock .w-local-translation-drawer .w-drawer__body {
         overflow: auto;
@@ -1585,27 +1585,27 @@
          */
         --_paper-text: var(--amz-drawer-text, #0f1111);
         --_paper-muted: var(--amz-drawer-muted, #565959);
-        --_inverse-text: var(--_paper-text);
-        --_inverse-muted: var(--_paper-muted);
-        --weline-theme-text: var(--_paper-text);
-        --weline-theme-text-secondary: var(--_paper-muted);
-        --weline-theme-text-muted: var(--_paper-muted);
-        --weline-theme-text-subtle: var(--_paper-muted);
-        --weline-theme-body-text: var(--_paper-text);
-        --weline-theme-body-text-secondary: var(--_paper-muted);
-        --weline-theme-body-text-muted: var(--_paper-muted);
-        --weline-theme-body-text-heading: var(--_paper-text);
-        --weline-theme-color-text: var(--_paper-text);
-        --weline-theme-color-text-muted: var(--_paper-muted);
-        --color-text: var(--_paper-text);
-        --color-text-primary: var(--_paper-text);
-        --color-text-secondary: var(--_paper-muted);
-        --color-text-muted: var(--_paper-muted);
-        --color-text-placeholder: var(--_paper-muted);
-        --w-surface-fg: var(--_paper-text);
-        --w-surface-fg-muted: var(--_paper-muted);
-        --w-surface-fg-subtle: var(--_paper-muted);
-        color: var(--_paper-text);
+        --_inverse-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --_inverse-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-text-subtle: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-body-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-body-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-body-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-body-text-heading: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-color-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-color-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --color-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --color-text-primary: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --color-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --color-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --color-text-placeholder: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --w-surface-fg: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --w-surface-fg-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --w-surface-fg-subtle: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        color: var(--_paper-text, var(--amz-drawer-text, #0f1111));
         color-scheme: light;
     }
     /*
@@ -1620,27 +1620,27 @@
     dialog.w-dialog[data-i18n-unsupported-lang] {
         --_paper-text: var(--amz-drawer-text, #0f1111);
         --_paper-muted: var(--amz-drawer-muted, #565959);
-        --_inverse-text: var(--_paper-text);
-        --_inverse-muted: var(--_paper-muted);
-        --weline-theme-text: var(--_paper-text);
-        --weline-theme-text-secondary: var(--_paper-muted);
-        --weline-theme-text-muted: var(--_paper-muted);
-        --weline-theme-text-subtle: var(--_paper-muted);
-        --weline-theme-body-text: var(--_paper-text);
-        --weline-theme-body-text-secondary: var(--_paper-muted);
-        --weline-theme-body-text-muted: var(--_paper-muted);
-        --weline-theme-body-text-heading: var(--_paper-text);
-        --weline-theme-color-text: var(--_paper-text);
-        --weline-theme-color-text-muted: var(--_paper-muted);
-        --color-text: var(--_paper-text);
-        --color-text-primary: var(--_paper-text);
-        --color-text-secondary: var(--_paper-muted);
-        --color-text-muted: var(--_paper-muted);
-        --color-text-placeholder: var(--_paper-muted);
-        --w-surface-fg: var(--_paper-text);
-        --w-surface-fg-muted: var(--_paper-muted);
-        --w-surface-fg-subtle: var(--_paper-muted);
-        color: var(--_paper-text);
+        --_inverse-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --_inverse-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-text-subtle: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-body-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-body-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-body-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --weline-theme-body-text-heading: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-color-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --weline-theme-color-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --color-text: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --color-text-primary: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --color-text-secondary: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --color-text-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --color-text-placeholder: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --w-surface-fg: var(--_paper-text, var(--amz-drawer-text, #0f1111));
+        --w-surface-fg-muted: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        --w-surface-fg-subtle: var(--_paper-muted, var(--amz-drawer-muted, #565959));
+        color: var(--_paper-text, var(--amz-drawer-text, #0f1111));
         color-scheme: light;
     }
     .w-language-switcher__search-wrap {

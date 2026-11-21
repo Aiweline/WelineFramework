@@ -5,6 +5,14 @@ window.WelineModulesConfig = window.WelineModulesConfig || {};
 window.WelineModulesConfig.modules = window.WelineModulesConfig.modules || {};
 
 Object.assign(window.WelineModulesConfig.modules, {
+    helpPayCtaCapture: {
+        paths: [
+            "Weline_HelpPay::js/helppay-cta-capture.js?v=20261121-cta-capture1"
+        ],
+        globalVar: null,
+        load: "eager",
+        description: "帮我付 CTA 预捕获：主模块延迟加载前的首点入队 __helppayPendingOpen"
+    },
     helpPayShare: {
         paths: [
             "Weline_HelpPay::js/helppay-share.js?v=20261006-cartamt1"

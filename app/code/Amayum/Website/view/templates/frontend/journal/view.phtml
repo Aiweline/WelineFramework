@@ -71,14 +71,14 @@ $faqs = is_array($guide_faqs ?? null) && $guide_faqs !== []
     : (array)($guide['faqs'] ?? []);
 $related = is_array($related_guides ?? null) ? array_values(array_filter($related_guides, 'is_array')) : [];
 ?>
-<section class="section" style="padding-top:140px" weline-code="amayum-journal-view-01">
+<section class="section section--article" weline-code="amayum-journal-view-01">
     <div class="w-container">
         <div class="article-grid">
             <article class="article-body">
                 <div class="article-head">
-                    <div class="crumbs" style="color:var(--muted)">
-                        <a href="<?= A::e(A::url($this, '/')) ?>" style="color:var(--muted)">首页</a><span>/</span>
-                        <a href="<?= A::e(A::url($this, '/journal')) ?>" style="color:var(--muted)">指南</a><span>/</span>
+                    <div class="crumbs">
+                        <a href="<?= A::e(A::url($this, '/')) ?>">首页</a><span>/</span>
+                        <a href="<?= A::e(A::url($this, '/journal')) ?>">指南</a><span>/</span>
                         <span><?= A::e($crumbLabel) ?></span>
                     </div>
                     <h1><?= A::e($title) ?></h1>
@@ -96,14 +96,14 @@ $related = is_array($related_guides ?? null) ? array_values(array_filter($relate
                     <span class="gc-tag"><?= A::e($cover[2]) ?></span>
                 </figure>
 
-                <div class="prose" style="margin-top:40px">
+                <div class="prose">
                     <?php if ($bodyTemplate !== ''): ?>
                         <?= $this->fetch($bodyTemplate) ?>
                     <?php endif; ?>
                 </div>
 
                 <?php if ($faqs !== []): ?>
-                    <section class="prose" style="margin-top:52px" aria-labelledby="article-faq-title" weline-code="amayum-journal-view-02">
+                    <section class="prose article-faq" aria-labelledby="article-faq-title" weline-code="amayum-journal-view-02">
                         <h2 id="article-faq-title">常见问题</h2>
                         <div class="faq-list">
                             <?php foreach (array_values($faqs) as $index => $faq): ?>
@@ -123,7 +123,7 @@ $related = is_array($related_guides ?? null) ? array_values(array_filter($relate
                     </section>
                 <?php endif; ?>
 
-                <div style="margin-top:44px;display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+                <div class="article-actions">
                     <a class="btn btn-primary" href="<?= A::e(A::url($this, '/diagnosis#diagnosis')) ?>">预约架构诊断</a>
                     <a class="btn btn-secondary" href="<?= A::e(A::url($this, '/journal')) ?>">读其他指南</a>
                 </div>
@@ -137,7 +137,7 @@ $related = is_array($related_guides ?? null) ? array_values(array_filter($relate
                 <div class="meta">作者：<?= A::e($byline) ?><br>
                     <?php if ($published !== ''): ?>发布：<?= A::e($published) ?><br><?php endif; ?>
                     <?php if ($modified !== ''): ?>更新：<?= A::e($modified) ?><br><?php endif; ?>
-                    <a href="<?= A::e(A::url($this, '/journal')) ?>" style="border:0;padding:0;color:var(--fg)">← 回到指南</a>
+                    <a href="<?= A::e(A::url($this, '/journal')) ?>">← 回到指南</a>
                 </div>
             </aside>
         </div>

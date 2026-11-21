@@ -14,10 +14,10 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.35rem 0.75rem;
-    background: var(--w-theme-editor-bg-card);
-    border-bottom: 1px solid var(--w-theme-editor-border);
-    box-shadow: var(--w-theme-editor-shadow-sm);
-    color: var(--w-theme-editor-text-primary);
+    background: var(--w-theme-editor-bg-card, var(--weline-theme-surface));
+    border-bottom: 1px solid var(--w-theme-editor-border, var(--weline-theme-border));
+    box-shadow: var(--w-theme-editor-shadow-sm, var(--weline-theme-shadow-sm));
+    color: var(--w-theme-editor-text-primary, var(--weline-theme-text));
     min-height: 2.5rem;
 }
 
@@ -36,12 +36,12 @@
 .editor-chrome-strip__title {
     font-weight: 600;
     font-size: 0.875rem;
-    color: var(--w-theme-editor-text-primary);
+    color: var(--w-theme-editor-text-primary, var(--weline-theme-text));
 }
 
 .editor-chrome-strip__scope {
     font-size: 0.8125rem;
-    color: var(--w-theme-editor-text-secondary);
+    color: var(--w-theme-editor-text-secondary, var(--weline-theme-text-muted));
     max-inline-size: 18rem;
     overflow: hidden;
     text-overflow: ellipsis;

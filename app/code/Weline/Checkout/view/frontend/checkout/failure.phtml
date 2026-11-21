@@ -82,7 +82,7 @@ $retryUrl = trim((string)($this->getData('retry_url') ?? ''));
     min-width: 0;
     margin: 0 auto;
     padding: var(--weline-space-5, 24px) var(--weline-layout-content-padding-inline) var(--weline-space-8, 48px);
-    color: var(--amz-text);
+    color: var(--amz-text, var(--color-text, #0f1111));
     font-size: var(--weline-font-size-sm, 14px);
     line-height: 1.5;
 }
@@ -90,7 +90,7 @@ $retryUrl = trim((string)($this->getData('retry_url') ?? ''));
     text-align: center;
     padding-bottom: var(--weline-space-5, 20px);
     margin-bottom: var(--weline-space-5, 20px);
-    border-bottom: 1px solid var(--amz-border);
+    border-bottom: 1px solid var(--amz-border, var(--color-border, #d5d9d9));
 }
 .amz-order-confirm__banner-inner {
     display: flex;
@@ -124,17 +124,17 @@ $retryUrl = trim((string)($this->getData('retry_url') ?? ''));
 }
 .amz-order-confirm__banner-copy > p {
     margin-top: var(--weline-space-2, 8px);
-    color: var(--amz-muted);
+    color: var(--amz-muted, var(--color-text-muted, #565959));
     font-size: var(--weline-font-size-sm, 14px);
 }
 .amz-order-confirm__order-no {
     margin-top: var(--weline-space-3, 10px) !important;
-    color: var(--amz-text) !important;
+    color: var(--amz-text, var(--color-text, #0f1111)) !important;
     font-size: var(--weline-font-size-sm, 15px);
 }
 .amz-order-confirm__panel {
-    background: var(--amz-panel-bg);
-    border: 1px solid var(--amz-border);
+    background: var(--amz-panel-bg, var(--color-surface, #fff));
+    border: 1px solid var(--amz-border, var(--color-border, #d5d9d9));
     border-radius: 8px;
     padding: 18px 20px;
     margin-bottom: 14px;
@@ -159,22 +159,22 @@ $retryUrl = trim((string)($this->getData('retry_url') ?? ''));
     cursor: pointer;
 }
 .amz-order-confirm__btn--primary {
-    background: var(--amz-btn-primary-bg);
-    border: 1px solid var(--amz-btn-primary-border);
-    color: var(--amz-btn-primary-fg);
+    background: var(--amz-btn-primary-bg, var(--color-primary, #b84a3c));
+    border: 1px solid var(--amz-btn-primary-border, var(--color-primary-dark, #963b30));
+    color: var(--amz-btn-primary-fg, var(--color-on-primary, #fff));
 }
 .amz-order-confirm__btn--primary:hover {
-    background: var(--amz-btn-primary-hover);
-    color: var(--amz-btn-primary-fg);
+    background: var(--amz-btn-primary-hover, var(--color-primary-hover, #963b30));
+    color: var(--amz-btn-primary-fg, var(--color-on-primary, #fff));
 }
 .amz-order-confirm__btn--secondary {
-    background: var(--amz-panel-bg);
-    border: 1px solid var(--amz-border);
-    color: var(--amz-text);
+    background: var(--amz-panel-bg, var(--color-surface, #fff));
+    border: 1px solid var(--amz-border, var(--color-border, #d5d9d9));
+    color: var(--amz-text, var(--color-text, #0f1111));
 }
 .amz-order-confirm__btn--secondary:hover {
-    background: var(--amz-banner-bg);
-    color: var(--amz-text);
+    background: var(--amz-banner-bg, var(--color-surface-subtle, #f7fafa));
+    color: var(--amz-text, var(--color-text, #0f1111));
 }
 @media (max-width: 720px) {
     .amz-order-confirm__actions { flex-direction: column; align-items: stretch; }

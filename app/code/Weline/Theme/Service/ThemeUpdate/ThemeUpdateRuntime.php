@@ -95,7 +95,12 @@ final class ThemeUpdateRuntime
         }
 
         $resolved = self::resolve();
-        RequestContext::set(self::REQUEST_STATE_KEY, $resolved ?? []);
+        // 主题应用上下文未安装前（早于 application_context_ready，如 FPC 键推导）
+        // resolve() 只能看到 themeId=0；此时空结果不得入 memo——否则负缓存毒化整请求，
+        // 上下文就位后 pair_segment/static_build 仍恒空（字面 /static/ URL 不被改写）。
+        if ($resolved !== null || self::anyApplicationContextInstalled()) {
+            RequestContext::set(self::REQUEST_STATE_KEY, $resolved ?? []);
+        }
 
         return $resolved;
     }
@@ -602,6 +607,20 @@ final class ThemeUpdateRuntime
         }
 
         return 0;
+    }
+
+    /** 任一槽位已安装即视为「主题选择已完成」——此后 resolve() 的空结果才可以入 memo。 */
+    private static function anyApplicationContextInstalled(): bool
+    {
+        foreach (['frontend', 'backend'] as $area) {
+            foreach (['runtime', 'editor', 'preview', 'asset'] as $purpose) {
+                if (ThemeApplicationContext::current($area, $purpose) instanceof ThemeApplicationContext) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static function currentArea(): string

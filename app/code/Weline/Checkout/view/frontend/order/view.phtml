@@ -120,7 +120,7 @@ $status = trim((string)($order['status'] ?? ''));
         width: min(100%, var(--weline-layout-content-max-width));
         margin: 0 auto;
         padding: 40px var(--weline-layout-content-padding-inline) 64px;
-        color: var(--checkout-order-text);
+        color: var(--checkout-order-text, #111827);
     }
     .order-view-page__header {
         display: flex;
@@ -138,7 +138,7 @@ $status = trim((string)($order['status'] ?? ''));
     }
     .order-view-page h1 {
         margin: 0;
-        color: var(--checkout-order-text);
+        color: var(--checkout-order-text, #111827);
         font-size: clamp(28px, 4vw, 40px);
         line-height: 1.15;
     }
@@ -163,13 +163,13 @@ $status = trim((string)($order['status'] ?? ''));
     .order-view-page .order-totals-section {
         margin-top: 16px;
         padding: 20px;
-        border: 1px solid var(--checkout-order-border);
-        background: var(--checkout-order-surface);
+        border: 1px solid var(--checkout-order-border, #d9dde3);
+        background: var(--checkout-order-surface, #ffffff);
         box-shadow: var(--weline-theme-shadow-sm, 0 10px 24px rgba(15, 23, 42, .06));
     }
     .order-view-page h2 {
         margin: 0 0 16px;
-        color: var(--checkout-order-text);
+        color: var(--checkout-order-text, #111827);
         font-size: 20px;
     }
     .order-view-page .info-grid {
@@ -183,13 +183,13 @@ $status = trim((string)($order['status'] ?? ''));
         min-width: 0;
     }
     .order-view-page .label {
-        color: var(--checkout-order-muted);
+        color: var(--checkout-order-muted, #5b6472);
         font-size: 13px;
         font-weight: 700;
     }
     .order-view-page .value {
         overflow-wrap: anywhere;
-        color: var(--checkout-order-text);
+        color: var(--checkout-order-text, #111827);
     }
     .order-view-page .order-status {
         color: #b8122a;
@@ -200,7 +200,7 @@ $status = trim((string)($order['status'] ?? ''));
     .order-view-page .order-items-scroll {
         max-width: 100%;
         overflow-x: auto;
-        border: 1px solid var(--checkout-order-border);
+        border: 1px solid var(--checkout-order-border, #d9dde3);
     }
     .order-view-page .order-items-table {
         width: 100%;
@@ -210,17 +210,17 @@ $status = trim((string)($order['status'] ?? ''));
     .order-view-page .order-items-table th,
     .order-view-page .order-items-table td {
         padding: 12px;
-        border-bottom: 1px solid var(--checkout-order-border);
-        color: var(--checkout-order-text);
+        border-bottom: 1px solid var(--checkout-order-border, #d9dde3);
+        color: var(--checkout-order-text, #111827);
         text-align: left;
     }
     .order-view-page .order-items-table th {
-        color: var(--checkout-order-muted);
+        color: var(--checkout-order-muted, #5b6472);
         font-size: 13px;
     }
     .order-view-page .order-items-empty {
         margin: 0;
-        color: var(--checkout-order-muted);
+        color: var(--checkout-order-muted, #5b6472);
     }
     .order-view-page .totals {
         display: grid;
@@ -233,8 +233,8 @@ $status = trim((string)($order['status'] ?? ''));
         justify-content: space-between;
         gap: 18px;
         padding-bottom: 10px;
-        border-bottom: 1px solid var(--checkout-order-border);
-        color: var(--checkout-order-text);
+        border-bottom: 1px solid var(--checkout-order-border, #d9dde3);
+        color: var(--checkout-order-text, #111827);
     }
     .order-view-page .total-row.total {
         border-bottom: 0;

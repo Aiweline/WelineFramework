@@ -99,7 +99,7 @@
 
 .w-local-bulk-dialog__log {
     font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-    font-size: var(--font-size-xs);
+    font-size: var(--backend-font-size-xs);
     line-height: 1.5;
     max-block-size: 120px;
     overflow: auto;

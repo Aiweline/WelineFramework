@@ -30,7 +30,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, var(--bg-color) 0%, var(--color-info) 100%);
+            background: linear-gradient(135deg, var(--bg-color, var(--color-header-bg)) 0%, var(--color-info) 100%);
             color: var(--text-color);
             min-height: 100vh;
             display: flex;
@@ -75,7 +75,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
             align-items: center;
             gap: var(--weline-space-2);
             padding: var(--weline-space-3) var(--weline-space-6);
-            background: var(--card-bg);
+            background: var(--card-bg, var(--color-header-bg-hover));
             border: var(--border-width-thin) solid var(--border-color);
             border-radius: var(--radius-full);
             color: var(--text-muted);
@@ -101,7 +101,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         
         /* 卡片 */
         .card {
-            background: var(--card-bg);
+            background: var(--card-bg, var(--color-header-bg-hover));
             border: var(--border-width-thin) solid var(--border-color);
             border-radius: var(--border-radius-2xl);
             padding: var(--weline-space-8);
@@ -118,7 +118,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         
         /* 终端样式 */
         .terminal {
-            background: var(--terminal-bg);
+            background: var(--terminal-bg, var(--color-bg-dark-secondary));
             border-radius: var(--border-radius-lg);
             padding: var(--weline-space-4);
             font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -126,7 +126,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
             line-height: 1.5;
             height: 300px;
             overflow-y: auto;
-            color: var(--terminal-text);
+            color: var(--terminal-text, var(--color-success));
         }
         
         .terminal-line {
@@ -136,7 +136,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         }
         
         .terminal-line.error {
-            color: var(--error-color);
+            color: var(--error-color, var(--color-danger));
         }
         
         .terminal-line.warning {
@@ -166,7 +166,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         .form-input {
             width: 100%;
             padding: var(--weline-space-3) var(--weline-space-4);
-            background: var(--bg-color);
+            background: var(--bg-color, var(--color-header-bg));
             border: var(--border-width-thin) solid var(--border-color);
             border-radius: var(--border-radius-lg);
             color: var(--text-color);
@@ -206,7 +206,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         }
         
         .btn-primary:hover {
-            background: var(--primary-hover);
+            background: var(--primary-hover, var(--color-primary));
         }
         
         .btn-primary:disabled {
@@ -243,7 +243,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         
         .status-badge.error {
             background: var(--color-danger-bg-subtle);
-            color: var(--error-color);
+            color: var(--error-color, var(--color-danger));
         }
         
         .status-badge.warning {
@@ -275,7 +275,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         .inline-message.error {
             border-color: var(--color-danger);
             background: var(--color-danger-bg-subtle);
-            color: var(--error-color);
+            color: var(--error-color, var(--color-danger));
         }
 
         .inline-message.warning {
@@ -318,7 +318,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         
         /* 完成页面 */
         .complete-info {
-            background: var(--bg-color);
+            background: var(--bg-color, var(--color-header-bg));
             border-radius: var(--border-radius-lg);
             padding: var(--weline-space-4);
             margin-top: var(--weline-space-4);

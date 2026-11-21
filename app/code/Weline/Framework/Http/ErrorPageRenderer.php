@@ -577,7 +577,9 @@ HTML;
                     }
                     StorefrontNotFoundFpcStore::publish($websiteCode, $lang, $html);
 
-                    return $html;
+                    // Serve the same generationless body later cache HITs serve —
+                    // the fresh render's volatile stamps must never reach the wire.
+                    return StorefrontNotFoundFpcStore::scrubVolatileGenerationClaims($html);
                 }
             );
         } catch (\Throwable $e) {

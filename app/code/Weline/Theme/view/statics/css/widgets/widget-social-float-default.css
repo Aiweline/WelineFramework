@@ -14,8 +14,8 @@
     align-items: center;
     /* 默认主题有 --weline-space-*；缺少这组 token 的主题（如 hanfu）会退化成 gap:normal，
      * 图标就贴在一起。给回退值，保持与默认主题同一套间距语义。 */
-    gap: var(--weline-space-1, 0.5rem);
-    padding: var(--weline-space-2, 0.75rem) var(--weline-space-1, 0.5rem);
+    gap: var(--weline-space-1);
+    padding: var(--weline-space-2) var(--weline-space-1);
     transform: translateY(-50%);
     color: var(--weline-theme-text);
     background: var(--weline-theme-surface-raised);
@@ -24,14 +24,14 @@
     border-left-color: var(--weline-theme-primary);
     border-radius: 0 var(--weline-radius-md) var(--weline-radius-md) 0;
     box-shadow: var(--weline-theme-shadow-md);
-    transition: transform var(--weline-theme-duration-normal, 0.28s) var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
+    transition: transform var(--weline-theme-duration-normal, var(--weline-motion-normal)) var(--weline-theme-easing-standard, var(--weline-motion-ease));
 }
 
 .w-social-float__panel {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--weline-space-1, 0.5rem);
+    gap: var(--weline-space-1);
 }
 
 .w-social-float__link {
@@ -47,8 +47,8 @@
     box-shadow: var(--weline-theme-shadow-xs);
     text-decoration: none;
     transition:
-        color var(--weline-theme-duration-fast, 0.16s) var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1)),
-        background-color var(--weline-theme-duration-fast, 0.16s) var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
+        color var(--weline-theme-duration-fast, var(--weline-motion-fast)) var(--weline-theme-easing-standard, var(--weline-motion-ease)),
+        background-color var(--weline-theme-duration-fast, var(--weline-motion-fast)) var(--weline-theme-easing-standard, var(--weline-motion-ease));
 }
 
 .w-social-float__link:is(:hover, :focus-visible) {
@@ -98,7 +98,7 @@
     align-items: center;
     justify-content: center;
     line-height: 0;
-    transition: transform var(--weline-theme-duration-normal, 0.28s) var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
+    transition: transform var(--weline-theme-duration-normal, var(--weline-motion-normal)) var(--weline-theme-easing-standard, var(--weline-motion-ease));
 }
 
 .w-social-float.is-collapsed {

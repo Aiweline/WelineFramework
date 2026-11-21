@@ -560,9 +560,23 @@
        * Explicit isomorphic chooser: matching icon+label buttons (no GSI renderButton).
        * Both providers use the same OAuth start URL as login-page Logos.
        */
-      function showVisibleFallback(reason) {
+      function showVisibleFallback(reason, ignorePending) {
         if (settled) return;
         var existingBar = document.querySelector('[data-w-social-quick-fallback-ui]');
+        if (!opts.force && floatingSuppressedByMount()) {
+          // An inline mount already owns the chooser — never stack the bar.
+          if (existingBar) {
+            existingBar.hidden = true;
+          }
+          return;
+        }
+        if (!ignorePending && !opts.force && !existingBar && floatingPendingByMount()) {
+          // Async owner mount still in flight (global-region fragment or
+          // pending host): wait it out, then re-decide — creating the bar now
+          // would flash a second chooser until the inline mount lands.
+          deferFallbackUntilMountSettles(reason);
+          return;
+        }
         if (existingBar) {
           // Explicit CTA (e.g. B2B「本页登录」) must re-open a dismissed chooser.
           existingBar.hidden = false;
@@ -610,6 +624,37 @@
             window.location.href = resolveOauthStart(provider);
           });
         });
+      }
+
+      var deferredFallbackTimer = null;
+
+      function deferFallbackUntilMountSettles(reason) {
+        if (deferredFallbackTimer) {
+          return;
+        }
+        var tries = 0;
+        deferredFallbackTimer = setInterval(function () {
+          tries += 1;
+          if (settled) {
+            clearInterval(deferredFallbackTimer);
+            deferredFallbackTimer = null;
+            return;
+          }
+          if (tries > 80) {
+            // Mount never settled (~20s): hydration is dead — fall through and
+            // let the bar stand in as the only chooser rather than wait forever.
+            clearInterval(deferredFallbackTimer);
+            deferredFallbackTimer = null;
+            showVisibleFallback(reason, true);
+            return;
+          }
+          if (floatingPendingByMount()) {
+            return;
+          }
+          clearInterval(deferredFallbackTimer);
+          deferredFallbackTimer = null;
+          showVisibleFallback(reason);
+        }, 250);
       }
 
       function prepareGoogleClient(done) {
@@ -736,6 +781,10 @@
     if (!bar) {
       return false;
     }
+    if (floatingSuppressedByMount()) {
+      bar.hidden = true;
+      return false;
+    }
     bar.hidden = false;
     return true;
   }
@@ -830,9 +879,12 @@
     try { probe.remove(); } catch (eRem) { /* ignore */ }
   }
 
-  function syncFloatingVisibility() {
+  function floatingSuppressedByMount() {
     var suppress = false;
     document.querySelectorAll('[data-weline-mount="' + MOUNT_SOCIAL_QUICK + '"]').forEach(function (host) {
+      if (suppress) {
+        return;
+      }
       if (host.getAttribute('data-weline-mount-suppress-floating') !== '1') {
         return;
       }
@@ -849,6 +901,73 @@
       }
       suppress = true;
     });
+    return suppress;
+  }
+
+  /**
+   * Owner mount not decided yet: an async global region is still fetching a
+   * suppress-mount host (e.g. base.body_end.marketing.03-quick-login) or a
+   * hydrated host is still at mount-state "pending". While pending, the
+   * floating bar must neither stack a second chooser nor be skipped forever —
+   * {@see showVisibleFallback} defers and re-decides once settled.
+   */
+  function floatingPendingByMount() {
+    if (document.querySelector('[data-global-region-async*="quick-login"]')) {
+      return true;
+    }
+    var pending = false;
+    document.querySelectorAll('[data-weline-mount="' + MOUNT_SOCIAL_QUICK + '"]').forEach(function (host) {
+      if (host.getAttribute('data-weline-mount-suppress-floating') === '1'
+        && host.getAttribute('data-weline-mount-state') === 'pending') {
+        pending = true;
+      }
+    });
+    return pending;
+  }
+
+  function syncFloatingVisibility() {
+    // Multiple owner mounts can each attach an inline chooser (the same async
+    // global region delivered into two slots, or a fragment applied twice).
+    // Keep the first shown non-drawer card and collapse the rest.
+    var inlineCards = Array.prototype.slice.call(
+      document.querySelectorAll('[data-w-social-quick-inline-ui]')
+    ).filter(function (card) {
+      return !card.closest('[data-b2b-apply-drawer], [data-w-component="drawer"]');
+    });
+    if (inlineCards.length > 1) {
+      var keepCard = null;
+      inlineCards.forEach(function (card) {
+        if (keepCard) {
+          return;
+        }
+        var hidden = false;
+        for (var n = card; n && n !== document.body; n = n.parentElement) {
+          if (n.hidden || (n.nodeType === 1 && getComputedStyle(n).display === 'none')) {
+            hidden = true;
+            break;
+          }
+        }
+        if (!hidden) {
+          keepCard = card;
+        }
+      });
+      if (!keepCard) {
+        keepCard = inlineCards[0];
+      }
+      inlineCards.forEach(function (card) {
+        if (card === keepCard) {
+          return;
+        }
+        var dupHost = card.closest('[data-weline-mount="' + MOUNT_SOCIAL_QUICK + '"]');
+        if (dupHost) {
+          dupHost.innerHTML = '';
+          dupHost.setAttribute('data-weline-mount-state', 'empty');
+        } else if (card.parentElement) {
+          card.parentElement.removeChild(card);
+        }
+      });
+    }
+    var suppress = floatingSuppressedByMount();
     var bar = document.querySelector('[data-w-social-quick-fallback-ui]');
     if (!bar) {
       return;

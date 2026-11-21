@@ -225,7 +225,7 @@
     display: inline-flex;
     align-items: center;
     padding: 0.15rem 0.55rem;
-    border-radius: var(--weline-radius-full);
+    border-radius: var(--weline-radius-round);
     background: var(--weline-theme-surface-raised);
     border: 1px solid var(--weline-theme-border);
     color: var(--weline-theme-text-muted);
@@ -244,7 +244,7 @@
     display: inline-flex;
     align-items: center;
     padding: 0.15rem 0.6rem;
-    border-radius: var(--weline-radius-full);
+    border-radius: var(--weline-radius-round);
     font-size: var(--weline-font-size-xs);
     font-weight: 600;
     line-height: 1.4;

@@ -415,7 +415,7 @@ class Hook extends BaseController
     private function renderHookPage(): string
     {
         $beforeStartedAt = microtime(true);
-        $before = $this->getTemplate()->fetchHtml('Weline_Admin::templates/backend/page-layout/main-content-before.phtml');
+        $before = $this->getTemplate()->fetchTagHtml('templates', 'Weline_Admin::templates/backend/page-layout/main-content-before.phtml');
         $this->logPerformance('render.before', $beforeStartedAt, ['html_bytes' => strlen($before)]);
 
         $contentStartedAt = microtime(true);
@@ -423,7 +423,7 @@ class Hook extends BaseController
         $this->logPerformance('render.content', $contentStartedAt, ['html_bytes' => strlen($content)]);
 
         $afterStartedAt = microtime(true);
-        $after = $this->getTemplate()->fetchHtml('Weline_Admin::templates/backend/page-layout/main-content-after.phtml');
+        $after = $this->getTemplate()->fetchTagHtml('templates', 'Weline_Admin::templates/backend/page-layout/main-content-after.phtml');
         $this->logPerformance('render.after', $afterStartedAt, ['html_bytes' => strlen($after)]);
 
         return $before . $content . $after;

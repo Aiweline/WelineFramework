@@ -371,7 +371,33 @@ final class PostResponseTaskQueue
             'host' => $host,
             'scheme' => $scheme,
             'website_url' => $websiteUrl,
+            'theme_contexts' => self::captureThemeApplicationContexts(),
         ];
+    }
+
+    /**
+     * 后响应任务（FPC 发布等）需要在任务作用域内重算主题代次——
+     * ThemeApplicationContext 不属于 ScopeEnvelope，必须显式随快照携带。
+     *
+     * @return array<string, array<string,mixed>> `{area}.{purpose}` → ctx->toArray()
+     */
+    private static function captureThemeApplicationContexts(): array
+    {
+        $contexts = [];
+        foreach (['frontend', 'backend'] as $area) {
+            foreach (['runtime', 'editor', 'preview', 'asset'] as $purpose) {
+                try {
+                    $ctx = ThemeApplicationContext::current($area, $purpose);
+                } catch (\Throwable) {
+                    $ctx = null;
+                }
+                if ($ctx instanceof ThemeApplicationContext) {
+                    $contexts[$area . '.' . $purpose] = $ctx->toArray();
+                }
+            }
+        }
+
+        return $contexts;
     }
 
     /**
@@ -439,6 +465,26 @@ final class PostResponseTaskQueue
             \trim((string)($snapshot['host'] ?? '')),
             \trim((string)($snapshot['scheme'] ?? '')),
         );
+
+        self::restoreThemeApplicationContexts($snapshot['theme_contexts'] ?? null);
+    }
+
+    /** 还原主题应用上下文；install() 顺带完成 GenerationRegistry 预热。逐槽 best-effort。 */
+    private static function restoreThemeApplicationContexts(mixed $contexts): void
+    {
+        if (!\is_array($contexts)) {
+            return;
+        }
+        foreach ($contexts as $data) {
+            if (!\is_array($data)) {
+                continue;
+            }
+            try {
+                ThemeApplicationContext::fromArray($data)->install();
+            } catch (\Throwable) {
+                // 槽位冲突或数据不完整不阻断发布任务
+            }
+        }
     }
 
     private static function restoreScopeOriginPins(string $host, string $scheme): void

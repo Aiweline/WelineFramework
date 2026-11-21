@@ -54,5 +54,26 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
             <p><lang>退换货问题建议附上商品照片、包装照片和物流凭证，能减少处理等待。</lang></p>
         </article>
     </div>
+
+    <style>
+        .customer-contact-inquiry {
+            margin-top: var(--weline-space-8);
+            max-width: 44rem;
+        }
+        .customer-contact-inquiry h2 {
+            margin: 0 0 var(--weline-space-2);
+            font-size: var(--font-size-xl);
+        }
+        .customer-contact-inquiry__note {
+            margin: 0 0 var(--weline-space-4);
+            color: var(--color-text-secondary);
+            font-size: var(--font-size-sm);
+        }
+    </style>
+    <section class="customer-contact-inquiry" aria-labelledby="customer-contact-inquiry-title" data-testid="customer-contact-inquiry">
+        <h2 id="customer-contact-inquiry-title"><lang>留言咨询</lang></h2>
+        <p class="customer-contact-inquiry__note"><lang>留下姓名、邮箱和问题描述，支持团队会尽快回复。</lang></p>
+        <w:inquiry code="contact" mode="inline" id="customer-contact-inquiry-form" />
+    </section>
 </section>
 

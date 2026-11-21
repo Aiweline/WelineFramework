@@ -85,7 +85,10 @@ $runtime = [
     ],
     'area' => 'backend',
     'modulesConfigUrl' => PublicStaticUrl::fromDevWebPath('/Weline/Backend/view/statics/base/weline.modules.js'),
-    'modulesBaseUrl' => PublicStaticUrl::fromDevWebPath('/Weline/Backend/view/statics/js'),
+    // 加载器（view/statics/js/weline.js）按「模块名前缀」拼路径：api → ${base}.js，
+    // 其它模块 → ${base}-<module>.js，兜底值即 .../js/weline-api。这里必须传同一前缀，
+    // 否则会拼出 .../js.js 404，主题可视化编辑器的 Weline.load('api') 直接失败。
+    'modulesBaseUrl' => PublicStaticUrl::fromDevWebPath('/Weline/Backend/view/statics/js/weline-api'),
     'assetVersion' => $deployVersion,
     'deployVersion' => $deployVersion,
     'workerBuildId' => $workerBuildId,
