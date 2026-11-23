@@ -34,15 +34,18 @@ final class PageSourceDependenciesTest extends TestCase
     public static function declaredLayouts(): array
     {
         return [
-            'module cart' => ['app/code/Weline/Cart/view/theme/frontend/layouts/cart/default.phtml', 'cart', 'cart-summary-note', 'data-cart-content="1"'],
-            'hanfu cart' => ['app/design/Weline/hanfu/frontend/layouts/cart/default.phtml', 'cart', 'cart-summary-note', 'data-cart-content="1"'],
-            'module checkout' => ['app/code/Weline/Checkout/view/theme/frontend/layouts/checkout/default.phtml', 'checkout', 'checkout-summary-note', 'data-checkout-form-host'],
-            'hanfu checkout' => ['app/design/Weline/hanfu/frontend/layouts/checkout/default.phtml', 'checkout', 'checkout-summary-note', 'data-checkout-form-host'],
+            // Module-contributed layouts belong to the Default theme (id 1): theme 3
+            // (hanfu) ships its own cart/checkout design files, so a module origin
+            // under theme_id=3 is now rejected by the source-precedence guard.
+            'module cart' => [1, 'app/code/Weline/Cart/view/theme/frontend/layouts/cart/default.phtml', 'cart', 'cart-summary-note', 'data-cart-content="1"'],
+            'hanfu cart' => [3, 'app/design/Weline/hanfu/frontend/layouts/cart/default.phtml', 'cart', 'cart-summary-note', 'data-cart-content="1"'],
+            'module checkout' => [1, 'app/code/Weline/Checkout/view/theme/frontend/layouts/checkout/default.phtml', 'checkout', 'checkout-summary-note', 'data-checkout-form-host'],
+            'hanfu checkout' => [3, 'app/design/Weline/hanfu/frontend/layouts/checkout/default.phtml', 'checkout', 'checkout-summary-note', 'data-checkout-form-host'],
         ];
     }
 
     #[DataProvider('declaredLayouts')]
-    public function testDeclaredLayoutHasAnExecutableBodyFallback(string $relative, string $type, string $slot, string $bodyMarker): void
+    public function testDeclaredLayoutHasAnExecutableBodyFallback(int $themeId, string $relative, string $type, string $slot, string $bodyMarker): void
     {
         $origin = BP . $relative;
         ObjectManager::setInstance(ThemeResourceCatalog::class, new class($origin, $type) extends ThemeResourceCatalog {
@@ -52,7 +55,7 @@ final class PageSourceDependenciesTest extends TestCase
         });
         ObjectManager::setInstance(ThemePlaceableRegistry::class, $this->registry);
         $paths = new ThemeLayoutEntityPaths(sys_get_temp_dir() . '/weline-page-fallback-' . bin2hex(random_bytes(6)));
-        $identity = new ThemeVersionIdentity(3, 'default.default.default', 'normal', 'frontend', 10, 'formal', 2);
+        $identity = new ThemeVersionIdentity($themeId, 'default.default.default', 'normal', 'frontend', 10, 'formal', 2);
         $materializer = new ThemeLayoutEntityMaterializer($paths, ObjectManager::getInstance(ThemeLayoutSlotTreeBuilder::class), ObjectManager::getInstance(ThemeLayoutEntityConfigStore::class));
         $candidates = $materializer->candidatePage($identity, $type, '', [$this->node('a', $slot, 'BODY-INJECTION', 0)], [], $type);
         // The page's unrelated public head is captured too; only body discovery
@@ -118,7 +121,7 @@ final class PageSourceDependenciesTest extends TestCase
         ObjectManager::setInstance(ThemePlaceableRegistry::class, $this->registry);
         $paths = new ThemeLayoutEntityPaths($root . '/derived');
         $materializer = new ThemeLayoutEntityMaterializer($paths, ObjectManager::getInstance(ThemeLayoutSlotTreeBuilder::class), ObjectManager::getInstance(ThemeLayoutEntityConfigStore::class));
-        $identity = new ThemeVersionIdentity(3, 'default.default.default', 'normal', 'frontend', 10, 'formal', 2);
+        $identity = new ThemeVersionIdentity(1, 'default.default.default', 'normal', 'frontend', 10, 'formal', 2);
         $nodes = [$this->node('a', 'cart-summary-note', 'SAVED-NOTE', 0), $this->node('b', 'cart-summary-credit', 'SAVED-CREDIT', 10)];
         try {
             $candidates = $materializer->candidatePage($identity, 'cart', '', $nodes, [], 'cart');
@@ -174,7 +177,7 @@ final class PageSourceDependenciesTest extends TestCase
         ObjectManager::setInstance(ThemePlaceableRegistry::class, $this->registry);
         $paths = new ThemeLayoutEntityPaths($root . '/derived');
         $materializer = new ThemeLayoutEntityMaterializer($paths, ObjectManager::getInstance(ThemeLayoutSlotTreeBuilder::class), ObjectManager::getInstance(ThemeLayoutEntityConfigStore::class));
-        $identity = new ThemeVersionIdentity(3, 'fixture.body.source', 'normal', 'frontend', 10, 'formal', 2);
+        $identity = new ThemeVersionIdentity(1, 'fixture.body.source', 'normal', 'frontend', 10, 'formal', 2);
         $one = $materializer->candidatePage($identity, 'cart', '', [$this->node('a', 'cart-summary-note', 'GLOBAL', 0)], [], 'cart');
         $two = $materializer->candidatePage($identity, 'cart', '', [$this->node('b', 'cart-summary-note', 'TARGET', 0)], [], 'cart', 'compact', 'product', 7);
         $all = array_replace($one, $two);

@@ -45,6 +45,8 @@ class AgentAdminService
             (string)($payload['permissions_text'] ?? '')
         );
         $selectedSkills = $this->parseStringList($payload['skills'] ?? []);
+        $selectedPlugins = $this->parseStringList($payload['plugins'] ?? []);
+        $agentCode = trim((string)($payload['agent_code'] ?? ''));
         $modelConfig = $this->parseJsonArray(
             $payload['model_config'] ?? null,
             (string)($payload['model_config_text'] ?? '')
@@ -80,6 +82,10 @@ class AgentAdminService
         );
         $role->setPermissions($permissions);
         $role->setSkills($selectedSkills);
+        $role->setPlugins($selectedPlugins);
+        if ($agentCode !== '') {
+            $role->setData(AgentRole::schema_fields_AGENT_CODE, $agentCode);
+        }
         $role->setModelConfig($modelConfig);
         $role->save();
 

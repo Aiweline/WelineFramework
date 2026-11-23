@@ -1,0 +1,364 @@
+<?php
+/**
+ * 可视化角色流程编辑/运行页（Weline_Agent）— 独立全屏应用文档
+ *
+ * 与店面布局解耦（同 chat 页契约）：不经过 theme layout，文末
+ * global-region 标记向响应级注入器声明「本页区域为空」。
+ */
+$welineBootHtml = '';
+try {
+    $welineBootHtml = (string)\Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Frontend\Block\Header\Base::class
+    )->render();
+} catch (\Throwable) {
+    $welineBootHtml = '';
+}
+$htmlLang = 'zh-Hans';
+try {
+    $locale = \trim((string)\Weline\Framework\Env\WelineEnv::getLang());
+    if ($locale !== '') {
+        $htmlLang = \str_starts_with($locale, 'zh') ? 'zh-Hans' : \str_replace('_', '-', $locale);
+    }
+} catch (\Throwable) {
+}
+$e = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<!doctype html>
+<html lang="<?= $e($htmlLang) ?>">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title><?= $e(__('角色流程', 'Role Flows')) ?> · Weline</title>
+<?= $welineBootHtml ?>
+<style>
+:root {
+    --af-bg: #1c1b1a;
+    --af-bg-side: #171614;
+    --af-bg-panel: #262523;
+    --af-bg-hover: #2d2b28;
+    --af-bg-input: #232220;
+    --af-border: #3a3733;
+    --af-border-soft: #2e2c29;
+    --af-text: #ece9e4;
+    --af-text-2: #a8a29a;
+    --af-text-3: #6f6a63;
+    --af-accent: #d97757;
+    --af-accent-hover: #e08a68;
+    --af-accent-soft: rgba(217, 119, 87, .14);
+    --af-ok: #7fb98a;
+    --af-err: #e57373;
+    --af-warn: #d9b25f;
+    --af-info: #7fa8c9;
+    --af-radius: 14px;
+    --af-radius-sm: 9px;
+    --af-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --af-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+    background: var(--af-bg); color: var(--af-text);
+    font: 14px/1.6 var(--af-font); overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+button { font-family: inherit; }
+::selection { background: var(--af-accent-soft); }
+
+.af-app { display: flex; height: 100vh; }
+
+/* ---------- 侧栏 ---------- */
+.af-side {
+    width: 250px; min-width: 250px; display: flex; flex-direction: column;
+    background: var(--af-bg-side); border-right: 1px solid var(--af-border-soft);
+}
+.af-brand { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; }
+.af-brand-mark {
+    width: 30px; height: 30px; border-radius: 9px; flex: none;
+    background: linear-gradient(135deg, var(--af-accent), #b85c3e);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 15px; font-weight: 700;
+}
+.af-brand-name { font-size: 14px; font-weight: 650; }
+.af-brand-sub { font-size: 11px; color: var(--af-text-3); margin-top: 1px; }
+.af-side-actions { padding: 4px 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.af-btn {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 9px 12px; border-radius: var(--af-radius-sm); cursor: pointer;
+    border: 1px solid var(--af-border); background: var(--af-bg-panel);
+    color: var(--af-text); font-size: 13px; font-weight: 550;
+    transition: background .15s, border-color .15s;
+}
+.af-btn:hover { background: var(--af-bg-hover); border-color: #4a4641; }
+.af-btn--primary { background: var(--af-accent); border-color: transparent; color: #fff; }
+.af-btn--primary:hover { background: var(--af-accent-hover); }
+.af-btn--primary:disabled { opacity: .45; cursor: not-allowed; }
+.af-nav { display: flex; gap: 4px; padding: 0 12px 8px; }
+.af-nav a {
+    flex: 1; text-align: center; padding: 7px 0; border-radius: var(--af-radius-sm);
+    font-size: 12.5px; color: var(--af-text-2); text-decoration: none;
+    border: 1px solid transparent; transition: background .15s, color .15s;
+}
+.af-nav a:hover { background: var(--af-bg-hover); color: var(--af-text); }
+.af-nav a.active { background: var(--af-bg-hover); color: var(--af-text); border-color: var(--af-border-soft); }
+.af-side-label { padding: 10px 18px 6px; font-size: 11px; color: var(--af-text-3); letter-spacing: .06em; text-transform: uppercase; }
+.af-flows { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+.af-flows::-webkit-scrollbar { width: 8px; }
+.af-flows::-webkit-scrollbar-thumb { background: #3d3a36; border-radius: 4px; }
+.af-flow-item {
+    padding: 9px 10px; border-radius: var(--af-radius-sm); cursor: pointer;
+    font-size: 13px; color: var(--af-text-2); margin-bottom: 1px;
+    border-left: 2px solid transparent; transition: background .12s, color .12s;
+}
+.af-flow-item:hover { background: var(--af-bg-hover); color: var(--af-text); }
+.af-flow-item.active { background: var(--af-bg-hover); color: var(--af-text); border-left-color: var(--af-accent); }
+.af-flow-item .af-flow-meta { font-size: 11px; color: var(--af-text-3); margin-top: 2px; }
+.af-side-foot { padding: 10px 14px; border-top: 1px solid var(--af-border-soft); font-size: 11px; color: var(--af-text-3); }
+
+/* ---------- 画布 ---------- */
+.af-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.af-toolbar {
+    display: flex; align-items: center; gap: 10px; padding: 12px 20px;
+    border-bottom: 1px solid var(--af-border-soft); flex-wrap: wrap;
+}
+.af-toolbar input[type=text], .af-toolbar select {
+    background: var(--af-bg-input); border: 1px solid var(--af-border-soft);
+    border-radius: var(--af-radius-sm); color: var(--af-text);
+    font: 13px var(--af-font); padding: 8px 11px; outline: none;
+    transition: border-color .15s;
+}
+.af-toolbar input[type=text]:focus, .af-toolbar select:focus {
+    border-color: var(--af-border);
+}
+.af-toolbar input[type=text] { min-width: 0; }
+.af-name { width: 240px; font-weight: 600; }
+.af-desc { width: 200px; color: var(--af-text-2); }
+.af-status { width: auto; }
+.af-meta { font-size: 11.5px; color: var(--af-text-3); font-family: var(--af-mono); }
+.af-spacer { flex: 1; }
+.af-status-chip {
+    font-size: 11px; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid var(--af-border-soft); color: var(--af-text-2);
+}
+.af-status-chip[data-s="active"] { color: var(--af-ok); border-color: rgba(127,185,138,.4); }
+.af-status-chip[data-s="disabled"] { color: var(--af-text-3); }
+
+.af-stage {
+    flex: 1; overflow: auto; position: relative;
+    background-image: radial-gradient(circle, #33302c 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+.af-stage::-webkit-scrollbar { width: 10px; height: 10px; }
+.af-stage::-webkit-scrollbar-thumb { background: #3d3a36; border-radius: 5px; }
+.af-flow-empty {
+    position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+    color: var(--af-text-3); font-size: 13.5px; text-align: center; z-index: 0;
+    pointer-events: none;
+}
+.af-flow-empty .af-empty-mark {
+    width: 46px; height: 46px; margin: 0 auto 14px; border-radius: 13px;
+    border: 1.5px dashed var(--af-border); display: flex; align-items: center; justify-content: center;
+    font-size: 20px; color: var(--af-text-3);
+}
+
+/* Coze 式节点卡片 */
+.af-world { position: relative; min-width: 100%; min-height: 100%; }
+.af-edges {
+    position: absolute; left: 0; top: 0; z-index: 1;
+    pointer-events: none; overflow: visible; display: block;
+}
+.af-nodebox {
+    position: absolute; width: 216px; z-index: 2;
+    background: var(--af-bg-panel); border: 1px solid var(--af-border);
+    border-radius: var(--af-radius); padding: 12px 14px;
+    cursor: grab; user-select: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,.28);
+    transition: border-color .15s, box-shadow .15s;
+}
+.af-nodebox:hover { border-color: #4a4641; }
+.af-nodebox.is-dragging { cursor: grabbing; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.af-nodebox.is-open { width: 300px; cursor: default; }
+.af-nodebox-head { display: flex; align-items: center; gap: 9px; }
+.af-nodebox-idx {
+    width: 24px; height: 24px; border-radius: 7px; flex: none;
+    background: var(--af-accent-soft); color: var(--af-accent);
+    font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(217,119,87,.35);
+}
+.af-nodebox-title {
+    flex: 1; font-size: 13px; font-weight: 600; color: var(--af-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.af-nodebox-status { font-size: 10.5px; color: var(--af-text-3); flex: none; }
+.af-nodebox-status.run { color: var(--af-warn); }
+.af-nodebox-status.done { color: var(--af-ok); }
+.af-nodebox-status.err { color: var(--af-err); }
+.af-nodebox-caret { color: var(--af-text-3); font-size: 11px; flex: none; }
+.af-nodebox-preview {
+    margin-top: 8px; font-size: 11.5px; color: var(--af-text-3); line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.af-nodebox .af-field { margin: 10px 0 0; text-align: left; cursor: auto; }
+.af-nodebox .af-field label {
+    display: block; font-size: 11px; color: var(--af-text-3); margin-bottom: 5px;
+}
+.af-nodebox select, .af-nodebox textarea, .af-nodebox input[type=text], .af-nodebox input[type=number] {
+    width: 100%; background: var(--af-bg-input); border: 1px solid var(--af-border-soft);
+    border-radius: var(--af-radius-sm); color: var(--af-text);
+    font: 12.5px var(--af-font); padding: 8px 10px; outline: none;
+}
+.af-nodebox select:focus, .af-nodebox textarea:focus,
+.af-nodebox input[type=text]:focus, .af-nodebox input[type=number]:focus { border-color: var(--af-border); }
+.af-nodebox input[type=number] { width: 110px; }
+.af-nodebox textarea { min-height: 56px; resize: vertical; font-size: 12px; line-height: 1.6; }
+.af-node-sub { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.af-import-btn {
+    font-size: 11px; padding: 3px 9px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--af-border-soft); background: transparent; color: var(--af-text-2);
+}
+.af-import-btn:hover { border-color: var(--af-border); color: var(--af-text); }
+.af-node-hint { font-size: 10.5px; color: var(--af-text-3); }
+.af-node-ops { display: flex; gap: 6px; margin-top: 10px; }
+.af-node-ops button {
+    flex: 1; font-size: 11px; padding: 5px 0; border-radius: 7px; cursor: pointer;
+    border: 1px solid var(--af-border-soft); background: transparent; color: var(--af-text-2);
+}
+.af-node-ops button:hover:not(:disabled) { border-color: var(--af-border); color: var(--af-text); }
+.af-node-ops button:disabled { opacity: .3; cursor: default; }
+.af-node-del { color: var(--af-err) !important; }
+
+.af-add-fab {
+    position: absolute; z-index: 3; width: 34px; height: 34px; border-radius: 50%;
+    border: 1.5px dashed var(--af-border); background: var(--af-bg-panel);
+    color: var(--af-text-2); font-size: 17px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color .15s, color .15s, background .15s;
+}
+.af-add-fab:hover { border-color: var(--af-accent); color: var(--af-accent); background: var(--af-accent-soft); }
+.af-arrange-btn {
+    font-size: 11.5px; padding: 5px 11px; border-radius: 7px; cursor: pointer;
+    border: 1px solid var(--af-border-soft); background: transparent; color: var(--af-text-2);
+    white-space: nowrap;
+}
+.af-arrange-btn:hover { border-color: var(--af-border); color: var(--af-text); }
+
+/* ---------- 运行面板 ---------- */
+.af-run {
+    border-top: 1px solid var(--af-border-soft); padding: 14px 20px;
+    background: var(--af-bg-side);
+}
+.af-run-row { display: flex; gap: 10px; align-items: stretch; max-width: 980px; margin: 0 auto; }
+.af-run textarea {
+    flex: 1; min-height: 46px; max-height: 120px; resize: none;
+    background: var(--af-bg-input); border: 1px solid var(--af-border-soft);
+    border-radius: var(--af-radius-sm); color: var(--af-text);
+    font: 13px/1.6 var(--af-font); padding: 11px 13px; outline: none;
+}
+.af-run textarea:focus { border-color: var(--af-border); }
+.af-run-btn {
+    padding: 0 22px; border: none; border-radius: var(--af-radius-sm); cursor: pointer;
+    background: var(--af-accent); color: #fff; font-size: 13px; font-weight: 600;
+    transition: background .15s;
+}
+.af-run-btn:hover:not(:disabled) { background: var(--af-accent-hover); }
+.af-run-btn:disabled { opacity: .45; cursor: not-allowed; }
+.af-log {
+    max-width: 980px; margin: 12px auto 0; max-height: 190px; overflow-y: auto;
+    background: var(--af-code-bg, #141311); border: 1px solid var(--af-border-soft);
+    border-radius: var(--af-radius-sm); padding: 10px 14px;
+    font: 12px/1.7 var(--af-mono); color: var(--af-text-2);
+    display: none; white-space: pre-wrap; word-break: break-word;
+}
+.af-log.show { display: block; }
+.af-log .lg-ok { color: var(--af-ok); }
+.af-log .lg-err { color: var(--af-err); }
+.af-log .lg-warn { color: var(--af-warn); }
+.af-log .lg-info { color: var(--af-info); }
+.af-runs {
+    max-width: 980px; margin: 10px auto 0; display: flex; gap: 6px; flex-wrap: wrap;
+}
+.af-run-chip {
+    font: 11px var(--af-mono); padding: 4px 10px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--af-border-soft); background: var(--af-bg-panel); color: var(--af-text-2);
+    transition: border-color .15s, color .15s;
+}
+.af-run-chip:hover { border-color: var(--af-border); color: var(--af-text); }
+.af-run-chip .st-done { color: var(--af-ok); }
+.af-run-chip .st-failed { color: var(--af-err); }
+.af-run-chip .st-running, .af-run-chip .st-queued { color: var(--af-warn); }
+
+@media (max-width: 900px) {
+    .af-side { display: none; }
+    .af-name { width: 150px; }
+    .af-desc { width: 130px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<!-- 自包含流程编排应用页：不挂店面全局区；三个标记声明本页区域为空。 -->
+<!--data-weline-global-region:head--><!--data-weline-global-region:body_open--><!--data-weline-global-region:body_end-->
+
+<div class="af-app" id="agentFlowApp" data-weline-load="agentFlow">
+    <aside class="af-side">
+        <div class="af-brand">
+            <div class="af-brand-mark">F</div>
+            <div>
+                <div class="af-brand-name"><?= $e(__('角色流程', 'Role Flows')) ?></div>
+                <div class="af-brand-sub">Weline_Agent</div>
+            </div>
+        </div>
+        <div class="af-side-actions">
+            <button type="button" class="af-btn af-btn--primary" id="flowNewBtn"><?= $e(__('＋ 新建流程', '+ New flow')) ?></button>
+            <button type="button" class="af-btn" id="flowSaveBtn"><?= $e(__('保存', 'Save')) ?></button>
+        </div>
+        <nav class="af-nav">
+            <a href="/agent/frontend/chat"><?= $e(__('聊天', 'Chat')) ?></a>
+            <a href="/agent/frontend/flow" class="active"><?= $e(__('流程编排', 'Flows')) ?></a>
+        </nav>
+        <div class="af-side-label"><?= $e(__('流程', 'Flows')) ?></div>
+        <div class="af-flows" id="flowList"></div>
+        <div class="af-side-foot">串行拓扑 · v1</div>
+    </aside>
+
+    <main class="af-main">
+        <div class="af-toolbar">
+            <input type="text" id="flowName" class="af-name" placeholder="<?= $e(__('流程名称', 'Flow name')) ?>">
+            <input type="text" id="flowDesc" class="af-desc" placeholder="<?= $e(__('描述（可选）', 'Description (optional)')) ?>">
+            <select id="flowStatus" class="af-status">
+                <option value="draft"><?= $e(__('草稿', 'Draft')) ?></option>
+                <option value="active"><?= $e(__('启用', 'Active')) ?></option>
+                <option value="disabled"><?= $e(__('停用', 'Disabled')) ?></option>
+            </select>
+            <span class="af-status-chip" id="flowStatusChip"></span>
+            <span class="af-meta" id="flowMeta"></span>
+            <span class="af-spacer"></span>
+            <button type="button" class="af-arrange-btn" id="flowArrangeBtn"><?= $e(__('自动排列', 'Auto layout')) ?></button>
+        </div>
+
+        <div class="af-stage" id="flowNodes">
+            <div class="af-flow-empty" id="flowEmpty">
+                <div class="af-empty-mark">＋</div>
+                <div><?= $e(__('点击左侧「新建流程」，或选择一个已有流程开始编排', 'Click "New flow" or pick an existing flow to start')) ?></div>
+            </div>
+            <div class="af-world" id="flowWorld">
+                <svg class="af-edges" id="flowEdges"></svg>
+            </div>
+        </div>
+
+        <div class="af-run">
+            <div class="af-run-row">
+                <textarea id="flowInput" placeholder="<?= $e(__('输入需求（整个流程的原始输入，会依次传给各节点）', 'Input requirement (passed through nodes in order)')) ?>"></textarea>
+                <button type="button" class="af-run-btn" id="flowRunBtn"><?= $e(__('▶ 运行流程', 'Run flow')) ?></button>
+            </div>
+            <div class="af-log" id="flowRunLog"></div>
+            <div class="af-runs" id="flowRuns"></div>
+        </div>
+    </main>
+</div>
+</body>
+</html>

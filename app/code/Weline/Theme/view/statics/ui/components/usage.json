@@ -17,7 +17,7 @@
             "surface"
         ]
     },
-    "files": 1172,
+    "files": 1179,
     "components": {
         "button": 4795,
         "field": 13011,
@@ -27,5 +27,5 @@
         "feedback": 2914
     },
     "components_total_bytes": 34434,
-    "generated_at": "2026-11-21T12:28:26+00:00"
+    "generated_at": "2026-11-23T16:46:52+00:00"
 }

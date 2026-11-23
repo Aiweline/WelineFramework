@@ -35,9 +35,15 @@ class SkillPackageManager
         return $skills->toModels();
     }
 
-    public function getSkillsForRole(AgentRole $role): array
+    /**
+     * @param list<string> $extraSkillCodes 额外技能码（如插件贡献），与角色技能取并集
+     */
+    public function getSkillsForRole(AgentRole $role, array $extraSkillCodes = []): array
     {
-        $skillCodes = $role->getSkills();
+        $skillCodes = array_values(array_unique(array_merge(
+            $role->getSkills(),
+            $extraSkillCodes
+        )));
         if (empty($skillCodes)) {
             return [];
         }
@@ -52,9 +58,9 @@ class SkillPackageManager
         return $skills->toModels();
     }
 
-    public function getToolsForRole(AgentRole $role): array
+    public function getToolsForRole(AgentRole $role, array $extraSkillCodes = []): array
     {
-        $skills = $this->getSkillsForRole($role);
+        $skills = $this->getSkillsForRole($role, $extraSkillCodes);
         $tools = [];
 
         foreach ($skills as $skill) {

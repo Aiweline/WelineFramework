@@ -4,7 +4,7 @@
  * 店面悬浮客服浮层：默认注入 footer chrome 槽 storefront-float-end。
  *
  * @widget.code {customer-service-float}
- * @widget.async {true}
+ * @widget.async {false}
  * @widget.async_cache {300}
  * @widget.async_module {customerServiceFloat}
  * @widget.cache {3600}
@@ -119,6 +119,7 @@ $customerServiceJsHref = rtrim($customerServiceJsHref, '?&');
 ?>
 <div id="customer-service-widget" class="customer-service-widget customer-service-widget--classic" data-editor-interactive
      data-weline-load="customerServiceFloat"
+     data-weline-load-when="interaction"
      data-cs-chat-url="@frontend-url{'customerservice/frontend/chat'}"
      data-cs-bind-url="@frontend-url{'customerservice/frontend/bind'}"
      data-cs-captcha-url="@frontend-url{'customerservice/frontend/bind/captcha-challenge'}">

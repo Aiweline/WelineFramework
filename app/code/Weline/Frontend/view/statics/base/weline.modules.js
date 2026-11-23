@@ -551,6 +551,20 @@
             load: "defer",
             description: "商品卡对比/快速查看/对比栏"
         },
+        agentChat: {
+            origin_paths: ["app/code/Weline/Agent/view/statics/js/agent-chat.js?v=20261201-agent-chat-4"],
+            paths: ["Weline_Agent::js/agent-chat.js?v=20261201-agent-chat-4"],
+            globalVar: null,
+            load: "eager",
+            description: "通用智能体聊天页"
+        },
+        agentFlow: {
+            origin_paths: ["app/code/Weline/Agent/view/statics/js/agent-flow.js?v=20261203-agent-flow-6"],
+            paths: ["Weline_Agent::js/agent-flow.js?v=20261203-agent-flow-6"],
+            globalVar: null,
+            load: "eager",
+            description: "可视化角色流程编辑/运行页"
+        },
         affiliateAccount: {
             origin_paths: ["app/code/Weline/Affiliate/view/statics/js/affiliate-account.js"],
             paths: ["Weline_Affiliate::js/affiliate-account.js"],

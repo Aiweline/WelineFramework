@@ -1933,6 +1933,21 @@ private function assert_ThemeLayoutEntityBakeCoordinator_testRebakeDedupesLayout
     self::assertStringContainsString('function applyLayoutCascadeFilter', $source);
     self::assertStringContainsString('function catalogLayoutOptions', $source);
     self::assertStringContainsString('!$allVersions && !$this->isCurrentlyEffectiveScopeVersion', $source);
+    // 发布完备性：published-effective 版本行无论 scope 是否继承主题应用都必须烤
+    // （getPublished self→祖先链会解析到它，请求按其 canonicalScope 读产物）。
+    self::assertStringContainsString('function isPublishedEffectiveVersion', $source);
+    self::assertStringContainsString('!$this->scopeOwnsSolidify($identity) && !$this->isPublishedEffectiveVersion($identity)', $source);
+    self::assertMatchesRegularExpression(
+        '/function isPublishedEffectiveVersion\b[\s\S]*?getPublished\([\s\S]*?getVersionId\(\) === \(int\)\$identity->themeVersionId/s',
+        $source,
+    );
+    // 完备性门：发布期枚举 getPublished 可解析集合并回填缺失产物，复用同一烘焙入口。
+    self::assertStringContainsString('public function ensureServingArtifacts', $source);
+    self::assertStringContainsString('private function ensureIdentityArtifacts', $source);
+    self::assertStringContainsString('$this->solidifyPendingIdentity($identity, $pending, [], true)', $source);
+    self::assertStringContainsString("'serving_artifacts_complete'", (string) file_get_contents(
+        '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/ThemeUpdate/ThemeUpdateBuildService.php'
+    ));
     $upgrade = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/LayoutEntity/ThemeLayoutEntityUpgradeSolidifyService.php';
     $upgradeSrc = (string) file_get_contents($upgrade);
     // setup/theme upgrade without -t: only website-bound themes (not rebake(null) all themes).

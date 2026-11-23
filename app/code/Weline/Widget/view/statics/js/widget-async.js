@@ -170,6 +170,46 @@
         }
     }
 
+    function isFloatChrome(host) {
+        return !!(host && host.closest && host.closest('#w-storefront-float-layer'));
+    }
+
+    /**
+     * Float chrome is non-critical: a page-wide async widget (e.g. consent) used
+     * to hydrate every placeholder immediately, pulling the five float fragments
+     * into the first-load trace and causing Lighthouse console timeouts. Keep the
+     * float placeholders until first user intent, or a bounded fallback.
+     */
+    function deferFloatHost(host) {
+        if (host.__welineFloatDeferred) {
+            return;
+        }
+        host.__welineFloatDeferred = true;
+        var done = false;
+        var events = ['pointerdown', 'touchstart', 'keydown', 'focusin', 'scroll'];
+        var cleanup = function () {
+            events.forEach(function (name) {
+                window.removeEventListener(name, run, true);
+            });
+        };
+        var run = function () {
+            if (done) {
+                return;
+            }
+            done = true;
+            cleanup();
+            host.__welineFloatDeferred = false;
+            if (getState(host) === '' && host.isConnected) {
+                queue.push(host);
+                pump();
+            }
+        };
+        events.forEach(function (name) {
+            window.addEventListener(name, run, { capture: true, passive: true });
+        });
+        window.setTimeout(run, 30000);
+    }
+
     function scan(root) {
         var scope = root && root.querySelectorAll ? root : document;
         var hosts = [];
@@ -183,6 +223,10 @@
 
         hosts.forEach(function (host) {
             if (getState(host) !== '') {
+                return;
+            }
+            if (isFloatChrome(host)) {
+                deferFloatHost(host);
                 return;
             }
             if (!isDeferred(host)) {

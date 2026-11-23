@@ -190,6 +190,17 @@ final class ThemeLayoutEntityUpgradeSolidifyService
     }
 
     /**
+     * Publish completeness gate: verify every getPublished-resolvable version
+     * row owns its page artifacts; backfill misses through the same bake entry.
+     *
+     * @return array{ok:bool,versions:int,baked:int,missing:list<string>,errors:list<string>}
+     */
+    public function ensureServingArtifacts(int $themeId): array
+    {
+        return $this->bakeCoordinator->ensureServingArtifacts($themeId);
+    }
+
+    /**
      * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
      */
     public function solidifyFromThemeCommand(?WelineTheme $theme, array $options = []): int

@@ -177,6 +177,9 @@ circle,圆圈
 "查看 AI 智能体","查看 AI 智能体"
 list,列表
 "查看 AI 智能体目录","查看 AI 智能体目录"
+"查看 AI 智能体架构","查看 AI 智能体架构"
+info,信息
+"查看 AI 智能体架构说明与对接指南","查看 AI 智能体架构说明与对接指南"
 tag,标签
 保存智能体覆盖,保存智能体覆盖
 save,节省
@@ -291,7 +294,6 @@ AI模型管理,AI模型管理
 robot,机器人
 查看AI模型列表,查看AI模型列表
 查看AI模型详情,查看AI模型详情
-info,信息
 收集AI模型,收集AI模型
 download,下载
 收集AI模型配置,收集AI模型配置
@@ -490,6 +492,63 @@ play,玩
 获取受保护的模型列表,获取受保护的模型列表
 lock,锁
 批量设置默认模型,批量设置默认模型
+智能体架构,智能体架构
+面向开发与运营的只读说明：智能体如何被发现、调用、治理，以及新智能体如何对接。实时目录见页底。,面向开发与运营的只读说明：智能体如何被发现、调用、治理，以及新智能体如何对接。实时目录见页底。
+一、架构总览,一、架构总览
+"智能体不是写死在 AI 模块里的功能，而是「业务模块按扩展约定贡献 Agent 类，Weline_Ai 负责发现、注册、治理与调用」。","智能体不是写死在 AI 模块里的功能，而是「业务模块按扩展约定贡献 Agent 类，Weline_Ai 负责发现、注册、治理与调用」。"
+"L1 · 业务模块（贡献方）","L1 · 业务模块（贡献方）"
+"例：Weline_Websites 的 WebsiteBuilderAgent（AI 建站工作台）。","例：Weline_Websites 的 WebsiteBuilderAgent（AI 建站工作台）。"
+"L2 · Weline_Ai 框架（治理与调度）","L2 · Weline_Ai 框架（治理与调度）"
+"按场景/代码解析出 Agent 实例，注入模型与 provider","按场景/代码解析出 Agent 实例，注入模型与 provider"
+"L3 · 模型 Provider（LLM）","L3 · 模型 Provider（LLM）"
+"支持 tools function calling 与流式（generate / generateStreamFull）。","支持 tools function calling 与流式（generate / generateStreamFull）。"
+工具调用结果回填，循环直到收敛,工具调用结果回填，循环直到收敛
+"L4 · 结果与事件","L4 · 结果与事件"
+二、一次调用的生命周期,二、一次调用的生命周期
+入口,入口
+解析,解析
+"按 agent code 从 <code>ai_agent</code> 表取 class/file，实例化 <code>AgentInterface</code>；按 scenario 可用 <code>getAgentsForScenario()</code> 选。","按 agent code 从 <code>ai_agent</code> 表取 class/file，实例化 <code>AgentInterface</code>；按 scenario 可用 <code>getAgentsForScenario()</code> 选。"
+治理,治理
+"<code>AgentGovernance</code> 按后台配置过滤禁用工具、套用描述覆盖——只对 executeAgent 路径生效。","<code>AgentGovernance</code> 按后台配置过滤禁用工具、套用描述覆盖——只对 executeAgent 路径生效。"
+循环,循环
+收敛,收敛
+"返回 <code>AgentResult</code>；streamCallback 事件驱动前端进度展示。轮次受 <code>getMaxIterations()</code> 约束（默认 12，硬顶 30）。","返回 <code>AgentResult</code>；streamCallback 事件驱动前端进度展示。轮次受 <code>getMaxIterations()</code> 约束（默认 12，硬顶 30）。"
+三、开发如何对接新智能体,三、开发如何对接新智能体
+放代码,放代码
+"在贡献模块建 <code>extends/module/Weline_Ai/Agent/{YourModule}/{Name}Agent.php</code>，实现 <code>Weline\Ai\Api\AgentInterface</code>（getCode/getName/getScenarios/getTools/getSystemPrompt/execute/supportsModel/getMaxIterations）。","在贡献模块建 <code>extends/module/Weline_Ai/Agent/{YourModule}/{Name}Agent.php</code>，实现 <code>Weline\Ai\Api\AgentInterface</code>（getCode/getName/getScenarios/getTools/getSystemPrompt/execute/supportsModel/getMaxIterations）。"
+写工具,写工具
+"工具实现 <code>Weline\Ai\Api\ToolInterface</code>（getName/getDescription/getParameters/execute/isEnabled），getParameters 返回 JSON Schema。","工具实现 <code>Weline\Ai\Api\ToolInterface</code>（getName/getDescription/getParameters/execute/isEnabled），getParameters 返回 JSON Schema。"
+写循环,写循环
+"框架不提供通用 runner——execute() 里自己实现「调模型→执行工具→回填」循环，可参考 WebsiteBuilderAgent。","框架不提供通用 runner——execute() 里自己实现「调模型→执行工具→回填」循环，可参考 WebsiteBuilderAgent。"
+注册,注册
+场景（可选）,场景（可选）
+"需要按场景路由时，在模块 <code>extends/module/Weline_Ai/Adapter/</code> 加 ScenarioAdapter；getScenarios() 声明场景码。","需要按场景路由时，在模块 <code>extends/module/Weline_Ai/Adapter/</code> 加 ScenarioAdapter；getScenarios() 声明场景码。"
+最小骨架,最小骨架
+四、治理边界（开发必读）,四、治理边界（开发必读）
+"后台只能做「目录治理」：名称/描述覆盖、启停、工具启停、扫描——不能新建自定义智能体、不能改 system prompt / 工具 JSON Schema / max_iterations。","后台只能做「目录治理」：名称/描述覆盖、启停、工具启停、扫描——不能新建自定义智能体、不能改 system prompt / 工具 JSON Schema / max_iterations。"
+"智能体类文件放 extends/module/Weline_Ai/Agent/，由 AgentScanner 按 extends.php 注册表发现；改完必须重新扫描才会刷新 ai_agent 表。","智能体类文件放 extends/module/Weline_Ai/Agent/，由 AgentScanner 按 extends.php 注册表发现；改完必须重新扫描才会刷新 ai_agent 表。"
+"场景适配器（ScenarioAdapter）只做 prompt/参数改写与默认模型绑定，不承载业务逻辑。","场景适配器（ScenarioAdapter）只做 prompt/参数改写与默认模型绑定，不承载业务逻辑。"
+"权威文档：app/code/Weline/Ai/doc/智能体(Agent)增强计划.md、app/code/Weline/Ai/doc/开发/后台智能体管理.md；建站智能体实例见 app/code/Weline/Websites/doc/AI建站工作台架构.md。","权威文档：app/code/Weline/Ai/doc/智能体(Agent)增强计划.md、app/code/Weline/Ai/doc/开发/后台智能体管理.md；建站智能体实例见 app/code/Weline/Websites/doc/AI建站工作台架构.md。"
+五、当前已注册智能体（实时）,五、当前已注册智能体（实时）
+"共 %{count} 个","共 %{count} 个"
+编码,编码
+名称,名称
+模块,模块
+场景,场景
+工具数,工具数
+最大轮次,最大轮次
+状态,状态
+启用,启用
+缺失,缺失
+暂无已注册智能体，请先运行扫描。,暂无已注册智能体，请先运行扫描。
+"AI 管理","AI 管理"
+模型,模型
+适配器,适配器
+智能体,智能体
+技能,技能
+风格,风格
+本地供应商,本地供应商
+供应商账户,供应商账户
 "AI 使用统计","AI 使用统计"
 今日,今日
 总令牌,总令牌
@@ -539,7 +598,6 @@ API密钥,API密钥
 总令牌数,总令牌数
 按模型消耗排名,按模型消耗排名
 排名,排名
-模型,模型
 暂无数据,暂无数据
 统计面板,统计面板
 "AI 中心","AI 中心"
@@ -583,9 +641,7 @@ API密钥,API密钥
 已导入为待审核技能，请检查后再启用和绑定。,已导入为待审核技能，请检查后再启用和绑定。
 导入失败,导入失败
 代码,代码
-技能,技能
 来源,来源
-状态,状态
 绑定,绑定
 操作,操作
 "AI 技能","AI 技能"
@@ -595,9 +651,7 @@ API密钥,API密钥
 搜索,搜索
 "代码 / 名称 / 标签","代码 / 名称 / 标签"
 全部,全部
-启用,启用
 待审核,待审核
-缺失,缺失
 "模块 / 系统","模块 / 系统"
 自定义,自定义
 "导入 / 平台","导入 / 平台"
@@ -605,7 +659,6 @@ API密钥,API密钥
 正在加载技能目录...,正在加载技能目录...
 从目录选择一个技能，或新建自定义技能。,从目录选择一个技能，或新建自定义技能。
 技能代码,技能代码
-名称,名称
 可读的技能名称,可读的技能名称
 版本,版本
 描述,描述
@@ -621,7 +674,6 @@ API密钥,API密钥
 导入为待审核,导入为待审核
 "仅允许公开 http/https URL。限制：256KB、8 秒超时、Markdown/text/JSON。","仅允许公开 http/https URL。限制：256KB、8 秒超时、Markdown/text/JSON。"
 系统管理,系统管理
-供应商账户,供应商账户
 供应商账户工作原理,供应商账户工作原理
 "供应商账户用于集中管理各 AI 供应商（如 OpenAI、阿里云等）的 API 密钥。添加账户后需进行「连通性测试」，测试通过才能激活账户。","供应商账户用于集中管理各 AI 供应商（如 OpenAI、阿里云等）的 API 密钥。添加账户后需进行「连通性测试」，测试通过才能激活账户。"
 "模型在调用时可选择使用「供应商账户」或「自配置」：使用供应商账户时，模型会从已激活的该供应商账户中获取 API 密钥，无需在每个模型中单独填写。","模型在调用时可选择使用「供应商账户」或「自配置」：使用供应商账户时，模型会从已激活的该供应商账户中获取 API 密钥，无需在每个模型中单独填写。"
@@ -760,7 +812,6 @@ API密钥将被加密存储,API密钥将被加密存储
 确定删除,确定删除
 正在绑定风格...,正在绑定风格...
 风格已绑定到适配器。,风格已绑定到适配器。
-风格,风格
 "AI 风格","AI 风格"
 管理模块、自定义、匹配和适配器绑定的视觉风格方向。,管理模块、自定义、匹配和适配器绑定的视觉风格方向。
 "代码 / 名称 / 关键词","代码 / 名称 / 关键词"
@@ -797,17 +848,34 @@ API密钥将被加密存储,API密钥将被加密存储
 管理已注册智能体、描述覆盖与工具启停。不能在后台新建智能体。,管理已注册智能体、描述覆盖与工具启停。不能在后台新建智能体。
 智能体目录,智能体目录
 "代码 / 名称 / 模块 / 场景","代码 / 名称 / 模块 / 场景"
-智能体,智能体
-模块,模块
 工具,工具
 源名称（只读）,源名称（只读）
 名称覆盖,名称覆盖
 留空则回退为源名称,留空则回退为源名称
 描述覆盖,描述覆盖
-场景,场景
 从目录选择一个智能体查看详情。,从目录选择一个智能体查看详情。
+一张图看懂：智能体如何被发现、调用、治理；新智能体怎么接入。,一张图看懂：智能体如何被发现、调用、治理；新智能体怎么接入。
+架构总览,架构总览
+智能体架构分层图,智能体架构分层图
+"紫色框 = Weline_Ai 框架职责；青色框 = 每个 Agent 自己实现的 ReAct 循环（框架不提供 runner）；绿色 = 工具直连业务 Service。","紫色框 = Weline_Ai 框架职责；青色框 = 每个 Agent 自己实现的 ReAct 循环（框架不提供 runner）；绿色 = 工具直连业务 Service。"
+一次调用怎么走（时序）,一次调用怎么走（时序）
+"业务调 executeAgent(agent_code, prompt, model)","业务调 executeAgent(agent_code, prompt, model)"
+"Scanner 解析实例 + 治理过滤禁用工具","Scanner 解析实例 + 治理过滤禁用工具"
+"LLM 流式返回：content 或 tool_calls","LLM 流式返回：content 或 tool_calls"
+"有 tool_calls → 执行工具 → 结果回填 → 回到③；无 → 收敛","有 tool_calls → 执行工具 → 结果回填 → 回到③；无 → 收敛"
+"AgentResult + SSE 事件给前端","AgentResult + SSE 事件给前端"
+"新智能体怎么接入（4 步）","新智能体怎么接入（4 步）"
+"业务模块建 extends/module/Weline_Ai/Agent/{Module}/{Name}Agent.php，实现 AgentInterface","业务模块建 extends/module/Weline_Ai/Agent/{Module}/{Name}Agent.php，实现 AgentInterface"
+"工具类实现 ToolInterface（getName/getParameters/execute）","工具类实现 ToolInterface（getName/getParameters/execute）"
+"execute() 自实现 ReAct 循环（参考 WebsiteBuilderAgent）","execute() 自实现 ReAct 循环（参考 WebsiteBuilderAgent）"
+"可选：按场景路由时加 extends/module/Weline_Ai/Adapter/ 场景适配器 + getScenarios() 声明场景码。","可选：按场景路由时加 extends/module/Weline_Ai/Adapter/ 场景适配器 + getScenarios() 声明场景码。"
+"AgentInterface 骨架","AgentInterface 骨架"
+治理边界（开发必读）,治理边界（开发必读）
+"后台只能治理：名称/描述覆盖、启停、工具启停、扫描——不能新建自定义智能体、不能改 system prompt / 工具 JSON Schema / max_iterations。","后台只能治理：名称/描述覆盖、启停、工具启停、扫描——不能新建自定义智能体、不能改 system prompt / 工具 JSON Schema / max_iterations。"
+"改完 Agent/Tool 代码必须重跑 ai:agent:scan，ai_agent 表才刷新。","改完 Agent/Tool 代码必须重跑 ai:agent:scan，ai_agent 表才刷新。"
+权威文档：app/code/Weline/Ai/doc/智能体(Agent)增强计划.md、doc/开发/后台智能体管理.md；建站实例：app/code/Weline/Websites/doc/AI建站工作台架构.md。,权威文档：app/code/Weline/Ai/doc/智能体(Agent)增强计划.md、doc/开发/后台智能体管理.md；建站实例：app/code/Weline/Websites/doc/AI建站工作台架构.md。
+当前已注册智能体（实时）,当前已注册智能体（实时）
 适配器说明,适配器说明
-适配器,适配器
 "用于不同业务场景调用 AI（如翻译、摘要、文章生成等）。每个适配器可设置默认模型，调用时会优先使用该模型；若未设置，则使用系统默认模型。","用于不同业务场景调用 AI（如翻译、摘要、文章生成等）。每个适配器可设置默认模型，调用时会优先使用该模型；若未设置，则使用系统默认模型。"
 "使用流程：先在「模型」Tab 配置并启用模型，在「供应商账户」Tab 添加并激活账户；再在本页为各适配器设置默认模型，并激活需要使用的适配器。","使用流程：先在「模型」Tab 配置并启用模型，在「供应商账户」Tab 添加并激活账户；再在本页为各适配器设置默认模型，并激活需要使用的适配器。"
 总适配器,总适配器
@@ -906,8 +974,6 @@ API密钥将被加密存储,API密钥将被加密存储
 保存全部,保存全部
 受保护的模型,受保护的模型
 正在作为默认值使用的模型不可删除。,正在作为默认值使用的模型不可删除。
-"AI 管理","AI 管理"
-本地供应商,本地供应商
 面包屑,面包屑
 模型启用指南,模型启用指南
 先添加供应商账户,先添加供应商账户
@@ -1371,7 +1437,6 @@ AI用量审计恢复,AI用量审计恢复
 "每个智能体必须实现 AgentInterface 接口。","每个智能体必须实现 AgentInterface 接口。"
 开始扫描智能体...,开始扫描智能体...
 未发现任何智能体,未发现任何智能体
-工具数,工具数
 最大迭代,最大迭代
 个工具,个工具
 智能体扫描完成,智能体扫描完成

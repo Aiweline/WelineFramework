@@ -33,7 +33,7 @@ WLS 无路由错误页通过与普通响应共用的 `App::finalizeResponse()` �
 - Scope 维护门禁：持久化 Website/Store/Channel 维护状态与 generation，使用现有 Scope Token keyring 签发只读、可撤销、跨 Worker 一致的预览令牌；详见 `scope-maintenance-preview.md`。
 - 默认网站兜底：维护系统安装默认站点 `website_id=0 / code=default`。
 - 域名注册与编排：注册商、DNS、证书、生命周期、域名池。
-- AI 建站工作台支撑：Provider、草稿、产物、事件流与主题来源注册。
+- AI 建站工作台支撑：Provider、草稿、产物、事件流与主题来源注册。架构总览见 `doc/AI建站工作台架构.md`，本地域名策略见 `doc/计划-AI建站工作台-Websites侧.md`。
 
 ## 核心约定
 

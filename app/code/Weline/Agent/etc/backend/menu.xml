@@ -22,6 +22,20 @@
               icon="mdi mdi-puzzle"
               order="20"/>
 
+        <menu source="Weline_Agent::plugin"
+              name="plugin"
+              title="插件管理"
+              action="*/backend/plugin/listing"
+              icon="mdi mdi-puzzle-outline"
+              order="25"/>
+
+        <menu source="Weline_Agent::flow"
+              name="flow"
+              title="流程编排"
+              action="*/backend/flow/listing"
+              icon="mdi mdi-vector-polyline"
+              order="26"/>
+
         <menu source="Weline_Agent::schedule"
               name="schedule"
               title="调度管理"

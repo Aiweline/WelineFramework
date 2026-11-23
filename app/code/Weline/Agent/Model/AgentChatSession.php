@@ -52,6 +52,15 @@ class AgentChatSession extends Model
     #[Col('int', comment: '总Token消耗')]
     public const schema_fields_TOTAL_TOKENS = 'total_tokens';
 
+    #[Col('int', comment: '所属项目ID（团队边界；空=个人会话）')]
+    public const schema_fields_PROJECT_ID = 'project_id';
+
+    #[Col('varchar', 128, comment: '会话级默认模型代码（回合可覆盖）')]
+    public const schema_fields_DEFAULT_MODEL_CODE = 'default_model_code';
+
+    #[Col('int', comment: '默认角色ID（新回合缺省角色；原 role_id 保留兼容）')]
+    public const schema_fields_DEFAULT_ROLE_ID = 'default_role_id';
+
     #[Col('int', comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
 

@@ -1,0 +1,675 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array $websites
+ * @var int $website_id
+ * @var array|null $website
+ * @var string $view
+ * @var array $filters
+ * @var array $summary
+ * @var array $tabs
+ * @var array $list
+ * @var array $runs
+ * @var array $policy_matrix
+ * @var array $actions
+ */
+$websites = is_array($websites ?? null) ? $websites : [];
+$websiteId = (int)($website_id ?? 0);
+$website = is_array($website ?? null) ? $website : null;
+$view = (string)($view ?? 'health');
+$filters = is_array($filters ?? null) ? $filters : [];
+$summary = is_array($summary ?? null) ? $summary : [];
+$tabs = is_array($tabs ?? null) ? $tabs : [];
+$list = is_array($list ?? null) ? $list : ['rows' => [], 'total' => 0, 'page' => 1, 'pages' => 1, 'per_page' => 25];
+$runs = is_array($runs ?? null) ? $runs : [];
+$policyMatrix = is_array($policy_matrix ?? null) ? $policy_matrix : [];
+$actions = is_array($actions ?? null) ? $actions : [];
+
+$escape = static fn ($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$filters = [
+    'issue' => (string)($filters['issue'] ?? ''),
+    'q' => (string)($filters['q'] ?? ''),
+    'state' => (string)($filters['state'] ?? ''),
+    'locale' => (string)($filters['locale'] ?? ''),
+];
+
+$policyByCode = [];
+foreach ($policyMatrix as $policyRow) {
+    if (is_array($policyRow) && isset($policyRow['issue_code'])) {
+        $policyByCode[(string)$policyRow['issue_code']] = $policyRow;
+    }
+}
+
+$viewUrl = function (array $override = []) use ($websiteId, $view, $filters): string {
+    $params = array_merge([
+        'website_id' => $websiteId,
+        'view' => $view,
+        'issue' => $filters['issue'],
+        'q' => $filters['q'],
+        'state' => $filters['state'],
+        'locale' => $filters['locale'],
+    ], $override);
+    $params = array_filter($params, static fn ($value): bool => $value !== '' && $value !== null);
+
+    return (string)$this->getBackendUrl('seo/backend/health', $params);
+};
+
+$actionLabels = [
+    'remove' => (string)__('移出 sitemap'),
+    'replace' => (string)__('替换为重定向目标'),
+    'redirect' => (string)__('替换为目标（不写重定向规则）'),
+    'notify' => (string)__('仅通知'),
+];
+$autoModeLabels = [
+    'off' => (string)__('关闭'),
+    'notify' => (string)__('只通知'),
+    'auto' => (string)__('自动处理'),
+    'dry_run' => (string)__('预演（只记录）'),
+];
+$runStatusLabels = [
+    'running' => (string)__('进行中'),
+    'completed' => (string)__('完成'),
+    'partial' => (string)__('部分完成'),
+    'failed' => (string)__('失败'),
+    'skipped' => (string)__('已跳过'),
+];
+$actionStatusLabels = [
+    'pending' => (string)__('待执行'),
+    'applied' => (string)__('已生效'),
+    'reverted' => (string)__('已撤销'),
+    'failed' => (string)__('失败'),
+    'dry_run' => (string)__('预演'),
+];
+$actionTypeLabels = [
+    'remove' => (string)__('移出 sitemap'),
+    'restore' => (string)__('加回 sitemap'),
+    'replace' => (string)__('替换为重定向目标'),
+    'redirect_add' => (string)__('写入重定向'),
+    'notify' => (string)__('仅通知'),
+    'exclude' => (string)__('加入保护名单'),
+];
+$stateOptions = [
+    '' => (string)__('全部状态'),
+    'open' => (string)__('待处理'),
+    'fixed' => (string)__('已修复'),
+    'ignored' => (string)__('已忽略'),
+    'auto_removed' => (string)__('已自动移除'),
+    'ok' => (string)__('正常'),
+];
+$activeTabCount = 0;
+foreach ($tabs as $tabRow) {
+    if (!empty($tabRow['active'])) {
+        $activeTabCount = (int)($tabRow['count'] ?? 0);
+        break;
+    }
+}
+$lastChecked = (string)($summary['last_checked_at'] ?? '');
+$latestRun = $runs[0] ?? null;
+$probeEndpoint = (string)$this->getBackendUrl('seo/backend/health/probe');
+$policyEndpoint = (string)$this->getBackendUrl('seo/backend/health/save-policy');
+$revertEndpoint = (string)$this->getBackendUrl('seo/backend/health/revert-action');
+?>
+<link rel="stylesheet" href="@static(Weline_Seo::css/seo-admin.css)?v=20260726-sitemap-multi-domain-2">
+<link rel="stylesheet" href="@static(Weline_Seo::css/seo-health.css)?v=20261123-health-1">
+<script src="@static(Weline_Seo::js/seo-health.js)?v=20261123-health-1" defer></script>
+
+<main class="seo-admin seo-health" data-seo-admin-page="health"
+      data-website-id="<?= $websiteId ?>"
+      data-probe-endpoint="<?= $escape($probeEndpoint) ?>"
+      data-policy-endpoint="<?= $escape($policyEndpoint) ?>"
+      data-revert-endpoint="<?= $escape($revertEndpoint) ?>"
+      data-probe-running="<?= $escape(__('探测进行中，请稍候…')) ?>"
+      data-probe-failed="<?= $escape(__('探测失败')) ?>"
+      data-probe-empty="<?= $escape(__('请先选择站点')) ?>"
+      data-policy-saved="<?= $escape(__('规则已保存')) ?>"
+      data-policy-saving="<?= $escape(__('规则保存中…')) ?>"
+      data-policy-failed="<?= $escape(__('规则保存失败')) ?>"
+      data-revert-confirm="<?= $escape(__('确认撤销这条自动处理？')) ?>"
+      data-revert-done="<?= $escape(__('已撤销')) ?>"
+      data-revert-failed="<?= $escape(__('撤销失败')) ?>"
+      data-confirm-probe="<?= $escape(__('将按当前预算探测本站 sitemap URL，并按规则写动作台账。继续？')) ?>"
+      data-tab-search-empty="<?= $escape(__('没有匹配的分类')) ?>">
+
+    <header class="seo-admin__header">
+        <div>
+            <p class="seo-admin__eyebrow"><lang>SEO 运维</lang></p>
+            <h2 class="seo-admin__title"><w:icon name="search" size="sm"></w:icon> <lang>索引健康</lang></h2>
+            <p class="seo-admin__description">
+                <lang>在 cron 生成 sitemap 时探测本站 URL：404、403、4xx、5xx、软 404、重定向、robots 屏蔽先自己发现，再决定怎么处理。</lang>
+            </p>
+        </div>
+        <div class="seo-admin__actions">
+            <button type="button" class="w-button" data-health-probe data-tone="primary">
+                <w:icon name="refresh" size="sm"></w:icon> <lang>立即探测</lang>
+            </button>
+            <a class="w-button" href="<?= $escape($viewUrl(['view' => 'runs'])) ?>" data-tone="neutral" data-variant="outline">
+                <w:icon name="list" size="sm"></w:icon> <lang>探测记录</lang>
+            </a>
+        </div>
+    </header>
+
+    <section class="seo-health__toolbar">
+        <form method="get" action="<?= $escape($this->getBackendUrl('seo/backend/health')) ?>" class="seo-health__site-form">
+            <input type="hidden" name="view" value="<?= $escape($view) ?>">
+            <label class="seo-health__field">
+                <span><lang>站点</lang></span>
+                <select class="w-select" name="website_id" data-health-website>
+                    <?php if ($websites === []): ?>
+                        <option value="0"><?= $escape(__('暂无站点')) ?></option>
+                    <?php endif; ?>
+                    <?php foreach ($websites as $websiteOption): ?>
+                        <?php
+                        $optionId = (int)($websiteOption['website_id'] ?? -1);
+                        if ($optionId < 0) {
+                            continue;
+                        }
+                        $optionLabel = (string)($websiteOption['name'] ?? ('#' . $optionId));
+                        $optionHost = (string)($websiteOption['domain'] ?? '');
+                        ?>
+                        <option value="<?= $optionId ?>" <?= $optionId === $websiteId ? 'selected' : '' ?>>
+                            <?= $escape($optionLabel . ($optionHost !== '' ? ' · ' . $optionHost : '')) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+            <noscript><button type="submit" class="w-button" data-size="sm"><lang>切换</lang></button></noscript>
+        </form>
+        <div class="seo-health__meta">
+            <?php if ($website !== null): ?>
+                <span class="seo-health__meta-item"><w:icon name="link" size="sm"></w:icon> <?= $escape((string)($website['url'] ?? '')) ?></span>
+            <?php endif; ?>
+            <span class="seo-health__meta-item">
+                <w:icon name="clock" size="sm"></w:icon>
+                <lang>上次检查</lang>：<?= $escape($lastChecked !== '' ? $lastChecked : __('尚未探测')) ?>
+            </span>
+            <?php if (is_array($latestRun)): ?>
+                <span class="seo-health__meta-item">
+                    <lang>最近跑批</lang> #<?= (int)($latestRun['run_id'] ?? 0) ?>
+                    · <?= $escape($runStatusLabels[(string)($latestRun['status'] ?? '')] ?? (string)($latestRun['status'] ?? '')) ?>
+                </span>
+            <?php endif; ?>
+        </div>
+        <div class="seo-health__probe-result" data-health-probe-result hidden></div>
+    </section>
+
+    <section class="seo-kpi-grid seo-health__kpis" aria-label="<?= $escape(__('索引健康概览')) ?>">
+        <?php
+        $kpis = [
+            ['icon' => 'link', 'value' => (int)($summary['total'] ?? 0), 'label' => __('已检查 URL')],
+            ['icon' => 'check', 'value' => (int)($summary['healthy'] ?? 0), 'label' => __('正常')],
+            ['icon' => 'warning', 'value' => (int)($summary['issues'] ?? 0), 'label' => __('问题 URL')],
+            ['icon' => 'clock', 'value' => (int)($summary['open'] ?? 0), 'label' => __('待处理')],
+            ['icon' => 'trash', 'value' => (int)($summary['auto_removed'] ?? 0), 'label' => __('已自动移除')],
+        ];
+        foreach ($kpis as $kpi):
+            ?>
+            <article class="seo-kpi">
+                <i class="mdi <?= $escape($kpi['icon']) ?>" aria-hidden="true"></i>
+                <div><strong><?= number_format((int)$kpi['value']) ?></strong><span><?= $escape($kpi['label']) ?></span></div>
+            </article>
+        <?php endforeach; ?>
+    </section>
+
+    <nav class="w-tabs seo-health__views" aria-label="<?= $escape(__('索引健康视图')) ?>">
+        <ul class="w-tabs__list" role="tablist">
+            <?php
+            $views = [
+                'health' => __('索引健康'),
+                'policy' => __('处理规则'),
+                'actions' => __('操作台账'),
+                'runs' => __('探测记录'),
+            ];
+            foreach ($views as $viewCode => $viewLabel):
+                ?>
+                <li role="presentation">
+                    <a class="w-tabs__tab <?= $view === $viewCode ? 'is-active' : '' ?>"
+                       role="tab"
+                       aria-selected="<?= $view === $viewCode ? 'true' : 'false' ?>"
+                       href="<?= $escape($viewUrl(['view' => $viewCode, 'page' => ''])) ?>">
+                        <?= $escape($viewLabel) ?>
+                        <?php if ($viewCode === 'health'): ?>
+                            <span class="seo-health__tab-count"><?= number_format($activeTabCount) ?></span>
+                        <?php endif; ?>
+                    </a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </nav>
+
+    <?php if ($view === 'health'): ?>
+        <section class="seo-admin__panel seo-health__panel">
+            <form method="get" action="<?= $escape($this->getBackendUrl('seo/backend/health')) ?>" class="seo-toolbar seo-health__filters">
+                <input type="hidden" name="website_id" value="<?= $websiteId ?>">
+                <input type="hidden" name="view" value="health">
+                <input type="hidden" name="issue" value="<?= $escape($filters['issue']) ?>">
+                <label class="seo-health__field seo-health__field--search">
+                    <span class="w-visually-hidden"><lang>搜索地址</lang></span>
+                    <input class="w-input" type="search" name="q" value="<?= $escape($filters['q']) ?>"
+                           placeholder="<?= $escape(__('搜索地址 / 模块 / 实体ID')) ?>">
+                </label>
+                <label class="seo-health__field">
+                    <span class="w-visually-hidden"><lang>处理状态</lang></span>
+                    <select class="w-select" name="state">
+                        <?php foreach ($stateOptions as $stateValue => $stateLabel): ?>
+                            <option value="<?= $escape($stateValue) ?>" <?= $filters['state'] === $stateValue ? 'selected' : '' ?>>
+                                <?= $escape($stateLabel) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label class="seo-health__field">
+                    <span class="w-visually-hidden"><lang>语言</lang></span>
+                    <input class="w-input" type="text" name="locale" value="<?= $escape($filters['locale']) ?>"
+                           placeholder="<?= $escape(__('语言（如 zh-CN）')) ?>">
+                </label>
+                <button type="submit" class="w-button" data-tone="primary" data-size="sm">
+                    <w:icon name="search" size="sm"></w:icon> <lang>筛选</lang>
+                </button>
+                <?php if ($filters['q'] !== '' || $filters['state'] !== '' || $filters['locale'] !== ''): ?>
+                    <a class="w-button" href="<?= $escape($viewUrl(['q' => '', 'state' => '', 'locale' => '', 'issue' => '', 'page' => ''])) ?>"
+                       data-tone="neutral" data-variant="outline" data-size="sm"><lang>重置</lang></a>
+                <?php endif; ?>
+            </form>
+
+            <div class="seo-health__tabs">
+                <button type="button" class="w-button seo-health__tabs-arrow" data-health-tabs-prev
+                        aria-label="<?= $escape(__('向左滚动分类')) ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                    <w:icon name="chevron-left" size="sm"></w:icon>
+                </button>
+                <div class="w-tabs__list seo-health__tabs-list" role="tablist" data-health-tabs aria-label="<?= $escape(__('按问题分类')) ?>">
+                    <?php foreach ($tabs as $tabRow): ?>
+                        <?php
+                        $tabCode = (string)($tabRow['code'] ?? '');
+                        $tabCount = (int)($tabRow['count'] ?? 0);
+                        $tabActive = !empty($tabRow['active']);
+                        $tabUrl = $viewUrl(['issue' => $tabCode, 'page' => '']);
+                        ?>
+                        <a class="w-tabs__tab seo-health__tab <?= $tabActive ? 'is-active' : '' ?> <?= $tabCount === 0 ? 'is-empty' : '' ?>"
+                           role="tab"
+                           aria-selected="<?= $tabActive ? 'true' : 'false' ?>"
+                           data-health-tab
+                           data-tab-label="<?= $escape(mb_strtolower((string)($tabRow['label'] ?? ''))) ?>"
+                           href="<?= $escape($tabUrl) ?>">
+                            <span><?= $escape((string)($tabRow['label'] ?? '')) ?></span>
+                            <span class="seo-health__tab-count" data-tone="<?= $escape((string)($tabRow['tone'] ?? 'info')) ?>"><?= number_format($tabCount) ?></span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+                <button type="button" class="w-button seo-health__tabs-arrow" data-health-tabs-next
+                        aria-label="<?= $escape(__('向右滚动分类')) ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                    <w:icon name="chevron-right" size="sm"></w:icon>
+                </button>
+                <label class="seo-health__tab-search">
+                    <span class="w-visually-hidden"><lang>搜索分类</lang></span>
+                    <input class="w-input" type="search" data-health-tab-search
+                           placeholder="<?= $escape(__('搜索分类')) ?>">
+                </label>
+            </div>
+
+            <div class="seo-admin__table-wrap">
+                <table class="w-table seo-health__table" data-w-vertical="middle">
+                    <thead>
+                    <tr>
+                        <th scope="col"><lang>地址</lang></th>
+                        <th scope="col"><lang>状态码</lang></th>
+                        <th scope="col"><lang>问题</lang></th>
+                        <th scope="col"><lang>处理状态</lang></th>
+                        <th scope="col"><lang>首次发现</lang></th>
+                        <th scope="col"><lang>最近检查</lang></th>
+                        <th scope="col"><lang>连续</lang></th>
+                        <th scope="col"><lang>处理</lang></th>
+                        <th scope="col"><lang>详情</lang></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (($list['rows'] ?? []) === []): ?>
+                        <tr>
+                            <td colspan="9">
+                                <div class="seo-empty-state">
+                                    <i class="mdi mdi-magnify" aria-hidden="true"></i>
+                                    <p><lang>该站点还没有匹配的探测记录。点右上角「立即探测」先跑一轮。</lang></p>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endif; ?>
+                    <?php foreach (($list['rows'] ?? []) as $row): ?>
+                        <?php
+                        $rowIssue = (string)($row['issue_code'] ?? '');
+                        $rowTone = (string)($row['tone'] ?? 'info');
+                        $rowPolicy = $policyByCode[$rowIssue] ?? null;
+                        $rowUrl = (string)($row['url'] ?? '');
+                        $rowState = (string)($row['state'] ?? '');
+                        $stateTone = match ($rowState) {
+                            'ok' => 'success',
+                            'fixed' => 'success',
+                            'ignored' => 'muted',
+                            'auto_removed' => 'warning',
+                            default => 'danger',
+                        };
+                        ?>
+                        <tr data-health-row data-issue="<?= $escape($rowIssue) ?>">
+                            <td class="seo-health__url-cell">
+                                <a href="<?= $escape($rowUrl) ?>" target="_blank" rel="noopener noreferrer"
+                                   title="<?= $escape($rowUrl) ?>"><?= $escape($rowUrl) ?></a>
+                                <small>
+                                    <?php if ((string)($row['module'] ?? '') !== ''): ?>
+                                        <code><?= $escape((string)$row['module']) ?></code>
+                                    <?php endif; ?>
+                                    <?php if ((string)($row['locale'] ?? '') !== ''): ?>
+                                        <span><?= $escape((string)$row['locale']) ?></span>
+                                    <?php endif; ?>
+                                    <?php if ((int)($row['response_ms'] ?? 0) > 0): ?>
+                                        <span><?= (int)$row['response_ms'] ?>ms</span>
+                                    <?php endif; ?>
+                                </small>
+                            </td>
+                            <td><strong><?= (int)($row['http_status'] ?? 0) ?></strong></td>
+                            <td>
+                                <span class="w-badge" data-tone="<?= $escape($rowTone) ?>"><?= $escape((string)($row['issue_label'] ?? '')) ?></span>
+                                <?php if ((string)($row['robots_state'] ?? '') === 'blocked'): ?>
+                                    <span class="w-badge" data-tone="warning"><lang>robots 禁止</lang></span>
+                                <?php endif; ?>
+                            </td>
+                            <td><span class="w-badge" data-tone="<?= $escape($stateTone) ?>"><?= $escape((string)($row['state_label'] ?? '')) ?></span></td>
+                            <td><?= $escape((string)($row['first_seen_at'] ?? '')) ?></td>
+                            <td><?= $escape((string)($row['last_checked_at'] ?? '')) ?></td>
+                            <td><?= (int)($row['consecutive_failures'] ?? 0) ?></td>
+                            <td>
+                                <?php if (is_array($rowPolicy)): ?>
+                                    <?php
+                                    $rowAutoMode = (string)($rowPolicy['auto_mode'] ?? '');
+                                    $rowAction = (string)($rowPolicy['action'] ?? '');
+                                    $rowAutoLabel = $autoModeLabels[$rowAutoMode] ?? $rowAutoMode;
+                                    $rowActionLabel = $actionLabels[$rowAction] ?? $rowAction;
+                                    ?>
+                                    <?= $escape($rowAutoLabel) ?>
+                                    <?php if ($rowAction !== 'notify' || !in_array($rowAutoMode, ['off', 'notify'], true)): ?>
+                                        <small><?= $escape($rowActionLabel) ?></small>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <span class="w-text" data-tone="muted">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <details class="seo-health__detail">
+                                    <summary><lang>查看</lang></summary>
+                                    <dl>
+                                        <dt><lang>最终地址</lang></dt>
+                                        <dd><?= $escape((string)($row['final_url'] ?? '')) ?></dd>
+                                        <dt><lang>重定向</lang></dt>
+                                        <dd><?= (int)($row['redirect_count'] ?? 0) ?> <?= $escape(__('跳')) ?></dd>
+                                        <dt><lang>语言</lang></dt>
+                                        <dd><?= $escape((string)($row['locale'] ?? '—')) ?></dd>
+                                    </dl>
+                                </details>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <?php
+            $currentPage = (int)($list['page'] ?? 1);
+            $totalPages = (int)($list['pages'] ?? 1);
+            $totalRows = (int)($list['total'] ?? 0);
+            ?>
+            <footer class="seo-health__pager">
+                <span>
+                    <?= $escape(__('共 %{1} 条，第 %{2}/%{3} 页', [$totalRows, $currentPage, $totalPages])) ?>
+                </span>
+                <div class="seo-health__pager-actions">
+                    <?php if ($currentPage > 1): ?>
+                        <a class="w-button" data-size="sm" data-variant="outline"
+                           href="<?= $escape($viewUrl(['page' => $currentPage - 1])) ?>"><lang>上一页</lang></a>
+                    <?php endif; ?>
+                    <?php if ($currentPage < $totalPages): ?>
+                        <a class="w-button" data-size="sm" data-variant="outline"
+                           href="<?= $escape($viewUrl(['page' => $currentPage + 1])) ?>"><lang>下一页</lang></a>
+                    <?php endif; ?>
+                </div>
+            </footer>
+        </section>
+    <?php elseif ($view === 'policy'): ?>
+        <section class="seo-admin__panel seo-health__panel">
+            <div class="seo-health__notice">
+                <w:icon name="info" size="sm"></w:icon>
+                <div>
+                    <strong><lang>自动处理规则</lang></strong>
+                    <p><lang>404/410、403/401、4xx、5xx、软 404、重定向、robots 都可以单独配置：连续几次后移出 sitemap、是否自动加回、通知渠道。规则保存后由下一次 sitemap cron 在发布前执行；「预演」只写台账不执行。</lang></p>
+                </div>
+            </div>
+            <form method="post" action="<?= $escape($policyEndpoint) ?>" data-health-policy-form data-endpoint="<?= $escape($policyEndpoint) ?>">
+                <input type="hidden" name="website_id" value="<?= $websiteId ?>">
+                <div class="seo-admin__table-wrap">
+                    <table class="w-table seo-health__table">
+                        <thead>
+                        <tr>
+                            <th scope="col"><lang>问题类型</lang></th>
+                            <th scope="col"><lang>自动模式</lang></th>
+                            <th scope="col"><lang>处理方式</lang></th>
+                            <th scope="col"><lang>连续次数</lang></th>
+                            <th scope="col"><lang>恢复加回</lang></th>
+                            <th scope="col"><lang>恢复阈值</lang></th>
+                            <th scope="col"><lang>通知渠道</lang></th>
+                            <th scope="col"><lang>来源</lang></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($policyMatrix as $policy): ?>
+                            <?php
+                            $policyCode = (string)($policy['issue_code'] ?? '');
+                            $policyMode = (string)($policy['auto_mode'] ?? 'notify');
+                            $policyAction = (string)($policy['action'] ?? 'notify');
+                            ?>
+                            <tr data-policy-row data-issue-code="<?= $escape($policyCode) ?>">
+                                <td>
+                                    <span class="w-badge" data-tone="<?= $escape((string)($policy['tone'] ?? 'info')) ?>">
+                                        <?= $escape((string)($policy['label'] ?? '')) ?>
+                                    </span>
+                                    <small><?= $escape((string)($policy['description'] ?? '')) ?></small>
+                                </td>
+                                <td>
+                                    <select class="w-select" data-policy-field="auto_mode" aria-label="<?= $escape(__('自动模式')) ?>">
+                                        <?php foreach ($autoModeLabels as $modeValue => $modeLabel): ?>
+                                            <option value="<?= $escape($modeValue) ?>" <?= $policyMode === $modeValue ? 'selected' : '' ?>>
+                                                <?= $escape($modeLabel) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select class="w-select" data-policy-field="action" aria-label="<?= $escape(__('处理方式')) ?>">
+                                        <?php foreach ($actionLabels as $actionValue => $actionLabel): ?>
+                                            <option value="<?= $escape($actionValue) ?>" <?= $policyAction === $actionValue ? 'selected' : '' ?>>
+                                                <?= $escape($actionLabel) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </td>
+                                <td>
+                                    <input class="w-input seo-health__number" type="number" min="1" max="10"
+                                           value="<?= (int)($policy['grace_runs'] ?? 2) ?>"
+                                           data-policy-field="grace_runs" aria-label="<?= $escape(__('连续次数')) ?>">
+                                </td>
+                                <td>
+                                    <input type="checkbox" data-policy-field="restore_enabled"
+                                           <?= !empty($policy['restore_enabled']) ? 'checked' : '' ?>
+                                           aria-label="<?= $escape(__('恢复加回')) ?>">
+                                </td>
+                                <td>
+                                    <input class="w-input seo-health__number" type="number" min="1" max="10"
+                                           value="<?= (int)($policy['restore_grace_runs'] ?? 3) ?>"
+                                           data-policy-field="restore_grace_runs" aria-label="<?= $escape(__('恢复阈值')) ?>">
+                                </td>
+                                <td>
+                                    <input class="w-input" type="text"
+                                           value="<?= $escape(implode(',', (array)($policy['notify_channels'] ?? ['backend']))) ?>"
+                                           data-policy-field="notify_channels" aria-label="<?= $escape(__('通知渠道')) ?>">
+                                </td>
+                                <td>
+                                    <?php if (!empty($policy['configured'])): ?>
+                                        <span class="w-badge" data-tone="info"><?= $escape((string)($policy['scope'] ?? '')) ?></span>
+                                    <?php else: ?>
+                                        <span class="w-text" data-tone="muted"><lang>默认</lang></span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <footer class="seo-health__pager">
+                    <span><lang>预演只写台账；自动执行发生在 sitemap cron 的发布前，并受单次移除上限保护。</lang></span>
+                    <div class="seo-health__pager-actions">
+                        <span class="seo-health__policy-result" data-policy-result aria-live="polite"></span>
+                        <button type="submit" class="w-button" data-tone="primary" data-policy-save>
+                            <w:icon name="check" size="sm"></w:icon> <lang>保存规则</lang>
+                        </button>
+                    </div>
+                </footer>
+            </form>
+        </section>
+    <?php elseif ($view === 'actions'): ?>
+        <section class="seo-admin__panel seo-health__panel">
+            <div class="seo-health__notice">
+                <w:icon name="info" size="sm"></w:icon>
+                <div>
+                    <strong><lang>动作台账</lang></strong>
+                    <p><lang>自动移除、恢复、替换都会记录在这里；cron 每轮按台账重新断言，Provider 同步复活也能压回去。已生效的移除/替换可以撤销。</lang></p>
+                </div>
+            </div>
+            <?php if ($actions === []): ?>
+                <div class="seo-empty-state">
+                    <i class="mdi mdi-clipboard-text-outline" aria-hidden="true"></i>
+                    <p><lang>还没有动作记录。规则设为「自动处理」或「预演」后，下一轮 cron 会在这里留下台账。</lang></p>
+                </div>
+            <?php else: ?>
+                <div class="seo-admin__table-wrap">
+                    <table class="w-table seo-health__table">
+                        <thead>
+                        <tr>
+                            <th scope="col"><lang>时间</lang></th>
+                            <th scope="col"><lang>地址</lang></th>
+                            <th scope="col"><lang>动作</lang></th>
+                            <th scope="col"><lang>问题</lang></th>
+                            <th scope="col"><lang>来源</lang></th>
+                            <th scope="col"><lang>跑批</lang></th>
+                            <th scope="col"><lang>状态</lang></th>
+                            <th scope="col"><lang>操作</lang></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($actions as $actionRow): ?>
+                            <?php
+                            $actionId = (int)($actionRow['action_id'] ?? 0);
+                            $actionType = (string)($actionRow['action_type'] ?? '');
+                            $actionStatus = (string)($actionRow['status'] ?? '');
+                            $canRevert = $actionStatus === 'applied' && in_array($actionType, ['remove', 'replace'], true);
+                            $statusTone = match ($actionStatus) {
+                                'applied' => 'success',
+                                'pending' => 'warning',
+                                'failed' => 'danger',
+                                'reverted' => 'muted',
+                                default => 'info',
+                            };
+                            ?>
+                            <tr data-action-row data-action-id="<?= $actionId ?>">
+                                <td><?= $escape((string)($actionRow['created_at'] ?? '')) ?></td>
+                                <td class="seo-health__url-cell">
+                                    <a href="<?= $escape((string)($actionRow['url'] ?? '')) ?>" target="_blank" rel="noopener noreferrer">
+                                        <?= $escape((string)($actionRow['url'] ?? '')) ?>
+                                    </a>
+                                </td>
+                                <td><?= $escape($actionTypeLabels[$actionType] ?? $actionType) ?></td>
+                                <td><?= $escape(\Weline\Seo\Service\Health\HealthIssueCatalog::label((string)($actionRow['issue_code'] ?? ''))) ?></td>
+                                <td><?= $escape((string)($actionRow['source'] ?? '')) ?></td>
+                                <td>#<?= (int)($actionRow['run_id'] ?? 0) ?></td>
+                                <td><span class="w-badge" data-tone="<?= $escape($statusTone) ?>"><?= $escape($actionStatusLabels[$actionStatus] ?? $actionStatus) ?></span></td>
+                                <td>
+                                    <?php if ($canRevert): ?>
+                                        <button type="button" class="w-button" data-size="sm" data-variant="outline"
+                                                data-health-revert data-action-id="<?= $actionId ?>">
+                                            <w:icon name="undo" size="sm"></w:icon> <lang>撤销</lang>
+                                        </button>
+                                    <?php else: ?>
+                                        <span class="w-text" data-tone="muted">—</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </section>
+    <?php else: ?>
+        <section class="seo-admin__panel seo-health__panel">
+            <div class="seo-admin__table-wrap">
+                <table class="w-table seo-health__table">
+                    <thead>
+                    <tr>
+                        <th scope="col"><lang>跑批</lang></th>
+                        <th scope="col"><lang>状态</lang></th>
+                        <th scope="col"><lang>触发</lang></th>
+                        <th scope="col"><lang>探测</lang></th>
+                        <th scope="col"><lang>正常</lang></th>
+                        <th scope="col"><lang>问题</lang></th>
+                        <th scope="col"><lang>动作</lang></th>
+                        <th scope="col"><lang>分类计数</lang></th>
+                        <th scope="col"><lang>耗时</lang></th>
+                        <th scope="col"><lang>开始</lang></th>
+                        <th scope="col"><lang>结束</lang></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if ($runs === []): ?>
+                        <tr>
+                            <td colspan="11">
+                                <div class="seo-empty-state">
+                                    <i class="mdi mdi-clock-outline" aria-hidden="true"></i>
+                                    <p><lang>还没有探测跑批。点右上角「立即探测」。</lang></p>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endif; ?>
+                    <?php foreach ($runs as $run): ?>
+                        <tr>
+                            <td>#<?= (int)($run['run_id'] ?? 0) ?></td>
+                            <td>
+                                <span class="w-badge" data-tone="<?= in_array((string)($run['status'] ?? ''), ['completed'], true) ? 'success' : ((string)($run['status'] ?? '') === 'failed' ? 'danger' : 'warning') ?>">
+                                    <?= $escape($runStatusLabels[(string)($run['status'] ?? '')] ?? (string)($run['status'] ?? '')) ?>
+                                </span>
+                            </td>
+                            <td><?= $escape((string)($run['trigger_type'] ?? '')) ?></td>
+                            <td><?= (int)($run['probed'] ?? 0) ?></td>
+                            <td><?= (int)($run['ok'] ?? 0) ?></td>
+                            <td><?= (int)($run['issues'] ?? 0) ?></td>
+                            <td><?= (int)($run['actions_applied'] ?? 0) ?></td>
+                            <td>
+                                <small>
+                                    <?php
+                                    $byIssue = (array)($run['by_issue'] ?? []);
+                                    if ($byIssue === []) {
+                                        echo '—';
+                                    } else {
+                                        $parts = [];
+                                        foreach ($byIssue as $issueCode => $issueCount) {
+                                            $parts[] = $escape((string)($issueCode)) . ':' . (int)$issueCount;
+                                        }
+                                        echo implode(' · ', $parts);
+                                    }
+                                    ?>
+                                </small>
+                            </td>
+                            <td><?= (int)($run['duration_ms'] ?? 0) ?>ms</td>
+                            <td><?= $escape((string)($run['started_at'] ?? '')) ?></td>
+                            <td><?= $escape((string)($run['finished_at'] ?? '')) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    <?php endif; ?>
+</main>

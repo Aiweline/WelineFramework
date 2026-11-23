@@ -229,11 +229,11 @@ final class FeedScheduleService
 
         file_put_contents(
             $jsonPath,
-            $this->generator->generateFeedFromItems($channel, $items, 'json_feed')
+            $this->generator->generateFeedFromItems($channel, $items, 'json_feed', $baseUrl)
         );
         file_put_contents(
             $xmlPath,
-            $this->generator->generateFeedFromItems($channel, $items, 'rss')
+            $this->generator->generateFeedFromItems($channel, $items, 'rss', $baseUrl)
         );
     }
 

@@ -310,7 +310,9 @@ CLS 必被破，且现场看不出「谁和谁不一致」。
 ```bash
 php bin/w theme:compile layoutCritical   # 把各设计主题生成物对齐当前基线
 php bin/w cache:clear
-php bin/w fpc:clear -w <站点域名>        # html-disk 层 Nginx 直出，cache:clear 清不掉
+php bin/w fpc:clear --url https://<站点域名>/<页面路径>   # 只清这一页（html-disk 层 Nginx 直出，cache:clear 清不掉）
+php bin/w fpc:clear -w <站点域名> --path /<路径>          # 只清该路径（站点全部域名）
+php bin/w fpc:clear -w <站点域名> --all -f                # 整站清理：必须 --all + -f 同时给
 ```
 
 然后对**至少 8 类页面**（`/`、FAQ、分类、列表、详情、购物车、博客、静态页）× **320/360/390** 取：

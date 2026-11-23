@@ -26,13 +26,26 @@ class ChatSessionManager
         AgentRole $role,
         string $channel = AgentChatSession::CHANNEL_WEB,
         string $contextId = '',
-        array $metadata = []
+        array $metadata = [],
+        array $options = []
     ): AgentChatSession {
         $session = $this->sessionModel;
         $session->setData(AgentChatSession::schema_fields_ROLE_ID, $role->getId());
         $session->setData(AgentChatSession::schema_fields_CHANNEL, $channel);
         $session->setData(AgentChatSession::schema_fields_CONTEXT_ID, $contextId ?: $this->generateContextId());
         $session->setData(AgentChatSession::schema_fields_STATUS, AgentChatSession::STATUS_ACTIVE);
+        $projectId = (int)($options['project_id'] ?? 0);
+        if ($projectId > 0) {
+            $session->setData(AgentChatSession::schema_fields_PROJECT_ID, $projectId);
+        }
+        $defaultRoleId = (int)($options['default_role_id'] ?? 0);
+        if ($defaultRoleId > 0) {
+            $session->setData(AgentChatSession::schema_fields_DEFAULT_ROLE_ID, $defaultRoleId);
+        }
+        $defaultModelCode = trim((string)($options['default_model_code'] ?? ''));
+        if ($defaultModelCode !== '') {
+            $session->setData(AgentChatSession::schema_fields_DEFAULT_MODEL_CODE, $defaultModelCode);
+        }
         $session->setMetadata($metadata);
         $session->save();
 
@@ -81,12 +94,36 @@ class ChatSessionManager
         string $content,
         array $toolCalls = [],
         string $toolName = '',
-        string $toolCallId = ''
+        string $toolCallId = '',
+        array $meta = []
     ): AgentChatMessage {
         $message = $this->messageModel;
         $message->setData(AgentChatMessage::schema_fields_SESSION_ID, $session->getId());
         $message->setData(AgentChatMessage::schema_fields_ROLE, $role);
         $message->setData(AgentChatMessage::schema_fields_CONTENT, $content);
+
+        $roleId = (int)($meta['role_id'] ?? 0);
+        if ($roleId > 0) {
+            $message->setData(AgentChatMessage::schema_fields_ROLE_ID, $roleId);
+        }
+        $agentCode = trim((string)($meta['agent_code'] ?? ''));
+        if ($agentCode !== '') {
+            $message->setData(AgentChatMessage::schema_fields_AGENT_CODE, $agentCode);
+        }
+        $modelCode = trim((string)($meta['model_code'] ?? ''));
+        if ($modelCode !== '') {
+            $message->setData(AgentChatMessage::schema_fields_MODEL_CODE, $modelCode);
+        }
+        $projectId = (int)($meta['project_id'] ?? $session->getData(AgentChatSession::schema_fields_PROJECT_ID) ?? 0);
+        if ($projectId > 0) {
+            $message->setData(AgentChatMessage::schema_fields_PROJECT_ID, $projectId);
+        }
+        $metaJson = $meta['meta_json'] ?? null;
+        if (is_array($metaJson)) {
+            $message->setData(AgentChatMessage::schema_fields_META_JSON, json_encode($metaJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        } elseif (is_string($metaJson) && $metaJson !== '') {
+            $message->setData(AgentChatMessage::schema_fields_META_JSON, $metaJson);
+        }
 
         if (!empty($toolCalls)) {
             $message->setToolCalls($toolCalls);

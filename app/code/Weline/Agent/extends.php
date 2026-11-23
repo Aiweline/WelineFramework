@@ -11,6 +11,12 @@ return [
             'interface' => 'Weline\\Agent\\Interface\\SkillInterface',
             'multiple' => true,
         ],
+        // 智能体插件扩展点（能力包：skills/prompt_fragments/permissions/agents）
+        'Plugin' => [
+            'path' => 'extends/module/Weline_Agent/Plugin',
+            'interface' => 'Weline\\Agent\\Interface\\AgentPluginInterface',
+            'multiple' => true,
+        ],
         // 渠道适配器扩展点
         'ChannelAdapter' => [
             'path' => 'extends/module/Weline_Agent/ChannelAdapter',

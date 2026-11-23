@@ -64,6 +64,24 @@ final class SiteBindingResolver
         return (bool) preg_match(self::PLACEHOLDER_PATTERN, $normalized);
     }
 
+    /**
+     * Canonical public origin for the registered website.
+     *
+     * Feed/JSON-LD output must not depend on the request host: CLI publishers and
+     * origin-direct requests have no usable Host, and a relative feed_url is invalid
+     * JSON Feed/RSS. The website cabinet is the authoritative source.
+     */
+    public function publicBaseUrl(object $website): string
+    {
+        $websiteId = $this->websiteIdOf($website);
+        $registered = $websiteId >= 0 ? $this->websiteDirectory->getWebsiteById($websiteId, true) : null;
+        if (!is_array($registered)) {
+            return '';
+        }
+
+        return rtrim(trim($this->websiteDirectory->effectivePublicBaseUrl($registered)), '/');
+    }
+
     private function websiteIdOf(object $website): int
     {
         return (int)($website->id ?? $website->website_id ?? 0);

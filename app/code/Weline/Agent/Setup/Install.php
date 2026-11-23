@@ -25,6 +25,8 @@ class Install implements InstallInterface
         $this->createDefaultRole();
         $this->createBuiltinSkills();
         $this->registerAgentAdapters();
+        (new GeneralRoleSeeder())->ensure();
+        (new PluginSeeder())->seed();
     }
 
     /**
@@ -54,9 +56,10 @@ class Install implements InstallInterface
         $now = time();
         $roleModel->clear()
             ->setData([
-                'code' => 'assistant',
-                'name' => 'AI 助手',
-                'system_prompt' => '你是一个智能助手，具备文件操作、Shell执行、网络请求等能力。请根据用户指令安全、高效地完成任务。对于危险操作，请务必先询问用户确认。',
+                'code' => 'general',
+                'name' => '通用助手',
+                'agent_code' => 'chat_agent',
+                'system_prompt' => '你是一个通用智能助手，具备文件操作、Shell执行、网络请求等能力。请根据用户指令安全、高效地完成任务。对于危险操作，请务必先询问用户确认。',
                 'permissions' => json_encode([
                     'fs.read:/app/*',
                     'fs.read:/var/*',
@@ -72,7 +75,7 @@ class Install implements InstallInterface
                 ], JSON_UNESCAPED_UNICODE),
                 'status' => 'enabled',
                 'is_default' => 1,
-                'description' => '默认 AI 助手角色，具备基础文件操作和网络请求能力',
+                'description' => '默认通用角色，具备基础文件操作和网络请求能力',
                 'icon' => 'mdi-robot',
                 'created_at' => $now,
                 'updated_at' => $now,

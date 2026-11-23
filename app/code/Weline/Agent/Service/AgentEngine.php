@@ -12,6 +12,7 @@ use Weline\Agent\Model\AgentChatSession;
 use Weline\Agent\Model\AgentRole;
 use Weline\Agent\Model\AgentSkill;
 use Weline\Agent\Model\AgentToolCall;
+use Weline\Framework\Manager\ObjectManager;
 
 class AgentEngine
 {
@@ -26,37 +27,55 @@ class AgentEngine
         private readonly ?AiModel $aiModel = null,
     ) {}
 
+    /**
+     * @param array $turnOpts 回合级选项：
+     *   - model_code：覆盖角色模型
+     *   - system_prompt_override：系统提示词覆盖（节点/回合级）
+     *   - project：['key','name'] 或 project_id 项目标记
+     *   - skill_codes：有效技能码（角色∪插件）
+     *   - on_event：callable(string $type, array $data) 运行事件（tool_call/tool_result/chunk）
+     *   - message_meta：写入消息行的 role_id/agent_code/model_code/project_id/meta_json
+     */
     public function execute(
         string $prompt,
         AgentRole $role,
         ?AgentChatSession $session = null,
-        ?callable $streamCallback = null
+        ?callable $streamCallback = null,
+        array $turnOpts = []
     ): AgentResult {
         try {
             if ($session === null) {
                 $session = $this->sessionManager->createSession($role);
             }
 
+            $messageMeta = is_array($turnOpts['message_meta'] ?? null) ? $turnOpts['message_meta'] : [];
             $this->sessionManager->addMessage(
                 $session,
                 AgentChatMessage::ROLE_USER,
-                $prompt
+                $prompt,
+                [],
+                '',
+                '',
+                $messageMeta
             );
 
             $adaptedPrompt = $this->adaptPrompt($prompt, $role, $session);
             $messages = $this->withCurrentPrompt(
-                $this->contextBuilder->build($session, $role),
+                $this->contextBuilder->build($session, $role, 50, 10, $this->contextOpts($turnOpts)),
                 $adaptedPrompt
             );
 
-            $result = $this->requestAgentResponse($role, $messages);
+            $result = $this->requestAgentResponse($role, $messages, $turnOpts);
             $maxIterations = 5;
             $iterations = 0;
 
             while (!empty($result->toolCalls) && $iterations < $maxIterations) {
+                $this->emitEvent($turnOpts, 'tool_request', [
+                    'tool_calls' => $result->toolCalls,
+                ]);
                 $this->persistAssistantToolRequest($session, $result);
 
-                $toolResults = $this->processToolCalls($result->toolCalls, $role, $session);
+                $toolResults = $this->processToolCalls($result->toolCalls, $role, $session, $turnOpts);
                 if (!$this->hasSuccessfulToolResult($toolResults)) {
                     return AgentResult::failure(
                         'The required tool call could not be completed with the current role skills or permissions.',
@@ -64,7 +83,7 @@ class AgentEngine
                     );
                 }
 
-                $result = $this->submitToolResults($toolResults, $role, $session);
+                $result = $this->submitToolResults($toolResults, $role, $session, $turnOpts);
                 $iterations++;
             }
 
@@ -81,7 +100,10 @@ class AgentEngine
                 $session,
                 AgentChatMessage::ROLE_ASSISTANT,
                 $result->content,
-                []
+                [],
+                '',
+                '',
+                $messageMeta
             );
 
             $this->memoryService->extractAndSave($result, $session);
@@ -103,9 +125,10 @@ class AgentEngine
         string $prompt,
         AgentRole $role,
         ?AgentChatSession $session = null,
-        ?callable $streamCallback = null
+        ?callable $streamCallback = null,
+        array $turnOpts = []
     ): \Generator {
-        $result = $this->execute($prompt, $role, $session);
+        $result = $this->execute($prompt, $role, $session, $streamCallback, $turnOpts);
 
         if (!$result->success) {
             $error = '[ERROR] ' . ($result->error ?: 'Unknown error');
@@ -160,11 +183,35 @@ class AgentEngine
         return $agentAdapter->adaptPrompt($prompt, $adapterParams);
     }
 
-    private function requestAgentResponse(AgentRole $role, array $messages): AgentResult
+    /** 提取传给 ContextBuilder 的选项子集 */
+    private function contextOpts(array $turnOpts): array
     {
-        $modelCode = $this->resolveModelCode($role);
+        $opts = [];
+        foreach (['system_prompt_override', 'project', 'project_id', 'skill_codes'] as $key) {
+            if (array_key_exists($key, $turnOpts)) {
+                $opts[$key] = $turnOpts[$key];
+            }
+        }
+        return $opts;
+    }
+
+    /** 统一运行事件出口（on_event 回调），失败静默不阻断主流程 */
+    private function emitEvent(array $turnOpts, string $type, array $data = []): void
+    {
+        $onEvent = $turnOpts['on_event'] ?? null;
+        if (is_callable($onEvent)) {
+            try {
+                $onEvent($type, $data);
+            } catch (\Throwable) {
+            }
+        }
+    }
+
+    private function requestAgentResponse(AgentRole $role, array $messages, array $turnOpts = []): AgentResult
+    {
+        $modelCode = $this->resolveModelCode($role, $turnOpts);
         $scenarioCode = $this->resolveScenarioCode($role);
-        $params = $this->buildProviderParams($role, $messages);
+        $params = $this->buildProviderParams($role, $messages, $turnOpts);
         $response = $this->aiService->generateStructured('', $modelCode, $scenarioCode, $params);
 
         $result = new AgentResult();
@@ -181,13 +228,17 @@ class AgentEngine
         return $result;
     }
 
-    private function buildProviderParams(AgentRole $role, array $messages): array
+    private function buildProviderParams(AgentRole $role, array $messages, array $turnOpts = []): array
     {
         $params = $role->getModelConfig();
         $params['messages'] = $messages;
         $params['is_backend'] = true;
 
-        $tools = $this->skillManager->getToolsForRole($role);
+        $extraCodes = $turnOpts['skill_codes'] ?? [];
+        $tools = $this->skillManager->getToolsForRole(
+            $role,
+            is_array($extraCodes) ? $extraCodes : []
+        );
         if (!empty($tools)) {
             $params['tools'] = $tools;
         }
@@ -232,8 +283,13 @@ class AgentEngine
         );
     }
 
-    private function resolveModelCode(AgentRole $role): ?string
+    private function resolveModelCode(AgentRole $role, array $turnOpts = []): ?string
     {
+        $override = trim((string)($turnOpts['model_code'] ?? ''));
+        if ($override !== '') {
+            return $override;
+        }
+
         $modelId = (int)$role->getData(AgentRole::schema_fields_MODEL_ID);
         if ($modelId <= 0) {
             return null;
@@ -280,7 +336,7 @@ class AgentEngine
         return $message;
     }
 
-    private function processToolCalls(array $toolCalls, AgentRole $role, AgentChatSession $session): array
+    private function processToolCalls(array $toolCalls, AgentRole $role, AgentChatSession $session, array $turnOpts = []): array
     {
         $toolResults = [];
 
@@ -288,6 +344,12 @@ class AgentEngine
             $skillCode = $toolCall['name'] ?? $toolCall['function']['name'] ?? '';
             $arguments = $toolCall['arguments'] ?? $toolCall['function']['arguments'] ?? [];
             $toolCallId = (string)($toolCall['id'] ?? '');
+
+            $this->emitEvent($turnOpts, 'tool_call', [
+                'tool_call_id' => $toolCallId,
+                'skill_code' => (string)$skillCode,
+                'arguments' => is_string($arguments) ? $arguments : json_encode($arguments, JSON_UNESCAPED_UNICODE),
+            ]);
 
             if (is_string($arguments)) {
                 $arguments = json_decode($arguments, true) ?? [];
@@ -346,12 +408,26 @@ class AgentEngine
                 $callRecord->markSuccess($encodedResult ?: '{}');
                 $callRecord->save();
 
+                $this->emitEvent($turnOpts, 'tool_result', [
+                    'tool_call_id' => $toolCallId,
+                    'skill_code' => (string)$skillCode,
+                    'success' => true,
+                    'result' => $resultData,
+                ]);
+
                 $toolResult['success'] = true;
                 $toolResult['result'] = $resultData;
                 $toolResults[] = $toolResult;
             } catch (\Throwable $e) {
                 $callRecord->markFailed($e->getMessage());
                 $callRecord->save();
+
+                $this->emitEvent($turnOpts, 'tool_result', [
+                    'tool_call_id' => $toolCallId,
+                    'skill_code' => (string)$skillCode,
+                    'success' => false,
+                    'error' => $e->getMessage(),
+                ]);
 
                 $toolResult['error'] = $e->getMessage();
                 $toolResults[] = $toolResult;
@@ -361,7 +437,7 @@ class AgentEngine
         return $toolResults;
     }
 
-    private function submitToolResults(array $toolResults, AgentRole $role, AgentChatSession $session): AgentResult
+    private function submitToolResults(array $toolResults, AgentRole $role, AgentChatSession $session, array $turnOpts = []): AgentResult
     {
         foreach ($toolResults as $toolResult) {
             $content = $toolResult['success']
@@ -378,6 +454,6 @@ class AgentEngine
             );
         }
 
-        return $this->requestAgentResponse($role, $this->contextBuilder->build($session, $role));
+        return $this->requestAgentResponse($role, $this->contextBuilder->build($session, $role, 50, 10, $this->contextOpts($turnOpts)), $turnOpts);
     }
 }

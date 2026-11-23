@@ -37,6 +37,8 @@ return [
             => \Weline\Shipping\Service\StorefrontDestinationOfferFilter::class,
         \Weline\Shipping\Api\StorefrontFulfillmentCountriesInterface::class
             => \Weline\Shipping\Service\StorefrontFulfillmentCountriesService::class,
+        \Weline\Shipping\Api\ShippingCoverageSourceInterface::class
+            => \Weline\Shipping\Service\ShippingCoverageService::class,
         'process_cache_resetter.Weline_Shipping' => \Weline\Shipping\Api\Runtime\ProcessCacheResetter::class,
     ],
 ];

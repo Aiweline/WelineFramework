@@ -106,7 +106,7 @@ $isStrip = $displayMode === 'strip';
         </div>
     <?php endif; ?>
 
-    <div class="category-grid columns-<?= $esc($columns) ?><?= $isStrip ? ' category-grid--strip' : '' ?>" role="list">
+    <div class="category-grid columns-<?= $esc($columns) ?><?= $isStrip ? ' category-grid--strip' : '' ?>">
         <?php foreach ($categories as $category): ?>
             <?php
             $categoryImage = trim((string)($category['image'] ?? ''));
@@ -115,8 +115,7 @@ $isStrip = $displayMode === 'strip';
             $categoryImageHeight = $isStrip ? 64 : ($categoryImageIsBanner ? 300 : 800);
             ?>
             <a href="<?= $esc(\Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($category['url'] ?? '#'))) ?>"
-               class="category-card<?= $isStrip ? ' category-card--tile' : '' ?>"
-               role="listitem">
+               class="category-card<?= $isStrip ? ' category-card--tile' : '' ?>">
                 <div class="category-image-wrapper w-frame" data-ratio="1" data-fit="cover">
                     <img src="<?= $esc($categoryImage) ?>"
                          alt="<?= $esc((string)($category['alt'] ?? $category['name'] ?? '')) ?>"
@@ -142,7 +141,6 @@ $isStrip = $displayMode === 'strip';
         <?php if ($showAllLink): ?>
             <a href="<?= $esc($allUrl) ?>"
                class="category-card category-card--all<?= $isStrip ? ' category-card--tile' : '' ?>"
-               role="listitem"
                aria-label="<?= $esc($allLabel) ?>">
                 <div class="category-image-wrapper category-image-wrapper--all" aria-hidden="true">
                     <span class="category-all-glyph">+</span>

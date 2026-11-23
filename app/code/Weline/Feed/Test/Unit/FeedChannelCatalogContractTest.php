@@ -99,7 +99,8 @@ final class FeedChannelCatalogContractTest extends TestCase
         foreach (['g:id', 'g:title', 'g:description', 'g:link', 'g:image_link', 'g:availability', 'g:price', 'g:brand'] as $node) {
             self::assertStringContainsString('<' . $node . '>', $body);
         }
-        self::assertStringContainsString('out_of_stock', $body);
+        self::assertStringContainsString('<g:availability>out of stock</g:availability>', $body);
+        self::assertStringContainsString('<g:condition>new</g:condition>', $body);
         self::assertStringContainsString('20.00 CNY', $body);
         self::assertStringContainsString('color=red', $body);
         self::assertStringContainsString('offer=offer-red-m', $body);
@@ -109,6 +110,27 @@ final class FeedChannelCatalogContractTest extends TestCase
         $sample = $channel->renderSample($definition);
         self::assertStringNotContainsString('<g:gtin>', $sample->body);
         self::assertStringContainsString('<g:brand>', $sample->body);
+
+        $sale = $channel->render($definition, [$this->item(salePriceMinor: 1500)])->body;
+        self::assertStringContainsString('<g:price>20.00 CNY</g:price>', $sale);
+        self::assertStringContainsString('<g:sale_price>15.00 CNY</g:sale_price>', $sale);
+        $notCheaper = $channel->render($definition, [$this->item(salePriceMinor: 2000)])->body;
+        self::assertStringNotContainsString('<g:sale_price>', $notCheaper);
+
+        $withShipping = $channel->render($definition, [$this->item(shipping: [[
+            'country' => 'us',
+            'cost_minor' => 730,
+            'currency' => 'CNY',
+            'days_min' => 7,
+            'days_max' => 15,
+        ]])])->body;
+        self::assertStringContainsString(
+            '<g:shipping><g:country>US</g:country><g:price>7.30 CNY</g:price><g:service>Standard</g:service>'
+            . '<g:min_transit_time>7</g:min_transit_time><g:max_transit_time>15</g:max_transit_time></g:shipping>',
+            $withShipping,
+        );
+        $withoutShipping = $channel->render($definition, [$this->item()])->body;
+        self::assertStringNotContainsString('<g:shipping>', $withoutShipping);
 
         self::assertStringContainsString('<g:identifier_exists>no</g:identifier_exists>', $body);
 
@@ -371,7 +393,7 @@ final class FeedChannelCatalogContractTest extends TestCase
         );
     }
 
-    private function item(string $availability = 'in_stock', string $brand = 'Atelier', string $description = 'A robe'): FeedItem
+    private function item(string $availability = 'in_stock', string $brand = 'Atelier', string $description = 'A robe', ?int $salePriceMinor = null, array $shipping = []): FeedItem
     {
         return new FeedItem(
             id: 'offer-red-m',
@@ -388,10 +410,11 @@ final class FeedChannelCatalogContractTest extends TestCase
             availability: $availability,
             currency: 'CNY',
             priceMinor: 2000,
-            salePriceMinor: null,
+            salePriceMinor: $salePriceMinor,
             gtin: null,
             mpn: null,
             attributes: [],
+            shipping: $shipping,
         );
     }
 }

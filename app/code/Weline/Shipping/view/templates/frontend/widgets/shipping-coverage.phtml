@@ -1,0 +1,95 @@
+<?php
+/**
+ * 配送覆盖表：按服务/时效聚合展示「覆盖国家数 + 预计送达 + 起运费」。
+ *
+ * 数据唯一来源：Weline_Shipping 的 ShippingCoverageSourceInterface。
+ * 本模板只展示，不查表、不算价；精确运费以结账页实时计算为准。
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {shipping-coverage}
+ * @widget.cache {0}
+ * @widget.share {true}
+ * @widget.name {配送覆盖表}
+ * @widget.description {政策页配送说明：按航线聚合国家覆盖、预计送达与起运费；保存配送配置后立即生效。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["policy"]}
+ * @widget.slot {policy-bottom}
+ * @widget.supports {["shipping-coverage","layout-policy-bottom"]}
+ * @widget.default_injections {[{"layout_type":"policy","layout_option":"shipping","slot":"policy-bottom","area":"content","sort_order":30,"required":true,"reason":"配送说明页默认展示国家覆盖与起运费"}]}
+ *
+ * @param title {default="配送覆盖",type="string",label="标题"}
+ * @param note {default="",type="string",label="补充说明"}
+ * @param max_groups {default=24,type="number",label="最多展示航线数"}
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Shipping\Api\Data\Shipping\ShippingCoverageRow;
+use Weline\Shipping\Api\ShippingCoverageSourceInterface;
+use Weline\Shipping\Helper\ShippingCoverageFormatter;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('shipping-coverage');
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$title = WidgetI18n::label(trim((string)($this->getData('title') ?? '')) ?: '配送覆盖', '配送覆盖');
+$note = WidgetI18n::label(trim((string)($this->getData('note') ?? '')), '逐重量与目的地金额在结账页实时计算，以结账金额为准。');
+$maxGroups = max(1, (int)($this->getData('max_groups') ?? 24));
+
+$rows = [];
+try {
+    $coverage = ObjectManager::getInstance(ShippingCoverageSourceInterface::class);
+    if ($coverage instanceof ShippingCoverageSourceInterface) {
+        $rows = $coverage->listCoverage();
+    }
+} catch (\Throwable) {
+}
+
+$groups = ShippingCoverageFormatter::groupByService($rows);
+$countryTotal = count($rows);
+$shown = array_slice($groups, 0, $maxGroups);
+?>
+<section class="shipping-coverage <?= $esc($scope->cssClass) ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-testid="shipping-coverage"
+         aria-labelledby="shipping-coverage-title">
+    <h2 id="shipping-coverage-title" class="shipping-coverage__title"><?= $esc($title) ?></h2>
+    <?php if ($rows === []): ?>
+        <p class="shipping-coverage__note"><?= $esc(WidgetI18n::label('配送覆盖数据尚未配置，请联系客服确认可配送范围。', 'Delivery coverage is not configured yet.')) ?></p>
+    <?php else: ?>
+        <p class="shipping-coverage__summary">
+            <?= $esc(WidgetI18n::label(sprintf('覆盖 %d 个国家和地区', $countryTotal), sprintf('Ships to %d countries and regions', $countryTotal))) ?>
+        </p>
+        <dl class="shipping-coverage__list">
+            <?php foreach ($shown as $group): ?>
+                <?php
+                $daysText = $group['days_min'] > 0 && $group['days_max'] >= $group['days_min']
+                    ? sprintf('%d–%d', $group['days_min'], $group['days_max'])
+                    : WidgetI18n::label('以结账页为准', 'Shown at checkout');
+                $costText = $group['cost_minor'] > 0
+                    ? ShippingCoverageFormatter::formatMoney($group['cost_minor'], $group['currency'])
+                    : WidgetI18n::label('以结账页为准', 'Shown at checkout');
+                ?>
+                <div class="shipping-coverage__item">
+                    <dt class="shipping-coverage__dest">
+                        <?= $esc(WidgetI18n::label('海外配送', 'International')) ?>
+                        <span class="shipping-coverage__count"><?= $esc(sprintf('×%d', $group['country_count'])) ?></span>
+                    </dt>
+                    <dd class="shipping-coverage__meta">
+                        <span class="shipping-coverage__days"><?= $esc(WidgetI18n::label('预计送达（天）', 'Delivery (days)')) ?>：<?= $esc($daysText) ?></span>
+                        <span class="shipping-coverage__cost"><?= $esc(WidgetI18n::label('起运费', 'From')) ?>：<?= $esc($costText) ?></span>
+                    </dd>
+                </div>
+            <?php endforeach; ?>
+        </dl>
+        <?php if (count($groups) > count($shown)): ?>
+            <p class="shipping-coverage__more"><?= $esc(WidgetI18n::label('其余航线以结账页可选配送为准。', 'Other routes are available at checkout.')) ?></p>
+        <?php endif; ?>
+        <p class="shipping-coverage__note"><?= $esc($note) ?></p>
+    <?php endif; ?>
+</section>

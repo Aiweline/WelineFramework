@@ -21,6 +21,7 @@ final class ServiceLaneAdminService
 
     public function __construct(
         private readonly ObjectManager $objectManager,
+        private readonly ?ShippingCoverageResourceChangePublisher $coverageChanges = null,
     ) {
     }
 
@@ -130,6 +131,17 @@ final class ServiceLaneAdminService
             ])->save();
             $saved++;
         }
+
+        $publisher = $this->coverageChanges
+            ?? $this->objectManager->getInstance(ShippingCoverageResourceChangePublisher::class);
+        $publisher->publish(
+            $model->getConnection(),
+            'upsert',
+            'service:' . $serviceId,
+            ['service_id' => $serviceId, 'country_regions' => count($existing)],
+            ['service_id' => $serviceId, 'country_regions' => $saved],
+            'shipping.service_lane.replace',
+        );
 
         return $saved;
     }

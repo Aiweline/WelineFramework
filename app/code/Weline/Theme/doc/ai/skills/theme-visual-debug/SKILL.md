@@ -31,7 +31,7 @@ node dev/tools/theme-visual-probe.mjs \
 - 结构正常但子项宽度远小于容器（逐词换行）→ **布局 min-content 塌陷** → `grid-template-columns: repeat(2, minmax(0, 1fr))` + 子项/文本列 `min-inline-size: 0`。
 - `matchedRules[].href` 是 hash 文件名 → 主题 CSS 是编译产物，改源后必须重编译/重发布才生效。
 
-改完走完生效链再复验：源 → `theme:update -t <theme> -f` → 真实重启实例（看 worker `lstart` 是否变新）→ `fpc:clear -w <站点code>` → `cache:clear` → CDN purge → 探针复验。
+改完走完生效链再复验：源 → `theme:update -t <theme> -f` → 真实重启实例（看 worker `lstart` 是否变新）→ `fpc:clear --url <完整URL>` 或 `fpc:clear -w <站点code> --path /<路径>`（整站才用 `-w <站点code> --all -f`）→ `cache:clear` → CDN purge → 探针复验。
 
 ## 禁止
 

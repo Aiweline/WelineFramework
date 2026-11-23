@@ -5,6 +5,10 @@
 **开发期强制**：`Framework\View\Template::compileSourceBytes()` 在 `DEV` 下调用
 `ThemeSpecValidator::assertFileForDev()`，命中硬违规直接抛
 `ThemeSpecViolationException`（含 rule / file / line / hint）。
+head 三段式拼接遇到该异常**不再降级兜底**（`Partials::fetchCachedPartialHtml` 直接
+rethrow）：降级 head 会丢整个 suffix 皮肤 CSS/JS 却仍 200 返回，违规必须当场暴露。
+**构建期门禁**：`theme:update` 构建代次时 `ThemeUpdateBuildService::checkThemeSpecCompliance()`
+对本主题根跑同一校验，硬违规 → `verify.ok=false` → 代次不予发布。
 
 本文件是规则正文；代码只负责执行。改规则 = 改本文件 + `ThemeSpecValidator` + 测试。
 

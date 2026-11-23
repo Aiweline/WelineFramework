@@ -33,6 +33,9 @@ window.Weline.Theme.storefrontPlaceholderSrc = <?= $placeholderSrcJson ?: '""' ?
 <?php
 // Marker: storefront-float-load-on-layer-v1 (float JS on #w-storefront-float-layer).
 // Image fallback + Theme chrome: idle (no natural visible host).
+// welineUi 是交互组件库（dialog/drawer/toast），首屏不需要，禁止挂在隐藏的 idle 标记上：
+// 它会在网络尾部才执行（实测 7.8s / 77ms 长任务，直接把 TTI 拖到 6s）。改为按需由
+// 真正用到 UI 的部件 Weline.load('welineUi') 加载。
 ?>
 <div hidden
      data-weline-load="storefrontImageFallback"
@@ -40,7 +43,7 @@ window.Weline.Theme.storefrontPlaceholderSrc = <?= $placeholderSrcJson ?: '""' ?
      data-testid="theme-storefront-tail-image-fallback"
      aria-hidden="true"></div>
 <div hidden
-     data-weline-load="themePrepaint,welineUi"
+     data-weline-load="themePrepaint"
      data-weline-load-when="idle"
      data-weline-theme-chrome="1"
      data-testid="theme-storefront-tail-chrome-js"

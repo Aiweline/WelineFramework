@@ -4,11 +4,18 @@ declare(strict_types=1);
 
 namespace Weline\Agent\Extends\Module\Weline_Framework\Query;
 
+use Weline\Agent\Model\AgentChatMessage;
 use Weline\Agent\Model\AgentChatSession;
+use Weline\Agent\Model\AgentFlow;
+use Weline\Agent\Model\AgentFlowNodeRun;
+use Weline\Agent\Model\AgentFlowRun;
+use Weline\Agent\Model\AgentProject;
 use Weline\Agent\Model\AgentRole;
 use Weline\Agent\Model\AgentSchedule;
 use Weline\Agent\Model\AgentSkill;
+use Weline\Agent\Model\AgentTask;
 use Weline\Agent\Service\AgentAdminService;
+use Weline\Agent\Service\TeamDispatchService;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
 
@@ -21,6 +28,13 @@ class AgentQueryProvider implements QueryProviderInterface
         private readonly AgentRole $roleModel,
         private readonly AgentSkill $skillModel,
         private readonly AgentChatSession $sessionModel,
+        private readonly AgentChatMessage $messageModel,
+        private readonly AgentProject $projectModel,
+        private readonly AgentFlow $flowModel,
+        private readonly AgentFlowRun $flowRunModel,
+        private readonly AgentFlowNodeRun $flowNodeRunModel,
+        private readonly AgentTask $taskModel,
+        private readonly TeamDispatchService $dispatchService,
         private readonly AgentSchedule $scheduleModel,
         private readonly AgentAdminService $adminService,
         private readonly SessionFactory $sessionFactory,
@@ -62,6 +76,27 @@ class AgentQueryProvider implements QueryProviderInterface
                 (int)($params['session_id'] ?? 0),
                 (int)($params['limit'] ?? 50)
             ),
+            'getSessionMessages' => $this->getSessionMessages($params),
+            'listProjects' => $this->listProjects($params),
+            'getProject' => $this->getProject($params),
+            'createProject' => $this->createProject($params),
+            'listModels' => $this->listModels($params),
+            'listFlows' => $this->listFlows($params),
+            'getFlow' => $this->getFlow($params),
+            'saveFlow' => $this->saveFlow($params),
+            'getFlowRun' => $this->getFlowRun($params),
+            'getFlowNodeRuns' => $this->getFlowNodeRuns($params),
+            'listTasks' => $this->listTasks($params),
+            'getTask' => $this->getTask($params),
+            'dispatchTask' => $this->dispatchService->dispatch(
+                (int)($params['from_session_id'] ?? 0),
+                (string)($params['to_role_code'] ?? ''),
+                (string)($params['prompt'] ?? ''),
+                (bool)($params['require_approval'] ?? false),
+                'admin',
+                (string)($this->sessionFactory->createBackendSession()->getUserId() ?? '')
+            ),
+            'approveTask' => $this->dispatchService->approve((int)($params['id'] ?? 0)),
             'introspect' => $this->getDescriptor(),
             default => throw new \InvalidArgumentException((string)__('不支持的智能体操作：%{1}', $operation)),
         };
@@ -184,6 +219,66 @@ class AgentQueryProvider implements QueryProviderInterface
                     'session_id' => ['type' => 'int', 'required' => true, 'min' => 1],
                     'limit' => ['type' => 'int', 'min' => 1, 'max' => 200],
                 ]),
+                $this->op('getSessionMessages', 'read', 'Weline_Agent::console_index', [
+                    'session_id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                    'limit' => ['type' => 'int', 'min' => 1, 'max' => 200],
+                ]),
+                $this->op('listProjects', 'read', 'Weline_Agent::console_index', [
+                    'status' => ['type' => 'string', 'max_length' => 32],
+                    'limit' => ['type' => 'int', 'min' => 1, 'max' => 200],
+                ]),
+                $this->op('getProject', 'read', 'Weline_Agent::console_index', [
+                    'id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                ]),
+                $this->op('createProject', 'write', 'Weline_Agent::console_index', [
+                    'name' => ['type' => 'string', 'required' => true, 'max_length' => 191],
+                    'website_id' => ['type' => 'int', 'min' => 0],
+                    'config' => ['type' => 'map'],
+                ]),
+                $this->op('listModels', 'read', 'Weline_Agent::console_index', [
+                    'modality' => ['type' => 'string', 'max_length' => 64],
+                    'status' => ['type' => 'string', 'max_length' => 32],
+                ]),
+                $this->op('listFlows', 'read', 'Weline_Agent::console_index', [
+                    'project_id' => ['type' => 'int', 'min' => 0],
+                    'status' => ['type' => 'string', 'max_length' => 32],
+                    'limit' => ['type' => 'int', 'min' => 1, 'max' => 200],
+                ]),
+                $this->op('getFlow', 'read', 'Weline_Agent::console_index', [
+                    'id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                ]),
+                $this->op('saveFlow', 'write', 'Weline_Agent::console_index', [
+                    'id' => ['type' => 'int', 'min' => 0],
+                    'project_id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                    'name' => ['type' => 'string', 'required' => true, 'max_length' => 191],
+                    'description' => ['type' => 'string'],
+                    'graph' => ['type' => 'map'],
+                    'graph_json' => ['type' => 'string'],
+                    'status' => ['type' => 'string', 'max_length' => 32],
+                ]),
+                $this->op('getFlowRun', 'read', 'Weline_Agent::console_index', [
+                    'id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                ]),
+                $this->op('getFlowNodeRuns', 'read', 'Weline_Agent::console_index', [
+                    'run_id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                ]),
+                $this->op('listTasks', 'read', 'Weline_Agent::console_index', [
+                    'project_id' => ['type' => 'int', 'min' => 0],
+                    'status' => ['type' => 'string', 'max_length' => 32],
+                    'limit' => ['type' => 'int', 'min' => 1, 'max' => 200],
+                ]),
+                $this->op('getTask', 'read', 'Weline_Agent::console_index', [
+                    'id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                ]),
+                $this->op('dispatchTask', 'write', 'Weline_Agent::console_index', [
+                    'from_session_id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                    'to_role_code' => ['type' => 'string', 'required' => true, 'max_length' => 128],
+                    'prompt' => ['type' => 'string', 'required' => true],
+                    'require_approval' => ['type' => 'bool'],
+                ]),
+                $this->op('approveTask', 'write', 'Weline_Agent::console_index', [
+                    'id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                ]),
             ],
         ];
     }
@@ -215,7 +310,8 @@ class AgentQueryProvider implements QueryProviderInterface
         $writes = [
             'saveRole', 'suggestRole', 'deleteRole', 'toggleRole',
             'saveSchedule', 'deleteSchedule', 'toggleSchedule', 'runSchedule',
-            'toggleSkill', 'archiveSession', 'deleteSession', 'sendMessage',
+            'toggleSkill', 'archiveSession', 'deleteSession', 'sendMessage', 'createProject', 'saveFlow',
+            'dispatchTask', 'approveTask',
         ];
         if (!in_array($operation, $writes, true)) {
             return;
@@ -338,6 +434,208 @@ class AgentQueryProvider implements QueryProviderInterface
             ->select()
             ->fetchArray();
         return $sessions;
+    }
+
+    /** 会话消息（含回合级 role_id/agent_code/model_code/project_id/meta_json） */
+    private function getSessionMessages(array $params): array
+    {
+        $sessionId = (int)($params['session_id'] ?? 0);
+        $limit = max(1, min(200, (int)($params['limit'] ?? 100)));
+        if ($sessionId <= 0) {
+            return [];
+        }
+        return $this->messageModel->reset()
+            ->where(AgentChatMessage::schema_fields_SESSION_ID, $sessionId)
+            ->order(AgentChatMessage::schema_fields_CREATED_AT, 'ASC')
+            ->limit($limit)
+            ->select()
+            ->fetchArray();
+    }
+
+    private function listProjects(array $params): array
+    {
+        $limit = max(1, min(200, (int)($params['limit'] ?? 100)));
+        $status = $params['status'] ?? null;
+        $query = $this->projectModel->reset();
+        if (is_string($status) && $status !== '') {
+            $query->where(AgentProject::schema_fields_STATUS, $status);
+        }
+        return $query->order(AgentProject::schema_fields_UPDATED_TIME, 'DESC')
+            ->limit($limit)
+            ->select()
+            ->fetchArray();
+    }
+
+    private function getProject(array $params): ?array
+    {
+        $id = (int)($params['id'] ?? 0);
+        if ($id <= 0) {
+            return null;
+        }
+        $project = $this->projectModel->load($id);
+        return $project->getId() ? $project->getData() : null;
+    }
+
+    private function createProject(array $params): array
+    {
+        $name = trim((string)($params['name'] ?? ''));
+        if ($name === '') {
+            throw new \InvalidArgumentException((string)__('项目名称不能为空'));
+        }
+
+        $session = $this->sessionFactory->createBackendSession();
+        $ownerId = (string)($session->getUserId() ?? '');
+
+        $project = clone $this->projectModel;
+        $project->reset();
+        $project->setData(AgentProject::schema_fields_NAME, $name);
+        $project->setData(AgentProject::schema_fields_OWNER_TYPE, AgentProject::OWNER_ADMIN);
+        $project->setData(AgentProject::schema_fields_OWNER_ID, $ownerId !== '' ? $ownerId : '0');
+        $websiteId = (int)($params['website_id'] ?? 0);
+        if ($websiteId > 0) {
+            $project->setData(AgentProject::schema_fields_WEBSITE_ID, $websiteId);
+        }
+        $config = $params['config'] ?? null;
+        if (is_array($config)) {
+            $project->setData(AgentProject::schema_fields_CONFIG_JSON, json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        }
+        $project->save();
+
+        return $project->getData();
+    }
+
+    /** 模型目录：透传 Weline_Ai listModels，前端选择器统一入口 */
+    private function listModels(array $params): array
+    {
+        $forward = [];
+        foreach (['modality', 'status', 'scenario_code'] as $key) {
+            if (isset($params[$key]) && $params[$key] !== '') {
+                $forward[$key] = $params[$key];
+            }
+        }
+        $result = w_query('ai', 'listModels', $forward);
+        return is_array($result) ? $result : [];
+    }
+
+    private function listFlows(array $params): array
+    {
+        $limit = max(1, min(200, (int)($params['limit'] ?? 100)));
+        $query = $this->flowModel->reset();
+        $projectId = (int)($params['project_id'] ?? 0);
+        if ($projectId > 0) {
+            $query->where(AgentFlow::schema_fields_PROJECT_ID, $projectId);
+        }
+        $status = $params['status'] ?? null;
+        if (is_string($status) && $status !== '') {
+            $query->where(AgentFlow::schema_fields_STATUS, $status);
+        }
+        return $query->order(AgentFlow::schema_fields_UPDATED_TIME, 'DESC')
+            ->limit($limit)->select()->fetchArray();
+    }
+
+    private function getFlow(array $params): ?array
+    {
+        $id = (int)($params['id'] ?? 0);
+        if ($id <= 0) {
+            return null;
+        }
+        $flow = $this->flowModel->load($id);
+        return $flow->getId() ? $flow->getData() : null;
+    }
+
+    private function saveFlow(array $params): array
+    {
+        $id = (int)($params['id'] ?? 0);
+        $projectId = (int)($params['project_id'] ?? 0);
+        $name = trim((string)($params['name'] ?? ''));
+        if ($projectId <= 0 || $name === '') {
+            throw new \InvalidArgumentException((string)__('项目与流程名称必填'));
+        }
+
+        $graph = $params['graph'] ?? null;
+        if (!is_array($graph) && isset($params['graph_json'])) {
+            $decoded = json_decode((string)$params['graph_json'], true);
+            $graph = is_array($decoded) ? $decoded : null;
+        }
+        if (is_array($graph)) {
+            $nodes = $graph['nodes'] ?? [];
+            if (is_array($nodes) && count($nodes) > AgentFlow::MAX_NODES) {
+                throw new \InvalidArgumentException((string)__('流程节点数超过上限 %{1}', [AgentFlow::MAX_NODES]));
+            }
+        }
+
+        $flow = $id > 0 ? $this->flowModel->load($id) : clone $this->flowModel;
+        if ($id <= 0) {
+            $flow->reset()->clearQuery();
+        }
+        $flow->setData(AgentFlow::schema_fields_PROJECT_ID, $projectId);
+        $flow->setData(AgentFlow::schema_fields_NAME, $name);
+        $flow->setData(AgentFlow::schema_fields_DESCRIPTION, (string)($params['description'] ?? ''));
+        if (is_array($graph)) {
+            $flow->setGraph($graph);
+            $flow->setData(AgentFlow::schema_fields_VERSION, (int)$flow->getData(AgentFlow::schema_fields_VERSION) + 1);
+        }
+        $status = trim((string)($params['status'] ?? ''));
+        if (in_array($status, [AgentFlow::STATUS_DRAFT, AgentFlow::STATUS_ACTIVE, AgentFlow::STATUS_DISABLED], true)) {
+            $flow->setData(AgentFlow::schema_fields_STATUS, $status);
+        } elseif (!$flow->getId()) {
+            $flow->setData(AgentFlow::schema_fields_STATUS, AgentFlow::STATUS_DRAFT);
+        }
+        $session = $this->sessionFactory->createBackendSession();
+        if (!$flow->getId() && (int)($session->getUserId() ?? 0) > 0) {
+            $flow->setData(AgentFlow::schema_fields_CREATED_BY, (int)$session->getUserId());
+        }
+        $flow->save();
+
+        return ['success' => true, 'id' => (int)$flow->getId()];
+    }
+
+    private function getFlowRun(array $params): ?array
+    {
+        $id = (int)($params['id'] ?? 0);
+        if ($id <= 0) {
+            return null;
+        }
+        $run = $this->flowRunModel->load($id);
+        return $run->getId() ? $run->getData() : null;
+    }
+
+    private function getFlowNodeRuns(array $params): array
+    {
+        $runId = (int)($params['run_id'] ?? 0);
+        if ($runId <= 0) {
+            return [];
+        }
+        return $this->flowNodeRunModel->reset()
+            ->where(AgentFlowNodeRun::schema_fields_RUN_ID, $runId)
+            ->order(AgentFlowNodeRun::schema_fields_NODE_RUN_ID, 'ASC')
+            ->select()->fetchArray();
+    }
+
+    private function listTasks(array $params): array
+    {
+        $limit = max(1, min(200, (int)($params['limit'] ?? 100)));
+        $query = $this->taskModel->reset();
+        $projectId = (int)($params['project_id'] ?? 0);
+        if ($projectId > 0) {
+            $query->where(AgentTask::schema_fields_PROJECT_ID, $projectId);
+        }
+        $status = $params['status'] ?? null;
+        if (is_string($status) && $status !== '') {
+            $query->where(AgentTask::schema_fields_STATUS, $status);
+        }
+        return $query->order(AgentTask::schema_fields_TASK_ID, 'DESC')
+            ->limit($limit)->select()->fetchArray();
+    }
+
+    private function getTask(array $params): ?array
+    {
+        $id = (int)($params['id'] ?? 0);
+        if ($id <= 0) {
+            return null;
+        }
+        $task = $this->taskModel->load($id);
+        return $task->getId() ? $task->getData() : null;
     }
 
     private function getSchedules(array $params): array

@@ -1,0 +1,276 @@
+<?php
+/**
+ * AI 智能体架构说明页（开发/运营只读：可视化架构图 + 实时目录）
+ * @var \Weline\Framework\View\Template $this
+ * @var array<int,array<string,mixed>> $agents
+ */
+$agents = \is_array($agents ?? null) ? $agents : [];
+$h = static function ($s): string {
+    return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
+};
+?>
+<css>Weline_Ai::css/backend/ai-admin.css</css>
+<style>
+.weline-ai-arch-diagram-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.weline-ai-arch-diagram { width:100%; min-width:720px; height:auto; display:block; }
+.weline-ai-agent-arch pre.w-code { max-width:100%; overflow-x:auto; white-space:pre; }
+.weline-ai-agent-arch td code { word-break:break-all; }
+.weline-ai-agent-arch .w-card__body > table { display:block; overflow-x:auto; }
+.weline-ai-arch-step { display:flex; align-items:stretch; gap:var(--weline-space-2); flex-wrap:wrap; }
+.weline-ai-arch-step .step { flex:1 1 140px; min-width:120px; }
+.weline-ai-arch-step .arrow { align-self:center; color:var(--weline-color-text-muted); font-weight:700; flex:0 0 auto; }
+@media (max-width: 720px) {
+  .weline-ai-arch-step .step { flex:1 1 100%; }
+  .weline-ai-arch-step .arrow { transform:rotate(90deg); }
+}
+</style>
+<?php if (empty($embed)): ?> <?= $this->fetch('Weline_Ai::templates/backend/Manager/tabs.phtml', ['activeTab' => 'agent_arch']) ?>
+<?php endif; ?>
+<div class="w-container weline-ai-agent-arch" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-8);">
+  <div class="w-cluster" data-wrap="true" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-5);">
+    <div>
+      <h4 style="--w-mb:var(--weline-space-1);"><w:icon name="sitemap" size="sm"></w:icon><?= __('智能体架构') ?></h4>
+      <div class="w-text" data-tone="muted" data-size="sm"><?= __('一张图看懂：智能体如何被发现、调用、治理；新智能体怎么接入。') ?></div>
+    </div>
+  </div>
+
+  <div class="w-card" style="--w-mb:var(--weline-space-4);">
+    <div class="w-card__header"><strong><?= __('架构总览') ?></strong></div>
+    <div class="w-card__body">
+      <div class="weline-ai-arch-diagram-wrap">
+      <svg class="weline-ai-arch-diagram" viewBox="0 0 980 640" role="img" aria-label="<?= $h(__('智能体架构分层图')) ?>">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+          </marker>
+          <marker id="arrLoop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/>
+          </marker>
+        </defs>
+
+        <!-- ============ L1 业务模块 ============ -->
+        <rect x="270" y="16" width="440" height="72" rx="12" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="490" y="38" text-anchor="middle" font-size="13" font-weight="700" fill="#1e40af">L1 · 业务模块（贡献方）</text>
+        <rect x="290" y="48" width="180" height="30" rx="8" fill="#fff" stroke="#93c5fd"/>
+        <text x="380" y="67" text-anchor="middle" font-size="12" fill="#1e3a8a">extends/.../Agent/*Agent.php</text>
+        <rect x="510" y="48" width="180" height="30" rx="8" fill="#fff" stroke="#93c5fd"/>
+        <text x="600" y="67" text-anchor="middle" font-size="12" fill="#1e3a8a">Service/**/Tool/*Tool.php</text>
+
+        <!-- arrow L1 -> L2 -->
+        <line x1="490" y1="88" x2="490" y2="118" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="505" y="108" font-size="11" fill="#64748b">AgentScanner 扫描 extends 注册表</text>
+
+        <!-- ============ L2 Weline_Ai 框架 ============ -->
+        <rect x="60" y="120" width="860" height="150" rx="12" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.5"/>
+        <text x="490" y="142" text-anchor="middle" font-size="13" font-weight="700" fill="#5b21b6">L2 · Weline_Ai 框架（发现 / 治理 / 调度）</text>
+
+        <rect x="80" y="156" width="160" height="52" rx="8" fill="#fff" stroke="#c4b5fd"/>
+        <text x="160" y="178" text-anchor="middle" font-size="12" font-weight="600" fill="#4c1d95">AgentScanner</text>
+        <text x="160" y="196" text-anchor="middle" font-size="10" fill="#64748b">扫描+实例化</text>
+
+        <rect x="260" y="156" width="160" height="52" rx="8" fill="#fff" stroke="#c4b5fd"/>
+        <text x="340" y="178" text-anchor="middle" font-size="12" font-weight="600" fill="#4c1d95">ai_agent 表</text>
+        <text x="340" y="196" text-anchor="middle" font-size="10" fill="#64748b">目录/启停/覆盖</text>
+
+        <rect x="440" y="156" width="160" height="52" rx="8" fill="#fff" stroke="#c4b5fd"/>
+        <text x="520" y="178" text-anchor="middle" font-size="12" font-weight="600" fill="#4c1d95">AgentGovernance</text>
+        <text x="520" y="196" text-anchor="middle" font-size="10" fill="#64748b">工具过滤+描述覆盖</text>
+
+        <rect x="620" y="156" width="160" height="52" rx="8" fill="#fff" stroke="#c4b5fd"/>
+        <text x="700" y="178" text-anchor="middle" font-size="12" font-weight="600" fill="#4c1d95">ScenarioAdapter</text>
+        <text x="700" y="196" text-anchor="middle" font-size="10" fill="#64748b">场景码→默认模型</text>
+
+        <rect x="250" y="222" width="300" height="40" rx="8" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.5"/>
+        <text x="400" y="247" text-anchor="middle" font-size="13" font-weight="700" fill="#5b21b6">AiService::executeAgent() ← 业务唯一入口</text>
+
+        <!-- arrow L2 -> L3 -->
+        <line x1="490" y1="270" x2="490" y2="300" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="505" y="290" font-size="11" fill="#64748b">AgentInterface 实例 + AiModel</text>
+
+        <!-- ============ L3 Agent 执行循环 ============ -->
+        <rect x="60" y="302" width="860" height="180" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.5"/>
+        <text x="490" y="324" text-anchor="middle" font-size="13" font-weight="700" fill="#155e75">L3 · Agent 执行（ReAct 循环，Agent 自己实现）</text>
+
+        <rect x="330" y="340" width="200" height="120" rx="10" fill="#fff" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="430" y="365" text-anchor="middle" font-size="13" font-weight="700" fill="#0e7490">Agent::execute()</text>
+        <text x="430" y="385" text-anchor="middle" font-size="10" fill="#64748b">组 messages → 调模型</text>
+        <text x="430" y="402" text-anchor="middle" font-size="10" fill="#64748b">→ 执行 tool_calls</text>
+        <text x="430" y="419" text-anchor="middle" font-size="10" fill="#64748b">→ 结果回填 → 循环</text>
+        <text x="430" y="442" text-anchor="middle" font-size="10" fill="#0e7490">≤ maxIterations（默认12/顶30）</text>
+
+        <!-- LLM box -->
+        <rect x="90" y="356" width="180" height="86" rx="10" fill="#f0f9ff" stroke="#38bdf8" stroke-width="1.5"/>
+        <text x="180" y="382" text-anchor="middle" font-size="12" font-weight="700" fill="#0369a1">LLM Provider</text>
+        <text x="180" y="400" text-anchor="middle" font-size="10" fill="#64748b">AiModel + ProviderFactory</text>
+        <text x="180" y="416" text-anchor="middle" font-size="10" fill="#64748b">tools function calling</text>
+        <text x="180" y="431" text-anchor="middle" font-size="10" fill="#64748b">流式 generateStreamFull</text>
+
+        <!-- Tools box -->
+        <rect x="710" y="356" width="180" height="86" rx="10" fill="#f0fdf4" stroke="#4ade80" stroke-width="1.5"/>
+        <text x="800" y="382" text-anchor="middle" font-size="12" font-weight="700" fill="#15803d">Tools 工具组</text>
+        <text x="800" y="400" text-anchor="middle" font-size="10" fill="#64748b">ToolInterface::execute()</text>
+        <text x="800" y="416" text-anchor="middle" font-size="10" fill="#64748b">查域名/买域名/建站…</text>
+        <text x="800" y="431" text-anchor="middle" font-size="10" fill="#64748b">真实业务 Service</text>
+
+        <!-- loop arrows: agent <-> llm, agent <-> tools -->
+        <line x1="330" y1="392" x2="272" y2="392" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrLoop)"/>
+        <line x1="272" y1="420" x2="330" y2="420" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrLoop)"/>
+        <text x="300" y="382" text-anchor="middle" font-size="9" fill="#7c3aed">prompt+tools</text>
+        <text x="300" y="434" text-anchor="middle" font-size="9" fill="#7c3aed">tool_calls/content</text>
+
+        <line x1="530" y1="392" x2="708" y2="392" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrLoop)"/>
+        <line x1="708" y1="420" x2="530" y2="420" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrLoop)"/>
+        <text x="620" y="382" text-anchor="middle" font-size="9" fill="#7c3aed">tool_call args</text>
+        <text x="620" y="434" text-anchor="middle" font-size="9" fill="#7c3aed">tool result JSON</text>
+
+        <!-- arrow L3 -> L4 -->
+        <line x1="490" y1="482" x2="490" y2="512" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="505" y="502" font-size="11" fill="#64748b">收敛：无 tool_calls 或业务成功</text>
+
+        <!-- ============ L4 结果 ============ -->
+        <rect x="270" y="514" width="440" height="72" rx="12" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
+        <text x="490" y="536" text-anchor="middle" font-size="13" font-weight="700" fill="#166534">L4 · 输出</text>
+        <rect x="290" y="546" width="130" height="30" rx="8" fill="#fff" stroke="#86efac"/>
+        <text x="355" y="565" text-anchor="middle" font-size="11" fill="#14532d">AgentResult</text>
+        <rect x="435" y="546" width="130" height="30" rx="8" fill="#fff" stroke="#86efac"/>
+        <text x="500" y="565" text-anchor="middle" font-size="11" fill="#14532d">SSE 事件流</text>
+        <rect x="580" y="546" width="110" height="30" rx="8" fill="#fff" stroke="#86efac"/>
+        <text x="635" y="565" text-anchor="middle" font-size="11" fill="#14532d">业务落库</text>
+
+        <!-- 侧注：两个真实例子 -->
+        <rect x="60" y="514" width="190" height="110" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-width="1"/>
+        <text x="155" y="536" text-anchor="middle" font-size="11" font-weight="700" fill="#92400e">真实例子</text>
+        <text x="70" y="558" font-size="10" fill="#78350f">• website_builder</text>
+        <text x="70" y="574" font-size="10" fill="#78350f">  （Websites 建站）</text>
+        <text x="70" y="596" font-size="10" fill="#78350f">• Weline_Ai 内置</text>
+        <text x="70" y="612" font-size="10" fill="#78350f">  通用 Agent</text>
+      </svg>
+      </div>
+      <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);">
+        <?= __('紫色框 = Weline_Ai 框架职责；青色框 = 每个 Agent 自己实现的 ReAct 循环（框架不提供 runner）；绿色 = 工具直连业务 Service。') ?>
+      </div>
+    </div>
+  </div>
+
+  <div class="w-card" style="--w-mb:var(--weline-space-4);">
+    <div class="w-card__header"><strong><?= __('一次调用怎么走（时序）') ?></strong></div>
+    <div class="w-card__body">
+      <div class="weline-ai-arch-step">
+        <div class="step w-alert" data-tone="info"><strong>①</strong> <?= __('业务调 executeAgent(agent_code, prompt, model)') ?></div>
+        <div class="arrow">→</div>
+        <div class="step w-alert" data-tone="neutral"><strong>②</strong> <?= __('Scanner 解析实例 + 治理过滤禁用工具') ?></div>
+        <div class="arrow">→</div>
+        <div class="step w-alert" data-tone="neutral"><strong>③</strong> <?= __('Agent::execute 起循环：system prompt + tools') ?></div>
+        <div class="arrow">→</div>
+        <div class="step w-alert" data-tone="info"><strong>④</strong> <?= __('LLM 流式返回：content 或 tool_calls') ?></div>
+        <div class="arrow">⇄</div>
+        <div class="step w-alert" data-tone="success"><strong>⑤</strong> <?= __('有 tool_calls → 执行工具 → 结果回填 → 回到③；无 → 收敛') ?></div>
+        <div class="arrow">→</div>
+        <div class="step w-alert" data-tone="success"><strong>⑥</strong> <?= __('AgentResult + SSE 事件给前端') ?></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+    <div style="--w-span-lg:7;">
+      <div class="w-card" data-w-height="full">
+        <div class="w-card__header"><strong><?= __('新智能体怎么接入（4 步）') ?></strong></div>
+        <div class="w-card__body">
+          <div class="weline-ai-arch-step" style="--w-mb:var(--weline-space-3);">
+            <div class="step w-alert" data-tone="info"><strong>1</strong> <?= __('业务模块建 extends/module/Weline_Ai/Agent/{Module}/{Name}Agent.php，实现 AgentInterface') ?></div>
+            <div class="arrow">→</div>
+            <div class="step w-alert" data-tone="info"><strong>2</strong> <?= __('工具类实现 ToolInterface（getName/getParameters/execute）') ?></div>
+            <div class="arrow">→</div>
+            <div class="step w-alert" data-tone="info"><strong>3</strong> <?= __('execute() 自实现 ReAct 循环（参考 WebsiteBuilderAgent）') ?></div>
+            <div class="arrow">→</div>
+            <div class="step w-alert" data-tone="success"><strong>4</strong> <?= __('跑 php bin/w ai:agent:scan 注册 → 本页目录可见') ?></div>
+          </div>
+          <div class="w-text" data-tone="muted" data-size="sm">
+            <?= __('可选：按场景路由时加 extends/module/Weline_Ai/Adapter/ 场景适配器 + getScenarios() 声明场景码。') ?>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="--w-span-lg:5;">
+      <div class="w-card" data-w-height="full">
+        <div class="w-card__header"><strong><?= __('AgentInterface 骨架') ?></strong></div>
+        <div class="w-card__body" style="--w-ps:0;--w-pe:0;">
+<pre class="w-code" style="--w-m:0;--w-p:var(--weline-space-4);font-size:var(--weline-font-size-xs);overflow:auto;">class MyAgent implements AgentInterface
+{
+    getCode()        → 'my_agent'
+    getScenarios()   → ['my_scene']
+    getTools()       → [ToolInterface...]
+    getSystemPrompt(){ /* ... */ }
+    execute($prompt, AiModel $model,
+            $params, $streamCallback)
+      → 自实现：调模型→tool_calls
+        →tool->execute()→回填→循环
+    getMaxIterations()→ 默认12/硬顶30
+}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="w-card" style="--w-mb:var(--weline-space-4);">
+    <div class="w-card__header"><strong><?= __('治理边界（开发必读）') ?></strong></div>
+    <div class="w-card__body">
+      <ul class="w-text" data-size="sm" style="--w-ps:var(--weline-space-5);--w-mb:0;">
+        <li style="--w-mb:var(--weline-space-2);"><?= __('后台只能治理：名称/描述覆盖、启停、工具启停、扫描——不能新建自定义智能体、不能改 system prompt / 工具 JSON Schema / max_iterations。') ?></li>
+        <li style="--w-mb:var(--weline-space-2);"><?= __('AgentGovernance 只对 AiService::executeAgent 生效；直接 $agent-&gt;execute() 是旁路，不受治理。') ?></li>
+        <li style="--w-mb:var(--weline-space-2);"><?= __('改完 Agent/Tool 代码必须重跑 ai:agent:scan，ai_agent 表才刷新。') ?></li>
+      </ul>
+      <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-3);">
+        <?= __('权威文档：app/code/Weline/Ai/doc/智能体(Agent)增强计划.md、doc/开发/后台智能体管理.md；建站实例：app/code/Weline/Websites/doc/AI建站工作台架构.md。') ?>
+      </div>
+    </div>
+  </div>
+
+  <div class="w-card">
+    <div class="w-card__header w-cluster" data-wrap="true" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);">
+      <strong><?= __('当前已注册智能体（实时）') ?></strong>
+      <span class="w-text" data-tone="muted" data-size="sm"><?= __('共 %{count} 个', ['count' => count($agents)]) ?></span>
+    </div>
+    <div class="w-card__body" style="--w-ps:0;--w-pe:0;">
+      <table class="w-table" style="--w-mb:0;">
+        <thead>
+          <tr>
+            <th><?= __('编码') ?></th>
+            <th><?= __('名称') ?></th>
+            <th><?= __('模块') ?></th>
+            <th><?= __('场景') ?></th>
+            <th><?= __('工具数') ?></th>
+            <th><?= __('最大轮次') ?></th>
+            <th><?= __('状态') ?></th>
+          </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($agents as $agent): ?>
+          <?php
+          $scenarios = $agent['scenarios'] ?? [];
+          if (\is_string($scenarios)) { $scenarios = json_decode($scenarios, true) ?: []; }
+          ?>
+          <tr>
+            <td><code><?= $h($agent['code'] ?? '') ?></code></td>
+            <td><?= $h($agent['name'] ?? '') ?></td>
+            <td><?= $h($agent['module'] ?? '') ?></td>
+            <td><?= $h(implode(', ', array_map('strval', (array)$scenarios))) ?></td>
+            <td><?= (int)($agent['tools_count'] ?? 0) ?></td>
+            <td><?= (int)($agent['max_iterations'] ?? 0) ?></td>
+            <td>
+              <?php if (!empty($agent['is_present'])): ?>
+                <?= !empty($agent['is_active']) ? '<span class="w-badge" data-tone="success">' . $h(__('启用')) . '</span>' : '<span class="w-badge" data-tone="muted">' . $h(__('禁用')) . '</span>' ?>
+              <?php else: ?>
+                <span class="w-badge" data-tone="warning"><?= $h(__('缺失')) ?></span>
+              <?php endif; ?>
+            </td>
+          </tr>
+        <?php endforeach; ?>
+        <?php if ($agents === []): ?>
+          <tr><td colspan="7" class="w-text" data-tone="muted" data-size="sm"><?= __('暂无已注册智能体，请先运行扫描。') ?></td></tr>
+        <?php endif; ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

@@ -895,14 +895,15 @@ final class ProductCardRenderer
      * all later cards keep the browser's native lazy loading behaviour.
      *
      * @param array<string, mixed> $product
-     * @return array{loading:'eager'|'lazy', fetchpriority?:'high'}
+     * @return array{loading:'eager'|'lazy', fetchpriority?:'high'|'low'}
      */
     public static function imageLoadingAttributes(array $product): array
     {
         if (isset($product['image_loading'])) {
             $explicit = \strtolower(\trim((string)$product['image_loading']));
             if ($explicit === 'lazy') {
-                return ['loading' => 'lazy'];
+                // 首屏以下的商品图不得与 LCP 图抢带宽：显式 low 让浏览器先让路。
+                return ['loading' => 'lazy', 'fetchpriority' => 'low'];
             }
             if ($explicit === 'eager') {
                 return [
@@ -921,7 +922,7 @@ final class ProductCardRenderer
             ];
         }
 
-        return ['loading' => 'lazy'];
+        return ['loading' => 'lazy', 'fetchpriority' => 'low'];
     }
 
     /**

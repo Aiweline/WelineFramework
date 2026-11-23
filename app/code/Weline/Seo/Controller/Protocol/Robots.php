@@ -20,6 +20,13 @@ class Robots extends FrontendController
 
     public function index(): Response
     {
-        return Response::text($this->renderer->render(), 200, 'text/plain; charset=utf-8');
+        $response = Response::text($this->renderer->render(), 200, 'text/plain; charset=utf-8');
+        // Lighthouse/agent fetchers abort slowly; keep robots.txt on the edge so a
+        // cold PHP render can never trip "Timed out fetching robots.txt" (SEO 92).
+        $response->setHeader('Cache-Control', 'public, max-age=300, must-revalidate');
+        $response->setHeader('CDN-Cache-Control', 'public, max-age=300');
+        $response->setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=300');
+
+        return $response;
     }
 }

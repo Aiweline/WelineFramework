@@ -144,6 +144,9 @@ final class IndustryProtocolDocuments
         }
         if ($llmsEnabled && $baseUrl !== '') {
             $lines[] = '<link rel="alternate" type="text/plain" title="' . $title . ' llms.txt" href="' . self::escape($baseUrl . '/llms.txt') . '">';
+            // llms.txt v2 recommends rel=describedby so agents can find the file
+            // that describes this path; keep rel=alternate for older consumers.
+            $lines[] = '<link rel="describedby" type="text/plain" title="' . $title . ' llms.txt" href="' . self::escape($baseUrl . '/llms.txt') . '">';
             $lines[] = '<link rel="alternate" type="text/plain" title="' . $title . ' llms-full.txt" href="' . self::escape($baseUrl . '/llms-full.txt') . '">';
         }
         if ($baseUrl !== '') {

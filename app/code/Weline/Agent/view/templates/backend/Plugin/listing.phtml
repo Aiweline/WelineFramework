@@ -1,0 +1,110 @@
+<?php
+/**
+ * Plugin listing — Weline_Agent 后台插件管理
+ * @var \Weline\Framework\View\Template $this
+ */
+$plugins = is_array($plugins ?? null) ? $plugins : [];
+$bindings = is_array($role_bindings ?? null) ? $role_bindings : [];
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$get = static function (mixed $item, string $key, mixed $default = ''): mixed {
+    if (is_array($item)) {
+        return $item[$key] ?? $default;
+    }
+    if (is_object($item) && method_exists($item, 'getData')) {
+        return $item->getData($key) ?? $default;
+    }
+    return $default;
+};
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
+
+<section class="w-agent-admin">
+    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-agent-admin__intro">
+            <p class="w-agent-admin__kicker"><?= $escape(__('插件为智能体提供可安装的能力包（技能集合）。扫描登记后可绑定到角色。')) ?></p>
+        </div>
+        <form method="post" action="@backend-url{'*/backend/plugin/post-scan'}">
+            <button type="submit" class="w-button"><?= $escape(__('扫描插件')) ?></button>
+        </form>
+    </header>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <article class="w-card">
+        <div class="w-card__body w-stack" data-gap="md">
+            <?php if (!empty($plugins)): ?>
+            <div class="w-agent-table-wrap">
+                <table class="w-agent-table">
+                    <thead>
+                    <tr>
+                        <th><?= $escape(__('插件')) ?></th>
+                        <th><?= $escape(__('模块')) ?></th>
+                        <th><?= $escape(__('版本')) ?></th>
+                        <th><?= $escape(__('技能')) ?></th>
+                        <th><?= $escape(__('绑定角色')) ?></th>
+                        <th><?= $escape(__('状态')) ?></th>
+                        <th><?= $escape(__('操作')) ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($plugins as $plugin): ?>
+                        <?php
+                        $id = (int)$get($plugin, 'plugin_id', 0);
+                        $code = (string)$get($plugin, 'code', '');
+                        $status = (string)$get($plugin, 'status', '');
+                        $manifest = $get($plugin, 'manifest_json', '');
+                        $manifestArr = is_string($manifest) ? (json_decode($manifest, true) ?: []) : (is_array($manifest) ? $manifest : []);
+                        $skillCodes = $manifestArr['skills'] ?? ($manifestArr['skill_codes'] ?? []);
+                        $boundRoles = $bindings[$code] ?? [];
+                        $toggleable = in_array($status, ['enabled', 'disabled', 'installed'], true);
+                        ?>
+                        <tr>
+                            <td>
+                                <div class="w-stack" data-gap="xs">
+                                    <strong><?= $escape((string)$get($plugin, 'name', $code)) ?></strong>
+                                    <span class="w-agent-code"><?= $escape($code) ?></span>
+                                </div>
+                            </td>
+                            <td><?= $escape((string)$get($plugin, 'module', '')) ?></td>
+                            <td><?= $escape((string)$get($plugin, 'version', '')) ?></td>
+                            <td>
+                                <?php if (is_array($skillCodes) && $skillCodes !== []): ?>
+                                    <?= $escape(implode(', ', array_map('strval', $skillCodes))) ?>
+                                <?php else: ?>
+                                    <span class="w-agent-chip" data-tone="neutral"><?= $escape(__('—')) ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php if ($boundRoles !== []): ?>
+                                    <?= $escape(implode(', ', $boundRoles)) ?>
+                                <?php else: ?>
+                                    <span class="w-agent-chip" data-tone="neutral"><?= $escape(__('未绑定')) ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <span class="w-agent-chip" data-tone="<?= $status === 'enabled' ? 'success' : ($status === 'missing' ? 'danger' : 'warning') ?>">
+                                    <?= $escape($status) ?>
+                                </span>
+                            </td>
+                            <td>
+                                <?php if ($toggleable): ?>
+                                <form method="post" action="@backend-url{'*/backend/plugin/post-toggle'}" style="display:inline">
+                                    <input type="hidden" name="id" value="<?= $id ?>">
+                                    <button type="submit" class="w-button" data-size="sm" data-variant="outline">
+                                        <?= $status === 'enabled' ? $escape(__('停用')) : $escape(__('启用')) ?>
+                                    </button>
+                                </form>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php else: ?>
+                <p class="w-agent-empty"><?= $escape(__('暂无插件，点击「扫描插件」登记模块内的能力包。')) ?></p>
+            <?php endif; ?>
+        </div>
+    </article>
+</section>

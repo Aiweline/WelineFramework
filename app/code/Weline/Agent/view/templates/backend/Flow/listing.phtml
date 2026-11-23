@@ -1,0 +1,115 @@
+<?php
+/**
+ * Flow listing — Weline_Agent 后台流程管理
+ * @var \Weline\Framework\View\Template $this
+ */
+$flows = is_array($flows ?? null) ? $flows : [];
+$lastRuns = is_array($last_runs ?? null) ? $last_runs : [];
+$editorUrl = (string)($editor_url ?? '/agent/frontend/flow');
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$get = static function (mixed $item, string $key, mixed $default = ''): mixed {
+    if (is_array($item)) {
+        return $item[$key] ?? $default;
+    }
+    if (is_object($item) && method_exists($item, 'getData')) {
+        return $item->getData($key) ?? $default;
+    }
+    return $default;
+};
+
+$statusTone = static fn(string $s): string => match ($s) {
+    'active' => 'success',
+    'disabled' => 'neutral',
+    'done' => 'success',
+    'failed' => 'danger',
+    'running', 'queued' => 'warning',
+    default => 'warning',
+};
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
+
+<section class="w-agent-admin">
+    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-agent-admin__intro">
+            <p class="w-agent-admin__kicker"><?= $escape(__('可视化角色流程：节点选择角色 + 可选提示词覆盖，串行执行。编排在前台编辑器中进行。')) ?></p>
+        </div>
+        <a class="w-button" href="<?= $escape($editorUrl) ?>"><?= $escape(__('打开编排器')) ?></a>
+    </header>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <article class="w-card">
+        <div class="w-card__body w-stack" data-gap="md">
+            <?php if (!empty($flows)): ?>
+            <div class="w-agent-table-wrap">
+                <table class="w-agent-table">
+                    <thead>
+                    <tr>
+                        <th><?= $escape(__('流程')) ?></th>
+                        <th><?= $escape(__('版本')) ?></th>
+                        <th><?= $escape(__('状态')) ?></th>
+                        <th><?= $escape(__('最近运行')) ?></th>
+                        <th><?= $escape(__('更新时间')) ?></th>
+                        <th><?= $escape(__('操作')) ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($flows as $flow): ?>
+                        <?php
+                        $id = (int)$get($flow, 'flow_id', 0);
+                        $status = (string)$get($flow, 'status', 'draft');
+                        $graph = $get($flow, 'graph_json', '');
+                        $nodeCount = 0;
+                        if (is_string($graph)) {
+                            $g = json_decode($graph, true);
+                            $nodeCount = is_array($g) ? count($g['nodes'] ?? []) : 0;
+                        }
+                        $last = $lastRuns[$id] ?? null;
+                        ?>
+                        <tr>
+                            <td>
+                                <div class="w-stack" data-gap="xs">
+                                    <strong><?= $escape((string)$get($flow, 'name', '')) ?></strong>
+                                    <span class="w-agent-code"><?= $nodeCount ?> <?= $escape(__('节点')) ?></span>
+                                </div>
+                            </td>
+                            <td>v<?= (int)$get($flow, 'version', 0) ?></td>
+                            <td>
+                                <span class="w-agent-chip" data-tone="<?= $statusTone($status) ?>"><?= $escape($status) ?></span>
+                            </td>
+                            <td>
+                                <?php if ($last): ?>
+                                    <span class="w-agent-chip" data-tone="<?= $statusTone((string)$last['status']) ?>">
+                                        <?= $escape((string)$last['status']) ?>
+                                    </span>
+                                    <span class="w-agent-code"><?= $escape(date('m-d H:i', (int)$last['time'])) ?></span>
+                                <?php else: ?>
+                                    <span class="w-agent-chip" data-tone="neutral"><?= $escape(__('—')) ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?= $escape(date('Y-m-d H:i', (int)$get($flow, 'updated_time', 0) ?: (int)$get($flow, 'created_time', 0))) ?></td>
+                            <td>
+                                <div class="w-cluster" data-gap="xs">
+                                    <a class="w-button" data-size="sm" data-variant="outline" data-tone="neutral"
+                                       href="<?= $escape($editorUrl) ?>?flow_id=<?= $id ?>"><?= $escape(__('编排')) ?></a>
+                                    <form method="post" action="@backend-url{'*/backend/flow/post-delete'}" style="display:inline"
+                                          onsubmit="return confirm('<?= $escape(__('确认删除该流程？')) ?>');">
+                                        <input type="hidden" name="id" value="<?= $id ?>">
+                                        <button type="submit" class="w-button" data-size="sm" data-variant="outline" data-tone="danger">
+                                            <?= $escape(__('删除')) ?>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php else: ?>
+                <p class="w-agent-empty"><?= $escape(__('暂无流程，点击「打开编排器」创建第一个角色流程。')) ?></p>
+            <?php endif; ?>
+        </div>
+    </article>
+</section>

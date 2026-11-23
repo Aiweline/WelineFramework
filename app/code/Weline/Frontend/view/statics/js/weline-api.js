@@ -4343,6 +4343,7 @@
         call: (provider, operation, params, options) => getOrCreateClient().call(provider, operation, params, options),
         graph: (graph, options) => getOrCreateClient().graph(graph, options),
         stream: (channel, params, options) => getOrCreateClient().stream(channel, params, options),
+        createStream: (channel, params, options) => new StreamHandle(getOrCreateClient(), channel, params, options),
         upload: (provider, operation, formData, options) => getOrCreateClient().upload(provider, operation, formData, options),
         resource: (provider, optionalMap) => getOrCreateClient().resource(provider, optionalMap),
         enableAutoRequests: () => getOrCreateClient().enableAutoRequests(),

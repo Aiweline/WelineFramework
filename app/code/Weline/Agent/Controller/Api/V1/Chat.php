@@ -7,6 +7,7 @@ use Weline\Framework\App\Controller\FrontendController;
 use Weline\Agent\Model\AgentRole;
 use Weline\Agent\Model\AgentChatSession;
 use Weline\Agent\Service\AgentEngine;
+use Weline\Agent\Service\AgentRuntimeService;
 use Weline\Agent\Service\ChatSessionManager;
 use Weline\Framework\Http\Sse\SseWriter;
 
@@ -17,6 +18,7 @@ class Chat extends FrontendController
 {
     public function __construct(
         private readonly AgentEngine $agentEngine,
+        private readonly AgentRuntimeService $runtimeService,
         private readonly ChatSessionManager $sessionManager,
         private readonly AgentRole $roleModel,
         private readonly AgentChatSession $sessionModel,
@@ -32,7 +34,9 @@ class Chat extends FrontendController
 
         $message = $data['message'] ?? '';
         $sessionId = (int) ($data['session_id'] ?? 0);
-        $roleCode = $data['role_code'] ?? 'assistant';
+        $roleCode = trim((string) ($data['role_code'] ?? ''));
+        $modelCode = trim((string) ($data['model_code'] ?? ''));
+        $projectId = (int) ($data['project_id'] ?? 0);
         $channel = $data['channel'] ?? AgentChatSession::CHANNEL_WEB;
         $contextId = $data['context_id'] ?? $this->generateContextId();
 
@@ -43,54 +47,45 @@ class Chat extends FrontendController
             ]);
         }
 
-        // 获取角色
-        $role = $this->roleModel->reset()
-            ->where(AgentRole::schema_fields_CODE, $roleCode)
-            ->where(AgentRole::schema_fields_STATUS, AgentRole::STATUS_ENABLED)
-            ->find()
-            ->fetch();
-
-        if (!$role->getId()) {
-            return $this->fetchJson([
-                'success' => false,
-                'msg' => __('角色不存在或已禁用'),
-            ]);
-        }
-
-        // 获取或创建会话
-        if ($sessionId > 0) {
-            $session = $this->sessionManager->getSession($sessionId);
-        } else {
-            $session = $this->sessionManager->getOrCreateSession($role, $channel, $contextId);
-        }
-
-        if (!$session) {
-            return $this->fetchJson([
-                'success' => false,
-                'msg' => __('会话不存在'),
-            ]);
-        }
-
+        // 统一运行时：角色缺省回落默认角色（general），模型/项目可覆盖
         try {
-            // 执行对话
-            $result = $this->agentEngine->execute($message, $role, $session);
-
-            return $this->fetchJson([
+            $turn = [
+                'prompt' => $message,
+                'session_id' => $sessionId,
+                'channel' => $channel,
+                'context_id' => $contextId,
+            ];
+            if ($roleCode !== '') {
+                $turn['role_code'] = $roleCode;
+            }
+            if ($modelCode !== '') {
+                $turn['model_code'] = $modelCode;
+            }
+            if ($projectId > 0) {
+                $turn['project_id'] = $projectId;
+            }
+            $result = $this->runtimeService->runTurn($turn);
+            $resolvedSessionId = $this->runtimeService->getLastSessionId() ?: $sessionId;
+            $session = $resolvedSessionId > 0
+                ? $this->sessionManager->getSession($resolvedSessionId)
+                : null;
+            $payload = [
                 'success' => $result->success,
                 'msg' => $result->success ? __('成功') : $result->error,
                 'data' => [
-                    'session_id' => $session->getId(),
+                    'session_id' => $session ? (int)$session->getId() : $resolvedSessionId,
                     'content' => $result->content,
                     'tool_calls' => $result->toolCalls,
                 ],
-            ]);
-
+            ];
         } catch (\Throwable $e) {
-            return $this->fetchJson([
+            $payload = [
                 'success' => false,
                 'msg' => $e->getMessage(),
-            ]);
+            ];
         }
+
+        return $this->fetchJson($payload);
     }
 
     /**
@@ -103,7 +98,9 @@ class Chat extends FrontendController
 
         $message = $data['message'] ?? '';
         $sessionId = (int) ($data['session_id'] ?? 0);
-        $roleCode = $data['role_code'] ?? 'assistant';
+        $roleCode = trim((string) ($data['role_code'] ?? ''));
+        $modelCode = trim((string) ($data['model_code'] ?? ''));
+        $projectId = (int) ($data['project_id'] ?? 0);
         $channel = $data['channel'] ?? AgentChatSession::CHANNEL_WEB;
         $contextId = $data['context_id'] ?? $this->generateContextId();
 
@@ -114,31 +111,32 @@ class Chat extends FrontendController
             ]);
         }
 
-        // 获取角色
-        $role = $this->roleModel->reset()
-            ->where(AgentRole::schema_fields_CODE, $roleCode)
-            ->where(AgentRole::schema_fields_STATUS, AgentRole::STATUS_ENABLED)
-            ->find()
-            ->fetch();
-
-        if (!$role->getId()) {
-            return $this->fetchJson([
-                'success' => false,
-                'msg' => __('角色不存在或已禁用'),
-            ]);
-        }
-
-        // 获取或创建会话
+        // 统一运行时解析（角色缺省→默认角色；模型/项目可覆盖）
+        $turn = [
+            'prompt' => $message,
+            'channel' => $channel,
+            'context_id' => $contextId,
+        ];
         if ($sessionId > 0) {
-            $session = $this->sessionManager->getSession($sessionId);
-        } else {
-            $session = $this->sessionManager->getOrCreateSession($role, $channel, $contextId);
+            $turn['session_id'] = $sessionId;
+        }
+        if ($roleCode !== '') {
+            $turn['role_code'] = $roleCode;
+        }
+        if ($modelCode !== '') {
+            $turn['model_code'] = $modelCode;
+        }
+        if ($projectId > 0) {
+            $turn['project_id'] = $projectId;
         }
 
-        if (!$session) {
+        try {
+            $role = $this->runtimeService->resolveRole($turn);
+            $session = $this->runtimeService->resolveSession($turn, $role, $this->runtimeService->resolveProject($turn));
+        } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
-                'msg' => __('会话不存在'),
+                'msg' => $e->getMessage(),
             ]);
         }
 
@@ -152,8 +150,35 @@ class Chat extends FrontendController
         echo "data: " . json_encode(['type' => 'session', 'session_id' => $session->getId()]) . "\n\n";
         flush();
 
-        // 流式执行
-        foreach ($this->agentEngine->executeStream($message, $role, $session) as $chunk) {
+        // 事件出口 → SSE；stream_callback → content 分片
+        $turnOpts = [
+            'model_code' => $modelCode,
+            'message_meta' => [
+                'role_id' => (int)$role->getId(),
+                'project_id' => $projectId,
+            ],
+            'on_event' => static function (string $type, array $data = []): void {
+                echo "data: " . json_encode(['type' => 'event', 'event' => $type, 'data' => $data], JSON_UNESCAPED_UNICODE) . "\n\n";
+                flush();
+            },
+        ];
+        if ($projectId > 0) {
+            $turnOpts['project_id'] = $projectId;
+        }
+        $project = $this->runtimeService->resolveProject($turn);
+        if ($project) {
+            $turnOpts['project'] = [
+                'key' => (string)$project->getData(\Weline\Agent\Model\AgentProject::schema_fields_PROJECT_KEY),
+                'name' => (string)$project->getData(\Weline\Agent\Model\AgentProject::schema_fields_NAME),
+            ];
+        }
+        $skillCodes = $this->runtimeService->resolveSkillCodes($role);
+        if ($skillCodes !== []) {
+            $turnOpts['skill_codes'] = $skillCodes;
+        }
+
+        // 流式执行：engine 内部完成 user/assistant 消息落库
+        foreach ($this->agentEngine->executeStream($message, $role, $session, null, $turnOpts) as $chunk) {
             echo "data: " . json_encode(['type' => 'content', 'content' => $chunk]) . "\n\n";
             flush();
         }

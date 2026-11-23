@@ -8,7 +8,7 @@
  * （异步部件引子契约，见 Weline_StoreMusic doc）。
  *
  * @widget.code {store-music}
- * @widget.async {true}
+ * @widget.async {false}
  * @widget.async_cache {300}
  * @widget.async_module {storeMusic}
  * @widget.cache {3600}
@@ -176,6 +176,7 @@ $faceUrl = $esc($faceUrl);
        data-store-music
        data-widget-code="store-music"
        data-weline-load="storeMusic"
+       data-weline-load-when="interaction"
        data-store-music-config="<?= $configJson ?>"
        data-website-id="<?= $esc($websiteId) ?>"
        data-store-id="<?= $esc($storeId) ?>"

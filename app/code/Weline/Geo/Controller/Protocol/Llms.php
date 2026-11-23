@@ -34,6 +34,12 @@ class Llms extends FrontendController
         // Request-scoped arm also prevents the WLS worker from re-queueing the cookie.
         \Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::arm('industry_protocol_document');
         $response->setHeader(self::PROTOCOL_DOCUMENT_HEADER, '1');
+        // Lighthouse/agent fetchers have a short timeout; a cold render is ~2s and
+        // can trip "Timed out fetching llms.txt" (agentic browsing 3/4). Edge-cache
+        // every protocol document, not just the ARD manifest.
+        $response->setHeader('Cache-Control', 'public, max-age=300, must-revalidate');
+        $response->setHeader('CDN-Cache-Control', 'public, max-age=300');
+        $response->setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=300');
 
         return $response;
     }

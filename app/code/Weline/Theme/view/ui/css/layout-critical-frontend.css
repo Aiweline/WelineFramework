@@ -172,3 +172,15 @@ body, p, li { font-size: var(--weline-font-size-base, 1rem); }
     overflow: hidden;
     white-space: nowrap;
 }
+
+/* marker: hero-title-first-paint-v1 · 2026-11-23
+ * 默认主题 hero-slider 的标题在组件 CSS 里先 opacity:0、再靠 animation 入场；
+ * 组件包改为 preload 后，标题会等 36KB CSS 到达才可见，LCP 被推到 4s。
+ * 首帧直接显示标题，入场动画留给设计主题覆盖；LCP 文本不再依赖非阻塞包。 */
+.wc-theme_widget_hero_slider .slide.active .slide-title,
+.wc-theme_widget_hero_slider .slide.active .slide-subtitle {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+}
+

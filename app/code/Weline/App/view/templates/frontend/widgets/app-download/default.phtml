@@ -4,7 +4,7 @@
  *
  * @widget.source {Weline_App::css/widgets/app-download.css,Weline_App::js/widgets/app-download-async.js}
  * @widget.code {app-download}
- * @widget.async {true}
+ * @widget.async {false}
  * @widget.async_cache {300}
  * @widget.async_module {appDownloadFloat}
  * @widget.name {下载App}
@@ -62,7 +62,7 @@ $wt = static function (string $zh, string $en) use ($widgetIsZh): string {
 };
 ?>
 <?php if ($entries['web'] || $entries['android'] || $entries['ios']): ?>
-<div class="weline-app-download" data-app-download data-weline-app-version="<?= htmlspecialchars($webVersion, ENT_QUOTES) ?>">
+<div class="weline-app-download" data-app-download data-weline-app-version="<?= htmlspecialchars($webVersion, ENT_QUOTES) ?>" data-weline-load="appDownloadFloat" data-weline-load-when="interaction">
     <?php // 单一入口：平台差异全在二维码弹窗/下载中心里，避免按平台重复渲染同名按钮 ?>
     <div class="app-download__entry">
         <a class="app-download__btn app-download__btn--primary"

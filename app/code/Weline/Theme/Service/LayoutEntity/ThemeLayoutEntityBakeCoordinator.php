@@ -859,6 +859,166 @@ final class ThemeLayoutEntityBakeCoordinator
     }
 
     /**
+     * Publish-time completeness pass: every scope version row that
+     * `getPublished()` can resolve for this theme must own its page artifacts.
+     *
+     * `collectRebakeWorkItems` now lets published-effective rows through
+     * `scopeOwnsSolidify`, so the normal pipeline already covers this set;
+     * this pass re-checks the same enumeration against disk and backfills
+     * anything still missing through the same `solidifyPendingIdentity`
+     * entry the pipeline uses — context in, artifacts+compile out.
+     *
+     * @return array{ok:bool,versions:int,baked:int,missing:list<string>,errors:list<string>}
+     */
+    public function ensureServingArtifacts(int $themeId): array
+    {
+        $report = ['ok' => true, 'versions' => 0, 'baked' => 0, 'missing' => [], 'errors' => []];
+        if ($themeId < 1) {
+            return $report;
+        }
+
+        $query = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->clearQuery();
+        $query->where('theme_id', $themeId);
+        $rows = $query->select()->fetchArray();
+        $rows = !is_array($rows) || $rows === [] ? [] : (array_is_list($rows) ? $rows : [$rows]);
+
+        $seenScopes = [];
+        $servedVersionIds = [];
+        foreach ($rows as $row) {
+            $version = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->setData($row);
+            $scopeKey = $version->getScope() . "\0" . $version->getStoreMode() . "\0" . $version->getArea();
+            if (isset($seenScopes[$scopeKey])) {
+                continue;
+            }
+            $seenScopes[$scopeKey] = true;
+
+            // Ask the authoritative resolver which version actually serves this
+            // scope — selection/flag/ancestor-chain semantics included.
+            $published = $this->scopeVersions->getPublished(
+                $themeId,
+                (string)$version->getScope(),
+                (string)$version->getStoreMode(),
+                (string)$version->getArea(),
+            );
+            if (!$published instanceof ThemeScopeVersion || $published->getVersionId() < 1) {
+                continue;
+            }
+            // 祖先链解析会让多个 scope 三元组落到同一已发布版本——按 versionId 去重。
+            $publishedVersionId = (int)$published->getVersionId();
+            if (isset($servedVersionIds[$publishedVersionId])) {
+                continue;
+            }
+            $servedVersionIds[$publishedVersionId] = true;
+            $identity = $published->toVersionIdentity()->withVersion(
+                $published->getVersionId(),
+                ThemeVersionIdentity::MODE_FORMAL,
+                max(1, (int)$published->getContentRevision()),
+            );
+            $report['versions']++;
+            $this->ensureIdentityArtifacts($identity, $report);
+        }
+
+        return $report;
+    }
+
+    /**
+     * Bake + verify one served identity's page artifacts. Pending selection
+     * mirrors `collectRebakeWorkItems` (own-solidify / non-empty / digest),
+     * then disk is re-probed so a silent no-op bake cannot pass the gate.
+     *
+     * @param array{ok:bool,versions:int,baked:int,missing:list<string>,errors:list<string>} $report
+     */
+    private function ensureIdentityArtifacts(ThemeVersionIdentity $identity, array &$report): void
+    {
+        if (!$this->ownsPublicationDirectory($identity)) {
+            return;
+        }
+
+        $targets = [];
+        foreach ($this->snapshotService()->resources($identity) as $resource) {
+            if (($resource['resource_type'] ?? '') !== 'layout') {
+                continue;
+            }
+            $key = json_decode((string)$resource['resource_key_json'], true);
+            if (is_array($key)) {
+                $targets[] = $key;
+            }
+        }
+        $targets = $this->uniqueLayoutTargets(array_merge(
+            $targets,
+            $this->existingPageTargets($identity),
+            $this->declaredPageTargets($identity, []),
+            $this->designOwnedPageTargets($identity),
+        ));
+        if ($targets === []) {
+            $targets[] = [
+                'layout_type' => 'homepage',
+                'layout_option' => 'default',
+                'target_type' => 'global',
+                'target_id' => 0,
+            ];
+        }
+        $targets = $this->applyLayoutCascadeFilter($targets, '', '', $identity);
+
+        $planDigest = $this->injectionPlanDigest();
+        $pending = [];
+        foreach ($targets as $key) {
+            $type = (string)($key['layout_type'] ?? 'default');
+            $option = (string)($key['layout_option'] ?? 'default');
+            $targetType = (string)($key['target_type'] ?? 'global');
+            $targetId = (int)($key['target_id'] ?? 0);
+            if (!$this->layoutNeedsOwnSolidify($identity, $type, $option, $targetType, $targetId)) {
+                continue;
+            }
+            if ($this->pageDerivedWouldBeEmpty($identity, $type, $option, $targetType, $targetId, [])) {
+                continue;
+            }
+            try {
+                if ($this->generatedPageMatchesInputs($identity, $type, $option, $targetType, $targetId, [], $planDigest)) {
+                    continue;
+                }
+            } catch (\Throwable $error) {
+                $report['errors'][] = 'V' . $identity->themeVersionId . '/' . $type . ': ' . $error->getMessage();
+                continue;
+            }
+            $pending[] = [
+                'layout_type' => $type,
+                'layout_option' => $option,
+                'target_type' => $targetType,
+                'target_id' => $targetId,
+            ];
+        }
+        if ($pending === []) {
+            return;
+        }
+
+        try {
+            $result = $this->solidifyPendingIdentity($identity, $pending, [], true);
+            $report['baked'] += (int)($result['migrated'] ?? 0);
+        } catch (\Throwable $error) {
+            $report['ok'] = false;
+            $report['errors'][] = 'V' . $identity->themeVersionId . ': ' . $error->getMessage();
+
+            return;
+        }
+
+        foreach ($pending as $key) {
+            $path = $this->paths()->pageLayoutPhtml(
+                $identity,
+                (string)$key['layout_type'],
+                (string)($key['layout_option'] ?? 'default'),
+                (string)($key['target_type'] ?? 'global'),
+                ((int)($key['target_id'] ?? 0)) ?: null,
+            );
+            if (!is_file($path)) {
+                $report['ok'] = false;
+                $report['missing'][] = 'V' . $identity->themeVersionId
+                    . '/' . $key['layout_type'] . '/' . ($key['layout_option'] ?? 'default');
+            }
+        }
+    }
+
+    /**
      * @param array{scope?:string,all_versions?:bool,version_ids?:list<int>,layout_type?:string,layout_option?:string,force_pages?:bool} $options
      * @return list<array{identity:ThemeVersionIdentity,pending:list<array<string,mixed>>,changes:array}>
      */
@@ -904,7 +1064,11 @@ final class ThemeLayoutEntityBakeCoordinator
             if ($versionIds === [] && !$allVersions && !$this->isCurrentlyEffectiveScopeVersion($identity, $includeSelectedDraft)) {
                 continue;
             }
-            if (!$this->scopeOwnsSolidify($identity)) {
+            // scopeOwnsSolidify 只挡「非生效版本行」：published-effective 的行无论 scope
+            // 是否继承主题应用，请求都会经 getPublished（self→祖先链）解析到它并按其
+            // canonicalScope 读产物，缺产物只能靠请求期兜底烘（实测 theme.solidified.bake
+            // 1.7–11s/身份）。生效行必须烤，才能让兜底回归纯防线。
+            if (!$this->scopeOwnsSolidify($identity) && !$this->isPublishedEffectiveVersion($identity)) {
                 continue;
             }
             $head = $this->snapshotService()->head($identity);
@@ -1121,6 +1285,25 @@ final class ThemeLayoutEntityBakeCoordinator
             return true;
         }
         return $this->hasOwnThemeApplication($identity);
+    }
+
+    /**
+     * True when this row IS the version `getPublished()` resolves for its own
+     * scope — i.e. storefront requests can land on it. Uses the authoritative
+     * resolver (selection → flagged → scope-ancestor chain) so the bake set
+     * matches exactly what the read path serves.
+     */
+    private function isPublishedEffectiveVersion(ThemeVersionIdentity $identity): bool
+    {
+        $published = $this->scopeVersions->getPublished(
+            $identity->themeId,
+            $identity->canonicalScope,
+            $identity->storeMode,
+            $identity->area,
+        );
+
+        return $published instanceof ThemeScopeVersion
+            && (int)$published->getVersionId() === (int)$identity->themeVersionId;
     }
 
     private function versionHasEditIntent(ThemeVersionIdentity $identity): bool

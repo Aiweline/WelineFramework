@@ -48,8 +48,10 @@ final class ThemeLayoutEntityMaterializer
         $layoutType = $this->paths->layoutRoutePath(trim($pageType) !== '' ? $pageType : $layoutIdentityHash);
         $path = $this->paths->pageLayoutPhtml($identity, $layoutType, $layoutOption, $targetType, $targetId);
         $origin = (new ThemeLayoutEntityDocumentShellBaker())->resolveLayoutAbsolutePath($layoutType, $identity->area, $layoutOption, $identity->themeId);
-        $source = $this->readSource($origin);
         $theme = $this->loadTheme($identity);
+        $this->assertThemeSourcePrecedence($this->assertionTheme($identity, $theme), $identity->area, 'layouts',
+            [[$layoutType, $layoutOption]], $origin, 'page:' . $layoutType . '/' . $layoutOption);
+        $source = $this->readSource($origin);
         $dependencyResolver = new ThemeLayoutTemplateDependencies();
         $dependencies = $dependencyResolver->moduleSources($source, $theme, $identity->area);
         $nodes = $this->selectNodes($contentNodes, false);
@@ -171,6 +173,8 @@ final class ThemeLayoutEntityMaterializer
                 }
                 throw new \RuntimeException('theme_partial_source_missing: ' . $type . '/' . $option);
             }
+            $this->assertThemeSourcePrecedence($this->assertionTheme($identity, $theme), $identity->area, 'partials',
+                [[$type, $option]], $origin, 'partial:' . $type . '/' . $option);
             $original = $this->readSource($origin);
             $dependencies += (new ThemeLayoutTemplateDependencies())->partialSources($original, $origin, $resources, $identity->area);
             $source = (new LayoutRelationCompiler(null, $theme))->compile($original, $nodes, [], $localeOverrides, $identity);
@@ -201,6 +205,8 @@ final class ThemeLayoutEntityMaterializer
             $path = $this->paths->partialPhtml($identity, $type, $option);
             if (isset($candidates[$path])) { continue; }
             $origin = (string)$resource['file_path'];
+            $this->assertThemeSourcePrecedence($this->assertionTheme($identity, $theme), $identity->area, 'partials',
+                [[$type, $option]], $origin, 'partial_dep:' . $type . '/' . $option);
             $original = $this->readSource($origin);
             $dependencies += (new ThemeLayoutTemplateDependencies())->partialSources($original, $origin, $resources, $identity->area);
             $source = (new LayoutRelationCompiler(null, $theme))->compile($original, $nodes, [], $localeOverrides, $identity);
@@ -299,11 +305,104 @@ final class ThemeLayoutEntityMaterializer
         return $nodes;
     }
 
+    /**
+     * A theme's own design-layer file for a logical resource must win over parent
+     * themes and module defaults. Resolution reads shared chain caches; a stale or
+     * foreign-theme resolution once rebuilt hanfu scope entities against the
+     * Default theme's module tree while provenance still claimed theme_id=hanfu.
+     * Assert the invariant here so a bad source fails the build instead of
+     * publishing silently.
+     *
+     * Only the exact requested (type, option) pair is asserted: resolver fallback
+     * pairs are different logical keys where a module/parent source may
+     * legitimately win, so they must not participate.
+     *
+     * @param list<array{0:string,1:string}> $candidates [type, option] pairs to check
+     */
+    private function assertThemeSourcePrecedence(
+        ?WelineTheme $theme,
+        string $area,
+        string $kind,
+        array $candidates,
+        string $origin,
+        string $label,
+    ): void {
+        if (!$theme instanceof WelineTheme || $origin === '') {
+            return;
+        }
+        $basePath = rtrim(str_replace('\\', '/', (string)$theme->getPath()), '/');
+        if ($basePath === '') {
+            return;
+        }
+        $area = strtolower(trim($area)) !== '' ? strtolower(trim($area)) : 'frontend';
+        $expected = null;
+        foreach ($candidates as [$type, $option]) {
+            $type = trim(str_replace('\\', '/', (string)$type), '/');
+            $option = trim((string)$option) !== '' ? trim((string)$option) : 'default';
+            if ($type === '') {
+                continue;
+            }
+            $rel = $kind . '/' . $type . '/' . $option . '.phtml';
+            foreach (['', '/theme', '/view/theme'] as $structure) {
+                $candidate = $basePath . $structure . '/' . $area . '/' . $rel;
+                if (is_file($candidate)) {
+                    $expected = $candidate;
+                    break 2;
+                }
+            }
+        }
+        if ($expected === null) {
+            return;
+        }
+        $originReal = realpath($origin);
+        $expectedReal = realpath($expected);
+        if ($originReal === false || $expectedReal === false) {
+            return;
+        }
+        // Only project source trees participate: synthetic fixture origins
+        // (temp dirs, in-memory stubs) are not resolver output and cannot
+        // violate source precedence.
+        $projectRoot = realpath(defined('BP') ? BP : '');
+        if (!is_string($projectRoot) || $projectRoot === '' || !str_starts_with($originReal, $projectRoot . DIRECTORY_SEPARATOR)) {
+            return;
+        }
+        if ($originReal !== $expectedReal) {
+            throw new \RuntimeException(
+                'theme_layout_source_override_violation: ' . $label
+                . ' theme_id=' . (int)$theme->getId()
+                . ' expected=' . $expected
+                . ' resolved=' . $origin
+            );
+        }
+    }
+
     private function loadTheme(ThemeVersionIdentity $identity): ?WelineTheme
     {
         $theme = clone ObjectManager::getInstance(WelineTheme::class);
         $theme->clearData()->clearQuery()->load($identity->themeId);
         return (int)$theme->getId() === $identity->themeId ? $theme : null;
+    }
+
+    /**
+     * Theme row for source-precedence assertions: prefers the catalog row so the
+     * check still works when the loaded model is unavailable, and stays a no-op
+     * for unknown/theme-less identities (module-default entities).
+     */
+    private function assertionTheme(ThemeVersionIdentity $identity, ?WelineTheme $theme): ?WelineTheme
+    {
+        if ($theme instanceof WelineTheme && (int)$theme->getId() === $identity->themeId) {
+            return $theme;
+        }
+        try {
+            $row = WelineTheme::catalogRow($identity->themeId);
+            if ($row === []) {
+                return null;
+            }
+            $catalogTheme = ObjectManager::make(WelineTheme::class)->setData($row);
+            return (int)$catalogTheme->getId() === $identity->themeId ? $catalogTheme : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function readSource(string $path): string

@@ -18,6 +18,7 @@
  * @widget.supports {["consent-banner","layout-storefront-tail-chrome","content"]}
  * @widget.default_injections {[]}
  * @global-region.cache {60}
+ * @global-region.eager {true}
  */
 
 use Weline\Theme\Helper\WidgetI18n;
@@ -32,6 +33,21 @@ WidgetI18n::prefetchLabels([
 ]);
 $t = static fn (string $word): string => $esc(WidgetI18n::label($word));
 ?>
+<style>
+/* Default-theme first-paint contract: the consent band is fixed at the bottom,
+   so an unstyled/oversized text block there can become the LCP candidate on
+   themes that don't override this fragment. Keep it compact, and delay its first
+   paint slightly so it never outranks the hero copy. */
+@keyframes weline-consent-in { from { opacity: 0; } to { opacity: 1; } }
+#weline-consent-banner{animation:weline-consent-in .01s linear .9s both;position:fixed;inset-inline:0;bottom:0;z-index:9999;box-sizing:border-box;max-block-size:min(40vh,100%);overflow-y:auto;border-block-start:1px solid var(--color-primary);background:var(--color-bg-dark);color:var(--color-text-on-dark);font-family:var(--font-family-ui);font-size:var(--weline-font-size-sm);box-shadow:0 -.75rem 2rem rgba(28,28,28,.22)}
+#weline-consent-banner .w-consent-banner__inner{display:flex;flex-wrap:nowrap;align-items:center;justify-content:space-between;gap:var(--weline-space-2) var(--weline-space-3);box-sizing:border-box;width:min(100%,var(--weline-layout-content-max-width));max-width:100%;margin-inline:auto;padding:var(--weline-space-2) var(--weline-layout-content-padding-inline)}
+#weline-consent-banner .w-consent-banner__text{flex:1 1 10rem;min-width:0;margin:0;font-size:var(--weline-font-size-sm);line-height:1.35;color:var(--color-text-on-dark-muted)}
+#weline-consent-banner .w-consent-banner__link{color:var(--color-text-on-dark);text-decoration:underline}
+#weline-consent-banner .w-consent-banner__actions{display:flex;flex-wrap:nowrap;align-items:center;gap:var(--weline-space-2);flex:0 0 auto}
+#weline-consent-banner .w-consent-banner__btn{display:inline-flex;align-items:center;justify-content:center;min-block-size:2.25rem;padding-inline:var(--weline-space-3);border:1px solid transparent;border-radius:2px;font-family:var(--font-family-ui);font-size:var(--weline-font-size-xs, var(--weline-font-size-sm));font-weight:600;line-height:1.2;cursor:pointer;white-space:nowrap}
+#weline-consent-banner .w-consent-banner__btn--primary{background:var(--color-primary);border-color:var(--color-primary);color:var(--color-on-primary)}
+#weline-consent-banner .w-consent-banner__btn--secondary{background:transparent;border-color:color-mix(in srgb,var(--color-text-on-dark) 38%,transparent);color:var(--color-text-on-dark)}
+</style>
 <div id="weline-consent-banner"
      class="w-consent-banner"
      role="dialog"
@@ -39,8 +55,7 @@ $t = static fn (string $word): string => $esc(WidgetI18n::label($word));
      data-widget-code="consent-banner"
      data-testid="consent-banner"
      aria-label="<?= $t('Cookie 同意') ?>"
-     data-weline-load="consentBanner"
-     hidden>
+     data-weline-load="consentBanner">
     <div class="w-consent-banner__inner">
         <p class="w-consent-banner__text">
             <?= $t('我们使用 Cookie 以改善体验。您可以同意或稍后管理偏好。') ?>

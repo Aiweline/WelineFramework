@@ -131,6 +131,36 @@ final class SitemapEdgeNginxMapWriter
             $locLines[] = '';
         }
 
+        // Agent/AI discovery documents are fetched by Lighthouse and crawlers with a
+        // short timeout. They must not wait for a PHP render or worker admission:
+        // serve the published static copies from pub/ before location / falls through
+        // to the FPC/WLS origin.
+        $agentDocuments = [
+            '/robots.txt' => 'text/plain',
+            '/llms.txt' => 'text/plain',
+            '/.well-known/ard.json' => 'application/ai-catalog+json',
+            '/.well-known/ai-catalog.json' => 'application/ai-catalog+json',
+        ];
+        foreach ($agentDocuments as $agentDocPath => $agentDocType) {
+            $locLines[] = 'location = ' . $agentDocPath . ' {';
+            $locLines[] = '    root ' . $quotedPubRoot . ';';
+            if ($agentDocType === 'application/ai-catalog+json') {
+                // nginx mime.types maps .json to application/json; ARD consumers
+                // require the ai-catalog media type on the manifest response.
+                $locLines[] = '    types { application/ai-catalog+json json; }';
+            }
+            $locLines[] = '    default_type ' . $agentDocType . ';';
+            $locLines[] = '    charset utf-8;';
+            $locLines[] = '    access_log off;';
+            $locLines[] = '    add_header Cache-Control "public, max-age=300, must-revalidate" always;';
+            $locLines[] = '    add_header CDN-Cache-Control "public, max-age=300" always;';
+            $locLines[] = '    add_header Cloudflare-CDN-Cache-Control "public, max-age=300" always;';
+            $locLines[] = '    add_header X-Wls-Agent-Doc "1" always;';
+            $locLines[] = '    try_files ' . $agentDocPath . ' =404;';
+            $locLines[] = '}';
+            $locLines[] = '';
+        }
+
         $mapBody = \implode("\n", $mapLines);
         $locBody = \implode("\n", $locLines);
         $mapOk = $this->atomicWrite($this->mapFilePath(), $mapBody);

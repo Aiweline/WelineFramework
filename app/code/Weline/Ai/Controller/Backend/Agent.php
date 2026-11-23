@@ -35,6 +35,19 @@ class Agent extends BackendController
         return $this->fetch();
     }
 
+    #[Acl('Weline_Ai::ai_agent_index', '查看 AI 智能体架构', 'info', '查看 AI 智能体架构说明与对接指南')]
+    public function architecture(): string
+    {
+        if ($this->request->getGet('embed') === '1') {
+            $this->layoutType = 'default.blank';
+        }
+        $this->assign('activeTab', 'agent_arch');
+        $this->assign('agents', $this->catalog()->listCatalog(true));
+        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
+
+        return $this->fetch();
+    }
+
     #[Acl('Weline_Ai::ai_agent_index', '查看 AI 智能体目录', 'tag', '查看 AI 智能体目录')]
     public function getCatalog(): string
     {

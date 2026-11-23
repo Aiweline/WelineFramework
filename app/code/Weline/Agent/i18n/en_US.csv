@@ -1,5 +1,10 @@
 ﻿不支持的智能体操作：%{1},"Unsupported agent operation: %{1}"
 请先登录后台,"Please log in to the backend first."
+项目名称不能为空,项目名称不能为空
+项目与流程名称必填,项目与流程名称必填
+"流程节点数超过上限 %{1}","流程节点数超过上限 %{1}"
+通用对话智能体,通用对话智能体
+"角色 leader 的默认任务型委托目标：带会话历史的通用 LLM 对话。","角色 leader 的默认任务型委托目标：带会话历史的通用 LLM 对话。"
 编码智能体,"Coding Agent"
 "专为代码编写、编辑、分析设计的智能体。支持读取文件、搜索替换、grep 搜索、目录浏览、glob 查找、执行终端命令等工具。","Agent for coding: read files, search/replace, grep, list dir, glob, run terminal commands."
 "正在调用 AI...","Calling AI..."
@@ -42,6 +47,7 @@
 面向监控、日志分析、事件分流与变更安全操作的适配器。,"Adapter tuned for monitoring, log analysis, incident triage, and change-safe operations."
 智能体适配器,"Agent Adapter"
 默认适配器：基于角色的智能体对话，含工具、记忆上下文与安全护栏。,"Default adapter for role-based agent conversations with tools, memory context, and safety guardrails."
+智能体,Agent
 会话不存在,"Session does not exist"
 会话管理,"Session Management"
 "管理 AI 对话会话","Manage AI chat sessions"
@@ -51,6 +57,18 @@
 查看会话详情,"View session detail"
 归档会话,"Archive session"
 删除会话,"Delete session"
+"插件扫描完成：扫描 %d，登记 %d，缺失 %d","插件扫描完成：扫描 %d，登记 %d，缺失 %d"
+插件不存在,插件不存在
+当前状态不可切换,当前状态不可切换
+状态已更新,"Status updated"
+插件管理,插件管理
+管理智能体插件,管理智能体插件
+插件列表,插件列表
+查看插件列表,查看插件列表
+扫描插件,扫描插件
+扫描并登记插件,扫描并登记插件
+切换状态,"Toggle status"
+启用/禁用插件,启用/禁用插件
 角色不存在,"Role not found"
 选择角色模板,"Choose role template"
 描述业务场景与项目数量,"Describe business context and project count"
@@ -80,7 +98,6 @@
 查看技能列表,"View skill list"
 查看技能,"View skill"
 查看技能详情,"View skill detail"
-切换状态,"Toggle status"
 启用/禁用技能,"Enable/disable skill"
 任务不存在,"Task not found"
 调度任务,"Schedule Tasks"
@@ -108,11 +125,42 @@
 "与 AI 智能体对话","Chat with AI agent"
 聊天界面,"Chat UI"
 访问聊天控制台,"Access chat console"
+流程不存在,流程不存在
+流程已删除,流程已删除
+流程编排,流程编排
+管理可视化角色流程,管理可视化角色流程
+流程列表,流程列表
+查看流程列表,查看流程列表
+删除流程,删除流程
+删除流程定义,删除流程定义
 消息不能为空,"Message cannot be empty"
-角色不存在或已禁用,"Role does not exist or is disabled"
 成功,Success
 "会话 ID 无效","Invalid session ID"
 历史已清除,"History cleared"
+"流程 ID 无效","流程 ID 无效"
+流程名称不能为空,流程名称不能为空
+"graph.nodes 必须为数组","graph.nodes 必须为数组"
+"节点 %s 未选择角色","节点 %s 未选择角色"
+流程至少需要一个节点,流程至少需要一个节点
+已保存,已保存
+"运行 ID 无效","运行 ID 无效"
+运行不存在,运行不存在
+"＋ 新会话","＋ 新会话"
+通用智能体,通用智能体
+"选择角色与模型，开始对话。支持 @role:code / @agent:code 团队派单（需项目会话）。","选择角色与模型，开始对话。支持 @role:code / @agent:code 团队派单（需项目会话）。"
+"输入消息，Enter 发送，Shift+Enter 换行","输入消息，Enter 发送，Shift+Enter 换行"
+发送,Send
+角色流程,角色流程
+"＋ 新建流程","＋ 新建流程"
+保存,Save
+流程名称,流程名称
+描述（可选）,描述（可选）
+草稿,草稿
+启用,Active
+停用,Disable
+"点击「＋ 新建流程」或从左侧选择一个流程开始编排","点击「＋ 新建流程」或从左侧选择一个流程开始编排"
+输入需求（整个流程的原始输入，会依次传给各节点）,输入需求（整个流程的原始输入，会依次传给各节点）
+"▶ 运行流程","▶ 运行流程"
 让智能体按时间自动执行任务，适合巡检、汇总和定期清理。,"Let the agent run tasks on a schedule—ideal for inspections, summaries, and periodic cleanup."
 新建调度,"New Schedule"
 任务,Tasks
@@ -122,8 +170,6 @@
 下次运行,"Next Run"
 操作,Actions
 编辑,Edit
-停用,Disable
-启用,Active
 还没有定时任务,"No scheduled tasks yet"
 先准备好角色，再创建第一条调度。例如：每天早上生成一份运营摘要。,"Prepare roles first, then create your first schedule. Example: generate an operations summary every morning."
 创建第一条调度,"Create the first schedule"
@@ -285,10 +331,16 @@
 发送后会在此显示你的消息与智能体回复。工具调用结果会出现在时间线里。,"After sending, your message and the agent’s reply appear here. Tool call results show up in the timeline."
 消息,Messages
 输入要问智能体的话…,"Enter what you want to ask the agent…"
-发送,Send
 新会话,"New session"
+插件为智能体提供可安装的能力包（技能集合）。扫描登记后可绑定到角色。,插件为智能体提供可安装的能力包（技能集合）。扫描登记后可绑定到角色。
+插件,插件
+模块,模块
+版本,版本
+绑定角色,绑定角色
+—,—
+未绑定,未绑定
+暂无插件，点击「扫描插件」登记模块内的能力包。,暂无插件，点击「扫描插件」登记模块内的能力包。
 用户,User
-智能体,Agent
 系统,System
 工具,Tools
 未知,Unknown
@@ -309,6 +361,14 @@
 归档,Archive
 删除,Delete
 还没有会话,"No sessions yet"
+"可视化角色流程：节点选择角色 + 可选提示词覆盖，串行执行。编排在前台编辑器中进行。","可视化角色流程：节点选择角色 + 可选提示词覆盖，串行执行。编排在前台编辑器中进行。"
+打开编排器,打开编排器
+流程,流程
+最近运行,最近运行
+节点,节点
+编排,编排
+确认删除该流程？,确认删除该流程？
+暂无流程，点击「打开编排器」创建第一个角色流程。,暂无流程，点击「打开编排器」创建第一个角色流程。
 在路径下按模式搜索文件，返回匹配行及其文件路径与行号。,"Search for a pattern in files under path. Returns matching lines with file path and line number."
 搜索模式（支持正则）,"Search pattern (regex supported)"
 "搜索目录（相对项目根），默认 app/code","Directory to search (relative to project root), default app/code"
@@ -358,15 +418,17 @@
 角色代码已存在,"Role code already exists"
 默认角色不可删除,"Default role cannot be deleted"
 删除成功,"Deleted successfully"
-状态已更新,"Status updated"
 任务名称和提示词不能为空,"Task name and prompt cannot be empty"
 任务已加入执行队列,"Task queued for execution"
 已归档,Archived
 已删除,Deleted
 请先选择角色,"Please select a role first"
+角色不存在或已禁用,"Role does not exist or is disabled"
 会话与角色不匹配,"Session and role mismatch"
 对话失败,"Conversation failed"
 回复已生成,"Reply generated"
+智能体回合在确认结果前中断，无法安全重试。,智能体回合在确认结果前中断，无法安全重试。
+智能体回合执行失败：,智能体回合执行失败：
 "AI 建议不可用，已应用模板草稿。","AI suggestion unavailable, applied template draft."
 未找到可用模型，已应用模板草稿。,"No active model found, applied template draft."
 调度管理,"Schedule Management"
@@ -385,7 +447,6 @@
 "Cron 表达式","Cron Expression"
 提示词,Prompt
 "上下文 JSON","Context JSON"
-保存,Save
 引导式角色配置,"Guided Role Setup"
 "从配置与模板预设开始，再用 AI 建议自动填充高级字段。","Start with profile and template presets, then use AI suggestion to auto-fill advanced fields."
 引导已启用,"Guide Enabled"

@@ -100,7 +100,7 @@ unset($badge);
 
                     <?php if ($style !== 'icon-only'): ?>
                         <div class="badge-content">
-                            <h4 class="badge-title"><?= $esc((string)($badge['title'] ?? '')) ?></h4>
+                            <h3 class="badge-title"><?= $esc((string)($badge['title'] ?? '')) ?></h3>
                             <?php if ($style === 'card' && !empty($badge['description'])): ?>
                                 <p class="badge-description"><?= $esc((string)$badge['description']) ?></p>
                             <?php endif; ?>

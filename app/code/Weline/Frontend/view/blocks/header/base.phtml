@@ -135,8 +135,11 @@ try {
 if ($generationUid === '') {
     $generationUid = (string)$pageGeneration;
 }
+// 静态构建号只能证明「有部署」，不能证明「本文件变了」：世代推进失败或同代内更新
+// 会让浏览器/边缘继续用 immutable 缓存里的旧 weline.js。把源文件 mtime 并入版本，
+// 文件一变 URL 必变，缓存不依赖发布链是否成功推进。
 $frontendAssetVersion = $staticBuildId !== ''
-    ? $pageGeneration
+    ? ($pageGeneration . ($frontendJsMtime > 0 ? ('-' . (string)$frontendJsMtime) : ''))
     : ($deployVersion . ($frontendJsMtime > 0 ? ('-' . (string)$frontendJsMtime) : ''));
 $modulesJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/base/weline.modules.js');
 $modulesConfigUrl = PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/base/weline.modules.js');

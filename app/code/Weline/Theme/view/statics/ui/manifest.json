@@ -11,7 +11,7 @@
             "ui-core"
         ]
     },
-    "build_id": "46ee7114252748c0a0b0d0dd7758ba82f4768abf16125c45d1255373d0c0ead9",
+    "build_id": "14c8c51757debf273557534728844a04729a9f6f7f4c58eafae54713667d8fee",
     "bundles": {
         "acl-role-assign-css": {
             "bytes": 2945,
@@ -532,10 +532,10 @@
             "type": "css"
         },
         "theme-editor-widget-config-css": {
-            "bytes": 54658,
+            "bytes": 54648,
             "file": "pages/weline-theme-editor-widget-config.css",
-            "gzip_bytes": 7886,
-            "sha256": "d3b6383531307643d3fc17f43207e7ea8813243dbf936e08020b04ff1a54993a",
+            "gzip_bytes": 7879,
+            "sha256": "7ceab73359ed922c7fc817278ea3575a9a379320fa962a161af7365532ceb4e3",
             "type": "css"
         },
         "theme-editor-widget-param-css": {

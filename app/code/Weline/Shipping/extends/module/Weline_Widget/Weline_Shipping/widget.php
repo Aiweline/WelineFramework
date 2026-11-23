@@ -12,6 +12,7 @@ return [
     'Weline_Shipping::templates/frontend/widgets/footer-shipping-info-link.phtml',
     'Weline_Shipping::templates/frontend/widgets/footer-returns-policy-link.phtml',
     'Weline_Shipping::templates/frontend/widgets/shipping-storefront-tail.phtml',
+    'Weline_Shipping::templates/frontend/widgets/shipping-coverage.phtml',
     'Weline_Shipping::templates/backend/widgets/backend-order-shipments.phtml',
     'Weline_Shipping::templates/backend/widgets/backend-order-list-shipping.phtml',
 ];

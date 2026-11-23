@@ -44,6 +44,14 @@
           icon="tree"
           order="50"/>
 
+    <menu source="Weline_Seo::sitemap_health"
+          name="sitemap_health"
+          title="索引健康"
+          action="seo/backend/health"
+          parent="Weline_Backend::seo_group"
+          icon="search"
+          order="52"/>
+
     <menu source="Weline_Seo::seo_duplicate"
           name="seo_duplicate"
           title="内容重复检测"

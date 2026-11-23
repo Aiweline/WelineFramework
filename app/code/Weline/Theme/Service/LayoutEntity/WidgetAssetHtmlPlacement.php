@@ -76,10 +76,10 @@ final class WidgetAssetHtmlPlacement
         // Layout CSS → after theme/disk/overlay; source → near </head> (other CSS last).
         foreach ($assets as $asset) {
             if (($asset['kind'] ?? '') === 'layout' && ($asset['position'] ?? '') === 'head') {
-                $layoutHead[] = $asset['tag'];
+                $layoutHead[] = $this->deferStylesheetTag((string)$asset['tag']);
                 continue;
             }
-            $groups[$asset['position']][] = $asset['tag'];
+            $groups[$asset['position']][] = $this->deferStylesheetTag((string)$asset['tag']);
         }
         if ($layoutHead !== []) {
             $html = $this->insertAfterThemeChrome($html, implode("\n", $layoutHead) . "\n");
@@ -97,6 +97,30 @@ final class WidgetAssetHtmlPlacement
             }
         }
         return $html;
+    }
+
+    /**
+     * Widget/layout CSS is non-critical when layout-critical already reserves the
+     * header/hero geometry (default Theme does). Emit preload + onload instead of a
+     * render-blocking stylesheet; keep a noscript fallback for JS-disabled clients.
+     */
+    private function deferStylesheetTag(string $tag): string
+    {
+        if (\preg_match('/\brel=(["\'])stylesheet\1/i', $tag) !== 1
+            || \stripos($tag, 'data-weline-widget-asset') === false
+        ) {
+            return $tag;
+        }
+        $preload = \preg_replace('/\brel=(["\'])stylesheet\1/i', 'rel=$1preload$1 as="style"', $tag, 1);
+        if (!\is_string($preload)) {
+            return $tag;
+        }
+        $preload = \preg_replace('/\s*\/?>$/', ' onload="this.onload=null;this.rel=\'stylesheet\'">', $preload, 1);
+        if (!\is_string($preload)) {
+            return $tag;
+        }
+
+        return $preload . '<noscript>' . $tag . '</noscript>';
     }
 
     /**

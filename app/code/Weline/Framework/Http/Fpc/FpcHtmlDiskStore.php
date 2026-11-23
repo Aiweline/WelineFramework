@@ -691,6 +691,115 @@ final class FpcHtmlDiskStore
                 self::purgeSlugUnderHostRoot($hostRoot, $slug, $stop);
             }
         }
+        // 2026-11-23：{host}/pg/{token} 页桶不在 purgeSlugUnderHostRoot 的候选里，
+        // 补一次 any-slot 扫描，否则 CLI / 资源变更后旧叶仍在（实测清完仍命中旧页）。
+        self::purgeSlugsAnySlot($hosts, \array_values($normalizedSlugs));
+    }
+
+    /**
+     * 按 slug 清任意页桶：覆盖 {host}/{slug}、locale/currency 前缀，以及 {host}/pg/{token} 各代。
+     *
+     * CLI 侧无法得知请求期的页代 token（pageGenerationToken 依赖请求上下文），
+     * purgeUrls() 在 CLI 里会算到别的 token 桶；精确清理必须用本方法扫全部页桶。
+     *
+     * @param list<string> $hosts Host keys as stored under live/{host}/ (no scheme).
+     * @param list<string> $slugPaths Storefront paths without locale/currency prefix (e.g. guide/returns).
+     */
+    public static function purgeSlugsAnySlot(array $hosts, array $slugPaths): void
+    {
+        $stop = self::writeBaseRoot();
+        $slugs = [];
+        foreach ($slugPaths as $slug) {
+            $slug = \trim(\str_replace('\\', '/', (string)$slug), '/');
+            if ($slug === '' || \str_contains($slug, '..')) {
+                continue;
+            }
+            if (\preg_match('#^[A-Za-z0-9][A-Za-z0-9_./~%-]*$#D', $slug) !== 1) {
+                continue;
+            }
+            $slugs[$slug] = $slug;
+        }
+        if ($slugs === []) {
+            return;
+        }
+        foreach ($hosts as $host) {
+            $host = \strtolower(\trim((string)$host));
+            if ($host === '' || \preg_match('/^[a-z0-9._:-]+$/Di', $host) !== 1) {
+                continue;
+            }
+            $hostRoot = $stop . \DIRECTORY_SEPARATOR . $host;
+            if (!\is_dir($hostRoot)) {
+                continue;
+            }
+            foreach (self::slugParentDirs($hostRoot) as $parent) {
+                foreach ($slugs as $slug) {
+                    $dir = $parent . \DIRECTORY_SEPARATOR . \str_replace('/', \DIRECTORY_SEPARATOR, $slug);
+                    if (!\is_dir($dir) || \is_link($dir)) {
+                        continue;
+                    }
+                    self::unlinkPageFiles($dir);
+                    self::removeEmptyParents($dir, $stop);
+                }
+            }
+        }
+    }
+
+    /**
+     * slug 的父级候选目录：host 根、host/pg/{current|token}，以及其下 locale/currency 前缀（两级）。
+     *
+     * @return list<string>
+     */
+    private static function slugParentDirs(string $hostRoot): array
+    {
+        $bases = [$hostRoot];
+        $pgRoot = $hostRoot . \DIRECTORY_SEPARATOR . self::PAGE_GEN_DIR;
+        $slots = \is_dir($pgRoot) ? @\scandir($pgRoot) : [];
+        if (\is_array($slots)) {
+            foreach ($slots as $name) {
+                if ($name === '.' || $name === '..') {
+                    continue;
+                }
+                $slot = $pgRoot . \DIRECTORY_SEPARATOR . $name;
+                if (\is_dir($slot)) {
+                    $bases[] = $slot;
+                }
+            }
+        }
+
+        $parents = [];
+        foreach ($bases as $base) {
+            $parents[] = $base;
+            $level1 = @\scandir($base);
+            if (!\is_array($level1)) {
+                continue;
+            }
+            foreach ($level1 as $a) {
+                if ($a === '.' || $a === '..') {
+                    continue;
+                }
+                $pathA = $base . \DIRECTORY_SEPARATOR . $a;
+                if (!\is_dir($pathA) || \is_link($pathA) || !self::isLocaleOrCurrencyDirName($a)) {
+                    continue;
+                }
+                $parents[] = $pathA;
+                $level2 = @\scandir($pathA);
+                if (!\is_array($level2)) {
+                    continue;
+                }
+                foreach ($level2 as $b) {
+                    if ($b === '.' || $b === '..') {
+                        continue;
+                    }
+                    $pathB = $pathA . \DIRECTORY_SEPARATOR . $b;
+                    if (!\is_dir($pathB) || \is_link($pathB) || !self::isLocaleOrCurrencyDirName($b)) {
+                        continue;
+                    }
+                    $parents[] = $pathB;
+                }
+            }
+        }
+
+        return \array_values(\array_unique($parents));
     }
 
     /**
@@ -940,6 +1049,13 @@ final class FpcHtmlDiskStore
             }
             if (\is_file($target) || \is_link($target)) {
                 @\unlink($target);
+            }
+            // pg/current 这类指针是符号链接：重建链接，别硬链/拷贝（对链接 copy 会跟随成目录而失败）。
+            if (\is_link($path)) {
+                $linkTarget = @\readlink($path);
+                if (\is_string($linkTarget) && $linkTarget !== '' && @\symlink($linkTarget, $target)) {
+                    return;
+                }
             }
             // Prefer hardlink (COW-friendly); fall back to byte copy.
             if (!@\link($path, $target) && !@\copy($path, $target)) {

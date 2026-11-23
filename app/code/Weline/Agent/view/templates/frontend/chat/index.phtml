@@ -1,0 +1,431 @@
+<?php
+/**
+ * 通用智能体聊天页（Weline_Agent）— 独立全屏应用文档
+ *
+ * 与店面布局解耦（Download 页同款模式）：控制器直接 Response::text 输出，
+ * 不经过 theme layout，因此没有店面导航/全局区浮层；文末三个 global-region
+ * 标记向响应级注入器声明「本页自理区域（为空）」，防止兜底注入店面部件。
+ *
+ * @var array $roles
+ * @var array $models
+ * @var array $projects
+ * @var bool $is_logged_in
+ */
+$roles = $roles ?? [];
+$models = $models ?? [];
+$projects = $projects ?? [];
+$isLoggedIn = $is_logged_in ?? false;
+
+$roleItems = [];
+foreach ($roles as $r) {
+    $roleItems[] = [
+        'id' => (int)($r['role_id'] ?? 0),
+        'role_id' => (int)($r['role_id'] ?? 0),
+        'role_code' => (string)($r['code'] ?? ''),
+        'code' => (string)($r['code'] ?? ''),
+        'name' => (string)($r['name'] ?? ''),
+        'is_default' => (int)($r['is_default'] ?? 0),
+    ];
+}
+$modelItems = [];
+foreach ($models as $m) {
+    $modelItems[] = [
+        'code' => (string)($m['model_code'] ?? ''),
+        'name' => (string)($m['model_name'] ?? $m['name'] ?? $m['model_code'] ?? ''),
+        'is_default' => (int)($m['is_default'] ?? 0),
+    ];
+}
+$projectItems = [[
+    'id' => 0,
+    'name' => '个人会话（无项目）',
+]];
+foreach ($projects as $p) {
+    $projectItems[] = [
+        'id' => (int)($p['project_id'] ?? 0),
+        'name' => (string)($p['name'] ?? ''),
+    ];
+}
+
+$welineBootHtml = '';
+try {
+    // 声明式加载引导（boot stub + runtime config + weline.js defer），
+    // 使 data-weline-load / Weline.load('api') 在自包含页同样可用。
+    $welineBootHtml = (string)\Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Frontend\Block\Header\Base::class
+    )->render();
+} catch (\Throwable) {
+    $welineBootHtml = '';
+}
+
+$htmlLang = 'zh-Hans';
+try {
+    $locale = \trim((string)\Weline\Framework\Env\WelineEnv::getLang());
+    if ($locale !== '') {
+        $htmlLang = \str_starts_with($locale, 'zh') ? 'zh-Hans' : \str_replace('_', '-', $locale);
+    }
+} catch (\Throwable) {
+}
+$e = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<!doctype html>
+<html lang="<?= $e($htmlLang) ?>">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title><?= $e(__('智能体', 'Agent')) ?> · Weline</title>
+<?= $welineBootHtml ?>
+<style>
+:root {
+    --ac-bg: #1c1b1a;
+    --ac-bg-side: #171614;
+    --ac-bg-panel: #262523;
+    --ac-bg-hover: #2d2b28;
+    --ac-bg-input: #232220;
+    --ac-border: #3a3733;
+    --ac-border-soft: #2e2c29;
+    --ac-text: #ece9e4;
+    --ac-text-2: #a8a29a;
+    --ac-text-3: #6f6a63;
+    --ac-accent: #d97757;
+    --ac-accent-hover: #e08a68;
+    --ac-accent-soft: rgba(217, 119, 87, .14);
+    --ac-user-bg: #33302b;
+    --ac-code-bg: #141311;
+    --ac-ok: #7fb98a;
+    --ac-err: #e57373;
+    --ac-info: #7fa8c9;
+    --ac-radius: 14px;
+    --ac-radius-sm: 9px;
+    --ac-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --ac-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+    background: var(--ac-bg);
+    color: var(--ac-text);
+    font: 15px/1.65 var(--ac-font);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+button { font-family: inherit; }
+::selection { background: var(--ac-accent-soft); }
+
+.ac-app { display: flex; height: 100vh; }
+
+/* ---------- 侧栏 ---------- */
+.ac-side {
+    width: 264px; min-width: 264px; display: flex; flex-direction: column;
+    background: var(--ac-bg-side); border-right: 1px solid var(--ac-border-soft);
+}
+.ac-brand { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; }
+.ac-brand-mark {
+    width: 30px; height: 30px; border-radius: 9px; flex: none;
+    background: linear-gradient(135deg, var(--ac-accent), #b85c3e);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 15px; font-weight: 700;
+}
+.ac-brand-name { font-size: 14px; font-weight: 650; letter-spacing: .02em; }
+.ac-brand-sub { font-size: 11px; color: var(--ac-text-3); margin-top: 1px; }
+.ac-side-actions { padding: 4px 12px 10px; }
+.ac-newchat {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 9px 12px; border-radius: var(--ac-radius-sm); cursor: pointer;
+    border: 1px solid var(--ac-border); background: var(--ac-bg-panel);
+    color: var(--ac-text); font-size: 13px; font-weight: 550;
+    transition: background .15s, border-color .15s;
+}
+.ac-newchat:hover { background: var(--ac-bg-hover); border-color: #4a4641; }
+.ac-nav { display: flex; gap: 4px; padding: 0 12px 8px; }
+.ac-nav a {
+    flex: 1; text-align: center; padding: 7px 0; border-radius: var(--ac-radius-sm);
+    font-size: 12.5px; color: var(--ac-text-2); text-decoration: none;
+    border: 1px solid transparent; transition: background .15s, color .15s;
+}
+.ac-nav a:hover { background: var(--ac-bg-hover); color: var(--ac-text); }
+.ac-nav a.active { background: var(--ac-bg-hover); color: var(--ac-text); border-color: var(--ac-border-soft); }
+.ac-side-label {
+    padding: 10px 18px 6px; font-size: 11px; color: var(--ac-text-3);
+    letter-spacing: .06em; text-transform: uppercase;
+}
+.ac-sessions { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+.ac-sessions::-webkit-scrollbar, .ac-msgs::-webkit-scrollbar, .ac-log::-webkit-scrollbar { width: 8px; }
+.ac-sessions::-webkit-scrollbar-thumb, .ac-msgs::-webkit-scrollbar-thumb, .ac-log::-webkit-scrollbar-thumb {
+    background: #3d3a36; border-radius: 4px;
+}
+.ac-session {
+    padding: 8px 10px; border-radius: var(--ac-radius-sm); cursor: pointer;
+    font-size: 13px; color: var(--ac-text-2); margin-bottom: 1px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    border-left: 2px solid transparent; transition: background .12s, color .12s;
+}
+.ac-session:hover { background: var(--ac-bg-hover); color: var(--ac-text); }
+.ac-session.active { background: var(--ac-bg-hover); color: var(--ac-text); border-left-color: var(--ac-accent); }
+.ac-session .ac-session-proj { font-size: 11px; color: var(--ac-text-3); margin-top: 1px; }
+.ac-side-foot { padding: 10px 14px; border-top: 1px solid var(--ac-border-soft); font-size: 11px; color: var(--ac-text-3); }
+
+/* ---------- 主区 ---------- */
+.ac-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.ac-topbar {
+    display: flex; align-items: center; gap: 8px; padding: 10px 18px;
+    border-bottom: 1px solid var(--ac-border-soft); flex-wrap: wrap;
+}
+.ac-select {
+    appearance: none; -webkit-appearance: none;
+    background: var(--ac-bg-panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23a8a29a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+    border: 1px solid var(--ac-border-soft); border-radius: 999px;
+    color: var(--ac-text-2); font-size: 12.5px; padding: 6px 28px 6px 12px;
+    max-width: 210px; cursor: pointer; outline: none;
+    transition: border-color .15s, color .15s;
+}
+.ac-select:hover, .ac-select:focus { border-color: var(--ac-border); color: var(--ac-text); }
+.ac-topbar-spacer { flex: 1; }
+.ac-badge { font-size: 11.5px; color: var(--ac-text-3); font-family: var(--ac-mono); }
+
+.ac-msgs { flex: 1; overflow-y: auto; }
+.ac-col { max-width: 780px; margin: 0 auto; padding: 24px 24px 12px; }
+
+.ac-welcome { text-align: center; padding: 11vh 24px 0; }
+.ac-welcome-mark {
+    width: 52px; height: 52px; margin: 0 auto 18px; border-radius: 15px;
+    background: linear-gradient(135deg, var(--ac-accent), #b85c3e);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 24px; font-weight: 700;
+    box-shadow: 0 8px 30px rgba(217, 119, 87, .25);
+}
+.ac-welcome h1 { font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
+.ac-welcome p { color: var(--ac-text-2); font-size: 13.5px; margin-top: 8px; }
+.ac-welcome-role {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 14px;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px;
+    background: var(--ac-bg-panel); border: 1px solid var(--ac-border-soft); color: var(--ac-text-2);
+}
+.ac-welcome-role b { color: var(--ac-text); font-weight: 600; }
+.ac-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 26px; max-width: 640px; margin-left: auto; margin-right: auto; }
+.ac-chip {
+    padding: 8px 14px; border-radius: 999px; font-size: 12.5px; cursor: pointer;
+    background: var(--ac-bg-panel); border: 1px solid var(--ac-border-soft); color: var(--ac-text-2);
+    transition: border-color .15s, color .15s, background .15s;
+}
+.ac-chip:hover { border-color: var(--ac-accent); color: var(--ac-text); background: var(--ac-accent-soft); }
+.ac-hint {
+    margin-top: 30px; font-size: 11.5px; color: var(--ac-text-3);
+    font-family: var(--ac-mono);
+}
+.ac-hint code { background: var(--ac-bg-panel); padding: 1px 6px; border-radius: 5px; }
+
+/* ---------- 消息 ---------- */
+.ac-msg { margin-bottom: 26px; }
+.ac-msg-user { display: flex; justify-content: flex-end; }
+.ac-bubble-user {
+    max-width: 78%; padding: 11px 15px; border-radius: 16px 16px 5px 16px;
+    background: var(--ac-user-bg); font-size: 14.5px; line-height: 1.6;
+    white-space: pre-wrap; word-break: break-word;
+}
+.ac-msg-assistant .ac-md { font-size: 14.5px; line-height: 1.75; word-break: break-word; }
+.ac-msg-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ac-avatar {
+    width: 24px; height: 24px; border-radius: 8px; flex: none;
+    background: linear-gradient(135deg, var(--ac-accent), #b85c3e);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 12px; font-weight: 700;
+}
+.ac-msg-meta { font-size: 11px; color: var(--ac-text-3); }
+.ac-caret {
+    display: inline-block; width: 8px; height: 15px; margin-left: 2px;
+    background: var(--ac-accent); border-radius: 2px; vertical-align: -2px;
+    animation: ac-blink 1s steps(2) infinite;
+}
+@keyframes ac-blink { 50% { opacity: 0; } }
+
+/* markdown */
+.ac-md p { margin: 0 0 12px; white-space: pre-line; }
+.ac-md p:last-child { margin-bottom: 0; }
+.ac-md h1, .ac-md h2, .ac-md h3, .ac-md h4 { margin: 20px 0 10px; line-height: 1.35; font-weight: 650; }
+.ac-md h1 { font-size: 19px; } .ac-md h2 { font-size: 17px; } .ac-md h3 { font-size: 15.5px; } .ac-md h4 { font-size: 14.5px; }
+.ac-md ul, .ac-md ol { margin: 0 0 12px; padding-left: 22px; }
+.ac-md li { margin: 4px 0; }
+.ac-md li > ul, .ac-md li > ol { margin: 4px 0; }
+.ac-md blockquote {
+    margin: 0 0 12px; padding: 8px 14px; border-left: 3px solid var(--ac-accent);
+    background: var(--ac-bg-panel); border-radius: 0 var(--ac-radius-sm) var(--ac-radius-sm) 0;
+    color: var(--ac-text-2); white-space: pre-line;
+}
+.ac-md hr { border: none; border-top: 1px solid var(--ac-border-soft); margin: 18px 0; }
+.ac-md a { color: var(--ac-accent-hover); text-decoration: none; border-bottom: 1px solid rgba(217,119,87,.4); }
+.ac-md a:hover { border-bottom-color: var(--ac-accent-hover); }
+.ac-md code:not(pre code) {
+    font: 13px var(--ac-mono); background: var(--ac-bg-hover);
+    padding: 2px 6px; border-radius: 6px; color: #e8b49e;
+}
+.ac-md pre {
+    margin: 0 0 14px; border-radius: var(--ac-radius-sm); overflow: hidden;
+    background: var(--ac-code-bg); border: 1px solid var(--ac-border-soft);
+}
+.ac-code-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 12px; border-bottom: 1px solid var(--ac-border-soft);
+    font: 11px var(--ac-mono); color: var(--ac-text-3);
+}
+.ac-code-copy {
+    border: none; background: transparent; color: var(--ac-text-3); cursor: pointer;
+    font: 11px var(--ac-mono); padding: 2px 6px; border-radius: 5px;
+}
+.ac-code-copy:hover { color: var(--ac-text); background: var(--ac-bg-hover); }
+.ac-md pre code {
+    display: block; padding: 12px 14px; overflow-x: auto;
+    font: 12.5px/1.6 var(--ac-mono); color: #d8d4cc; white-space: pre;
+}
+.ac-md table { border-collapse: collapse; margin: 0 0 14px; font-size: 13.5px; width: 100%; }
+.ac-md th, .ac-md td { border: 1px solid var(--ac-border-soft); padding: 7px 11px; text-align: left; }
+.ac-md th { background: var(--ac-bg-panel); font-weight: 600; }
+.ac-md img { max-width: 100%; border-radius: var(--ac-radius-sm); }
+
+/* 工具/派单事件 */
+.ac-event {
+    display: flex; align-items: center; gap: 8px; margin: 10px 0;
+    font-size: 12px; color: var(--ac-text-3);
+}
+.ac-event-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ac-info); flex: none; }
+.ac-event--tool .ac-event-dot { background: var(--ac-text-3); }
+.ac-event--dispatch { color: var(--ac-info); }
+.ac-event--dispatch .ac-event-dot { background: var(--ac-info); }
+.ac-event code { font: 11px var(--ac-mono); background: var(--ac-bg-panel); padding: 1px 6px; border-radius: 5px; color: var(--ac-text-2); }
+
+/* ---------- 输入区 ---------- */
+.ac-composer-wrap { padding: 8px 18px 16px; }
+.ac-composer {
+    max-width: 780px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px;
+    background: var(--ac-bg-panel); border: 1px solid var(--ac-border);
+    border-radius: 20px; padding: 8px 8px 8px 16px;
+    transition: border-color .15s;
+}
+.ac-composer:focus-within { border-color: #4a4641; }
+.ac-composer textarea {
+    flex: 1; border: none; outline: none; resize: none; background: transparent;
+    color: var(--ac-text); font: 14.5px/1.6 var(--ac-font);
+    max-height: 200px; padding: 7px 0;
+}
+.ac-composer textarea::placeholder { color: var(--ac-text-3); }
+.ac-send {
+    width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--ac-accent); color: #fff; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s, opacity .15s;
+}
+.ac-send:hover:not(:disabled) { background: var(--ac-accent-hover); }
+.ac-send:disabled { opacity: .4; cursor: not-allowed; }
+.ac-stop {
+    width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--ac-border);
+    background: var(--ac-bg-hover); color: var(--ac-text); cursor: pointer; flex: none;
+    display: none; align-items: center; justify-content: center;
+}
+.ac-stop.show { display: flex; }
+.ac-composer-foot {
+    max-width: 780px; margin: 8px auto 0; text-align: center;
+    font-size: 11px; color: var(--ac-text-3);
+}
+
+@media (max-width: 860px) {
+    .ac-side { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ac-caret { animation: none; }
+    * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<!-- 自包含智能体应用页：不挂店面全局区（导航/浮层/像素均不需要）。
+     三个标记是 GlobalRegionHtmlInjector 的「锚点已处理」契约——本页区域为空，
+     声明后响应级注入器整体跳过，不会兜底注入店面部件。 -->
+<!--data-weline-global-region:head--><!--data-weline-global-region:body_open--><!--data-weline-global-region:body_end-->
+
+<div class="ac-app" id="agentChatApp" data-weline-load="agentChat">
+    <aside class="ac-side">
+        <div class="ac-brand">
+            <div class="ac-brand-mark">W</div>
+            <div>
+                <div class="ac-brand-name"><?= $e(__('智能体', 'Agent')) ?></div>
+                <div class="ac-brand-sub">Weline Agent</div>
+            </div>
+        </div>
+        <div class="ac-side-actions">
+            <button type="button" class="ac-newchat" id="agentNewChat">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+                <?= $e(__('新会话', 'New chat')) ?>
+            </button>
+        </div>
+        <nav class="ac-nav">
+            <a href="/agent/frontend/chat" class="active"><?= $e(__('聊天', 'Chat')) ?></a>
+            <a href="/agent/frontend/flow"><?= $e(__('流程编排', 'Flows')) ?></a>
+        </nav>
+        <div class="ac-side-label"><?= $e(__('会话', 'Sessions')) ?></div>
+        <div class="ac-sessions" id="agentSessionList"></div>
+        <div class="ac-side-foot">Weline_Agent · v1</div>
+    </aside>
+
+    <main class="ac-main">
+        <div class="ac-topbar">
+            <select id="agentProjectSelect" class="ac-select" aria-label="project"></select>
+            <select id="agentRoleSelect" class="ac-select" aria-label="role"></select>
+            <select id="agentModelSelect" class="ac-select" aria-label="model"></select>
+            <div class="ac-topbar-spacer"></div>
+            <span class="ac-badge" id="agentSessionBadge"></span>
+        </div>
+
+        <div class="ac-msgs" id="agentMessages">
+            <div class="ac-col">
+                <div class="ac-welcome" id="agentWelcome">
+                    <div class="ac-welcome-mark">W</div>
+                    <h1><?= $e(__('有什么可以帮你？', 'How can I help?')) ?></h1>
+                    <p><?= $e(__('选择角色与模型开始对话；项目会话内可用 @role:code / @agent:code 派单给团队。', 'Pick a role and model to start. In project sessions, @role:code / @agent:code dispatches to teammates.')) ?></p>
+                    <div class="ac-welcome-role" id="agentWelcomeRole"></div>
+                    <div class="ac-chips" id="agentChips"></div>
+                    <div class="ac-hint"><code>@role:code</code> <?= $e(__('团队派单', 'team dispatch')) ?> · <code>Enter</code> <?= $e(__('发送', 'send')) ?> · <code>Shift+Enter</code> <?= $e(__('换行', 'newline')) ?></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ac-composer-wrap">
+            <div class="ac-composer">
+                <textarea id="agentInput" rows="1" placeholder="<?= $e(__('输入消息…', 'Message…')) ?>"></textarea>
+                <button type="button" class="ac-stop" id="agentStop" title="<?= $e(__('停止生成', 'Stop')) ?>" aria-label="stop">
+                    <svg width="12" height="12" viewBox="0 0 12 12"><rect x="2" y="2" width="8" height="8" rx="1.5" fill="currentColor"/></svg>
+                </button>
+                <button type="button" class="ac-send" id="agentSend" aria-label="<?= $e(__('发送', 'Send')) ?>">
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5"/></svg>
+                </button>
+            </div>
+            <div class="ac-composer-foot"><?= $e(__('内容由 AI 生成，请注意核实重要信息', 'AI-generated content — verify before relying on it')) ?></div>
+        </div>
+    </main>
+</div>
+
+<script type="application/json" id="agent-chat-config"><?php
+echo json_encode([
+    'roles' => $roleItems,
+    'models' => $modelItems,
+    'projects' => $projectItems,
+    'apiBase' => '/agent/api/v1/chat',
+    'contextIdKey' => 'weline.agent.chat.context_id',
+    'i18n' => [
+        'sessionPrefix' => __('会话', 'Session'),
+        'resuming' => __('恢复进行中的任务…', 'Resuming task…'),
+        'agentTag' => __('智能体', 'Agent'),
+        'sendFailed' => __('发送失败：', 'Send failed: '),
+        'streamFailed' => __('流式连接失败：', 'Stream failed: '),
+        'errorPrefix' => __('错误：', 'Error: '),
+        'cancelled' => __('(已取消)', '(cancelled)'),
+        'expired' => __('(任务已过期，请重试)', '(task expired, please retry)'),
+        'toolCall' => __('工具调用', 'tool'),
+        'toolResult' => __('工具结果', 'tool result'),
+        'teamDispatch' => __('团队派单', 'dispatch'),
+        'copy' => __('复制', 'Copy'),
+        'copied' => __('已复制', 'Copied'),
+    ],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+?></script>
+</body>
+</html>

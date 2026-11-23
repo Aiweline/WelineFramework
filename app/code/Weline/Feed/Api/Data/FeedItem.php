@@ -13,6 +13,7 @@ final readonly class FeedItem
     /**
      * @param list<string> $additionalImageLinks
      * @param list<array{code:string,label:string,value:string}> $attributes
+     * @param list<array{country:string,cost_minor:int,currency:string,days_min:int,days_max:int}> $shipping
      */
     public function __construct(
         public string $id,
@@ -36,6 +37,7 @@ final readonly class FeedItem
         public ?string $channelCategory = null,
         public ?string $channelCategoryName = null,
         public int $storeCategoryId = 0,
+        public array $shipping = [],
     ) {
     }
 
@@ -63,6 +65,7 @@ final readonly class FeedItem
             channelCategory: $category,
             channelCategoryName: $name,
             storeCategoryId: $storeCategoryId,
+            shipping: $this->shipping,
         );
     }
 }

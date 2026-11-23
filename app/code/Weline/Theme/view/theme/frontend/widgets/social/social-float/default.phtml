@@ -7,7 +7,7 @@
  *
  * @widget.source {Weline_Theme::css/widgets/widget-social-float-default.css}
  * @widget.code {social-float}
- * @widget.async {true}
+ * @widget.async {false}
  * @widget.async_cache {300}
  * @widget.async_module {footerSocialFloat}
  * @widget.cache {3600}
@@ -62,6 +62,7 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
      data-side="left"
      data-testid="footer-social-float"
      data-weline-load="footerSocialFloat"
+     data-weline-load-when="interaction"
      data-collapsed-label="<?= $esc((string)__('展开社交媒体')) ?>"
      data-expanded-label="<?= $esc((string)__('收起社交媒体')) ?>"
      aria-label="<?= $esc((string)__('官方社交媒体')) ?>">

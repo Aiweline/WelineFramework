@@ -1,7 +1,7 @@
 <?php
 /**
  * AI 管理顶部 Tab 栏（页面级导航，官方 w-tabs soft 变体）
- * @var string $activeTab 当前 Tab：model | adapter | agent | skill | style | custom_vendor | account
+ * @var string $activeTab 当前 Tab：model | adapter | agent | agent_arch | skill | style | custom_vendor | account
  * @var \Weline\Framework\View\Template $this
  */
 $activeTab = $activeTab ?? 'model';
@@ -12,6 +12,7 @@ $h = static function ($s): string {
 $modelSelected = $activeTab === 'model' ? 'true' : 'false';
 $adapterSelected = $activeTab === 'adapter' ? 'true' : 'false';
 $agentSelected = $activeTab === 'agent' ? 'true' : 'false';
+$agentArchSelected = $activeTab === 'agent_arch' ? 'true' : 'false';
 $skillSelected = $activeTab === 'skill' ? 'true' : 'false';
 $styleSelected = $activeTab === 'style' ? 'true' : 'false';
 $customVendorSelected = $activeTab === 'custom_vendor' ? 'true' : 'false';
@@ -20,6 +21,7 @@ $accountSelected = $activeTab === 'account' ? 'true' : 'false';
 $modelTabIndex = $activeTab === 'model' ? '0' : '-1';
 $adapterTabIndex = $activeTab === 'adapter' ? '0' : '-1';
 $agentTabIndex = $activeTab === 'agent' ? '0' : '-1';
+$agentArchTabIndex = $activeTab === 'agent_arch' ? '0' : '-1';
 $skillTabIndex = $activeTab === 'skill' ? '0' : '-1';
 $styleTabIndex = $activeTab === 'style' ? '0' : '-1';
 $customVendorTabIndex = $activeTab === 'custom_vendor' ? '0' : '-1';
@@ -29,6 +31,7 @@ $tabsAriaLabel = $h(__('AI 管理'));
 $modelLabel = $h(__('模型'));
 $adapterLabel = $h(__('适配器'));
 $agentLabel = $h(__('智能体'));
+$agentArchLabel = $h(__('智能体架构'));
 $skillLabel = $h(__('技能'));
 $styleLabel = $h(__('风格'));
 $customVendorLabel = $h(__('本地供应商'));
@@ -46,6 +49,10 @@ $accountLabel = $h(__('供应商账户'));
     <a class="w-tabs__tab" href="@backend-url{'ai/backend/agent'}" role="tab" aria-selected="<?= $agentSelected ?>" tabindex="<?= $agentTabIndex ?>">
         <w:icon name="sparkles"></w:icon>
         <span><?= $agentLabel ?></span>
+    </a>
+    <a class="w-tabs__tab" href="@backend-url{'ai/backend/agent/architecture'}" role="tab" aria-selected="<?= $agentArchSelected ?>" tabindex="<?= $agentArchTabIndex ?>">
+        <w:icon name="sitemap"></w:icon>
+        <span><?= $agentArchLabel ?></span>
     </a>
     <a class="w-tabs__tab" href="@backend-url{'ai/backend/skill'}" role="tab" aria-selected="<?= $skillSelected ?>" tabindex="<?= $skillTabIndex ?>">
         <w:icon name="bolt"></w:icon>

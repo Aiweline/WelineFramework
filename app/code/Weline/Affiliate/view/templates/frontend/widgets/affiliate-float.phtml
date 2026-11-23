@@ -8,7 +8,7 @@
  * 在确认登录后异步水合（异步部件引子契约，见 Weline_Affiliate doc）。
  *
  * @widget.code {affiliate-float}
- * @widget.async {true}
+ * @widget.async {false}
  * @widget.async_cache {300}
  * @widget.async_module {affiliateFloat}
  * @widget.cache {3600}
@@ -87,6 +87,7 @@ if (!is_string($floatI18nJson)) {
      data-float-side-widget
      data-affiliate-float
      data-weline-load="api,account,affiliateFloat"
+     data-weline-load-when="interaction"
      data-affiliate-center-url="<?= $esc($affiliateCenterUrl) ?>"
      data-affiliate-level-name="<?= $esc((string) ($rules['level_name'] ?? '')) ?>"
      data-affiliate-i18n="<?= $esc($floatI18nJson) ?>"
@@ -108,7 +109,7 @@ if (!is_string($floatI18nJson)) {
          data-affiliate-float-panel
          hidden
          role="region"
-         aria-label="@lang('分销面板')"
+         aria-label="<?= $esc((string) __('分销面板')) ?>"
          data-testid="affiliate-float-panel">
         <div class="affiliate-float-widget__panel-body" data-affiliate-float-body>
             <p class="affiliate-float-widget__status" data-affiliate-float-status></p>

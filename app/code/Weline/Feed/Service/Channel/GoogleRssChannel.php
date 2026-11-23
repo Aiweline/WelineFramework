@@ -69,8 +69,37 @@ abstract class GoogleRssChannel extends AbstractFeedChannel
             . '<g:description>' . $this->xml($item->description) . '</g:description>'
             . '<g:link>' . $this->xml($item->link) . '</g:link>'
             . '<g:image_link>' . $this->xml($item->imageLink) . '</g:image_link>'
-            . '<g:availability>' . $this->xml($item->availability) . '</g:availability>'
+            . '<g:availability>' . $this->xml($this->googleAvailability($item->availability)) . '</g:availability>'
+            . '<g:condition>new</g:condition>'
             . '<g:price>' . $this->xml($this->money($item->priceMinor, $currency, true)) . '</g:price>';
+        $salePriceMinor = (int)($item->salePriceMinor ?? 0);
+        if ($salePriceMinor > 0 && $salePriceMinor < $item->priceMinor) {
+            $xml .= '<g:sale_price>' . $this->xml($this->money($salePriceMinor, $currency, true)) . '</g:sale_price>';
+        }
+        foreach ($item->shipping as $shipping) {
+            if (!is_array($shipping)) {
+                continue;
+            }
+            $country = strtoupper(trim((string)($shipping['country'] ?? '')));
+            $costMinor = (int)($shipping['cost_minor'] ?? 0);
+            $shippingCurrency = strtoupper(trim((string)($shipping['currency'] ?? '')));
+            if (strlen($country) !== 2 || $costMinor <= 0 || $shippingCurrency === '') {
+                continue;
+            }
+            $xml .= '<g:shipping>'
+                . '<g:country>' . $this->xml($country) . '</g:country>'
+                . '<g:price>' . $this->xml($this->money($costMinor, $shippingCurrency, true)) . '</g:price>'
+                . '<g:service>Standard</g:service>';
+            $daysMin = max(0, (int)($shipping['days_min'] ?? 0));
+            $daysMax = max(0, (int)($shipping['days_max'] ?? 0));
+            if ($daysMin > 0) {
+                $xml .= '<g:min_transit_time>' . $daysMin . '</g:min_transit_time>';
+            }
+            if ($daysMax >= $daysMin && $daysMax > 0) {
+                $xml .= '<g:max_transit_time>' . $daysMax . '</g:max_transit_time>';
+            }
+            $xml .= '</g:shipping>';
+        }
         $brand = trim($item->brand);
         $gtin = trim((string)$item->gtin);
         $mpn = trim((string)$item->mpn);
@@ -95,5 +124,13 @@ abstract class GoogleRssChannel extends AbstractFeedChannel
         }
 
         return $xml . '</item>';
+    }
+
+    /**
+     * Google Merchant Center accepts "in stock" / "out of stock"; the neutral row uses underscores.
+     */
+    private function googleAvailability(string $availability): string
+    {
+        return $availability === 'in_stock' ? 'in stock' : 'out of stock';
     }
 }

@@ -54,6 +54,21 @@ class AgentChatMessage extends Model
     #[Col('int', comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
 
+    #[Col('int', comment: '本条实际使用的角色ID')]
+    public const schema_fields_ROLE_ID = 'role_id';
+
+    #[Col('varchar', 64, comment: '实际执行智能体代码')]
+    public const schema_fields_AGENT_CODE = 'agent_code';
+
+    #[Col('varchar', 128, comment: '实际模型代码')]
+    public const schema_fields_MODEL_CODE = 'model_code';
+
+    #[Col('int', comment: '冗余项目标记')]
+    public const schema_fields_PROJECT_ID = 'project_id';
+
+    #[Col('mediumtext', comment: '扩展元数据 JSON（flow_run_id/task_id/node_key 等）')]
+    public const schema_fields_META_JSON = 'meta_json';
+
     public const ROLE_USER = 'user';
     public const ROLE_ASSISTANT = 'assistant';
     public const ROLE_SYSTEM = 'system';

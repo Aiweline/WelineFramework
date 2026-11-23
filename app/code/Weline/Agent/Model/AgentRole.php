@@ -69,6 +69,15 @@ class AgentRole extends Model
     #[Col('varchar', 255, comment: '头像图标')]
     public const schema_fields_ICON = 'icon';
 
+    #[Col('varchar', 64, comment: 'leader 智能体代码（Weline_Ai Agent 目录）；空按约定解析')]
+    public const schema_fields_AGENT_CODE = 'agent_code';
+
+    #[Col('text', comment: '绑定插件列表（JSON，plugin code 数组）')]
+    public const schema_fields_PLUGINS = 'plugins';
+
+    #[Col('int', comment: '直接上级角色ID（组织汇报链，禁止越级汇报）')]
+    public const schema_fields_PARENT_ROLE_ID = 'parent_role_id';
+
     #[Col('int', comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
 
@@ -128,6 +137,27 @@ class AgentRole extends Model
     public function setSkills(array $skills): self
     {
         return $this->setData(self::schema_fields_SKILLS, json_encode($skills, JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * 获取绑定插件列表（plugin code 数组）
+     *
+     * @return list<string>
+     */
+    public function getPlugins(): array
+    {
+        $plugins = $this->getData(self::schema_fields_PLUGINS);
+        if (is_string($plugins)) {
+            $decoded = json_decode($plugins, true);
+            return is_array($decoded) ? array_values(array_map('strval', $decoded)) : [];
+        }
+        return is_array($plugins) ? array_values(array_map('strval', $plugins)) : [];
+    }
+
+    /** @param list<string> $plugins */
+    public function setPlugins(array $plugins): self
+    {
+        return $this->setData(self::schema_fields_PLUGINS, json_encode(array_values($plugins), JSON_UNESCAPED_UNICODE));
     }
 
     /**
@@ -276,6 +306,12 @@ class AgentRole extends Model
         if (is_array($this->getData(self::schema_fields_MODEL_CONFIG))) {
             $this->setData(self::schema_fields_MODEL_CONFIG, json_encode(
                 $this->getData(self::schema_fields_MODEL_CONFIG),
+                JSON_UNESCAPED_UNICODE
+            ));
+        }
+        if (is_array($this->getData(self::schema_fields_PLUGINS))) {
+            $this->setData(self::schema_fields_PLUGINS, json_encode(
+                $this->getData(self::schema_fields_PLUGINS),
                 JSON_UNESCAPED_UNICODE
             ));
         }

@@ -12,6 +12,7 @@ use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityUpgradeSolidifyService;
 use Weline\Theme\Service\ThemeHeadChromeCssPack;
 use Weline\Theme\Service\ThemeHeadCssDuplicateInspector;
+use Weline\Theme\Service\Spec\ThemeSpecValidator;
 
 /**
  * 主题更新代次构建器。
@@ -176,6 +177,22 @@ final class ThemeUpdateBuildService
                     }
                 }
                 $layoutTargetsUsed = $targets;
+
+                // 完备性门（仅全主题发布）：getPublished 可解析的每个版本行都必须
+                // 拥有页面产物。scopeOwnsSolidify 已对 published-effective 放行，
+                // 这里再按同一枚举探测磁盘，缺什么补什么，补不齐判红不晋升。
+                // 增量 layout_targets 构建是定向操作，不在此门范围。
+                if ($targets === []) {
+                    $servingReport = $solidify->ensureServingArtifacts($themeId);
+                    $checks[] = [
+                        'name' => 'serving_artifacts_complete',
+                        'ok' => (bool)($servingReport['ok'] ?? false),
+                        'versions' => (int)($servingReport['versions'] ?? 0),
+                        'baked' => (int)($servingReport['baked'] ?? 0),
+                        'missing' => \array_slice((array)($servingReport['missing'] ?? []), 0, 20),
+                        'errors' => \array_slice((array)($servingReport['errors'] ?? []), 0, 20),
+                    ];
+                }
             } finally {
                 ThemeLayoutEntityPaths::forceRoot(null);
                 \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::forceBatch(null);
@@ -201,6 +218,10 @@ final class ThemeUpdateBuildService
         // 3.2) 头部皮肤包可产出（消费侧）：清单叶必须解析得到、文件必须存在。
         // 缺这一项时「代次 verified」与「页面真带皮肤 CSS」无关（2026-11-02 掉样式事故）。
         $checks[] = $this->checkHeadPackLeaves($themeId);
+        // 3.3) 主题规范门禁（S1–S13）：head partial 违规会让 dev 编译期抛
+        // ThemeSpecViolationException → storefront head 三段式拼接降级 →
+        // 整页丢 suffix 样式（2026-11-23 hanfu 事故）。与 theme:compile spec 同判定。
+        $checks[] = $this->checkThemeSpecCompliance($themeId);
 
         $ok = true;
         foreach ($checks as $check) {
@@ -634,6 +655,16 @@ final class ThemeUpdateBuildService
             if ((int)$theme->getId() < 1) {
                 return ['name' => 'head_pack_leaves', 'ok' => true, 'skipped' => 'theme_not_found'];
             }
+            $themePath = \rtrim(\str_replace('\\', '/', (string)$theme->getPath()), '/');
+            $themeModule = Env::getInstance()->getModuleList()['Weline_Theme'] ?? null;
+            $defaultThemePath = \is_array($themeModule)
+                ? \rtrim(\str_replace('\\', '/', (string)($themeModule['base_path'] ?? '')), '/') . '/view/theme'
+                : '';
+            if ($defaultThemePath !== '' && $themePath === $defaultThemePath) {
+                // The built-in default theme has no design overlay/skin pack by design;
+                // its first-paint CSS lives in layout-critical + tokens/storefront packs.
+                return ['name' => 'head_pack_leaves', 'ok' => true, 'skipped' => 'default_theme_no_overlay'];
+            }
             /** @var ThemeHeadChromeCssPack $pack */
             $pack = ObjectManager::getInstance(ThemeHeadChromeCssPack::class);
             $leaves = $pack->overlayManifestLeaves('frontend', $theme);
@@ -677,6 +708,97 @@ final class ThemeUpdateBuildService
                 'name' => 'head_pack_leaves',
                 'ok' => true,
                 'skipped' => 'check_error',
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * 主题规范合规检查（S1–S13）：与 `php bin/w theme:compile spec` 同一判定，
+     * 但只扫本主题的根。模块默认主题扫 `view/theme` 整根；设计主题只扫
+     * `{theme}/frontend`（spec 命令对设计主题同样只扫 frontend area）。
+     *
+     * head partial 一旦违规，dev 编译期 `assertFileForDev` 抛
+     * {@see \Weline\Theme\Service\Spec\ThemeSpecViolationException} → storefront
+     * head 三段式拼接降级 → 整页丢 suffix（皮肤 CSS/JS 全丢）却仍 200 返回。
+     * 构建期拦下，代次不予发布。
+     *
+     * 不区分 dev/prod；检查自身异常降级为 skipped，不伪造通过。
+     *
+     * @return array<string,mixed>
+     */
+    private function checkThemeSpecCompliance(int $themeId): array
+    {
+        $name = 'theme_spec_compliance';
+        try {
+            $theme = ObjectManager::getInstance(WelineTheme::class);
+            if ((int)$theme->getId() !== $themeId) {
+                $theme->load($themeId);
+            }
+            if ((int)$theme->getId() < 1) {
+                return ['name' => $name, 'ok' => true, 'skipped' => 'theme_not_found'];
+            }
+            $themePath = \rtrim(\str_replace('\\', '/', (string)$theme->getPath()), '/');
+            $module = Env::getInstance()->getModuleList()['Weline_Theme'] ?? null;
+            $defaultThemePath = \is_array($module)
+                ? \rtrim(\str_replace('\\', '/', (string)($module['base_path'] ?? '')), '/') . '/view/theme'
+                : '';
+            $roots = [];
+            if ($defaultThemePath !== '' && $themePath === $defaultThemePath) {
+                $roots[] = $themePath;
+            } else {
+                $frontendRoot = $themePath . '/frontend';
+                if (\is_dir($frontendRoot)) {
+                    $roots[] = $frontendRoot;
+                }
+            }
+            if ($roots === []) {
+                return [
+                    'name' => $name,
+                    'ok' => true,
+                    'skipped' => 'theme_root_missing',
+                    'theme_path' => (string)$theme->getPath(),
+                ];
+            }
+            /** @var ThemeSpecValidator $validator */
+            $validator = ObjectManager::getInstance(ThemeSpecValidator::class);
+            $hard = [];
+            $soft = 0;
+            foreach ($roots as $root) {
+                foreach ($validator->assertDirectory($root) as $violation) {
+                    if (($violation['severity'] ?? 'hard') === 'hard') {
+                        $hard[] = $violation;
+                    } else {
+                        ++$soft;
+                    }
+                }
+            }
+            $check = [
+                'name' => $name,
+                'ok' => $hard === [],
+                'roots' => \count($roots),
+                'hard' => \count($hard),
+                'soft' => $soft,
+            ];
+            if ($hard !== []) {
+                $check['violations'] = \array_map(
+                    static fn(array $v): string => \sprintf(
+                        '%s %s:%d %s',
+                        (string)($v['rule'] ?? '?'),
+                        \str_replace(BP, '', (string)($v['file'] ?? '')),
+                        (int)($v['line'] ?? 0),
+                        (string)($v['message'] ?? '')
+                    ),
+                    \array_slice($hard, 0, 10)
+                );
+            }
+
+            return $check;
+        } catch (\Throwable $e) {
+            return [
+                'name' => $name,
+                'ok' => true,
+                'skipped' => 'validator_error',
                 'error' => $e->getMessage(),
             ];
         }

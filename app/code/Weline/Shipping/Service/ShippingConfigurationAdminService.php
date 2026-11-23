@@ -18,8 +18,10 @@ use Weline\Shipping\Model\ShippingService;
  */
 final class ShippingConfigurationAdminService
 {
-    public function __construct(private readonly ObjectManager $objectManager)
-    {
+    public function __construct(
+        private readonly ObjectManager $objectManager,
+        private readonly ?ShippingCoverageResourceChangePublisher $coverageChanges = null,
+    ) {
     }
 
     /** @param array<string,mixed> $data */
@@ -463,6 +465,8 @@ final class ShippingConfigurationAdminService
         /** @var RateTemplate $model */
         $model = $this->fresh(RateTemplate::class);
         $model->setData($this->rateTemplatePayload($data, $scope, $name, $code, $type))->save();
+        $this->publishCoverageChange($model, 'rate_template', 'upsert', 'shipping.rate_template.create');
+
         return $model;
     }
 
@@ -500,6 +504,8 @@ final class ShippingConfigurationAdminService
         }
         $data['mixed_config'] ??= $model->getMixedConfig();
         $model->setData($this->rateTemplatePayload($data, $scope, $name, $code, $type))->save();
+        $this->publishCoverageChange($model, 'rate_template', 'upsert', 'shipping.rate_template.update');
+
         return $model;
     }
 
@@ -707,6 +713,7 @@ final class ShippingConfigurationAdminService
             $laneAdmin = $this->objectManager->getInstance(ServiceLaneAdminService::class);
             $laneAdmin->replaceForService((int)$model->getId(), $laneRows);
         }
+        $this->publishCoverageChange($model, 'shipping_service', 'upsert', 'shipping.service.create');
 
         return $model;
     }
@@ -865,5 +872,30 @@ final class ShippingConfigurationAdminService
     private function fresh(string $class): object
     {
         return $this->objectManager->getInstance($class, [], false);
+    }
+
+    /**
+     * 配送配置保存后立即失效政策页与 Feed：不让读者等部件缓存 TTL。
+     */
+    private function publishCoverageChange(object $model, string $kind, string $action, string $entry): void
+    {
+        if (!method_exists($model, 'getConnection') || !method_exists($model, 'getId')) {
+            return;
+        }
+        $id = (int)$model->getId();
+        try {
+            $publisher = $this->coverageChanges
+                ?? $this->objectManager->getInstance(ShippingCoverageResourceChangePublisher::class);
+            $publisher->publish(
+                $model->getConnection(),
+                $action,
+                $kind . ':' . $id,
+                ['id' => $id],
+                ['id' => $id],
+                $entry,
+            );
+        } catch (\Throwable) {
+            // 失效推送失败不回滚已保存的配送配置。
+        }
     }
 }

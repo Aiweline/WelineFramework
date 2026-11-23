@@ -97,15 +97,24 @@ ensure 会写出 MCP 生成的 Cursor alwaysApply 门禁：`.cursor/rules/weline
 - 风格用**风格文件/`data-theme`** 选择，禁止把厂商名（如 amazon）写进元素 class 或全局 CSS 文件名。
 - 权威细则：`app/code/Weline/Theme/doc/theme-css-architecture-vs-style.md`「版心与页面画布契约」。
 
+## FPC 清理必须指定范围（HARD · 2026-11-23 用户指定）
+
+- 默认**禁止整站/全量清理**：单页用 `bin/w fpc:clear --url <完整URL>`，单路径用 `bin/w fpc:clear -w <站点> --path /<路径>`。
+- 整站/全量必须 `--all` 与 `-f` **同时**给（缺一不执行）；`-w` 或 `-f` 单独使用会被命令拒绝。
+- 不给范围运行 `fpc:clear` 不再清理：TTY 下交互选择，非 TTY 直接报错退出 1。
+- 单 URL 落点 `FpcHtmlDiskStore::purgeSlugsAnySlot()`：CLI 拿不到请求期页代 token，直接 `purgeUrls()` 会删错 `pg/{token}` 桶。
+- 权威细则：`app/code/Weline/Ai/doc/规则/40-集成与运维.md` §14 + 技能 `weline-cache`。
+
 ## 诚实性门禁（HARD · 2026-10-25 用户指定）
 
 **验收前必须清缓存（HARD · 2026-11-04 用户指定）**：任何前端 / 整页 / 全局部件的验证之前，按顺序执行：
 1. `php bin/w cache:clear`（清池 + FPC）；需要连持久池一起清时用 `cache:clear -f`。
-2. **清 html-disk 整页缓存**：`php bin/w fpc:clear`，范围必须显式给出，否则拒绝执行：
-   - `-w <站点ID|站点code|域名>`：清该站点（其所有主题共用同一 host 树）；
-   - `-t <主题名>`：按主题校验后清（html-disk 无主题维度，单独给主题等价全站 html-disk 清理）；
-   - `-w … -t …`：两个条件都要满足才清（站点存在 + 主题存在）；
-   - `-f`：清全部站点。
+2. **清 html-disk 整页缓存**：`php bin/w fpc:clear`，必须按范围清，禁止整站全量：
+   - `--url <完整URL>`：只清这一页（html-disk 全部页代桶 + 路径索引 + router/fpc 池）；
+   - `-w <站点> --path /<路径>`：只清该路径（站点全部域名一起清）；
+   - `-w <站点> --all -f`：清该站点全部页面（`--all` 与 `-f` 必须同时给）；
+   - `--all -f`：清全部站点（同上，缺一不执行）；
+   - 不给范围：不清理（TTY 交互选择，非 TTY 报错退出 1）。
    这层由 Nginx 直接 `try_files` 命中，PHP 根本不执行，`cache:clear` / `server:reload` 都不会失效它（2026-11-04 实测：清池+重启后首页仍吐旧内联脚本，清掉这层后才恢复）。
 3. 重启 WLS（`server:reload`，必要时 `server:stop` + `server:start`）。
 4. 再发请求验证，证据里必须带 `x-weline-fpc` / `x-weline-fpc-source` 响应头原文。

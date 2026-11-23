@@ -44,17 +44,53 @@ class FeedGeneratorService
     /**
      * @param array<int, array<string, mixed>> $items
      */
-    public function generateFeedFromItems(Feed $feed, array $items, string $format = 'json_feed'): string
+    public function generateFeedFromItems(Feed $feed, array $items, string $format = 'json_feed', string $baseUrl = ''): string
     {
         switch ($format) {
             case 'json_feed':
-                return $this->generateJsonFeed($feed, $items);
+                return $this->generateJsonFeed($feed, $items, $baseUrl);
             case 'xml':
             case 'rss':
-                return $this->generateRssFeed($feed, $items);
+                return $this->generateRssFeed($feed, $items, $baseUrl);
             default:
-                return $this->generateJsonFeed($feed, $items);
+                return $this->generateJsonFeed($feed, $items, $baseUrl);
         }
+    }
+
+    /**
+     * JSON Feed/RSS consumers expect absolute URLs; the DB stores the public
+     * `feed_url` as a site-relative path (`/geo-feeds/feed_1.json`).
+     */
+    private function absoluteFeedUrl(string $url, string $baseUrl): string
+    {
+        $url = trim($url);
+        if (preg_match('#^https?://#i', $url) === 1) {
+            return $url;
+        }
+        $baseUrl = rtrim(trim($baseUrl), '/');
+        if ($baseUrl === '') {
+            return $url;
+        }
+
+        return $baseUrl . '/' . ltrim($url, '/');
+    }
+
+    /**
+     * Last-resort origin for contexts where the request/site resolver is empty.
+     * Feed items are already absolute, so their origin is authoritative.
+     *
+     * @param array<int, array<string, mixed>> $items
+     */
+    private function originFromItems(array $items): string
+    {
+        foreach ($items as $item) {
+            $url = trim((string)($item['url'] ?? $item['link'] ?? ''));
+            if (preg_match('#^(https?://[^/]+)#i', $url, $m) === 1) {
+                return rtrim($m[1], '/');
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -141,14 +177,32 @@ class FeedGeneratorService
      * @param array $items Feed条目
      * @return string JSON Feed内容
      */
-    protected function generateJsonFeed(Feed $feed, array $items): string
+    protected function generateJsonFeed(Feed $feed, array $items, string $baseUrl = ''): string
     {
+        $feedUrl = $this->absoluteFeedUrl((string)($feed->getData(Feed::schema_fields_FEED_URL) ?? ''), $baseUrl);
+        $homePageUrl = rtrim(trim($baseUrl), '/');
+        if ($homePageUrl === '') {
+            $homePageUrl = $feedUrl;
+        }
+        if (preg_match('#^https?://#i', $homePageUrl) !== 1
+            || preg_match('#^https?://#i', $feedUrl) !== 1
+        ) {
+            $origin = $this->originFromItems($items);
+            if ($origin !== '') {
+                if (preg_match('#^https?://#i', $homePageUrl) !== 1) {
+                    $homePageUrl = $origin;
+                }
+                if (preg_match('#^https?://#i', $feedUrl) !== 1) {
+                    $feedUrl = $origin . '/' . ltrim($feedUrl, '/');
+                }
+            }
+        }
         $jsonFeed = [
             'version' => 'https://jsonfeed.org/version/1.1',
             'title' => $feed->getData(Feed::schema_fields_FEED_NAME),
             'description' => $feed->getConfigArray()['description'] ?? '',
-            'home_page_url' => $feed->getData(Feed::schema_fields_FEED_URL) ?? '',
-            'feed_url' => $feed->getData(Feed::schema_fields_FEED_URL) ?? '',
+            'home_page_url' => $homePageUrl,
+            'feed_url' => $feedUrl,
             'items' => [],
         ];
 
@@ -184,13 +238,24 @@ class FeedGeneratorService
      * @param array $items Feed条目
      * @return string RSS Feed内容
      */
-    protected function generateRssFeed(Feed $feed, array $items): string
+    protected function generateRssFeed(Feed $feed, array $items, string $baseUrl = ''): string
     {
+        $feedUrl = $this->absoluteFeedUrl((string)($feed->getData(Feed::schema_fields_FEED_URL) ?? ''), $baseUrl);
+        $homePageUrl = rtrim(trim($baseUrl), '/');
+        if ($homePageUrl === '') {
+            $homePageUrl = $feedUrl;
+        }
+        if (preg_match('#^https?://#i', $homePageUrl) !== 1) {
+            $origin = $this->originFromItems($items);
+            if ($origin !== '') {
+                $homePageUrl = $origin;
+            }
+        }
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         $xml .= '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">' . "\n";
         $xml .= '  <channel>' . "\n";
         $xml .= '    <title>' . htmlspecialchars($feed->getData(Feed::schema_fields_FEED_NAME)) . '</title>' . "\n";
-        $xml .= '    <link>' . htmlspecialchars($feed->getData(Feed::schema_fields_FEED_URL) ?? '') . '</link>' . "\n";
+        $xml .= '    <link>' . htmlspecialchars($homePageUrl) . '</link>' . "\n";
         $xml .= '    <description>' . htmlspecialchars($feed->getConfigArray()['description'] ?? '') . '</description>' . "\n";
         $xml .= '    <lastBuildDate>' . date('r') . '</lastBuildDate>' . "\n";
 

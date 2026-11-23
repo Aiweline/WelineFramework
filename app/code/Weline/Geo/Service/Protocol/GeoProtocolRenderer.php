@@ -210,7 +210,7 @@ class GeoProtocolRenderer
         $channel = $this->preferredFeed($config->getFeedId()) ?: $feeds[0];
         $items = $this->collectPublishedItemsForWebsite($feeds, $website->id, $baseUrl);
 
-        return $this->feedGenerator->generateFeedFromItems($channel, $items, $format);
+        return $this->feedGenerator->generateFeedFromItems($channel, $items, $format, $baseUrl);
     }
 
     /**
@@ -529,6 +529,13 @@ class GeoProtocolRenderer
             if ($candidate !== '' && $this->isHttpUrl($candidate)) {
                 return rtrim($candidate, '/');
             }
+        }
+
+        // Request host may be loopback/absent (WLS origin-direct, CLI publisher).
+        // Fall back to the registered website origin so feed URLs stay absolute.
+        $registeredBase = $this->siteBinding->publicBaseUrl($website);
+        if ($registeredBase !== '' && $this->isHttpUrl($registeredBase) && !$this->isLoopbackHost($registeredBase)) {
+            return rtrim($registeredBase, '/');
         }
 
         return '';

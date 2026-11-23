@@ -465,13 +465,13 @@
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: var(--spacing-2_5);
+    gap: var(--weline-space-2);
     z-index: 10;
 }
 
 .wc-theme_widget_hero_slider .dot {
-    width: var(--font-size-xs);
-    height: var(--font-size-xs);
+    width: var(--weline-space-6);
+    height: var(--weline-space-6);
     border-radius: 50%;
     background: color-mix(in srgb, var(--weline-theme-on-primary) 45%, transparent);
     border: none;

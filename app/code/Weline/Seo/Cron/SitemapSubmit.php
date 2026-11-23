@@ -13,6 +13,11 @@ namespace Weline\Seo\Cron;
 
 use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Seo\Model\HealthRun;
+use Weline\Seo\Service\Health\HealthNotifier;
+use Weline\Seo\Service\Health\HealthPolicyEngine;
+use Weline\Seo\Service\Health\SitemapActionApplier;
+use Weline\Seo\Service\Health\UrlHealthProbeService;
 use Weline\Seo\Service\SeoWebsiteAccountBindingService;
 use Weline\Seo\Service\SeoWebsiteDirectory;
 use Weline\Seo\Service\SitemapUrlSyncService;
@@ -70,6 +75,12 @@ class SitemapSubmit implements CronTaskInterface
                 'generated_files' => 0,
                 'submitted' => 0,
                 'errors' => 0,
+                'health_probed' => 0,
+                'health_issues' => 0,
+                'health_skipped_websites' => 0,
+                'health_actions_applied' => 0,
+                'health_restores' => 0,
+                'health_reasserted' => 0,
                 'unbound_websites' => [],
             ];
 
@@ -87,8 +98,74 @@ class SitemapSubmit implements CronTaskInterface
                 w_log_error('[Weline_Seo] SitemapSubmit provider sync error: ' . $message);
             }
 
-            // ========== 步骤2：为所有站点生成 sitemap 文件 ==========
+            // ========== 步骤1.5：URL 健康探测 + 规则决策 + 动作台账 ==========
+            // 总预算 120s，单站最多 60s / 150 条；预算用完的站点下一轮优先继续。
+            // 决策只写台账；apply 在发布前执行，随后 reassert 压回 Provider 同步复活的停用 URL。
             $websites = $websiteDirectory->listWebsites();
+            $healthDeadline = microtime(true) + 120.0;
+            try {
+                /** @var UrlHealthProbeService $healthProbe */
+                $healthProbe = ObjectManager::getInstance(UrlHealthProbeService::class);
+                /** @var HealthPolicyEngine $policyEngine */
+                $policyEngine = ObjectManager::getInstance(HealthPolicyEngine::class);
+                /** @var SitemapActionApplier $actionApplier */
+                $actionApplier = ObjectManager::getInstance(SitemapActionApplier::class);
+                /** @var HealthNotifier $healthNotifier */
+                $healthNotifier = ObjectManager::getInstance(HealthNotifier::class);
+
+                foreach ($websites as $website) {
+                    $websiteId = (int)($website['website_id'] ?? 0);
+                    if ($websiteId < 0 || in_array($websiteId, $failedWebsiteIds, true)) {
+                        continue;
+                    }
+                    $remainingMs = (int)max(0, ($healthDeadline - microtime(true)) * 1000);
+                    if ($remainingMs < 5000) {
+                        $stats['health_skipped_websites']++;
+                        continue;
+                    }
+
+                    try {
+                        $health = $healthProbe->probeWebsite($websiteId, [
+                            'max_urls' => 150,
+                            'budget_ms' => min(60000, $remainingMs),
+                            'trigger' => 'cron',
+                        ]);
+                        $stats['health_probed'] += (int)($health['probed'] ?? 0);
+                        $stats['health_issues'] += (int)($health['issues'] ?? 0);
+
+                        $runId = (int)($health['run_id'] ?? 0);
+                        if ($runId <= 0) {
+                            continue;
+                        }
+
+                        $decisions = $policyEngine->decideWebsite($websiteId, $runId);
+                        $application = $actionApplier->applyWebsite($websiteId);
+                        $reasserted = $actionApplier->reassertActiveRemovals($websiteId);
+
+                        $stats['health_actions_applied'] += (int)($application['applied'] ?? 0);
+                        $stats['health_restores'] += (int)($decisions['restores'] ?? 0);
+                        $stats['health_reasserted'] += $reasserted;
+
+                        $runModel = ObjectManager::getInstance(HealthRun::class);
+                        $run = (clone $runModel)->reset()->load($runId);
+                        if ($run->getId()) {
+                            $run->setData(HealthRun::schema_fields_ACTIONS_APPLIED, (int)($application['applied'] ?? 0))->save();
+                        }
+
+                        $healthNotifier->notifyRun($websiteId, $health, $decisions, $application);
+                    } catch (\Throwable $e) {
+                        w_log_error(sprintf(
+                            '[Weline_Seo] SitemapSubmit health error: website_id=%d - %s',
+                            $websiteId,
+                            $e->getMessage()
+                        ));
+                    }
+                }
+            } catch (\Throwable $e) {
+                w_log_error('[Weline_Seo] SitemapSubmit health probe error: ' . $e->getMessage());
+            }
+
+            // ========== 步骤2：为所有站点生成 sitemap 文件 ==========
             $generatedWebsites = [];
 
             foreach ($websites as $website) {
@@ -184,13 +261,19 @@ class SitemapSubmit implements CronTaskInterface
             }
 
             return sprintf(
-                'Sitemap任务完成：同步 %d 条URL，禁用 %d 条，变更 %d 个站点，生成 %d 个文件，提交 %d 个，未绑定 %d 个，错误 %d 个',
+                'Sitemap任务完成：同步 %d 条URL，禁用 %d 条，变更 %d 个站点，生成 %d 个文件，提交 %d 个，未绑定 %d 个，健康探测 %d 条（问题 %d），自动处理 %d 条（恢复 %d，重新压回 %d），跳过探测站点 %d 个，错误 %d 个',
                 $stats['synced_urls'],
                 $stats['disabled_urls'],
                 $stats['collected_websites'],
                 $stats['generated_files'],
                 $stats['submitted'],
                 count($stats['unbound_websites']),
+                $stats['health_probed'],
+                $stats['health_issues'],
+                $stats['health_actions_applied'],
+                $stats['health_restores'],
+                $stats['health_reasserted'],
+                $stats['health_skipped_websites'],
                 $stats['errors']
             );
         } catch (\Throwable $e) {

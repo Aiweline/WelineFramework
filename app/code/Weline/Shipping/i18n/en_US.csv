@@ -203,8 +203,6 @@ grid,grid
 取件,Pickup
 到达,Arrival
 派送,Delivery
-收货地址,"Delivery Address"
-发货地址,"Shipping Address"
 发货地址加载失败，请稍后重试,"Failed to load shipping addresses. Please try again later."
 收货地址加载失败，请稍后重试,"Failed to load delivery addresses. Please try again later."
 中国,China
@@ -218,7 +216,9 @@ grid,grid
 请输入联系人,"Please enter the contact person"
 请输入联系电话,"Please enter contact phone"
 收货人,Recipient
+收货地址,"Delivery Address"
 联系人,Contact
+发货地址,"Shipping Address"
 选择收货地址,"Select a shipping address"
 名,名
 姓,姓
@@ -989,7 +989,7 @@ globe,globe
 "1.1 跨境售后说明：下单前请确认尺码与款式。正常试穿检查不等于实际穿着使用；跨境回程成本较高，但不自动排除消费者适用的法定撤回权或质量问题救济。","1.1 International returns: Check the size and style before ordering. Trying on an item for normal inspection is different from wearing it in use. International return shipping can be costly, but this does not automatically exclude applicable statutory withdrawal rights or remedies for faulty goods."
 "1.3 个性化定制：仅按订单生产、手工制作或选择标准尺码、颜色，不当然属于定制例外。只有按个人尺寸、专属设计等实际制作且满足当地法定条件的商品，才可能不适用撤回权；特价、清仓也不当然排除法定权利。质量问题与描述不符仍可申请救济。","1.3 Personalised goods: Making an item to order or by hand, or selecting a standard size or colour, does not by itself qualify for a personalised-goods exception. Only goods actually made to personal measurements, an exclusive design or similar requirements and meeting local legal conditions may be exempt from withdrawal rights. Sale or clearance pricing does not automatically exclude statutory rights. Remedies for faulty or misdescribed goods remain available."
 "1.4 欧盟与英国消费者：适用撤回权的普通商品，通常可在收货后14日内通知我们撤回购买，无需说明理由，并在通知后14日内寄回。真正个性化商品的法定例外须单独判断；其他地区按当地适用权利及下单时约定办理。","1.4 EU and UK consumers: For ordinary goods covered by withdrawal rights, you can generally notify us within 14 days of receipt that you wish to withdraw, without giving a reason, and return the goods within 14 days of that notice. Any statutory exception for genuinely personalised goods is assessed separately. For other regions, applicable local rights and the terms agreed when ordering apply."
-超过适用的法定或约定期限后，仅因个人喜好或标准尺码、颜色不合适提出的申请，可能无法办理；在法定撤回期内不适用此限制；,"Requests based solely on a change of mind or an unsuitable standard size or colour may not be accepted after the applicable statutory or agreed return period. This restriction does not apply during a statutory withdrawal period;"
+仅因个人喜好、标准尺码或颜色不合适提出的退换申请，原则上不受理（法定撤回期内除外）；,"Returns or exchanges requested only because of personal preference, or because a standard size or colour does not suit you, are not accepted (except during a statutory withdrawal period);"
 超出检查性质、特征及尺码所必需的使用，可能产生价值减损；正常试穿检查或吊牌缺失不自动取消法定撤回权，任何扣减须有合理依据并符合法律；,"Handling beyond what is necessary to establish the nature, characteristics and size of the goods may reduce their value. Normal inspection or trying on, or a missing tag, does not automatically remove statutory withdrawal rights. Any deduction must be justified and lawful;"
 "3.1 提交申请：可通过「我的订单」或联系客服提出退货、换货或退款。质量问题可附照片或视频帮助核查；行使法定撤回权时，清楚通知撤回意愿即可，不要求您说明理由或先取得审批。","3.1 Submitting a request: Use My Orders or contact customer service to request a return, exchange or refund. Photos or videos can help us assess a quality problem. To exercise statutory withdrawal rights, a clear statement that you wish to withdraw is sufficient; you do not need to give a reason or obtain prior approval."
 "4.2 非质量原因的直接回程运费，仅在下单前已告知且法律允许时由买家承担。请先确认退货地址与合理寄回方式；不以未披露费用或任意税费扣减限制您的法定权利。","4.2 You pay direct return shipping costs for non-faulty goods only where disclosed before ordering and permitted by law. Confirm the return address and a reasonable shipping method first. Undisclosed charges or arbitrary tax deductions will not be used to restrict your statutory rights."
@@ -1006,7 +1006,7 @@ globe,globe
 标准配送,"Standard delivery"
 运费与预计时效以结算页为准,"Shipping fee and ETA are confirmed at checkout"
 下单前请联系客服核实所选款式及目的地的预计发货与运输时间,"Before ordering"
-"支持退货：未使用且吊牌完整的商品可在签收后 30 日内申请退货；国际买家须自行安排并承担寄回中国的运费。质量问题、描述不符、错发或运输损坏可申请售后；普通商品适用的法定撤回权不会因跨境运输、手工制作或特价而取消。退款金额与到账规则另见退款政策。","Returns are accepted: unused items with intact tags may be returned within 30 days of delivery; international buyers must arrange and pay for return shipping to China. Quality issues, misdescription, wrong or missing items, or shipping damage qualify for after-sales support; statutory withdrawal rights for ordinary goods are not cancelled by cross-border shipping, handmade production, or sale pricing. Refund amounts and timing are covered in the Refund Policy."
+"退换政策：仅受理质量问题（明显做工瑕疵、污渍破损、与描述明显不符）、错发漏发及运输损坏的退换，请在签收后 30 日内提出并保留凭证；非质量原因的退换（如改变主意、标准尺码或颜色不合适）原则上不受理，法律规定的撤回权（如欧盟/英国 14 日无理由撤回）依当地法律保留，不因跨境运输、手工制作或特价而取消。国际买家须自行安排并承担寄回中国的运费。订单处理时间约 2 个工作日；因手工制作与远程国际运输，预计送达时间为 12–30 天，具体视款式、目的地、旺季与清关情况而定。退款金额与到账规则另见退款政策。","Returns policy: we accept returns or exchanges only for quality issues (clear workmanship defects, stains, damage, or a clear mismatch with the description), wrong or missing items, and shipping damage; please raise the claim within 30 days of delivery and keep the evidence. Change-of-mind returns, or returns because a standard size or colour does not suit you, are not accepted, except where local law gives you a withdrawal right (for example the 14-day right of withdrawal for EU and UK consumers), which this policy does not exclude; cross-border shipping, handmade production or sale pricing do not cancel those statutory rights. International buyers must arrange and pay for return shipping to China. Order processing takes about 2 business days, and delivery is expected within 12–30 days because items are handmade and shipped long distances; the exact timing depends on the style, destination, peak season and customs clearance. Refund amounts and timing are covered in the Refund Policy."
 "4.2 买家自费寄回中国：国际买家安排并支付寄回中国仓库的回程运费（Buyer pays return shipping to China）。非质量原因的直接回程运费，在下单前已告知且法律允许时由买家承担。请先确认退货地址与合理寄回方式；不以未披露费用或任意税费扣减限制您的法定权利。","4.2 Buyer pays return shipping to China: International buyers arrange and pay return freight to our China warehouse. Direct return shipping for non-quality reasons is borne by the buyer when disclosed before ordering and permitted by law. Confirm the return address and a reasonable shipping method first; we do not limit your statutory rights through undisclosed fees or arbitrary tax deductions."
 亚洲/国标尺码偏小；下单前请对照商品页尺码表与自身三围/身高体重；若介于两码之间，可先咨询客服或考虑加大一码。,"Asian / China-standard sizes run small; before ordering, compare the product size chart with your bust/waist/hip measurements and height/weight. If you are between sizes, ask customer service or consider sizing up."
 汉服形制、交领宽窄、袖型等观感因个人审美差异较大；非质量问题的退换通常难以安排，请优先参考详情页实拍与尺寸后再下单。,"Hanfu silhouette, collar width, sleeve shape, and similar look-and-feel vary widely by personal taste; non-quality returns or exchanges are usually hard to arrange—please rely on detail-page photos and measurements before ordering."

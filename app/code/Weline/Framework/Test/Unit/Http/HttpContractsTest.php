@@ -675,7 +675,9 @@ private function assert_BackendUrlLocalePrefix_testGetBackendUrlKeepsNonDefaultL
     WelineEnv::set('website.currency', 'CNY', 'backend url locale contract');
     WelineEnv::set('website.language', 'zh_Hans_CN', 'backend url locale contract');
     self::assertSame('en_US', WelineEnv::getLang());
-    self::assertSame('/en_US', Url::getPrefix());
+    // 前缀允许带货币段（'/USD/en_US' 是现行约定），这里只锁「非默认语言段必须保留」。
+    $prefix = Url::getPrefix();
+    self::assertStringEndsWith('/en_US', $prefix, '前缀必须保留非默认语言段，实际：' . $prefix);
     /** @var Url $url */
     $url = ObjectManager::getInstance(Url::class);
     $root = $url->getBackendUrl('/');
@@ -996,10 +998,23 @@ private function tearDown_FpcHtmlDiskStore(): void
     FpcHtmlDiskStore::purgeUrls([$url, 'https://' . $this->fixtureHost_FpcHtmlDiskStore . '/en/demo-product', 'https://' . $this->fixtureHost_FpcHtmlDiskStore . '/en/path']);
 }
 
+/**
+ * 完整页面文档（≥1024 字节、带 </body></html>）：FPC 落盘要过 HtmlCacheAdmission，
+ * 碎片/短串会被拒；测试要用真实整页，而不是为了变绿绕过准入。
+ * $lang 只给带 locale 前缀的 URL（/en_US/…）用，且必须与路径语言一致。
+ */
+private function fpcFullDocument(string $marker = 'ok', string $lang = ''): string
+{
+    $langAttr = $lang !== '' ? ' lang="' . $lang . '"' : '';
+    $filler = \str_repeat('<p>fpc fixture filler paragraph</p>', 40);
+
+    return '<!doctype html><html' . $langAttr . '><head><meta charset="utf-8"><title>fpc fixture</title></head><body><div class="fixture">' . $marker . '</div>' . $filler . '</body></html>';
+}
+
 private function assert_FpcHtmlDiskStore_testPublishReadAndPurgeUrls(): void
 {
     $url = 'https://' . $this->fixtureHost_FpcHtmlDiskStore . '/en/demo-product';
-    $html = "<!doctype html><html><head><title>t</title></head><body>ok</body></html>\n";
+    $html = $this->fpcFullDocument('ok');
     self::assertTrue(FpcHtmlDiskStore::publish($url, $html, ''));
     $path = FpcHtmlDiskStore::htmlPath($url);
     self::assertIsString($path);
@@ -1036,14 +1051,14 @@ private function assert_FpcHtmlDiskStore_testPublishFailClosedWithoutBrotliBytes
     self::assertFalse(FpcHtmlDiskStore::publish($url, '', ''), 'empty payload must fail');
     if (!ContentEncodingNegotiator::brotliAvailable()) {
         self::assertFalse(
-            FpcHtmlDiskStore::publish($url, "<html>no-br</html>\n", ''),
+            FpcHtmlDiskStore::publish($url, $this->fpcFullDocument('no-br'), ''),
             'without brotli extension plaintext-only publish must fail-closed'
         );
         self::assertNull(FpcHtmlDiskStore::read($url, ''));
         return;
     }
     // With brotli present, plaintext-only authority is still not written — .br is.
-    self::assertTrue(FpcHtmlDiskStore::publish($url, "<html>with-br</html>\n", ''));
+    self::assertTrue(FpcHtmlDiskStore::publish($url, $this->fpcFullDocument('with-br'), ''));
     $htmlPath = FpcHtmlDiskStore::htmlPath($url);
     self::assertIsString($htmlPath);
     self::assertFileExists($htmlPath . '.br');
@@ -1057,7 +1072,7 @@ private function assert_FpcHtmlDiskStore_testBrotliPublishIsBrOnlyAndReadableWit
         self::markTestSkipped('brotli extension is not loaded');
     }
     $url = 'https://' . $this->fixtureHost_FpcHtmlDiskStore . '/en/demo-product';
-    $html = "<!doctype html><html><body>br-only</body></html>\n";
+    $html = $this->fpcFullDocument('br-only');
     $br = \brotli_compress($html, \Weline\Framework\Http\ContentEncodingNegotiator::BROTLI_QUALITY);
     self::assertIsString($br);
     self::assertNotSame('', $br);
@@ -1074,12 +1089,13 @@ private function assert_FpcHtmlDiskStore_testBrotliPublishIsBrOnlyAndReadableWit
     $hitIdentity = FpcHtmlDiskStore::read($url, '');
     self::assertIsArray($hitIdentity);
     self::assertSame('br', $hitIdentity['encoding']);
-    self::assertSame($br, $hitIdentity['body']);
-    self::assertSame($brPath, $hitIdentity['path']);
+    // 落盘可能按自己的质量档重压：比对解压后的正文，而不是压缩字节。
+    self::assertSame($html, ContentEncodingNegotiator::decode((string)$hitIdentity['body'], ContentEncodingNegotiator::ENCODING_BROTLI));
+    self::assertSame(\realpath($brPath), \realpath((string)$hitIdentity['path']));
     $hitBr = FpcHtmlDiskStore::read($url, 'gzip, deflate, br');
     self::assertIsArray($hitBr);
     self::assertSame('br', $hitBr['encoding']);
-    self::assertSame($br, $hitBr['body']);
+    self::assertSame($html, ContentEncodingNegotiator::decode((string)$hitBr['body'], ContentEncodingNegotiator::ENCODING_BROTLI));
     FpcHtmlDiskStore::purgeUrls([$url]);
     self::assertFileDoesNotExist($brPath);
     self::assertNull(FpcHtmlDiskStore::read($url, ''));
@@ -1089,8 +1105,8 @@ private function assert_FpcHtmlDiskStore_testAllowlistedQueryUsesQVariantLeaf():
 {
     $canonical = 'https://' . $this->fixtureHost_FpcHtmlDiskStore . '/en/path';
     $withQuery = $canonical . '?price=0-99';
-    $pathOnlyHtml = "<html><body>path-only</body></html>\n";
-    $variantHtml = "<html><body>price-variant</body></html>\n";
+    $pathOnlyHtml = $this->fpcFullDocument('path-only');
+    $variantHtml = $this->fpcFullDocument('price-variant');
     self::assertTrue(FpcHtmlDiskStore::publish($canonical, $pathOnlyHtml, ''));
     self::assertTrue(FpcHtmlDiskStore::publish($withQuery, $variantHtml, ''));
     $pathOnly = FpcHtmlDiskStore::htmlPath($canonical);
@@ -1151,7 +1167,12 @@ private function assert_FpcHtmlDiskStore_testExpiredGenerationsKeepThreeAndSeven
     \sort($deleteChain);
     self::assertSame(['20261023000001-a', '20261023000002-b'], $deleteChain);
     self::assertSame(3, FpcHtmlDiskStore::RETAIN_GENERATIONS);
-    self::assertNotNull(FpcHtmlDiskStore::previous2GenerationId() === null ? null : null);
+    // previous2 只可能是 null 或合法代次 id（不写恒真的 assertNotNull(null)）。
+    $previous2 = FpcHtmlDiskStore::previous2GenerationId();
+    self::assertTrue(
+        $previous2 === null || \preg_match('/^[0-9]{14}-[a-f0-9]+$/', $previous2) === 1,
+        'previous2 必须是 null 或合法代次 id，实际：' . \var_export($previous2, true)
+    );
     $now = \time();
     self::assertTrue(FpcHtmlDiskStore::generationIsOlderThanDays('20200101000000-old', 7, $now));
     self::assertFalse(FpcHtmlDiskStore::generationIsOlderThanDays(\date('YmdHis') . '-new', 7, $now));
@@ -1162,7 +1183,7 @@ private function assert_FpcHtmlDiskStore_testExpiredGenerationsKeepThreeAndSeven
 private function assert_FpcHtmlDiskStore_testSoftPurgeAllKeepsPreviousAndRollbackRestores(): void
 {
     $url = 'https://' . $this->fixtureHost_FpcHtmlDiskStore . '/en/demo-product';
-    $html = "<html><body>gen-a</body></html>\n";
+    $html = $this->fpcFullDocument('gen-a');
     self::assertTrue(FpcHtmlDiskStore::publish($url, $html, ''));
     $beforeGen = FpcHtmlDiskStore::currentGenerationId();
     self::assertNotSame('', $beforeGen);
@@ -1180,8 +1201,8 @@ private function assert_FpcHtmlDiskStore_testSoftPurgeAllKeepsPreviousAndRollbac
 private function assert_FpcHtmlDiskStore_testStagingSeedWarmWritesDoNotFlipLiveUntilPromote(): void
 {
     $url = 'https://' . $this->fixtureHost_FpcHtmlDiskStore . '/en/demo-product';
-    $old = "<html><body>live-old</body></html>\n";
-    $neu = "<html><body>staging-new</body></html>\n";
+    $old = $this->fpcFullDocument('live-old');
+    $neu = $this->fpcFullDocument('staging-new');
     self::assertTrue(FpcHtmlDiskStore::publish($url, $old, ''));
     $liveBefore = FpcHtmlDiskStore::currentGenerationId();
     $stagingId = FpcHtmlDiskStore::beginStagingGeneration(true);
@@ -1202,10 +1223,10 @@ private function assert_FpcHtmlDiskStore_testStagingSeedWarmWritesDoNotFlipLiveU
 private function assert_FpcHtmlDiskStore_testAbandonStagingKeepsLive(): void
 {
     $url = 'https://' . $this->fixtureHost_FpcHtmlDiskStore . '/en/demo-product';
-    $old = "<html><body>keep-live</body></html>\n";
+    $old = $this->fpcFullDocument('keep-live');
     self::assertTrue(FpcHtmlDiskStore::publish($url, $old, ''));
     FpcHtmlDiskStore::beginStagingGeneration(true);
-    self::assertTrue(FpcHtmlDiskStore::publish($url, "<html><body>discard</body></html>\n", ''));
+    self::assertTrue(FpcHtmlDiskStore::publish($url, $this->fpcFullDocument('discard'), ''));
     FpcHtmlDiskStore::abandonStagingGeneration();
     $hit = FpcHtmlDiskStore::read($url, '');
     self::assertIsArray($hit);
@@ -1217,16 +1238,14 @@ private function assert_FpcHtmlDiskStore_testStagingSeedToleratesVanishedChildDi
     $host = $this->fixtureHost_FpcHtmlDiskStore;
     $keep = 'https://' . $host . '/en_US/keep-page';
     $vanish = 'https://' . $host . '/ar_SA/about';
-    $html = "<html><body>seed-race</body></html>\n";
-    self::assertTrue(FpcHtmlDiskStore::publish($keep, $html, ''));
-    self::assertTrue(FpcHtmlDiskStore::publish($vanish, $html, ''));
+    $keepHtml = $this->fpcFullDocument('seed-race', 'en_US');
+    self::assertTrue(FpcHtmlDiskStore::publish($keep, $keepHtml, ''));
+    self::assertTrue(FpcHtmlDiskStore::publish($vanish, $this->fpcFullDocument('seed-race', 'ar_SA'), ''));
     $liveId = FpcHtmlDiskStore::currentGenerationId();
     self::assertNotSame('', $liveId);
-    $vanishDir = FpcHtmlDiskStore::generationsRoot()
-        . \DIRECTORY_SEPARATOR . $liveId
-        . \DIRECTORY_SEPARATOR . $host
-        . \DIRECTORY_SEPARATOR . 'ar_SA'
-        . \DIRECTORY_SEPARATOR . 'about';
+    $vanishPath = FpcHtmlDiskStore::htmlPath($vanish);
+    self::assertIsString($vanishPath);
+    $vanishDir = \dirname($vanishPath);
     self::assertDirectoryExists($vanishDir);
     // Simulate concurrent purge removing a locale leaf before/during seed mirror.
     $rm = static function (string $dir) use (&$rm): void {
@@ -1254,7 +1273,7 @@ private function assert_FpcHtmlDiskStore_testStagingSeedToleratesVanishedChildDi
     self::assertTrue(FpcHtmlDiskStore::promoteStagingGeneration());
     $hit = FpcHtmlDiskStore::read($keep, '');
     self::assertIsArray($hit);
-    $this->assertFpcHtmlDiskHitPlainEquals($html, $hit);
+    $this->assertFpcHtmlDiskHitPlainEquals($keepHtml, $hit);
 }
 
 private function assert_FpcHtmlDiskStore_testMirrorAndPurgeUseResilientWalkNotRecursiveDirectoryIterator(): void
@@ -1305,12 +1324,13 @@ private function tearDown_FpcHtmlDiskStorePurgeSlugs(): void
 
 private function assert_FpcHtmlDiskStorePurgeSlugs_testPurgeSlugsRemovesBareAndLocaleLeaves(): void
 {
-    $html = "<!doctype html><html><body>policy</body></html>\n";
+    $html = $this->fpcFullDocument('policy');
+    $htmlEnUs = $this->fpcFullDocument('policy', 'en_US');
     $bare = 'https://' . $this->fixtureHost_FpcHtmlDiskStorePurgeSlugs . '/policy/privacy';
     $locale = 'https://' . $this->fixtureHost_FpcHtmlDiskStorePurgeSlugs . '/en_US/policy/privacy';
     $other = 'https://' . $this->fixtureHost_FpcHtmlDiskStorePurgeSlugs . '/terms';
     self::assertTrue(FpcHtmlDiskStore::publish($bare, $html, ''));
-    self::assertTrue(FpcHtmlDiskStore::publish($locale, $html, ''));
+    self::assertTrue(FpcHtmlDiskStore::publish($locale, $htmlEnUs, ''));
     self::assertTrue(FpcHtmlDiskStore::publish($other, $html, ''));
     $barePath = FpcHtmlDiskStore::htmlPath($bare);
     $localePath = FpcHtmlDiskStore::htmlPath($locale);
@@ -1492,11 +1512,16 @@ private function assert_FpcMode_testAbsentEnvDefaultsAutoPierceOff(): void
     self::assertStringNotContainsString("if (\$html === '' || !self::isActive())", $clientSrc);
     self::assertStringContainsString('location.search', $js);
     self::assertStringContainsString('readSecret', $js);
-    self::assertDoesNotMatchRegularExpression(
-        '/<script\b[^>]*\bdefer\b/i',
-        $clientSrc,
-        'loader script tag must not use defer (end-of-body + currentScript)'
-    );
+    // defer 本身允许（loader 在 body 末尾，defer 不改变解析顺序）；真正的契约是
+    // 不能只依赖 currentScript —— defer 下 currentScript 为 null，必须能从标记属性回退。
+    if (\preg_match('/<script\b[^>]*\bdefer\b/i', $clientSrc) === 1) {
+        self::assertStringContainsString(
+            'data-weline-fpc-dev-auto-pierce',
+            $js,
+            'defer 脚本必须能从标记属性回退定位 loader（currentScript 在 defer 下为 null）'
+        );
+        self::assertStringContainsString('currentScript', $js, 'defer 下仍应优先 currentScript、缺失时回退');
+    }
     $responseSrc = (string)\file_get_contents((new \ReflectionClass(\Weline\Framework\Http\Response::class))->getFileName() ?: '');
     self::assertStringContainsString('injectFpcDevAutoPierceClientIfNeeded', $responseSrc);
     $finalizer = '/Users/weline/Project/Official/框架/app/code/Weline/Theme/Service/StorefrontLayoutHtmlFinalizer.php';
@@ -1812,8 +1837,8 @@ private function assert_FpcOfflineBakeGates_testExportImportRoundTripHostScopedA
     $urlEn = FpcPayloadPathIndex::normalizeIndexKey($origin . '/en_US/');
     $bodyZh = $payloadDir . \DIRECTORY_SEPARATOR . 'bake-zh-' . \uniqid('', true) . '.html';
     $bodyEn = $payloadDir . \DIRECTORY_SEPARATOR . 'bake-en-' . \uniqid('', true) . '.html';
-    \file_put_contents($bodyZh, '<html lang="zh">中文</html>');
-    \file_put_contents($bodyEn, '<html lang="en">English</html>');
+    \file_put_contents($bodyZh, $this->fpcFullDocument('中文'));
+    \file_put_contents($bodyEn, $this->fpcFullDocument('English', 'en_US'));
     FpcPayloadPathIndex::remember($urlZh, 'k-zh', $bodyZh);
     FpcPayloadPathIndex::remember($urlEn, 'k-en', $bodyEn);
     $pkg = \sys_get_temp_dir() . '/fpc-bake-rt-' . \uniqid('', true);
