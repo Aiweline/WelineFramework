@@ -31,6 +31,29 @@ async function disableCache(page) {
   }
 }
 
+const ANCHOR_SETTLED_KEY = 'weline.storefront_last_aligned_anchor';
+
+// 世代锚点对齐是异步 bootstrap：落后页面会被 location.replace 到 ?w_pg=… 整页重载，
+// 重载时机不定（bootstrap fetch 返回即触发），会打断面板点击/断言。交互前必须等
+// 锚点落定：不导航的结果写 last_aligned；导航结果 URL 带 w_pg（重载后同桶/节流
+// 分支不会再导航）。waitForFunction 跨导航存活。
+async function waitForAnchorSettled(page, timeout = 60000) {
+  await page.waitForFunction(
+    (key) => {
+      try {
+        if (String(sessionStorage.getItem(key) || '') !== '') {
+          return true;
+        }
+        return new URL(window.location.href).searchParams.get('w_pg') !== null;
+      } catch {
+        return false;
+      }
+    },
+    ANCHOR_SETTLED_KEY,
+    { timeout },
+  );
+}
+
 async function chooseLanguage(page, lang) {
   const trigger = page.locator('.w-language-switcher__trigger:visible').first();
   await expect(trigger).toBeVisible({ timeout: 30000 });
@@ -41,10 +64,11 @@ async function chooseLanguage(page, lang) {
   ).first();
   await expect(option).toBeAttached({ timeout: 15000 });
   await Promise.all([
-    page.waitForURL(new RegExp(`/${lang}(/|$)`), { timeout: 45000 }),
+    page.waitForURL(new RegExp(`/${lang}(/|$|\\?)`), { timeout: 45000 }),
     option.click(),
   ]);
   await page.waitForLoadState('domcontentloaded');
+  await waitForAnchorSettled(page);
 }
 
 async function chooseCurrency(page, code) {
@@ -68,6 +92,7 @@ moduleDescribe(test, MODULE, 'e2e-plan-suite storefront locale currency scope pa
     await disableCache(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await waitForAnchorSettled(page);
     await expect(page.locator('body')).not.toContainText(/Fatal error|WLS Runtime Error/i);
     await expect(page.locator('header, .weline-header').first()).toBeAttached({ timeout: 45000 });
     await expect(page.locator('.w-language-switcher__trigger').first()).toBeAttached({ timeout: 30000 });
@@ -78,6 +103,7 @@ moduleDescribe(test, MODULE, 'e2e-plan-suite storefront locale currency scope pa
     await disableCache(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await waitForAnchorSettled(page);
     const beforeCookies = await page.context().cookies();
     const langCookieBefore = beforeCookies.filter((c) => /WELINE_USER_LANG|weline_user_lang/i.test(c.name));
     await chooseLanguage(page, 'en_US');
@@ -98,6 +124,7 @@ moduleDescribe(test, MODULE, 'e2e-plan-suite storefront locale currency scope pa
     await disableCache(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${BASE}/currency`, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await waitForAnchorSettled(page);
     await expect(page.locator('body')).not.toContainText(/Fatal error|WLS Runtime Error/i);
     const trigger = page.locator('.w-currency-switcher__trigger:visible').first();
     const beforeText = await trigger.innerText();
@@ -114,6 +141,7 @@ moduleDescribe(test, MODULE, 'e2e-plan-suite storefront locale currency scope pa
     await disableCache(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${BASE}/en_US/`, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await waitForAnchorSettled(page);
     await expect(page).toHaveURL(/\/en_US(\/|$|\?)/);
     await expect(page.locator('body')).not.toContainText(/Fatal error|WLS Runtime Error/i);
     await expect(page.locator('header, .weline-header').first()).toBeAttached({ timeout: 45000 });
@@ -125,6 +153,7 @@ moduleDescribe(test, MODULE, 'e2e-plan-suite storefront locale currency scope pa
     const pageA = await ctxA.newPage();
     await disableCache(pageA);
     await pageA.goto(`${BASE}/en_US/currency`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await waitForAnchorSettled(pageA);
     await expect(pageA).toHaveURL(/\/en_US(\/|$|\?)/);
     await expect(pageA.locator('body')).not.toContainText(/Fatal error|WLS Runtime Error/i);
     await ctxA.close();
@@ -133,6 +162,7 @@ moduleDescribe(test, MODULE, 'e2e-plan-suite storefront locale currency scope pa
     const pageB = await ctxB.newPage();
     await disableCache(pageB);
     await pageB.goto(`${BASE}/currency`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await waitForAnchorSettled(pageB);
     expect(pageB.url()).not.toMatch(/\/en_US(\/|$|\?)/);
     await expect(pageB.locator('body')).not.toContainText(/Fatal error|WLS Runtime Error/i);
     await expect(pageB.locator('h1, header').first()).toBeAttached({ timeout: 30000 });
