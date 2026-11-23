@@ -185,9 +185,16 @@ final class StorefrontWarmupCapacityPlanner
         if ($nproc > 0) {
             return $nproc;
         }
-        $sysctl = (int)\trim((string)@\shell_exec('sysctl -n hw.ncpu 2>/dev/null'));
-        if ($sysctl > 0) {
-            return $sysctl;
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            // crontab 的 PATH 通常只有 /usr/bin:/bin，sysctl 在 /usr/sbin，必须先试绝对路径。
+            foreach (['hw.logicalcpu', 'hw.ncpu'] as $key) {
+                foreach (['/usr/sbin/sysctl -n ' . $key, 'sysctl -n ' . $key] as $command) {
+                    $n = (int)\trim((string)@\shell_exec($command . ' 2>/dev/null'));
+                    if ($n > 0) {
+                        return $n;
+                    }
+                }
+            }
         }
 
         return 2;

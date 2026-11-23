@@ -76,10 +76,15 @@ final class HostLoadSampler
         }
         // macOS / 无 /proc 宿主：必须走 sysctl，否则分母退化成 1，
         // load1/1 再被夹到 1.0，开发机将恒判「满载」而永不预热。
+        // crontab 的 PATH 通常只有 /usr/bin:/bin，sysctl 在 /usr/sbin，必须先试绝对路径。
         if (\PHP_OS_FAMILY === 'Darwin') {
-            $n = (int)\trim((string)@\shell_exec('sysctl -n hw.ncpu 2>/dev/null'));
-            if ($n > 0) {
-                return $n;
+            foreach (['hw.logicalcpu', 'hw.ncpu'] as $key) {
+                foreach (['/usr/sbin/sysctl -n ' . $key, 'sysctl -n ' . $key] as $command) {
+                    $n = (int)\trim((string)@\shell_exec($command . ' 2>/dev/null'));
+                    if ($n > 0) {
+                        return $n;
+                    }
+                }
             }
         }
 
