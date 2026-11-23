@@ -160,6 +160,18 @@
             return { aligned: true, reason: 'same_bucket', anchor: serverAnchor };
         }
 
+        // R2.5 锚点结构不可比时禁止导航：页面锚点带 `~theme` 而服务端只回裸部署号
+        // （或服务端根本给不出 uid），说明 scope-bootstrap 没解析到与页面渲染同一条
+        // 主题链（API 路由无 ThemeApplicationContext、站点 hosts 未登记等），"谁新"
+        // 无从判定。此时 location.replace 只是把每次冷启动变成一次无效重载，
+        // 还会打断正在进行的交互（面板点击、表单输入）。不写终态：服务端日后
+        // 恢复链解析后仍能正常跟进。
+        const pageHasThemeSegment = pageAnchor.indexOf('~') >= 0;
+        const serverHasThemeSegment = serverAnchor.indexOf('~') >= 0;
+        if (serverAnchor === '' || (pageHasThemeSegment && !serverHasThemeSegment)) {
+            return { aligned: true, reason: 'incomparable_anchor', anchor: pageAnchor };
+        }
+
         return {
             aligned: false,
             reason: anchorNewer(serverAnchor, pageAnchor) ? 'server_newer' : 'unknown',
