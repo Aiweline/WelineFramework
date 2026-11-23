@@ -187,7 +187,7 @@ class AgentEngine
     private function contextOpts(array $turnOpts): array
     {
         $opts = [];
-        foreach (['system_prompt_override', 'project', 'project_id', 'skill_codes'] as $key) {
+        foreach (['system_prompt_override', 'project', 'project_id', 'skill_codes', 'knowledge_context'] as $key) {
             if (array_key_exists($key, $turnOpts)) {
                 $opts[$key] = $turnOpts[$key];
             }

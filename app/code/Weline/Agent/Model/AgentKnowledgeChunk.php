@@ -57,6 +57,9 @@ class AgentKnowledgeChunk extends Model
     #[Col('text', comment: '关键词（空格分隔，BM25 侧）')]
     public const schema_fields_KEYWORDS = 'keywords';
 
+    #[Col('mediumtext', comment: '稠密向量 JSON（embedding 模型可用时写入）')]
+    public const schema_fields_EMBEDDING = 'embedding';
+
     #[Col('varchar', 32, nullable: false, default: 'active', comment: 'active/archived')]
     public const schema_fields_STATUS = 'status';
 

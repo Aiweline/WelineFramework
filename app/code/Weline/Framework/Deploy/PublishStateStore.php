@@ -546,6 +546,12 @@ final class PublishStateStore
         return false;
     }
 
+    /** 公开版：供 stage() 在写 target 前校验"该 token 的页桶是否真实存在" */
+    public static function pageBucketPopulated(string $pageToken, array $hosts = []): bool
+    {
+        return self::pageBucketExists($hosts, $pageToken);
+    }
+
     private static function bucketDirAlreadyPopulated(string $dir): bool
     {
         return \is_dir($dir) && \count((array)@\scandir($dir)) > 2;

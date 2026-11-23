@@ -30,7 +30,7 @@ class AgentLedgerService
     public function beginWork(array $opts): int
     {
         try {
-            $worklog = ObjectManager::getInstance(AgentWorklog::class);
+            $worklog = ObjectManager::getInstance(AgentWorklog::class)->clearData();
             $worklog->setData(AgentWorklog::schema_fields_PROJECT_ID, (int)($opts['project_id'] ?? 0));
             $worklog->setData(AgentWorklog::schema_fields_REF_TYPE, (string)($opts['ref_type'] ?? self::REF_TURN));
             $worklog->setData(AgentWorklog::schema_fields_REF_ID, (int)($opts['ref_id'] ?? 0));
@@ -56,7 +56,7 @@ class AgentLedgerService
             return;
         }
         try {
-            $worklog = ObjectManager::getInstance(AgentWorklog::class);
+            $worklog = ObjectManager::getInstance(AgentWorklog::class)->clearData();
             $worklog->load($worklogId);
             if (!$worklog->getId()) {
                 return;
@@ -84,7 +84,7 @@ class AgentLedgerService
     public function track(string $kind, array $opts = []): void
     {
         try {
-            $row = ObjectManager::getInstance(AgentTrajectory::class);
+            $row = ObjectManager::getInstance(AgentTrajectory::class)->clearData();
             $row->setData(AgentTrajectory::schema_fields_PROJECT_ID, (int)($opts['project_id'] ?? 0));
             $row->setData(AgentTrajectory::schema_fields_KIND, mb_substr($kind, 0, 32));
             $row->setData(AgentTrajectory::schema_fields_REF_TYPE, isset($opts['ref_type']) ? mb_substr((string)$opts['ref_type'], 0, 32) : null);
@@ -97,7 +97,10 @@ class AgentLedgerService
                 $row->setData(AgentTrajectory::schema_fields_PAYLOAD_JSON, is_string($payload) ? $payload : json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             }
             $row->save();
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            if (\defined('STDERR')) {
+                fwrite(STDERR, '[AgentLedger] track failed kind=' . $kind . ': ' . $e->getMessage() . "\n");
+            }
         }
     }
 }

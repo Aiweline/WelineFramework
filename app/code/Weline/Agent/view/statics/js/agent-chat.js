@@ -351,12 +351,29 @@
         this.$input.addEventListener('input', this.autosize.bind(this));
         this.$newChat.addEventListener('click', this.newChat.bind(this));
         this.$sessionList.addEventListener('click', this.onSessionClick.bind(this));
+        this.$tasksBtn = root.querySelector('#agentTasksBtn');
+        this.$tasksPanel = root.querySelector('#agentTasksPanel');
+        this.$tasksList = root.querySelector('#agentTasksList');
+        this.$tasksCount = root.querySelector('#agentTasksCount');
+        this.$tasksRefresh = root.querySelector('#agentTasksRefresh');
+        this.taskApiBase = '/agent/api/v1/task';
+        this._tasksTimer = null;
+        if (this.$tasksBtn) {
+            this.$tasksBtn.addEventListener('click', this.toggleTasksPanel.bind(this));
+        }
+        if (this.$tasksRefresh) {
+            this.$tasksRefresh.addEventListener('click', this.loadTasks.bind(this));
+        }
+        if (this.$tasksList) {
+            this.$tasksList.addEventListener('click', this.onTaskAction.bind(this));
+        }
         if (this.$chips) {
             this.$chips.addEventListener('click', this.onChipClick.bind(this));
         }
         this.renderWelcomeRole();
         this.renderChips();
         this.loadSessions();
+        this.loadTasksBadge();
         this.tryResumeActiveTask();
     };
 
@@ -421,6 +438,109 @@
         if (this.sessionId) {
             this.newChat();
         }
+        this.loadTasksBadge();
+        if (this.$tasksPanel && !this.$tasksPanel.hidden) {
+            this.loadTasks();
+        }
+    };
+
+    /* ---------- 团队任务 / 审批面板 ---------- */
+
+    AgentChatApp.prototype.taskStatusLabel = function (s) {
+        const map = {
+            queued: '排队中', running: '执行中', awaiting_approval: '待审批',
+            done: '已完成', failed: '失败', cancelled: '已取消',
+        };
+        return map[s] || s || '—';
+    };
+
+    AgentChatApp.prototype.taskStatusClass = function (s) {
+        if (s === 'awaiting_approval') return 'is-awaiting';
+        if (s === 'done') return 'is-done';
+        if (s === 'failed') return 'is-failed';
+        return 'is-' + (s || 'queued');
+    };
+
+    AgentChatApp.prototype.loadTasksBadge = function () {
+        const self = this;
+        const qs = this.projectId > 0 ? ('?project_id=' + this.projectId + '&status=awaiting_approval') : '?status=awaiting_approval';
+        apiGet(this.taskApiBase + '/tasks' + qs).then(function (res) {
+            const n = res && res.success && Array.isArray(res.tasks) ? res.tasks.length : 0;
+            if (self.$tasksCount) {
+                self.$tasksCount.textContent = String(n);
+                self.$tasksCount.hidden = n <= 0;
+            }
+        }).catch(function () {});
+    };
+
+    AgentChatApp.prototype.toggleTasksPanel = function () {
+        if (!this.$tasksPanel) return;
+        const show = this.$tasksPanel.hidden;
+        this.$tasksPanel.hidden = !show;
+        if (show) {
+            this.loadTasks();
+            const self = this;
+            if (this._tasksTimer) clearInterval(this._tasksTimer);
+            this._tasksTimer = setInterval(function () { self.loadTasks(); self.loadTasksBadge(); }, 15000);
+        } else if (this._tasksTimer) {
+            clearInterval(this._tasksTimer);
+            this._tasksTimer = null;
+        }
+    };
+
+    AgentChatApp.prototype.loadTasks = function () {
+        const self = this;
+        const qs = this.projectId > 0 ? ('?project_id=' + this.projectId) : '';
+        apiGet(this.taskApiBase + '/tasks' + qs).then(function (res) {
+            if (!self.$tasksList) return;
+            const tasks = res && res.success && Array.isArray(res.tasks) ? res.tasks : [];
+            if (!tasks.length) {
+                self.$tasksList.innerHTML = '<div class="ac-tasks-empty">暂无团队任务</div>';
+                return;
+            }
+            self.$tasksList.innerHTML = '';
+            tasks.forEach(function (t) {
+                const box = el('div', 'ac-task');
+                box.appendChild(el('div', 'ac-task-prompt', '#' + t.task_id + ' ' + (t.prompt || '')));
+                const meta = el('div', 'ac-task-meta');
+                meta.appendChild(el('span', 'ac-task-status ' + self.taskStatusClass(t.status), self.taskStatusLabel(t.status)));
+                meta.appendChild(el('span', null, 'by ' + (t.created_by_type || 'system')));
+                if (t.status === 'awaiting_approval' || t.status === 'queued') {
+                    const actions = el('div', 'ac-task-actions');
+                    const ok = el('button', 'ac-approve', '批准');
+                    ok.type = 'button'; ok.dataset.taskId = t.task_id; ok.dataset.action = 'approve';
+                    const no = el('button', null, '拒绝');
+                    no.type = 'button'; no.dataset.taskId = t.task_id; no.dataset.action = 'reject';
+                    actions.appendChild(ok); actions.appendChild(no);
+                    meta.appendChild(actions);
+                }
+                box.appendChild(meta);
+                self.$tasksList.appendChild(box);
+            });
+        }).catch(function () {});
+    };
+
+    AgentChatApp.prototype.onTaskAction = function (e) {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const taskId = parseInt(btn.dataset.taskId, 10) || 0;
+        const action = btn.dataset.action;
+        if (taskId <= 0) return;
+        btn.disabled = true;
+        const path = action === 'approve' ? '/approve' : '/reject';
+        const self = this;
+        apiPost(this.taskApiBase + path, { task_id: taskId }).then(function (res) {
+            if (res && res.success) {
+                self.loadTasks();
+                self.loadTasksBadge();
+            } else {
+                btn.disabled = false;
+                alert((res && res.msg) || '操作失败');
+            }
+        }).catch(function () {
+            btn.disabled = false;
+            alert('网络错误');
+        });
     };
 
     AgentChatApp.prototype.onRoleChange = function () {

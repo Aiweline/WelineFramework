@@ -128,6 +128,80 @@ final class TeamDispatchService
         return $this->executeTask($task, $taskId, $projectId, $role, $prompt, $runtime);
     }
 
+    /**
+     * 项目级直接派单（无来源会话）：巡检重拉、系统任务等场景。
+     * 项目边界由显式 projectId 强制；roleCode 必须精确命中。
+     *
+     * @return array{success:bool,task_id?:int,error?:string,result?:string,status?:string}
+     */
+    public function dispatchForProject(
+        int $projectId,
+        string $roleCode,
+        string $prompt,
+        bool $requireApproval = false,
+        string $createdByType = 'system',
+        string $createdById = ''
+    ): array {
+        $prompt = trim($prompt);
+        if ($prompt === '') {
+            return ['success' => false, 'error' => 'prompt is empty'];
+        }
+        if ($projectId <= 0) {
+            return ['success' => false, 'error' => 'project required'];
+        }
+
+        $runtime = $this->runtime ?? ObjectManager::getInstance(AgentRuntimeService::class);
+        try {
+            $role = $runtime->resolveRole(['role_code' => $roleCode]);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => 'role resolve failed: ' . $e->getMessage()];
+        }
+        if ((string)$role->getData(AgentRole::schema_fields_CODE) !== $roleCode) {
+            return ['success' => false, 'error' => "role '{$roleCode}' not found"];
+        }
+
+        $idempotencyKey = 'dispatch_' . hash('sha256', 'project|' . $projectId . '|' . $roleCode . '|' . $prompt . '|' . $createdById);
+        try {
+            $prototype = ObjectManager::getInstance(AgentTask::class);
+            $existing = clone $prototype;
+            $existing->reset()->clearQuery()
+                ->where(AgentTask::schema_fields_IDEMPOTENCY_KEY, $idempotencyKey)
+                ->find()->fetch();
+            if ($existing->getId()) {
+                return [
+                    'success' => true,
+                    'task_id' => (int)$existing->getId(),
+                    'idempotent_replay' => true,
+                    'status' => (string)$existing->getData(AgentTask::schema_fields_STATUS),
+                ];
+            }
+        } catch (\Throwable) {
+        }
+
+        $task = clone ObjectManager::getInstance(AgentTask::class);
+        $task->clearData();
+        $task->setData(AgentTask::schema_fields_PROJECT_ID, $projectId);
+        $task->setData(AgentTask::schema_fields_SESSION_ID, 0);
+        $task->setData(AgentTask::schema_fields_ASSIGNEE_ROLE_ID, (int)$role->getId());
+        $task->setData(AgentTask::schema_fields_ASSIGNEE_AGENT_CODE, $runtime->resolveAgentCode([], $role));
+        $task->setData(AgentTask::schema_fields_PROMPT, $prompt);
+        $task->setData(AgentTask::schema_fields_REQUIRE_APPROVAL, $requireApproval ? 1 : 0);
+        $task->setData(AgentTask::schema_fields_STATUS, AgentTask::STATUS_QUEUED);
+        $task->setData(AgentTask::schema_fields_IDEMPOTENCY_KEY, $idempotencyKey);
+        $task->setData(AgentTask::schema_fields_CREATED_BY_TYPE, $createdByType);
+        $task->setData(AgentTask::schema_fields_CREATED_BY_ID, $createdById);
+        $task->save();
+        $taskId = (int)$task->getId();
+
+        if ($requireApproval) {
+            $task->setData(AgentTask::schema_fields_STATUS, AgentTask::STATUS_AWAITING_APPROVAL);
+            $task->save();
+            return ['success' => true, 'task_id' => $taskId, 'status' => AgentTask::STATUS_AWAITING_APPROVAL];
+        }
+
+        return $this->executeTask($task, $taskId, $projectId, $role, $prompt, $runtime);
+    }
+
     /** 审批放行：awaiting_approval → 执行 */
     public function approve(int $taskId): array
     {

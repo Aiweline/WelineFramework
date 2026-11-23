@@ -63,6 +63,15 @@ class ContextBuilder
             ];
         }
 
+        // 2.5 项目知识库命中上下文（P4 RAG：先复用已有 SOP/轨迹做法）
+        $knowledgeContext = trim((string)($opts['knowledge_context'] ?? ''));
+        if ($knowledgeContext !== '') {
+            $messages[] = [
+                'role' => 'system',
+                'content' => $knowledgeContext,
+            ];
+        }
+
         // 3. 历史消息
         $historyMessages = $this->sessionManager->getMessagesForOpenAI($session, $maxHistoryMessages);
 
@@ -180,6 +189,20 @@ class ContextBuilder
         $fullPrompt .= "- 对于危险操作（如删除文件、执行命令），必须先询问用户确认\n";
         $fullPrompt .= "- 不要泄露敏感信息（如 API Key、密码）\n";
         $fullPrompt .= "- 遇到无法完成的任务，请诚实告知用户\n";
+        $fullPrompt .= "- 接到任务先查项目知识库是否有同类任务的既有做法（SOP），有则直接复用并在过程中优化；\n";
+        $fullPrompt .= "- 任务完成后若沉淀了可复用做法，在回复末尾输出 <!--SOP:类型键-->做法步骤<!--/SOP-->；\n";
+        $fullPrompt .= "  若有值得记录的反思/教训，输出 <!--REFLECT:摘要-->要点<!--/REFLECT-->\n";
+
+        // 汇报链（P2）：能处理就处理，处理不了沿 parent 链向上汇报，禁止越级
+        try {
+            $hierarchy = ObjectManager::getInstance(RoleHierarchyService::class);
+            $reportLine = $hierarchy->reportLineText((int)$role->getId());
+            if ($reportLine !== '') {
+                $fullPrompt .= "- 组织汇报链：{$reportLine}；小事由对应角色直接处理，"
+                    . "仅当你判断无法处理时才向上一级汇报，禁止越级直达顶层\n";
+            }
+        } catch (\Throwable) {
+        }
 
         return $fullPrompt;
     }

@@ -96,6 +96,16 @@ final class AgentRuntimeService
             $turnOpts['skill_codes'] = $skillCodes;
         }
 
+        // P4 项目知识库：命中 SOP/轨迹注入上下文（项目会话查项目+全局，个人会话查全局）
+        try {
+            $knowledge = ObjectManager::getInstance(ProjectKnowledgeService::class);
+            $knowledgeContext = $knowledge->buildContext($project ? (int)$project->getId() : 0, $prompt, 5);
+            if ($knowledgeContext !== '') {
+                $turnOpts['knowledge_context'] = $knowledgeContext;
+            }
+        } catch (\Throwable) {
+        }
+
         $onEvent = $turn['on_event'] ?? null;
         if (is_callable($onEvent)) {
             $emit = static function (string $type, array $data = []) use ($onEvent): void {
@@ -162,6 +172,18 @@ final class AgentRuntimeService
         }
 
         $ok = (bool)($result->success ?? false);
+
+        // P5 反思闭环：解析模型输出的 <!--SOP:key--> / <!--REFLECT:摘要--> 标记，
+        // 沉淀为项目知识（SOP 去重复用）与轨迹事件
+        if ($ok) {
+            $this->harvestReflection($projectId, (string)($result->content ?? ''), [
+                'role_id' => (int)$role->getId(),
+                'agent_code' => $agentCode,
+                'session_id' => (int)$session->getId(),
+                'prompt' => $prompt,
+            ]);
+        }
+
         $actualMinutes = max(1, (int)ceil((microtime(true) - $turnStarted) / 60));
         $ledger->finishWork($worklogId, $actualMinutes, $ok ? 'done' : 'failed', $ok ? null : '回合未成功');
         $ledger->track($ok ? 'turn_done' : 'turn_failed', [
@@ -459,6 +481,66 @@ final class AgentRuntimeService
             return $role->getId() ? $role : null;
         } catch (\Throwable) {
             return null;
+        }
+    }
+
+    /**
+     * P5 反思收割：从回合输出解析 <!--SOP:key-->…<!--/SOP--> 与
+     * <!--REFLECT:摘要-->…<!--/REFLECT-->，写入项目知识库/轨迹。
+     * 标记为模型自愿输出；解析失败静默（不阻断回合）。
+     */
+    private function harvestReflection(int $projectId, string $content, array $meta): void
+    {
+        if ($content === '' || (!str_contains($content, '<!--SOP:') && !str_contains($content, '<!--REFLECT:'))) {
+            return;
+        }
+        try {
+            $knowledge = ObjectManager::getInstance(ProjectKnowledgeService::class);
+            $ledger = ObjectManager::getInstance(AgentLedgerService::class);
+
+            if (preg_match_all('/<!--SOP:([^>\-]+)-->(.*?)<!--\/SOP-->/su', $content, $mSop, PREG_SET_ORDER)) {
+                foreach ($mSop as $m) {
+                    $sopKey = trim($m[1]);
+                    $sopBody = trim($m[2]);
+                    if ($sopKey === '' || $sopBody === '') {
+                        continue;
+                    }
+                    $chunkId = $knowledge->index(
+                        $projectId,
+                        'sop',
+                        'SOP:' . $sopKey,
+                        $sopBody . "\n\n来源任务：" . mb_substr((string)($meta['prompt'] ?? ''), 0, 300),
+                        'turn/' . ((int)($meta['session_id'] ?? 0)),
+                        $sopKey
+                    );
+                    $ledger->track('sop_recorded', [
+                        'project_id' => $projectId,
+                        'ref_type' => AgentLedgerService::REF_TURN,
+                        'actor_role_id' => (int)($meta['role_id'] ?? 0),
+                        'actor_agent_code' => (string)($meta['agent_code'] ?? ''),
+                        'summary' => '沉淀 SOP：' . $sopKey,
+                        'payload' => ['chunk_id' => $chunkId, 'sop_key' => $sopKey],
+                    ]);
+                }
+            }
+
+            if (preg_match_all('/<!--REFLECT:([^>\-]+)-->(.*?)<!--\/REFLECT-->/su', $content, $mRef, PREG_SET_ORDER)) {
+                foreach ($mRef as $m) {
+                    $summary = trim($m[1] . ' ' . $m[2]);
+                    if ($summary === '') {
+                        continue;
+                    }
+                    $ledger->track('reflection', [
+                        'project_id' => $projectId,
+                        'ref_type' => AgentLedgerService::REF_TURN,
+                        'actor_role_id' => (int)($meta['role_id'] ?? 0),
+                        'actor_agent_code' => (string)($meta['agent_code'] ?? ''),
+                        'summary' => '任务反思：' . mb_substr($summary, 0, 200),
+                        'payload' => ['session_id' => (int)($meta['session_id'] ?? 0)],
+                    ]);
+                }
+            }
+        } catch (\Throwable) {
         }
     }
 }

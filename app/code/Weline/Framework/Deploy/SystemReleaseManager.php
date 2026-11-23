@@ -50,6 +50,15 @@ final class SystemReleaseManager
             if ($pageToken === '') {
                 $pageToken = FpcHtmlDiskStore::pageGenerationToken();
             }
+            // 自愈：active.page_token 可能因页桶被清理/世代轮换而失效（promote 必然失败的死循环）。
+            // 校验桶真实存在；不存在时回退到该链 hosts 当前 pg/current 实际指向的 token。
+            $chainHosts = \is_array($row['hosts'] ?? null) ? $row['hosts'] : [];
+            if ($pageToken !== '' && !PublishStateStore::pageBucketPopulated($pageToken, $chainHosts)) {
+                $liveToken = self::currentServedPageToken($chainHosts);
+                if ($liveToken !== '' && PublishStateStore::pageBucketPopulated($liveToken, $chainHosts)) {
+                    $pageToken = $liveToken;
+                }
+            }
             PublishStateStore::stageTarget(
                 $websiteId,
                 $themeId,
@@ -113,6 +122,53 @@ final class SystemReleaseManager
         }
 
         return ['ok' => $failed === [], 'promoted' => $promoted, 'failed' => $failed];
+    }
+
+    /**
+     * 该链 hosts 当前 `pg/current` 符号链接实际指向的页桶 token（站点此刻真实在服务的代次）。
+     * 多 host 时取第一个有效指向；都取不到返回 ''。
+     *
+     * @param array<int,mixed> $hosts
+     */
+    private static function currentServedPageToken(array $hosts): string
+    {
+        try {
+            $liveRoot = FpcHtmlDiskStore::liveRoot();
+        } catch (\Throwable) {
+            return '';
+        }
+        $candidates = [];
+        foreach ($hosts as $host) {
+            $host = \strtolower(\trim((string)$host));
+            if ($host !== '' && \preg_match('/^[a-z0-9._:-]+$/D', $host) === 1) {
+                $candidates[] = $host;
+            }
+        }
+        // hosts 未登记时回退扫描 liveRoot 下全部 host（与 pageBucketExists 的兜底口径一致）
+        if ($candidates === []) {
+            foreach ((array)@\scandir($liveRoot) as $name) {
+                if ($name !== '.' && $name !== '..' && \is_string($name)
+                    && \preg_match('/^[a-z0-9._:-]+$/D', $name) === 1
+                    && \is_dir($liveRoot . \DIRECTORY_SEPARATOR . $name)) {
+                    $candidates[] = $name;
+                }
+            }
+        }
+        foreach ($candidates as $host) {
+            $link = $liveRoot . \DIRECTORY_SEPARATOR . $host
+                . \DIRECTORY_SEPARATOR . FpcHtmlDiskStore::PAGE_GEN_DIR
+                . \DIRECTORY_SEPARATOR . FpcHtmlDiskStore::PAGE_GEN_CURRENT;
+            $target = @\readlink($link);
+            if (!\is_string($target) || $target === '') {
+                continue;
+            }
+            // readlink 可能是相对路径（如 ../d3f9…）或绝对路径
+            $token = \basename(\rtrim($target, '/\\'));
+            if ($token !== '' && $token !== '.' && $token !== '..') {
+                return \strtolower($token);
+            }
+        }
+        return '';
     }
 
     /** @return array{0:int,1:int,2:string} */
