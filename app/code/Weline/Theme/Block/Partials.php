@@ -35,6 +35,7 @@ use Weline\Theme\Service\FooterNestedChromeSourceFingerprint;
 use Weline\Theme\Service\NestedChromeSourceFingerprint;
 use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot;
+use Weline\Theme\Service\Spec\ThemeSpecViolationException;
 
 /**
  * Partials Block
@@ -620,6 +621,13 @@ class Partials extends Block
                     return $this->finalizeStorefrontChromeHtml($type, $html);
                 }
             } catch (\Throwable $e) {
+                // 主题规范违规是源码缺陷、不是瞬态上下文降级：设计主题的降级 head
+                // 缺整个 suffix（皮肤 CSS/JS 全丢）却仍 200 返回，只剩 warning.log
+                // —— 2026-11-23 hanfu 整站样式丢失事故。直接抛出让请求失败，
+                // 违规在编辑当下暴露，而不是等用户看到乱版。
+                if ($e instanceof ThemeSpecViolationException) {
+                    throw $e;
+                }
                 $this->logPartialCacheDiagnostic('shared_chrome_fallback', [
                     'file' => $fileName,
                     'type' => $type,

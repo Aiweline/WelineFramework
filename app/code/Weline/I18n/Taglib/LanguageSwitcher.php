@@ -451,7 +451,7 @@ class LanguageSwitcher implements TaglibInterface
                 . ' class="w-button w-language-switcher__trigger" data-tone="quiet" data-size="sm"'
                 . ' data-w-menu-trigger aria-expanded="false" aria-haspopup="menu"'
                 . ' aria-controls="' . $safePanelId . '"'
-                . ' aria-label="' . htmlspecialchars($labelSwitchLanguage, ENT_QUOTES, 'UTF-8') . '">';
+                . ' aria-label="' . htmlspecialchars($labelSwitchLanguage . ' · ' . $currentLabel, ENT_QUOTES, 'UTF-8') . '">';
             $html[] = '        ' . $currentFlag
                 . '<span class="w-language-switcher__current current-language">' . $currentLabel . '</span>'
                 . '<w-icon name="chevron-down" size="xs"></w-icon>';

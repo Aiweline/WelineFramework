@@ -1802,6 +1802,100 @@
             })));
         }
 
+        /**
+         * data-w-component islands (menu / dialog / choice-filter / …) are mounted by
+         * the Weline UI runtime. The shell is heavy, so it must not go back to eager or
+         * idle loading: schedule it on first user intent, with the same bounded fallback
+         * as interaction-deferred modules so controls still work for passive visitors.
+         */
+        let welineUiIntentScheduled = false;
+        function scheduleWelineUiRuntimeForComponents() {
+            if (welineUiIntentScheduled) {
+                return;
+            }
+            const uiReady = window.Weline && window.Weline.UI
+                && window.Weline.UI.__runtimeId === 'weline-ui-2';
+            if (uiReady || !document.querySelector('[data-w-component]')) {
+                return;
+            }
+            welineUiIntentScheduled = true;
+            // phase: idle → loading → done. The click that schedules the runtime
+            // finishes before components mount, so the activating click would be
+            // lost; capture-phase click interception records the target inside a
+            // [data-w-component] island and replays it once components report ready.
+            let phase = 'idle';
+            let pendingComponentActivation = null;
+            const replayPendingComponentActivation = () => {
+                const activation = pendingComponentActivation;
+                pendingComponentActivation = null;
+                phase = 'done';
+                window.removeEventListener('click', onComponentActivationClick, { capture: true });
+                if (!(activation instanceof Element) || !activation.isConnected) {
+                    return;
+                }
+                const island = activation.closest('[data-w-component]');
+                if (!island) {
+                    return;
+                }
+                const ui = window.Weline && window.Weline.UI;
+                const dispatch = () => {
+                    if (activation.isConnected) {
+                        activation.dispatchEvent(new MouseEvent('click', {
+                            bubbles: true,
+                            cancelable: true,
+                            view: window,
+                        }));
+                    }
+                };
+                if (!ui || typeof ui.whenReady !== 'function') {
+                    dispatch();
+                    return;
+                }
+                const names = String(island.getAttribute('data-w-component') || '')
+                    .split(/\s+/)
+                    .filter(Boolean);
+                const ready = names.length
+                    ? Promise.allSettled(names.map((name) => ui.whenReady(island, name, 8000)))
+                    : Promise.resolve();
+                ready.then(dispatch, dispatch);
+            };
+            const events = ['pointerdown', 'touchstart', 'keydown', 'focusin'];
+            const start = () => {
+                if (phase !== 'idle') {
+                    return;
+                }
+                phase = 'loading';
+                events.forEach((name) => window.removeEventListener(name, onIntent, { capture: true }));
+                loadModuleNames(['welineUi']).then(replayPendingComponentActivation, replayPendingComponentActivation);
+            };
+            const onIntent = () => start();
+            const onComponentActivationClick = (event) => {
+                if (phase === 'done') {
+                    return;
+                }
+                const target = event.target;
+                if (!(target instanceof Element)) {
+                    return;
+                }
+                if (!target.closest('[data-w-component]')) {
+                    // A later click outside any island supersedes a pending activation.
+                    pendingComponentActivation = null;
+                    return;
+                }
+                pendingComponentActivation = target;
+                start();
+            };
+            events.forEach((name) => {
+                window.addEventListener(name, onIntent, { capture: true, passive: true });
+            });
+            window.addEventListener('click', onComponentActivationClick, { capture: true, passive: true });
+            const configured = Number(
+                runtimeConfig.modulesLoad && runtimeConfig.modulesLoad.interactionTimeoutMs
+            );
+            const timeoutMs = Number.isFinite(configured) && configured >= 0 ? configured : 30000;
+            window.setTimeout(start, timeoutMs);
+        }
+
         function process() {
             const declareNames = new Set();
             const immediateNames = [];
@@ -1812,6 +1906,14 @@
             const elementLoads = [];
             /** @type {Array<{el: Element, modules: string[]}>} */
             const visibleDeferredLoads = [];
+            /**
+             * Non-critical chrome (float widgets) opts into interaction: load on the
+             * first user intent, or after a bounded fallback so the control still works
+             * for visitors who never touch the page before that. Themes opt in by putting
+             * data-weline-load-when="interaction" on the container (e.g. the float layer).
+             * @type {Array<{el: Element, modules: string[]}>}
+             */
+            const interactionDeferredLoads = [];
 
             document.querySelectorAll('[data-weline-declare]').forEach((el) => {
                 const modules = splitModules(el.getAttribute('data-weline-declare'));
@@ -1828,10 +1930,23 @@
                 if (modules.length === 0) {
                     return;
                 }
-                let when = String(el.getAttribute('data-weline-load-when') || 'visible').toLowerCase();
+                // Load policy can be declared on the host itself or inherited from a
+                // container (the theme's float layer). A container-level interaction
+                // policy also wins over a host's generic "idle": the whole chrome block
+                // is non-critical, and loading one of its modules early re-creates the
+                // long tail this policy exists to remove.
+                const inheritedPolicyHost = el.parentElement && el.parentElement.closest
+                    ? el.parentElement.closest('[data-weline-load-when]')
+                    : null;
+                const inheritedWhen = inheritedPolicyHost
+                    ? String(inheritedPolicyHost.getAttribute('data-weline-load-when') || '').toLowerCase()
+                    : '';
+                let when = inheritedWhen === 'interaction'
+                    ? 'interaction'
+                    : String(el.getAttribute('data-weline-load-when') || 'visible').toLowerCase();
                 // Hidden hosts never intersect → visible IO never fires (headerSearch loader).
                 // Force idle when host is hidden / explicit search loader, even if when-attr was stripped.
-                if (when !== 'idle'
+                if (when !== 'idle' && when !== 'interaction'
                     && (el.hasAttribute('hidden')
                         || el.getAttribute('aria-hidden') === 'true'
                         || el.hasAttribute('data-w-header-search-loader'))
@@ -1860,12 +1975,18 @@
                 }
                 // idle = legacy requestIdleCallback (still storms Finish within ~2s).
                 // visible (default) = IntersectionObserver near host element — no scroll, no fetch.
+                if (when === 'interaction') {
+                    interactionDeferredLoads.push({ el: el, modules: deferredForEl });
+                    return;
+                }
                 if (when === 'idle') {
                     deferredForEl.forEach((name) => idleDeferredNames.push(name));
                     return;
                 }
                 visibleDeferredLoads.push({ el: el, modules: deferredForEl });
             });
+
+            scheduleWelineUiRuntimeForComponents();
 
             const notifyElements = (loadedNames) => {
                 const loaded = new Set(loadedNames);
@@ -1953,9 +2074,86 @@
                 });
             };
 
+            const runInteractionEntries = (entries) => {
+                if (entries.length === 0) {
+                    return;
+                }
+                const all = [];
+                entries.forEach((entry) => {
+                    entry.modules.forEach((name) => all.push(name));
+                });
+                const unique = Array.from(new Set(all));
+                loadModuleNames(unique).then(() => notifyElements(unique));
+            };
+
+            const runInteractionDeferred = () => {
+                if (interactionDeferredLoads.length === 0) {
+                    return;
+                }
+                runInteractionEntries(interactionDeferredLoads.splice(0, interactionDeferredLoads.length));
+            };
+
+            const scheduleInteractionDeferred = () => {
+                if (interactionDeferredLoads.length === 0) {
+                    return;
+                }
+                const configured = Number(
+                    runtimeConfig.modulesLoad && runtimeConfig.modulesLoad.interactionTimeoutMs
+                );
+                const defaultMs = Number.isFinite(configured) && configured >= 0 ? configured : 30000;
+                // 每个宿主可声明自己的兜底时间：头部账户这类 SSR 已有可用态的增强模块
+                // 不该在首屏末尾改 UI（会把 SI 拖到它改完的那一刻）。
+                const groups = new Map();
+                interactionDeferredLoads.forEach((entry) => {
+                    const raw = Number(entry.el.getAttribute('data-weline-load-timeout'));
+                    const timeoutMs = Number.isFinite(raw) && raw >= 0 ? raw : defaultMs;
+                    if (!groups.has(timeoutMs)) {
+                        groups.set(timeoutMs, []);
+                    }
+                    groups.get(timeoutMs).push(entry);
+                });
+                let fired = false;
+                let remaining = groups.size;
+                const events = ['pointerdown', 'touchstart', 'keydown', 'focusin'];
+                const cleanup = () => {
+                    events.forEach((name) => window.removeEventListener(name, onIntent, { capture: true }));
+                };
+                const onIntent = () => {
+                    if (fired) {
+                        return;
+                    }
+                    fired = true;
+                    cleanup();
+                    runInteractionDeferred();
+                };
+                events.forEach((name) => {
+                    window.addEventListener(name, onIntent, { capture: true, passive: true });
+                });
+                groups.forEach((entries, timeoutMs) => {
+                    window.setTimeout(() => {
+                        if (fired) {
+                            return;
+                        }
+                        const pending = new Set(entries);
+                        for (let i = interactionDeferredLoads.length - 1; i >= 0; i -= 1) {
+                            if (pending.has(interactionDeferredLoads[i])) {
+                                interactionDeferredLoads.splice(i, 1);
+                            }
+                        }
+                        runInteractionEntries(entries);
+                        remaining -= 1;
+                        if (remaining <= 0) {
+                            fired = true;
+                            cleanup();
+                        }
+                    }, timeoutMs);
+                });
+            };
+
             const immediateUnique = Array.from(new Set(immediateNames));
             const scheduleDeferred = () => {
                 scheduleVisibleDeferred();
+                scheduleInteractionDeferred();
                 if (idleDeferredNames.length === 0) {
                     return;
                 }
