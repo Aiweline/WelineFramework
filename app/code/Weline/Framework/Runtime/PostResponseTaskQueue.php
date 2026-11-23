@@ -154,6 +154,14 @@ final class PostResponseTaskQueue
                     if ($mode === PostResponseCaptureMode::Full && $context instanceof WlsFiberContext) {
                         $context->restore(false);
                     } elseif ($mode === PostResponseCaptureMode::Scope && \is_array($task['scope'] ?? null)) {
+                        // Scope restore mutates Context::getCurrent() in place. On the
+                        // worker main loop that is the shared main Context, so without
+                        // isolation the previous task's frozen ScopeIdentity survives
+                        // and the next task's installScopeIdentity() is rejected —
+                        // the task then runs under the wrong site/store/channel.
+                        // Enter a per-task Context so cleanupRestoredContext() resets
+                        // and discards it like a Full-mode restore.
+                        Context::enter(new Context());
                         self::restoreScopeSnapshot($task['scope']);
                     }
                     $taskStartedAt = \microtime(true);
@@ -190,6 +198,13 @@ final class PostResponseTaskQueue
                 if ($budgetMs > 0 && ((\microtime(true) - $startedAt) * 1000) >= $budgetMs) {
                     break;
                 }
+            }
+
+            // Full 模式任务恢复的 $_SERVER 快照（含 HTTP_COOKIE/Authorization 等请求头）
+            // 不得滞留到下一个请求重建之前；仅在 drain 跑在无宿主 Context 的主循环上时摘除，
+            // 嵌在某个 Context 内被调用时归属方负责自己的收尾。
+            if ($previousContext === null) {
+                Context::detachRequestGlobals();
             }
 
             self::memoryProbe('drain_end', null, \count(self::$tasks));

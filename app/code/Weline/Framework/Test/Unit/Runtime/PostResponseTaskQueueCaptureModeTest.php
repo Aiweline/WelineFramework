@@ -9,6 +9,7 @@ use Weline\Framework\Runtime\PostResponseCaptureMode;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Runtime\WlsFiberContext;
 
 final class PostResponseTaskQueueCaptureModeTest extends TestCase
@@ -111,6 +112,62 @@ final class PostResponseTaskQueueCaptureModeTest extends TestCase
             self::assertSame(0, PostResponseTaskQueue::sharedFullSnapshotCount());
         } finally {
             RequestContext::cleanup();
+        }
+    }
+
+    public function testScopeDrainDoesNotLeakScopeIdentityIntoDrainContext(): void
+    {
+        Runtime::setMode(Runtime::WLS);
+        // Simulate the worker main-loop Context: non-null and shared across drains.
+        $drainContext = new Context();
+        Context::enter($drainContext);
+        $seen = [];
+        try {
+            RequestContext::installScopeIdentity(
+                ScopeIdentity::channel(1, 'sitea', 'storea', 'chana', 'normal')
+            );
+            RequestContext::setWelineUserCurrency('EUR');
+            PostResponseTaskQueue::enqueue('scope-leak-a', function () use (&$seen): void {
+                $id = RequestContext::scopeIdentity();
+                $seen['a'] = [
+                    'scope' => $id instanceof ScopeIdentity ? $id->canonicalKey() : null,
+                    'currency' => RequestContext::getWelineUserCurrency(),
+                ];
+            }, 0.0, PostResponseCaptureMode::Scope);
+
+            // Next "request" reuses the same drain context: cleanup, then siteb/USD.
+            RequestContext::cleanup();
+            RequestContext::installScopeIdentity(
+                ScopeIdentity::channel(2, 'siteb', 'storeb', 'chanb', 'normal')
+            );
+            RequestContext::setWelineUserCurrency('USD');
+            PostResponseTaskQueue::enqueue('scope-leak-b', function () use (&$seen): void {
+                $id = RequestContext::scopeIdentity();
+                $seen['b'] = [
+                    'scope' => $id instanceof ScopeIdentity ? $id->canonicalKey() : null,
+                    'currency' => RequestContext::getWelineUserCurrency(),
+                ];
+            }, 0.0, PostResponseCaptureMode::Scope);
+
+            // Back to neutral idle state before the drain runs.
+            RequestContext::cleanup();
+
+            PostResponseTaskQueue::drain(5000.0, 10);
+
+            self::assertStringContainsString('sitea', (string)($seen['a']['scope'] ?? ''));
+            self::assertSame('EUR', $seen['a']['currency'] ?? null);
+            self::assertStringContainsString(
+                'siteb',
+                (string)($seen['b']['scope'] ?? ''),
+                'Scope task must run under its own captured identity, not the previous task\'s',
+            );
+            self::assertSame('USD', $seen['b']['currency'] ?? null);
+            self::assertNull(
+                RequestContext::scopeIdentity(),
+                'drain must not leave a ScopeIdentity behind in the shared drain context',
+            );
+        } finally {
+            Context::leave();
         }
     }
 
